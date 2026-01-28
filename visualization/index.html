@@ -4138,8 +4138,10 @@
         function initBiochemScatterSigs() {
             const scatterData = state.data.cimabiochemscatter;
             if (!scatterData) return;
-            biochemScatterSigs.cytosig = scatterData.cytosig_signatures || [];
-            biochemScatterSigs.secact = scatterData.secact_signatures || [];
+            // Data uses 'cytokines' key for CytoSig cytokine names
+            biochemScatterSigs.cytosig = scatterData.cytokines || [];
+            // SecAct not available in scatter data - show CytoSig as fallback
+            biochemScatterSigs.secact = scatterData.cytokines || [];
         }
 
         function getBiochemScatterSigs() {

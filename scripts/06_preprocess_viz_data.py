@@ -1698,7 +1698,7 @@ def preprocess_cima_biochem_scatter():
             sample_data = {
                 'sample': sample,
                 'age': row.get('Age', None),
-                'sex': row.get('Sex', None),
+                'sex': row.get('sex', None),  # lowercase 'sex' in CIMA metadata
                 'bmi': row.get('BMI', None),
                 'biochem': {},
                 'activity': {}

@@ -78,7 +78,8 @@ def aggregate_by_tissue_celltype(
     adata: ad.AnnData,
     tissue_col: str,
     celltype_col: str,
-    min_cells: int = 50
+    min_cells: int = 50,
+    extra_cols: List[str] = None
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Aggregate expression by tissue and cell type for pseudo-bulk analysis.
@@ -88,6 +89,7 @@ def aggregate_by_tissue_celltype(
         tissue_col: Column for tissue/organ
         celltype_col: Column for cell type
         min_cells: Minimum cells per group
+        extra_cols: Additional columns to include in metadata (e.g., ['cancerType', 'donorID'])
 
     Returns:
         expr_df: DataFrame (genes x (tissue_celltype combinations))
@@ -95,8 +97,13 @@ def aggregate_by_tissue_celltype(
     """
     log(f"Aggregating by {tissue_col} and {celltype_col}...")
 
+    # Determine columns to extract
+    cols_to_use = [tissue_col, celltype_col]
+    if extra_cols:
+        cols_to_use.extend([c for c in extra_cols if c in adata.obs.columns])
+
     # Get unique combinations
-    obs = adata.obs[[tissue_col, celltype_col]].copy()
+    obs = adata.obs[cols_to_use].copy()
     obs = obs.reset_index(drop=True)
     groups = obs.groupby([tissue_col, celltype_col], observed=True).groups
 
@@ -134,11 +141,19 @@ def aggregate_by_tissue_celltype(
             meta_dict[col_name]['n_cells'] += len(idx_array)
         else:
             aggregated[col_name] = group_sum
-            meta_dict[col_name] = {
+            meta_entry = {
                 'tissue': tissue,
                 'cell_type': celltype,
                 'n_cells': len(idx_array)
             }
+            # Add extra columns (use most common value for categorical)
+            if extra_cols:
+                for ec in extra_cols:
+                    if ec in obs.columns:
+                        ec_vals = obs.loc[idx_array, ec].dropna()
+                        if len(ec_vals) > 0:
+                            meta_entry[ec] = ec_vals.mode().iloc[0] if len(ec_vals.mode()) > 0 else ec_vals.iloc[0]
+            meta_dict[col_name] = meta_entry
 
         if (i + 1) % 500 == 0:
             log(f"    Processed {i + 1}/{len(groups)} groups...")
@@ -271,7 +286,8 @@ def compute_activities_from_counts(
     counts_path: Path,
     tissue_col: str,
     celltype_col: str,
-    dataset_name: str
+    dataset_name: str,
+    extra_cols: List[str] = None
 ) -> Tuple[Dict[str, pd.DataFrame], Dict[str, pd.DataFrame], pd.DataFrame]:
     """
     Complete pipeline: load counts, aggregate, compute activities.
@@ -281,6 +297,7 @@ def compute_activities_from_counts(
         tissue_col: Column for tissue grouping
         celltype_col: Column for cell type
         dataset_name: Name for logging and output files
+        extra_cols: Additional columns to include in metadata
 
     Returns:
         cytosig_results: Dict with CytoSig activity matrices
@@ -299,7 +316,7 @@ def compute_activities_from_counts(
 
     # Aggregate by tissue and cell type
     expr_df, agg_meta = aggregate_by_tissue_celltype(
-        adata, tissue_col, celltype_col
+        adata, tissue_col, celltype_col, extra_cols=extra_cols
     )
 
     # Release memory
@@ -799,6 +816,440 @@ def identify_pan_signatures(
     return pan_df
 
 
+def compute_immune_infiltration(
+    adata: ad.AnnData,
+    tissue_col: str = 'tissue',
+    celltype_col: str = 'cell_type',
+    cancertype_col: str = 'cancerType'
+) -> pd.DataFrame:
+    """
+    Compute immune cell infiltration proportions per cancer type.
+
+    Returns:
+        DataFrame with cancer_type, immune_proportion, immune_celltypes, and activities
+    """
+    log("Computing immune infiltration analysis...")
+
+    # Define immune cell type patterns
+    immune_patterns = [
+        'T', 'B', 'NK', 'Mono', 'Macro', 'DC', 'Neutro', 'Mast',
+        'Plasma', 'Treg', 'CD4', 'CD8', 'gdT', 'MAIT', 'ILC'
+    ]
+
+    # Get activity matrix
+    if sp.issparse(adata.X):
+        X = adata.X.toarray()
+    else:
+        X = np.array(adata.X)
+
+    signatures = list(adata.var_names)
+    obs = adata.obs.copy()
+
+    # Classify cells as immune or non-immune
+    def is_immune(celltype):
+        celltype_str = str(celltype).lower()
+        return any(p.lower() in celltype_str for p in immune_patterns)
+
+    obs['is_immune'] = obs[celltype_col].apply(is_immune)
+
+    # Only proceed if we have cancerType column
+    if cancertype_col not in obs.columns:
+        log("  Warning: No cancerType column found")
+        return pd.DataFrame()
+
+    results = []
+
+    # Group by cancer type
+    cancer_types = obs[cancertype_col].dropna().unique()
+    log(f"  Found {len(cancer_types)} cancer types")
+
+    for ct in cancer_types:
+        ct_mask = (obs[cancertype_col] == ct).values
+        tumor_mask = (obs[tissue_col] == 'Tumor').values if tissue_col in obs.columns else np.ones(len(obs), dtype=bool)
+        combined_mask = ct_mask & tumor_mask
+
+        if combined_mask.sum() < 100:
+            continue
+
+        ct_obs = obs[combined_mask]
+        n_immune = ct_obs['is_immune'].sum()
+        n_total = len(ct_obs)
+        immune_prop = n_immune / n_total
+
+        # Get mean activity for immune vs non-immune
+        ct_X = X[combined_mask, :]
+        immune_activity = ct_X[ct_obs['is_immune'].values, :].mean(axis=0)
+        nonimmune_activity = ct_X[~ct_obs['is_immune'].values, :].mean(axis=0) if (~ct_obs['is_immune'].values).sum() > 0 else np.zeros(len(signatures))
+
+        for i, sig in enumerate(signatures):
+            results.append({
+                'cancer_type': ct,
+                'signature': sig,
+                'immune_proportion': immune_prop,
+                'n_immune': n_immune,
+                'n_total': n_total,
+                'mean_immune_activity': immune_activity[i],
+                'mean_nonimmune_activity': nonimmune_activity[i],
+                'immune_enrichment': immune_activity[i] - nonimmune_activity[i]
+            })
+
+    result_df = pd.DataFrame(results)
+    log(f"  Computed {len(result_df)} cancer-signature infiltration records")
+
+    return result_df
+
+
+def compute_tcell_exhaustion(
+    adata: ad.AnnData,
+    celltype_col: str = 'cell_type'
+) -> pd.DataFrame:
+    """
+    Compute T cell exhaustion analysis comparing exhausted vs non-exhausted T cells.
+
+    Uses cell type annotations containing 'Tex' (exhausted) patterns.
+
+    Returns:
+        DataFrame with exhaustion comparison statistics
+    """
+    log("Computing T cell exhaustion analysis...")
+
+    # Patterns for exhausted T cells
+    exhausted_patterns = ['Tex', 'exhausted', 'PDCD1', 'CTLA4', 'LAG3', 'HAVCR2', 'TIGIT']
+
+    # Get activity matrix
+    if sp.issparse(adata.X):
+        X = adata.X.toarray()
+    else:
+        X = np.array(adata.X)
+
+    signatures = list(adata.var_names)
+    obs = adata.obs.copy()
+
+    # Identify T cells
+    def is_tcell(celltype):
+        celltype_str = str(celltype).lower()
+        return any(p in celltype_str for p in ['cd4t', 'cd8t', 't_cd4', 't_cd8', 'tcell', 't cell', 't_cell'])
+
+    # Identify exhausted T cells
+    def is_exhausted(celltype):
+        celltype_str = str(celltype)
+        return any(p.lower() in celltype_str.lower() for p in exhausted_patterns)
+
+    obs['is_tcell'] = obs[celltype_col].apply(is_tcell)
+    obs['is_exhausted'] = obs[celltype_col].apply(is_exhausted)
+
+    # Filter to T cells
+    tcell_mask = obs['is_tcell'].values
+    n_tcells = tcell_mask.sum()
+    log(f"  Found {n_tcells:,} T cells")
+
+    if n_tcells < 100:
+        log("  Warning: Too few T cells for analysis")
+        return pd.DataFrame()
+
+    # Split into exhausted and non-exhausted
+    exhausted_mask = obs['is_exhausted'].values & tcell_mask
+    nonexhausted_mask = ~obs['is_exhausted'].values & tcell_mask
+
+    n_exhausted = exhausted_mask.sum()
+    n_nonexhausted = nonexhausted_mask.sum()
+    log(f"  Exhausted T cells: {n_exhausted:,}")
+    log(f"  Non-exhausted T cells: {n_nonexhausted:,}")
+
+    if n_exhausted < 50 or n_nonexhausted < 50:
+        log("  Warning: Too few cells in one group")
+        return pd.DataFrame()
+
+    results = []
+
+    exhausted_X = X[exhausted_mask, :]
+    nonexhausted_X = X[nonexhausted_mask, :]
+
+    for i, sig in enumerate(signatures):
+        exhausted_vals = exhausted_X[:, i]
+        nonexhausted_vals = nonexhausted_X[:, i]
+
+        # Statistical comparison
+        try:
+            stat, pval = stats.mannwhitneyu(exhausted_vals, nonexhausted_vals, alternative='two-sided')
+        except Exception:
+            stat, pval = np.nan, np.nan
+
+        results.append({
+            'signature': sig,
+            'mean_exhausted': exhausted_vals.mean(),
+            'mean_nonexhausted': nonexhausted_vals.mean(),
+            'median_exhausted': np.median(exhausted_vals),
+            'median_nonexhausted': np.median(nonexhausted_vals),
+            'log2fc': np.log2(exhausted_vals.mean() + 0.01) - np.log2(nonexhausted_vals.mean() + 0.01),
+            'statistic': stat,
+            'pvalue': pval,
+            'n_exhausted': n_exhausted,
+            'n_nonexhausted': n_nonexhausted
+        })
+
+    result_df = pd.DataFrame(results)
+
+    # FDR correction
+    if len(result_df) > 0:
+        try:
+            from statsmodels.stats.multitest import multipletests
+            valid_pvals = result_df['pvalue'].dropna()
+            if len(valid_pvals) > 0:
+                _, pvals_corrected, _, _ = multipletests(valid_pvals.values, method='fdr_bh')
+                result_df.loc[valid_pvals.index, 'qvalue'] = pvals_corrected
+        except ImportError:
+            result_df['qvalue'] = result_df['pvalue']
+
+    log(f"  Computed {len(result_df)} exhaustion comparisons")
+
+    return result_df
+
+
+def compute_caf_signatures(
+    adata: ad.AnnData,
+    celltype_col: str = 'cell_type',
+    cancertype_col: str = 'cancerType'
+) -> pd.DataFrame:
+    """
+    Compute cancer-associated fibroblast (CAF) signatures.
+
+    Identifies fibroblast subtypes and computes activity patterns.
+
+    Returns:
+        DataFrame with CAF subtype activities per cancer type
+    """
+    log("Computing CAF (cancer-associated fibroblast) signatures...")
+
+    # Fibroblast patterns
+    fibroblast_patterns = ['fb', 'fibroblast', 'caf', 'stromal']
+
+    # Get activity matrix
+    if sp.issparse(adata.X):
+        X = adata.X.toarray()
+    else:
+        X = np.array(adata.X)
+
+    signatures = list(adata.var_names)
+    obs = adata.obs.copy()
+
+    # Identify fibroblasts
+    def is_fibroblast(celltype):
+        celltype_str = str(celltype).lower()
+        return any(p in celltype_str for p in fibroblast_patterns)
+
+    obs['is_fibroblast'] = obs[celltype_col].apply(is_fibroblast)
+
+    # Filter to fibroblasts
+    fb_mask = obs['is_fibroblast'].values
+    n_fibroblasts = fb_mask.sum()
+    log(f"  Found {n_fibroblasts:,} fibroblasts")
+
+    if n_fibroblasts < 100:
+        log("  Warning: Too few fibroblasts for analysis")
+        return pd.DataFrame()
+
+    results = []
+
+    # Get unique fibroblast subtypes
+    fb_celltypes = obs.loc[fb_mask, celltype_col].unique()
+    log(f"  Fibroblast subtypes: {len(fb_celltypes)}")
+
+    # Analyze by cancer type if available
+    if cancertype_col in obs.columns:
+        cancer_types = obs.loc[fb_mask, cancertype_col].dropna().unique()
+
+        for ct in cancer_types:
+            ct_fb_mask = fb_mask & (obs[cancertype_col] == ct).values
+            n_ct_fb = ct_fb_mask.sum()
+
+            if n_ct_fb < 50:
+                continue
+
+            ct_fb_X = X[ct_fb_mask, :]
+            mean_activity = ct_fb_X.mean(axis=0)
+
+            for i, sig in enumerate(signatures):
+                results.append({
+                    'cancer_type': ct,
+                    'cell_type': 'All_Fibroblasts',
+                    'signature': sig,
+                    'mean_activity': mean_activity[i],
+                    'n_cells': n_ct_fb
+                })
+
+            # Also compute per fibroblast subtype within this cancer type
+            for fb_ct in fb_celltypes:
+                subtype_mask = ct_fb_mask & (obs[celltype_col] == fb_ct).values
+                n_subtype = subtype_mask.sum()
+
+                if n_subtype < 20:
+                    continue
+
+                subtype_X = X[subtype_mask, :]
+                subtype_mean = subtype_X.mean(axis=0)
+
+                for i, sig in enumerate(signatures):
+                    results.append({
+                        'cancer_type': ct,
+                        'cell_type': fb_ct,
+                        'signature': sig,
+                        'mean_activity': subtype_mean[i],
+                        'n_cells': n_subtype
+                    })
+    else:
+        # Just analyze overall fibroblast subtypes
+        for fb_ct in fb_celltypes:
+            subtype_mask = (obs[celltype_col] == fb_ct).values
+            n_subtype = subtype_mask.sum()
+
+            if n_subtype < 20:
+                continue
+
+            subtype_X = X[subtype_mask, :]
+            subtype_mean = subtype_X.mean(axis=0)
+
+            for i, sig in enumerate(signatures):
+                results.append({
+                    'cancer_type': 'All',
+                    'cell_type': fb_ct,
+                    'signature': sig,
+                    'mean_activity': subtype_mean[i],
+                    'n_cells': n_subtype
+                })
+
+    result_df = pd.DataFrame(results)
+    log(f"  Computed {len(result_df)} CAF signature records")
+
+    return result_df
+
+
+def compute_adjacent_signatures(
+    adata_cancer: ad.AnnData,
+    adata_normal: ad.AnnData = None,
+    tissue_col: str = 'tissue',
+    cancertype_col: str = 'cancerType'
+) -> pd.DataFrame:
+    """
+    Analyze field effect in adjacent tissue.
+
+    Compares Adjacent tissue to Tumor tissue within cancer data,
+    and optionally to Normal tissue from normal organ atlas.
+
+    Returns:
+        DataFrame with adjacent tissue signature differences
+    """
+    log("Computing adjacent tissue signatures (field effect)...")
+
+    # Get activity matrix from cancer data
+    if sp.issparse(adata_cancer.X):
+        X = adata_cancer.X.toarray()
+    else:
+        X = np.array(adata_cancer.X)
+
+    signatures = list(adata_cancer.var_names)
+    obs = adata_cancer.obs.copy()
+
+    # Get tissue types
+    adjacent_mask = (obs[tissue_col] == 'Adjacent').values if tissue_col in obs.columns else None
+    tumor_mask = (obs[tissue_col] == 'Tumor').values if tissue_col in obs.columns else None
+
+    if adjacent_mask is None or tumor_mask is None:
+        log("  Warning: No tissue column found")
+        return pd.DataFrame()
+
+    n_adjacent = adjacent_mask.sum()
+    n_tumor = tumor_mask.sum()
+    log(f"  Adjacent cells: {n_adjacent:,}")
+    log(f"  Tumor cells: {n_tumor:,}")
+
+    if n_adjacent < 100 or n_tumor < 100:
+        log("  Warning: Too few cells for comparison")
+        return pd.DataFrame()
+
+    results = []
+
+    # Overall comparison
+    adjacent_X = X[adjacent_mask, :]
+    tumor_X = X[tumor_mask, :]
+
+    for i, sig in enumerate(signatures):
+        adjacent_vals = adjacent_X[:, i]
+        tumor_vals = tumor_X[:, i]
+
+        try:
+            stat, pval = stats.mannwhitneyu(adjacent_vals, tumor_vals, alternative='two-sided')
+        except Exception:
+            stat, pval = np.nan, np.nan
+
+        results.append({
+            'cancer_type': 'All',
+            'signature': sig,
+            'mean_adjacent': adjacent_vals.mean(),
+            'mean_tumor': tumor_vals.mean(),
+            'log2fc_adj_vs_tumor': np.log2(adjacent_vals.mean() + 0.01) - np.log2(tumor_vals.mean() + 0.01),
+            'statistic': stat,
+            'pvalue': pval,
+            'n_adjacent': n_adjacent,
+            'n_tumor': n_tumor
+        })
+
+    # Per cancer type comparison
+    if cancertype_col in obs.columns:
+        cancer_types = obs[cancertype_col].dropna().unique()
+
+        for ct in cancer_types:
+            ct_adj_mask = adjacent_mask & (obs[cancertype_col] == ct).values
+            ct_tumor_mask = tumor_mask & (obs[cancertype_col] == ct).values
+
+            n_ct_adj = ct_adj_mask.sum()
+            n_ct_tumor = ct_tumor_mask.sum()
+
+            if n_ct_adj < 50 or n_ct_tumor < 50:
+                continue
+
+            ct_adj_X = X[ct_adj_mask, :]
+            ct_tumor_X = X[ct_tumor_mask, :]
+
+            for i, sig in enumerate(signatures):
+                adj_vals = ct_adj_X[:, i]
+                tumor_vals = ct_tumor_X[:, i]
+
+                try:
+                    stat, pval = stats.mannwhitneyu(adj_vals, tumor_vals, alternative='two-sided')
+                except Exception:
+                    stat, pval = np.nan, np.nan
+
+                results.append({
+                    'cancer_type': ct,
+                    'signature': sig,
+                    'mean_adjacent': adj_vals.mean(),
+                    'mean_tumor': tumor_vals.mean(),
+                    'log2fc_adj_vs_tumor': np.log2(adj_vals.mean() + 0.01) - np.log2(tumor_vals.mean() + 0.01),
+                    'statistic': stat,
+                    'pvalue': pval,
+                    'n_adjacent': n_ct_adj,
+                    'n_tumor': n_ct_tumor
+                })
+
+    result_df = pd.DataFrame(results)
+
+    # FDR correction
+    if len(result_df) > 0:
+        try:
+            from statsmodels.stats.multitest import multipletests
+            valid_pvals = result_df['pvalue'].dropna()
+            if len(valid_pvals) > 0:
+                _, pvals_corrected, _, _ = multipletests(valid_pvals.values, method='fdr_bh')
+                result_df.loc[valid_pvals.index, 'qvalue'] = pvals_corrected
+        except ImportError:
+            result_df['qvalue'] = result_df['pvalue']
+
+    log(f"  Computed {len(result_df)} adjacent tissue comparisons")
+
+    return result_df
+
+
 # ==============================================================================
 # Main Analysis Pipeline
 # ==============================================================================
@@ -888,11 +1339,13 @@ def analyze_cancer_atlas():
 
     # Compute activities from raw counts
     # For cancer data, aggregate by tissue type (Tumor/Adjacent) and cell type
+    # Include cancerType and donorID in metadata for downstream analysis
     cytosig_results, secact_results, agg_meta = compute_activities_from_counts(
         CANCER_COUNTS,
         TISSUE_COL,
         CELLTYPE_COARSE,
-        'cancer'
+        'cancer',
+        extra_cols=['cancerType', 'donorID', 'subCluster']
     )
 
     results = {}
@@ -942,6 +1395,54 @@ def analyze_cancer_atlas():
                                results.get('SecAct_cancer', pd.DataFrame())])
         cancer_df.to_csv(OUTPUT_DIR / 'cancer_type_signatures.csv', index=False)
         log(f"Saved cancer type signatures: {len(cancer_df)} rows")
+
+    # Additional analyses using CytoSig results
+    log("\nRunning additional cancer analyses...")
+
+    # Immune infiltration analysis
+    adata_cytosig = activity_to_adata(cytosig_results, agg_meta, 'CytoSig')
+    if 'cancerType' in adata_cytosig.obs.columns:
+        immune_df = compute_immune_infiltration(
+            adata_cytosig, 'tissue', 'cell_type', 'cancerType'
+        )
+        if len(immune_df) > 0:
+            immune_df['signature_type'] = 'CytoSig'
+            immune_df.to_csv(OUTPUT_DIR / 'cancer_immune_infiltration.csv', index=False)
+            log(f"Saved immune infiltration: {len(immune_df)} rows")
+            results['immune_infiltration'] = immune_df
+
+    # T cell exhaustion analysis
+    exhaustion_df = compute_tcell_exhaustion(adata_cytosig, 'cell_type')
+    if len(exhaustion_df) > 0:
+        exhaustion_df['signature_type'] = 'CytoSig'
+        exhaustion_df.to_csv(OUTPUT_DIR / 'cancer_tcell_exhaustion.csv', index=False)
+        log(f"Saved T cell exhaustion: {len(exhaustion_df)} rows")
+        results['tcell_exhaustion'] = exhaustion_df
+
+    # CAF analysis
+    caf_df = compute_caf_signatures(
+        adata_cytosig, 'cell_type',
+        'cancerType' if 'cancerType' in adata_cytosig.obs.columns else None
+    )
+    if len(caf_df) > 0:
+        caf_df['signature_type'] = 'CytoSig'
+        caf_df.to_csv(OUTPUT_DIR / 'cancer_caf_signatures.csv', index=False)
+        log(f"Saved CAF signatures: {len(caf_df)} rows")
+        results['caf_signatures'] = caf_df
+
+    # Adjacent tissue analysis
+    adjacent_df = compute_adjacent_signatures(
+        adata_cytosig, None, 'tissue',
+        'cancerType' if 'cancerType' in adata_cytosig.obs.columns else None
+    )
+    if len(adjacent_df) > 0:
+        adjacent_df['signature_type'] = 'CytoSig'
+        adjacent_df.to_csv(OUTPUT_DIR / 'cancer_adjacent_signatures.csv', index=False)
+        log(f"Saved adjacent signatures: {len(adjacent_df)} rows")
+        results['adjacent_signatures'] = adjacent_df
+
+    del adata_cytosig
+    gc.collect()
 
     return results, cytosig_results, secact_results, agg_meta
 

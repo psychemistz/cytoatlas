@@ -614,23 +614,17 @@ def compute_meta_analysis():
     """Perform meta-analysis of age/sex effects across atlases."""
     log("Computing meta-analysis...")
 
-    # Load correlation results from CIMA (we only have CIMA for now)
-    cima_age_path = RESULTS_DIR / 'cima' / 'CIMA_correlation_age.csv'
-    cima_diff_path = RESULTS_DIR / 'cima' / 'CIMA_differential_demographics.csv'
-
     meta_results = []
 
-    # Age correlations
+    # === CIMA Age Correlations ===
+    cima_age_path = RESULTS_DIR / 'cima' / 'CIMA_correlation_age.csv'
     if cima_age_path.exists():
         age_corr = pd.read_csv(cima_age_path)
         age_corr = age_corr[age_corr['signature'] == 'CytoSig']
 
         for _, row in age_corr.iterrows():
-            # For meta-analysis we need SE. Approximate from n and rho
             n = row['n']
             rho = row['rho']
-
-            # Fisher z-transformation for SE
             z = np.arctanh(rho) if abs(rho) < 1 else 0
             se = 1 / np.sqrt(n - 3) if n > 3 else 0.5
 
@@ -644,18 +638,73 @@ def compute_meta_analysis():
                 'n': int(n),
             })
 
-    # Sex differences
+    # === Inflammation Age Correlations ===
+    # Compute from h5ad if sample metadata is available
+    inflam_meta_path = Path('/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_ATLAS_afterQC_sampleMetadata.csv')
+    inflam_h5ad_path = RESULTS_DIR / 'inflammation' / 'main_CytoSig_pseudobulk.h5ad'
+
+    if inflam_meta_path.exists() and inflam_h5ad_path.exists():
+        log("  Computing Inflammation age correlations...")
+        try:
+            sample_meta = pd.read_csv(inflam_meta_path)
+            meta_age = sample_meta[['sampleID', 'age']].dropna()
+
+            if len(meta_age) >= 10:
+                inflam_adata = ad.read_h5ad(inflam_h5ad_path)
+                activity_df = pd.DataFrame(
+                    inflam_adata.X,
+                    index=inflam_adata.obs_names,
+                    columns=inflam_adata.var_names
+                )
+                var_info = inflam_adata.var[['sample', 'n_cells']].copy()
+
+                # Aggregate to sample level (weighted mean)
+                sample_activity = {}
+                for sample in var_info['sample'].unique():
+                    sample_cols = var_info[var_info['sample'] == sample].index
+                    weights = var_info.loc[sample_cols, 'n_cells'].values
+                    total_weight = weights.sum()
+                    if total_weight > 0:
+                        weighted_mean = (activity_df[sample_cols] * weights).sum(axis=1) / total_weight
+                        sample_activity[sample] = weighted_mean
+
+                sample_activity_df = pd.DataFrame(sample_activity).T
+
+                # Compute correlations with age
+                for sig in sample_activity_df.columns:
+                    merged = meta_age.merge(
+                        sample_activity_df[[sig]].reset_index().rename(columns={'index': 'sampleID', sig: 'activity'}),
+                        on='sampleID', how='inner'
+                    )
+                    if len(merged) >= 10:
+                        rho, pval = stats.spearmanr(merged['age'], merged['activity'])
+                        n = len(merged)
+                        se = 1 / np.sqrt(n - 3) if n > 3 else 0.5
+
+                        meta_results.append({
+                            'analysis': 'age',
+                            'signature': sig,
+                            'atlas': 'Inflammation',
+                            'effect': float(rho),
+                            'se': float(se),
+                            'pvalue': float(pval),
+                            'n': int(n),
+                        })
+
+                log(f"  Inflammation age correlations: {len([r for r in meta_results if r['atlas'] == 'Inflammation' and r['analysis'] == 'age'])}")
+        except Exception as e:
+            log(f"  Warning: Could not compute Inflammation correlations: {e}")
+
+    # === CIMA Sex Differences ===
+    cima_diff_path = RESULTS_DIR / 'cima' / 'CIMA_differential_demographics.csv'
     if cima_diff_path.exists():
         diff = pd.read_csv(cima_diff_path)
         sex_diff = diff[(diff['comparison'] == 'sex') & (diff['signature'] == 'CytoSig')]
 
         for _, row in sex_diff.iterrows():
-            # Effect size: Cohen's d approximation from medians
             median_diff = row['median_g1'] - row['median_g2']
             n1, n2 = row['n_g1'], row['n_g2']
-
-            # Approximate SE from sample sizes
-            se = np.sqrt(1/n1 + 1/n2) * 1.5  # Rough approximation
+            se = np.sqrt(1/n1 + 1/n2) * 1.5
 
             meta_results.append({
                 'analysis': 'sex',
@@ -669,20 +718,63 @@ def compute_meta_analysis():
 
     meta_df = pd.DataFrame(meta_results)
 
-    # For signatures with only one atlas, we can't compute real meta-analysis
-    # But we format the data for the visualization which can show single-study results
+    # === Compute pooled effects and I² for signatures with multiple atlases ===
+    if len(meta_df) > 0:
+        pooled_results = []
+        for analysis_type in meta_df['analysis'].unique():
+            analysis_df = meta_df[meta_df['analysis'] == analysis_type]
+            signatures = analysis_df['signature'].unique()
 
-    # Add placeholder heterogeneity metrics
-    meta_df['I2'] = 0.0  # No heterogeneity with single study
-    meta_df['pooled_effect'] = meta_df['effect']
-    meta_df['pooled_se'] = meta_df['se']
-    meta_df['ci_low'] = meta_df['effect'] - 1.96 * meta_df['se']
-    meta_df['ci_high'] = meta_df['effect'] + 1.96 * meta_df['se']
+            for sig in signatures:
+                sig_data = analysis_df[analysis_df['signature'] == sig]
+                n_atlases = len(sig_data)
+
+                if n_atlases == 1:
+                    # Single study - no pooling possible
+                    row = sig_data.iloc[0]
+                    pooled_results.append({
+                        **row.to_dict(),
+                        'I2': 0.0,
+                        'pooled_effect': row['effect'],
+                        'pooled_se': row['se'],
+                        'ci_low': row['effect'] - 1.96 * row['se'],
+                        'ci_high': row['effect'] + 1.96 * row['se'],
+                        'n_atlases': 1
+                    })
+                else:
+                    # Fixed-effects meta-analysis
+                    effects = sig_data['effect'].values
+                    ses = sig_data['se'].values
+                    weights = 1 / (ses ** 2)
+
+                    pooled_effect = np.sum(weights * effects) / np.sum(weights)
+                    pooled_se = np.sqrt(1 / np.sum(weights))
+
+                    # Q statistic and I²
+                    Q = np.sum(weights * (effects - pooled_effect) ** 2)
+                    df = n_atlases - 1
+                    I2 = max(0, (Q - df) / Q * 100) if Q > 0 else 0
+
+                    # Add individual atlas results
+                    for _, row in sig_data.iterrows():
+                        pooled_results.append({
+                            **row.to_dict(),
+                            'I2': I2,
+                            'pooled_effect': pooled_effect,
+                            'pooled_se': pooled_se,
+                            'ci_low': pooled_effect - 1.96 * pooled_se,
+                            'ci_high': pooled_effect + 1.96 * pooled_se,
+                            'n_atlases': n_atlases
+                        })
+
+        meta_df = pd.DataFrame(pooled_results)
 
     meta_df.to_csv(OUTPUT_DIR / 'meta_analysis.csv', index=False)
 
-    log(f"  Age effects: {len(meta_df[meta_df['analysis'] == 'age'])} signatures")
-    log(f"  Sex effects: {len(meta_df[meta_df['analysis'] == 'sex'])} signatures")
+    log(f"  Total meta-analysis records: {len(meta_df)}")
+    log(f"  Age effects: {len(meta_df[meta_df['analysis'] == 'age'])} records")
+    log(f"  Sex effects: {len(meta_df[meta_df['analysis'] == 'sex'])} records")
+    log(f"  Multi-atlas signatures: {len(meta_df[meta_df['n_atlases'] > 1]['signature'].unique()) if 'n_atlases' in meta_df.columns else 0}")
 
     return meta_df
 
