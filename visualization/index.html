@@ -4709,7 +4709,7 @@
             }
 
             // Check if container is visible (has valid dimensions)
-            const width = container.clientWidth;
+            let width = container.clientWidth;
             if (width < 100) {
                 // Container is likely hidden; defer rendering
                 return;
@@ -4745,7 +4745,7 @@
 
             // Clear and draw
             container.innerHTML = '';
-            const width = container.clientWidth;
+            width = container.clientWidth;  // Re-measure after clearing
             const height = 550;
 
             const svg = d3.select(container)
