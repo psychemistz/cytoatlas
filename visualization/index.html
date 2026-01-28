@@ -1290,15 +1290,15 @@
                     <div class="control-group">
                         <label>Signature Type</label>
                         <select id="inflam-sig-type">
-                            <option value="CytoSig">CytoSig (44 cytokines)</option>
-                            <option value="SecAct">SecAct (top 100 proteins)</option>
+                            <option value="CytoSig">CytoSig (43 cytokines)</option>
+                            <option value="SecAct">SecAct (100 proteins)</option>
+                            <option value="all">All signatures (143)</option>
                         </select>
                     </div>
-                    <div class="control-group">
-                        <label>Signature</label>
-                        <select id="inflam-signature">
-                            <!-- Populated dynamically -->
-                        </select>
+                    <div class="control-group" style="position: relative;">
+                        <label>Search Signature</label>
+                        <input type="text" id="inflam-signature-search" placeholder="Type to search (e.g., IFNG, IL6)" value="IFNG" style="width: 180px;">
+                        <div id="inflam-signature-suggestions" style="position: absolute; top: 100%; left: 0; width: 180px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
                     </div>
                 </div>
 
@@ -3841,25 +3841,65 @@
             updateInflammationHeatmap();
         }
 
+        // Store available inflammation signatures for search
+        let inflammationSignatures = { all: [], cytosig: [], secact: [] };
+
         function populateInflammationSignatures() {
             const data = state.data.inflammationcelltype;
             if (!data) return;
 
+            // Build signature lists
+            const cytosigSigs = [...new Set(data.filter(d =>
+                d.signature_type === 'CytoSig' || !d.signature_type
+            ).map(d => d.signature))].sort();
+
+            const secactSigs = [...new Set(data.filter(d =>
+                d.signature_type === 'SecAct'
+            ).map(d => d.signature))].sort();
+
+            inflammationSignatures = {
+                cytosig: cytosigSigs,
+                secact: secactSigs,
+                all: [...new Set([...cytosigSigs, ...secactSigs])].sort()
+            };
+        }
+
+        function getInflammationSignatures() {
             const sigType = document.getElementById('inflam-sig-type')?.value || 'CytoSig';
+            if (sigType === 'all') return inflammationSignatures.all;
+            if (sigType === 'SecAct') return inflammationSignatures.secact;
+            return inflammationSignatures.cytosig;
+        }
 
-            // Filter by signature type (handle data without signature_type field for backward compatibility)
-            const filteredData = data.filter(d =>
-                d.signature_type === sigType || (!d.signature_type && sigType === 'CytoSig')
-            );
+        function showInflamSignatureSuggestions() {
+            const input = document.getElementById('inflam-signature-search');
+            const suggestionsDiv = document.getElementById('inflam-signature-suggestions');
+            if (!input || !suggestionsDiv) return;
 
-            const signatures = [...new Set(filteredData.map(d => d.signature))].sort();
-            const select = document.getElementById('inflam-signature');
-            if (select) {
-                const defaultSig = sigType === 'CytoSig' ? 'IFNG' : signatures[0];
-                select.innerHTML = signatures.map(s =>
-                    `<option value="${s}"${s === defaultSig ? ' selected' : ''}>${s}</option>`
-                ).join('');
+            const query = input.value.toLowerCase();
+            const signatures = getInflammationSignatures();
+            const filtered = signatures.filter(s => s.toLowerCase().includes(query)).slice(0, 15);
+
+            if (filtered.length === 0) {
+                suggestionsDiv.style.display = 'none';
+                return;
             }
+
+            suggestionsDiv.innerHTML = filtered.map(s =>
+                `<div style="padding: 6px 10px; cursor: pointer; border-bottom: 1px solid #eee;"
+                     onmouseover="this.style.background='#f0f0f0'"
+                     onmouseout="this.style.background='white'"
+                     onclick="selectInflamSignature('${s}')">${s}</div>`
+            ).join('');
+            suggestionsDiv.style.display = 'block';
+        }
+
+        function selectInflamSignature(sig) {
+            const input = document.getElementById('inflam-signature-search');
+            const suggestionsDiv = document.getElementById('inflam-signature-suggestions');
+            if (input) input.value = sig;
+            if (suggestionsDiv) suggestionsDiv.style.display = 'none';
+            updateInflammationBar();
         }
 
         function updateInflammationBar() {
@@ -3870,13 +3910,18 @@
             if (!data) return;
 
             const sigType = document.getElementById('inflam-sig-type')?.value || 'CytoSig';
-            const signature = document.getElementById('inflam-signature')?.value || 'IFNG';
+            const signature = document.getElementById('inflam-signature-search')?.value || 'IFNG';
 
-            // Filter to selected signature type and signature
-            const filtered = data.filter(d =>
-                d.signature === signature &&
-                (d.signature_type === sigType || (!d.signature_type && sigType === 'CytoSig'))
-            );
+            // Filter to selected signature (and optionally by type)
+            let filtered;
+            if (sigType === 'all') {
+                filtered = data.filter(d => d.signature === signature);
+            } else {
+                filtered = data.filter(d =>
+                    d.signature === signature &&
+                    (d.signature_type === sigType || (!d.signature_type && sigType === 'CytoSig'))
+                );
+            }
             filtered.sort((a, b) => b.mean_activity - a.mean_activity);
 
             // Take top 30 cell types
