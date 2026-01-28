@@ -1753,7 +1753,7 @@ def preprocess_cima_biochem_scatter():
 
 
 def preprocess_cima_population_stratification():
-    """Preprocess CIMA population stratification data for multiomics panel."""
+    """Preprocess CIMA population stratification data for all demographic variables."""
     print("Processing CIMA population stratification data...")
 
     try:
@@ -1768,11 +1768,26 @@ def preprocess_cima_population_stratification():
         return None
 
     sample_meta = pd.read_csv(CIMA_META_PATH)
-    sample_meta = sample_meta.rename(columns={'Sample_name': 'sample', 'Age': 'age', 'Sex': 'sex'})
+    # Rename columns - note: 'sex' is already lowercase in source
+    sample_meta = sample_meta.rename(columns={'Sample_name': 'sample', 'Age': 'age'})
 
     # Create stratification groups
     sample_meta['age_group'] = pd.cut(sample_meta['age'], bins=[0, 40, 60, 100],
                                        labels=['Young (<40)', 'Middle (40-60)', 'Older (>60)'])
+
+    # Create BMI groups (using WHO categories)
+    if 'BMI' in sample_meta.columns:
+        sample_meta['bmi_group'] = pd.cut(sample_meta['BMI'], bins=[0, 18.5, 25, 30, 100],
+                                          labels=['Underweight', 'Normal', 'Overweight', 'Obese'])
+
+    # Clean smoking status (note: source has typo 'smoking_ststus')
+    if 'smoking_ststus' in sample_meta.columns:
+        sample_meta['smoking_status'] = sample_meta['smoking_ststus'].fillna('Unknown')
+        # Simplify to Never/Former/Current
+        smoking_map = {'never': 'Never', 'former': 'Former', 'current': 'Current'}
+        sample_meta['smoking_status'] = sample_meta['smoking_status'].str.lower().map(
+            lambda x: smoking_map.get(x, 'Unknown') if pd.notna(x) else 'Unknown'
+        )
 
     # Load activity data
     h5ad_file = CIMA_DIR / "CIMA_CytoSig_pseudobulk.h5ad"
@@ -1802,7 +1817,7 @@ def preprocess_cima_population_stratification():
         on='sample', how='inner'
     )
 
-    cytokines = activity_df.index.tolist()[:20]  # Top 20 cytokines
+    cytokines = activity_df.index.tolist()  # All cytokines
 
     strat_data = {
         'cytokines': cytokines,
@@ -1810,59 +1825,89 @@ def preprocess_cima_population_stratification():
         'effect_sizes': {}
     }
 
-    # Effect sizes by sex
-    sex_effects = []
-    for cyt in cytokines:
-        if cyt in merged.columns:
-            male = merged[merged['sex'] == 'Male'][cyt].dropna()
-            female = merged[merged['sex'] == 'Female'][cyt].dropna()
-            if len(male) > 5 and len(female) > 5:
-                stat, pval = stats.ranksums(male, female)
-                effect = male.mean() - female.mean()
-                sex_effects.append({
-                    'cytokine': cyt,
-                    'effect': round(effect, 4),
-                    'pvalue': round(pval, 6),
-                    'n_male': len(male),
-                    'n_female': len(female)
-                })
-    strat_data['effect_sizes']['sex'] = sex_effects
+    # Helper function for effect size calculation
+    def calc_effect_sizes(group1_data, group2_data, cytokines, n1_label, n2_label):
+        effects = []
+        for cyt in cytokines:
+            if cyt in group1_data.columns and cyt in group2_data.columns:
+                g1 = group1_data[cyt].dropna()
+                g2 = group2_data[cyt].dropna()
+                if len(g1) > 5 and len(g2) > 5:
+                    stat, pval = stats.ranksums(g1, g2)
+                    effect = g1.mean() - g2.mean()
+                    effects.append({
+                        'cytokine': cyt,
+                        'effect': round(effect, 4),
+                        'pvalue': round(pval, 6),
+                        n1_label: len(g1),
+                        n2_label: len(g2)
+                    })
+        return effects
 
-    # Effect sizes by age group
-    age_effects = []
-    for cyt in cytokines:
-        if cyt in merged.columns:
-            young = merged[merged['age_group'] == 'Young (<40)'][cyt].dropna()
-            older = merged[merged['age_group'] == 'Older (>60)'][cyt].dropna()
-            if len(young) > 5 and len(older) > 5:
-                stat, pval = stats.ranksums(older, young)
-                effect = older.mean() - young.mean()
-                age_effects.append({
-                    'cytokine': cyt,
-                    'effect': round(effect, 4),
-                    'pvalue': round(pval, 6),
-                    'n_young': len(young),
-                    'n_older': len(older)
-                })
-    strat_data['effect_sizes']['age'] = age_effects
+    # 1. Sex stratification (Male vs Female)
+    if 'sex' in merged.columns:
+        male = merged[merged['sex'] == 'Male']
+        female = merged[merged['sex'] == 'Female']
+        strat_data['effect_sizes']['sex'] = calc_effect_sizes(male, female, cytokines, 'n_male', 'n_female')
+
+    # 2. Age stratification (Older vs Young)
+    if 'age_group' in merged.columns:
+        young = merged[merged['age_group'] == 'Young (<40)']
+        older = merged[merged['age_group'] == 'Older (>60)']
+        strat_data['effect_sizes']['age'] = calc_effect_sizes(older, young, cytokines, 'n_older', 'n_young')
+
+    # 3. BMI stratification (Obese vs Normal)
+    if 'bmi_group' in merged.columns:
+        normal = merged[merged['bmi_group'] == 'Normal']
+        obese = merged[merged['bmi_group'] == 'Obese']
+        strat_data['effect_sizes']['bmi'] = calc_effect_sizes(obese, normal, cytokines, 'n_obese', 'n_normal')
+
+    # 4. Blood type stratification (O vs A - most common comparison)
+    if 'blood_type' in merged.columns:
+        type_o = merged[merged['blood_type'] == 'O']
+        type_a = merged[merged['blood_type'] == 'A']
+        strat_data['effect_sizes']['blood_type'] = calc_effect_sizes(type_o, type_a, cytokines, 'n_type_o', 'n_type_a')
+
+    # 5. Smoking stratification (Current vs Never)
+    if 'smoking_status' in merged.columns:
+        never = merged[merged['smoking_status'] == 'Never']
+        current = merged[merged['smoking_status'] == 'Current']
+        strat_data['effect_sizes']['smoking'] = calc_effect_sizes(current, never, cytokines, 'n_current', 'n_never')
 
     # Group means for heatmap
-    for group_col, group_name in [('sex', 'sex'), ('age_group', 'age')]:
+    strat_configs = [
+        ('sex', 'sex', ['Male', 'Female']),
+        ('age_group', 'age', ['Young (<40)', 'Middle (40-60)', 'Older (>60)']),
+        ('bmi_group', 'bmi', ['Underweight', 'Normal', 'Overweight', 'Obese']),
+        ('blood_type', 'blood_type', ['O', 'A', 'B', 'AB']),
+        ('smoking_status', 'smoking', ['Never', 'Former', 'Current']),
+    ]
+
+    for group_col, group_name, expected_groups in strat_configs:
+        if group_col not in merged.columns:
+            continue
         group_means = {}
-        for group_val in merged[group_col].dropna().unique():
+        for group_val in expected_groups:
             group_data = merged[merged[group_col] == group_val]
-            means = {}
-            for cyt in cytokines:
-                if cyt in group_data.columns:
-                    means[cyt] = round(group_data[cyt].mean(), 4)
-            group_means[str(group_val)] = means
-        strat_data['groups'][group_name] = group_means
+            if len(group_data) > 0:
+                means = {}
+                for cyt in cytokines:
+                    if cyt in group_data.columns:
+                        val = group_data[cyt].mean()
+                        if pd.notna(val):
+                            means[cyt] = round(val, 4)
+                group_means[str(group_val)] = means
+        if group_means:
+            strat_data['groups'][group_name] = group_means
 
     with open(OUTPUT_DIR / "cima_population_stratification.json", 'w') as f:
         json.dump(strat_data, f)
 
-    print(f"  Sex effects: {len(sex_effects)}")
-    print(f"  Age effects: {len(age_effects)}")
+    print(f"  Sex effects: {len(strat_data['effect_sizes'].get('sex', []))}")
+    print(f"  Age effects: {len(strat_data['effect_sizes'].get('age', []))}")
+    print(f"  BMI effects: {len(strat_data['effect_sizes'].get('bmi', []))}")
+    print(f"  Blood type effects: {len(strat_data['effect_sizes'].get('blood_type', []))}")
+    print(f"  Smoking effects: {len(strat_data['effect_sizes'].get('smoking', []))}")
     return strat_data
 
 
@@ -2157,7 +2202,7 @@ def create_embedded_data():
         'cima_celltype_correlations.json',
         'cima_biochem_scatter.json',
         'cima_population_stratification.json',
-        # 'cima_eqtl.json',  # Excluded - lazy loaded separately (39 MB)
+        'cima_eqtl.json',  # Full eQTL data (14 MB) - now embedded directly
         'scatlas_organs.json',
         'scatlas_organs_top.json',
         'scatlas_celltypes.json',
@@ -2193,27 +2238,6 @@ def create_embedded_data():
                 print(f"  Embedded {json_file}: {size_kb:.1f} KB")
         else:
             print(f"  Skipping {json_file} (not found)")
-
-    # Add small subset of eQTL data for initial fast visualization (500 eQTLs)
-    # Full data (223K) is loaded on demand via "Load full data" button
-    eqtl_top_path = OUTPUT_DIR / 'cima_eqtl_top.json'
-    if eqtl_top_path.exists():
-        with open(eqtl_top_path) as f:
-            eqtl_data = json.load(f)
-            # Embed only first 500 eQTLs for fast initial rendering
-            embedded['cimaeqtltop'] = {
-                'summary': {
-                    **eqtl_data['summary'],
-                    'displayed_eqtls': 500,
-                    'note': 'Showing top 500 most significant cis-eQTLs for fast initial loading. Click "Load full data" for all 71,530 eQTLs.'
-                },
-                'cell_types': eqtl_data['cell_types'],
-                'genes': eqtl_data['genes'][:50],  # Top 50 genes
-                'eqtls': eqtl_data['eqtls'][:500]  # Top 500 eQTLs
-            }
-            print(f"  Embedded cima_eqtl_top.json (subset): 500 eQTLs for initial view")
-    else:
-        print(f"  Skipping cima_eqtl_top.json (not found)")
 
     # Write as JavaScript
     js_content = f"const EMBEDDED_DATA = {json.dumps(embedded)};\n"

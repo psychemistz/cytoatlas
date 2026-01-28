@@ -1238,10 +1238,9 @@
                 </div>
 
                 <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
-                    <strong>cis-eQTL Browser:</strong> <span id="eqtl-count-display">Showing top 500 most significant eQTLs</span> (of 71,530 total) across 69 immune cell types.
+                    <strong>cis-eQTL Browser:</strong> <span id="eqtl-count-display">71,530 cis-eQTLs</span> across 69 immune cell types.
                     Explore genetic variants (SNPs) associated with gene expression in immune cells.
                     <br><small style="color: #666;">Data: CIMA Lead cis-eQTL (study-wise FDR < 0.05). 9,600 genes with significant eQTLs.</small>
-                    <br><button id="eqtl-load-full" onclick="loadFullEqtlData()" style="margin-top: 0.5rem; padding: 0.3rem 0.8rem; cursor: pointer;">Load full data (71,530 eQTLs, ~14 MB)</button>
                 </div>
 
                 <div class="two-col">
@@ -2460,7 +2459,7 @@
                 cimametabolitestop: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.cimametabolitestop : null,
                 cimabiochemscatter: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.cimabiochemscatter : null,
                 cimapopulationstratification: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.cimapopulationstratification : null,
-                cimaeqtl: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.cimaeqtltop : null,  // Top 500 eQTLs embedded for fast initial load
+                cimaeqtl: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.cimaeqtl : null,  // Full 71,530 eQTLs embedded
                 scatlasorgans: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.scatlasorgans : null,
                 scatlasorganstop: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.scatlasorganstop : null,
                 scatlascelltypes: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.scatlascelltypes : null,
@@ -4766,12 +4765,12 @@
             const countDisplay = document.getElementById('eqtl-count-display');
             if (btn) {
                 btn.disabled = true;
-                btn.textContent = 'Loading full data (~40 MB)...';
+                btn.textContent = 'Loading full data (~14 MB)...';
             }
 
             try {
                 const response = await fetch('data/cima_eqtl.json');
-                if (!response.ok) throw new Error('Failed to load full eQTL data');
+                if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 state.data.cimaeqtl = await response.json();
                 eqtlFullDataLoaded = true;
                 console.log('Full eQTL data loaded:', state.data.cimaeqtl.summary);
@@ -4783,7 +4782,8 @@
                 console.error('Error loading full eQTL data:', error);
                 if (btn) {
                     btn.disabled = false;
-                    btn.textContent = 'Load full data (failed - retry)';
+                    btn.textContent = 'Load failed - use HTTP server';
+                    btn.title = error.message + '. File:// protocol does not support fetch. Use: python -m http.server';
                 }
             }
         }
