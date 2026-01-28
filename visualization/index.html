@@ -1322,11 +1322,12 @@
                         <label>Signature Type</label>
                         <select id="inflam-corr-sig-type">
                             <option value="CytoSig">CytoSig (43 cytokines)</option>
-                            <option value="SecAct">SecAct (top 100 proteins)</option>
+                            <option value="SecAct">SecAct (1,170 proteins)</option>
+                            <option value="both">Both (CytoSig + SecAct)</option>
                         </select>
                     </div>
                 </div>
-                <p style="color: #666; margin-bottom: 1rem;">Spearman correlations with patient age and BMI.</p>
+                <p style="color: #666; margin-bottom: 1rem;">Spearman correlations with patient age and BMI. Showing top correlations sorted from high to low.</p>
 
                 <div class="two-col">
                     <div class="viz-container" style="min-height: 550px;">
@@ -5026,65 +5027,115 @@
         function updateInflamCorrelations() {
             const data = state.data.inflammationcorrelations;
             if (!data) {
-                // Data not yet loaded - show placeholder
                 const ageContainer = document.getElementById('inflam-age-lollipop');
                 const bmiContainer = document.getElementById('inflam-bmi-lollipop');
                 if (ageContainer) {
                     ageContainer.classList.remove('loading');
-                    ageContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 2rem;">Age/BMI correlation data not yet available. Running preprocessing...</p>';
+                    ageContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 2rem;">Age/BMI correlation data not yet available.</p>';
                 }
                 if (bmiContainer) {
                     bmiContainer.classList.remove('loading');
-                    bmiContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 2rem;">Age/BMI correlation data not yet available. Running preprocessing...</p>';
+                    bmiContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 2rem;">Age/BMI correlation data not yet available.</p>';
                 }
                 return;
             }
-            createInflamCorrelationChart('inflam-age-lollipop', data.age, 'Age');
-            createInflamCorrelationChart('inflam-bmi-lollipop', data.bmi, 'BMI');
-        }
-
-        function createInflamCorrelationChart(containerId, data, title) {
-            const container = document.getElementById(containerId);
-            if (!container || !data) return;
 
             const sigType = document.getElementById('inflam-corr-sig-type')?.value || 'CytoSig';
-            const filtered = data.filter(d => d.signature === sigType);
-            filtered.sort((a, b) => b.rho - a.rho);
 
-            const top20 = filtered.slice(0, 20);
-            const bottom20 = filtered.slice(-20);
-            // Combine and reverse so highest values appear at top in horizontal bar chart
-            const displayData = [...top20, ...bottom20].reverse();
+            // Helper: get top 10 + bottom 10 correlations
+            function getTopBottom(dataArr, sigFilter) {
+                const filtered = dataArr.filter(d => d.signature === sigFilter);
+                filtered.sort((a, b) => b.rho - a.rho);
+                const top10 = filtered.slice(0, 10);
+                const bottom10 = filtered.slice(-10);
+                return [...top10, ...bottom10];
+            }
+
+            if (sigType === 'both') {
+                // Show CytoSig and SecAct side by side
+                const ageCytoSig = getTopBottom(data.age, 'CytoSig');
+                const ageSecAct = getTopBottom(data.age, 'SecAct');
+                createInflamDualChart('inflam-age-lollipop', ageCytoSig, ageSecAct, 'Age');
+
+                const bmiCytoSig = getTopBottom(data.bmi, 'CytoSig');
+                const bmiSecAct = getTopBottom(data.bmi, 'SecAct');
+                createInflamDualChart('inflam-bmi-lollipop', bmiCytoSig, bmiSecAct, 'BMI');
+            } else {
+                const ageData = getTopBottom(data.age, sigType);
+                createInflamDualChart('inflam-age-lollipop', ageData, [], 'Age');
+
+                const bmiData = getTopBottom(data.bmi, sigType);
+                createInflamDualChart('inflam-bmi-lollipop', bmiData, [], 'BMI');
+            }
+        }
+
+        function createInflamDualChart(containerId, primaryData, secondaryData, title) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
 
             container.classList.remove('loading');
             Plotly.purge(container);
 
-            if (displayData.length === 0) {
+            if (!primaryData || primaryData.length === 0) {
                 container.innerHTML = '<p style="text-align: center; color: #666; padding: 2rem;">No correlation data available</p>';
                 return;
             }
 
-            const maxAbs = Math.max(...displayData.map(d => Math.abs(d.rho)));
+            const hasBoth = secondaryData && secondaryData.length > 0;
+            let combinedY = [], combinedX = [], combinedColors = [], combinedText = [];
+
+            if (hasBoth) {
+                // SecAct section (bottom)
+                const secActReversed = [...secondaryData].reverse();
+                for (const d of secActReversed) {
+                    combinedY.push(d.protein + ' (SecAct)');
+                    combinedX.push(d.rho);
+                    combinedColors.push(d.rho > 0 ? '#f4a6a6' : '#a8d4e6');
+                    combinedText.push(d.rho?.toFixed(3) || 'N/A');
+                }
+
+                // Separator
+                combinedY.push('─────────────');
+                combinedX.push(0);
+                combinedColors.push('#ffffff');
+                combinedText.push('');
+
+                // CytoSig section (top)
+                const cytoSigReversed = [...primaryData].reverse();
+                for (const d of cytoSigReversed) {
+                    combinedY.push(d.protein + ' (CytoSig)');
+                    combinedX.push(d.rho);
+                    combinedColors.push(d.rho > 0 ? '#f4a6a6' : '#a8d4e6');
+                    combinedText.push(d.rho?.toFixed(3));
+                }
+            } else {
+                // Single signature type
+                const reversed = [...primaryData].reverse();
+                for (const d of reversed) {
+                    combinedY.push(d.protein);
+                    combinedX.push(d.rho);
+                    combinedColors.push(d.rho > 0 ? '#f4a6a6' : '#a8d4e6');
+                    combinedText.push(d.rho?.toFixed(3));
+                }
+            }
+
+            const maxAbs = Math.max(...combinedX.filter(x => x !== 0).map(x => Math.abs(x)), 0.3);
 
             Plotly.newPlot(container, [{
-                y: displayData.map(d => d.protein),
-                x: displayData.map(d => d.rho),
+                y: combinedY,
+                x: combinedX,
                 type: 'bar',
                 orientation: 'h',
-                marker: {
-                    color: displayData.map(d => d.rho > 0 ? '#f4a6a6' : '#a8d4e6')
-                },
-                text: displayData.map(d => d.rho?.toFixed(2)),
-                textposition: 'outside',
-                textfont: { size: 11, color: '#333' },
-                constraintext: 'none',
-                cliponaxis: false,
+                marker: { color: combinedColors },
+                text: combinedText,
+                textposition: combinedX.map(x => Math.abs(x) < 0.1 ? 'outside' : 'inside'),
+                textfont: { size: 9, color: '#333' },
                 hovertemplate: '<b>%{y}</b><br>ρ = %{x:.3f}<extra></extra>'
             }], {
-                margin: {l: 140, r: 70, t: 30, b: 50},
-                xaxis: {title: 'Spearman ρ', zeroline: true, zerolinecolor: '#ccc', range: [-maxAbs - 0.15, maxAbs + 0.15]},
+                margin: {l: 150, r: 50, t: 30, b: 50},
+                xaxis: {title: 'Spearman ρ', zeroline: true, zerolinecolor: '#ccc', range: [-maxAbs - 0.1, maxAbs + 0.1]},
                 yaxis: {automargin: true},
-                height: 550
+                height: hasBoth ? 600 : 550
             }, {responsive: true});
         }
 
