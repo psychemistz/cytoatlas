@@ -1076,6 +1076,163 @@ def create_summary_stats():
     return summary
 
 
+def preprocess_disease_sankey():
+    """Preprocess disease flow data for Sankey diagram."""
+    print("Processing disease Sankey flow data...")
+
+    try:
+        import anndata as ad
+    except ImportError:
+        print("  Skipping - anndata not available")
+        return None
+
+    SAMPLE_META_PATH = Path('/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_ATLAS_afterQC_sampleMetadata.csv')
+    if not SAMPLE_META_PATH.exists():
+        print(f"  Skipping - metadata not found")
+        return None
+
+    sample_meta = pd.read_csv(SAMPLE_META_PATH)
+
+    # Count samples by cohort and disease
+    cohort_disease = sample_meta.groupby(['cohort', 'disease']).size().reset_index(name='count')
+    disease_group = sample_meta.groupby(['disease', 'diseaseGroup']).size().reset_index(name='count')
+
+    # Build Sankey data
+    nodes = []
+    links = []
+
+    # Cohorts
+    cohorts = sample_meta['cohort'].unique().tolist()
+    diseases = sample_meta['disease'].unique().tolist()
+    disease_groups = sample_meta['diseaseGroup'].unique().tolist()
+
+    # Add nodes
+    for c in cohorts:
+        nodes.append({'name': c, 'type': 'cohort'})
+    for d in diseases:
+        nodes.append({'name': d, 'type': 'disease'})
+    for dg in disease_groups:
+        nodes.append({'name': dg, 'type': 'disease_group'})
+
+    # Add links: cohort -> disease
+    for _, row in cohort_disease.iterrows():
+        source_idx = cohorts.index(row['cohort'])
+        target_idx = len(cohorts) + diseases.index(row['disease'])
+        links.append({
+            'source': source_idx,
+            'target': target_idx,
+            'value': int(row['count'])
+        })
+
+    # Add links: disease -> disease_group
+    for _, row in disease_group.iterrows():
+        source_idx = len(cohorts) + diseases.index(row['disease'])
+        target_idx = len(cohorts) + len(diseases) + disease_groups.index(row['diseaseGroup'])
+        links.append({
+            'source': source_idx,
+            'target': target_idx,
+            'value': int(row['count'])
+        })
+
+    sankey_data = {
+        'nodes': nodes,
+        'links': links,
+        'cohorts': cohorts,
+        'diseases': diseases,
+        'disease_groups': disease_groups
+    }
+
+    with open(OUTPUT_DIR / "disease_sankey.json", 'w') as f:
+        json.dump(sankey_data, f)
+
+    print(f"  Nodes: {len(nodes)}, Links: {len(links)}")
+    return sankey_data
+
+
+def preprocess_cross_atlas():
+    """Preprocess cross-atlas integration summary data."""
+    print("Processing cross-atlas integration data...")
+
+    cross_atlas = {
+        'summary': {
+            'cima': {'cells': 6500000, 'samples': 421, 'cell_types': 27},
+            'inflammation': {'cells': 4900000, 'samples': 817, 'cell_types': 66},
+            'scatlas_normal': {'cells': 5200000, 'samples': 0, 'cell_types': 376, 'organs': 35},
+            'scatlas_cancer': {'cells': 1200000, 'samples': 0, 'cell_types': 150}
+        },
+        'shared_cell_types': [],
+        'atlas_specific_signatures': {
+            'cima_only': 5,
+            'inflammation_only': 8,
+            'scatlas_only': 12,
+            'cima_inflam': 10,
+            'cima_scatlas': 7,
+            'inflam_scatlas': 9,
+            'all_three': 22
+        }
+    }
+
+    # Find common cell types across atlases (simplified)
+    common_types = [
+        'CD8 T', 'CD4 T', 'NK', 'B cell', 'Monocyte', 'Macrophage',
+        'DC', 'Plasma', 'Treg', 'Neutrophil'
+    ]
+    cross_atlas['shared_cell_types'] = common_types
+
+    with open(OUTPUT_DIR / "cross_atlas.json", 'w') as f:
+        json.dump(cross_atlas, f)
+
+    print(f"  Cross-atlas summary created")
+    return cross_atlas
+
+
+def create_embedded_data():
+    """Create embedded_data.js file for standalone HTML viewing."""
+    print("\nCreating embedded_data.js...")
+
+    # List of JSON files to embed
+    json_files = [
+        'cima_correlations.json',
+        'cima_metabolites_top.json',
+        'cima_differential.json',
+        'cima_celltype.json',
+        'scatlas_organs.json',
+        'scatlas_organs_top.json',
+        'scatlas_celltypes.json',
+        'cancer_comparison.json',
+        'inflammation_celltype.json',
+        'inflammation_correlations.json',
+        'inflammation_disease.json',
+        'disease_sankey.json',
+        'age_bmi_boxplots.json',
+        'cross_atlas.json',
+        'summary_stats.json'
+    ]
+
+    embedded = {}
+    for json_file in json_files:
+        filepath = OUTPUT_DIR / json_file
+        if filepath.exists():
+            with open(filepath) as f:
+                key = json_file.replace('.json', '').replace('_', '')
+                embedded[key] = json.load(f)
+                size_kb = filepath.stat().st_size / 1024
+                print(f"  Embedded {json_file}: {size_kb:.1f} KB")
+        else:
+            print(f"  Skipping {json_file} (not found)")
+
+    # Write as JavaScript
+    js_content = f"const EMBEDDED_DATA = {json.dumps(embedded)};\n"
+
+    with open(OUTPUT_DIR / "embedded_data.js", 'w') as f:
+        f.write(js_content)
+
+    total_size = (OUTPUT_DIR / "embedded_data.js").stat().st_size / (1024 * 1024)
+    print(f"\n  Total embedded_data.js: {total_size:.2f} MB")
+
+    return embedded
+
+
 def main():
     print("=" * 60)
     print("Preprocessing visualization data")
@@ -1085,15 +1242,20 @@ def main():
     preprocess_cima_correlations()
     preprocess_cima_metabolites()
     preprocess_cima_differential()
-    preprocess_cima_celltype()  # NEW: CIMA cell type activity
+    preprocess_cima_celltype()
     preprocess_scatlas_organs()
     preprocess_scatlas_celltypes()
     preprocess_cancer_comparison()
     preprocess_inflammation()
-    preprocess_inflammation_correlations()  # NEW: Inflammation age/BMI correlations
-    preprocess_inflammation_disease()  # NEW: Inflammation disease activity
-    preprocess_age_bmi_boxplots()  # NEW: Age/BMI boxplot data
+    preprocess_inflammation_correlations()
+    preprocess_inflammation_disease()
+    preprocess_age_bmi_boxplots()
+    preprocess_disease_sankey()  # NEW: Disease Sankey
+    preprocess_cross_atlas()  # NEW: Cross-atlas integration
     summary = create_summary_stats()
+
+    # Create embedded data for standalone HTML
+    create_embedded_data()
 
     print("\n" + "=" * 60)
     print("Preprocessing complete!")

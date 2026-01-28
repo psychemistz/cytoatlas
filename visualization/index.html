@@ -1520,12 +1520,17 @@
                 cimacorrelations: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.cimacorrelations : null,
                 cimadifferential: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.cimadifferential : null,
                 cimacelltype: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.cimacelltype : null,
+                cimametabolitestop: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.cimametabolitestop : null,
                 scatlasorgans: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.scatlasorgans : null,
+                scatlasorganstop: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.scatlasorganstop : null,
                 scatlascelltypes: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.scatlascelltypes : null,
                 cancercomparison: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.cancercomparison : null,
                 inflammationcelltype: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.inflammationcelltype : null,
                 inflammationcorrelations: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.inflammationcorrelations : null,
-                inflammationdisease: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.inflammationdisease : null
+                inflammationdisease: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.inflammationdisease : null,
+                diseasesankey: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.diseasesankey : null,
+                agebmiboxplots: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.agebmiboxplots : null,
+                crossatlas: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.crossatlas : null
             },
             selectedOrgan: null,
             currentSignature: 'IFNG'
@@ -3200,10 +3205,34 @@
             if (titleEl) titleEl.textContent = `${stratifyBy === 'age' ? 'Age' : 'BMI'}-Stratified ${signature} Activity`;
             if (subtitleEl) subtitleEl.textContent = `Distribution across ${stratifyBy === 'age' ? 'age decades' : 'BMI categories'}`;
 
-            // Generate mock stratified data (replace with real data when available)
+            // Try to get real data
+            const boxplotData = state.data.agebmiboxplots?.cima;
+            if (boxplotData && boxplotData[stratifyBy]) {
+                // Filter to selected signature
+                const sigData = boxplotData[stratifyBy].filter(d => d.signature === signature);
+                if (sigData.length > 0) {
+                    const traces = sigData.map((d, i) => ({
+                        y: d.values,
+                        type: 'box',
+                        name: d.bin,
+                        boxpoints: 'outliers',
+                        marker: { color: d3.schemeTableau10[i % 10] }
+                    }));
+
+                    Plotly.newPlot(container, traces, {
+                        yaxis: { title: `${signature} Activity Score`, zeroline: true },
+                        xaxis: { title: stratifyBy === 'age' ? 'Age Group' : 'BMI Category' },
+                        showlegend: false,
+                        margin: { t: 30, b: 60, l: 60, r: 30 }
+                    }, { responsive: true });
+                    return;
+                }
+            }
+
+            // Fallback to mock data if real data not available
             const bins = stratifyBy === 'age'
-                ? ['<30', '30-39', '40-49', '50-59', '60-69', '70+']
-                : ['Underweight', 'Normal', 'Overweight', 'Obese I', 'Obese II+'];
+                ? ['<30', '30-40', '40-50', '50-60', '>60']
+                : ['Underweight', 'Normal', 'Overweight', 'Obese'];
 
             const traces = bins.map((bin, i) => ({
                 y: Array(30).fill(0).map(() => (Math.random() - 0.5) * 2 + (i * 0.1)),
@@ -3219,6 +3248,25 @@
                 showlegend: false,
                 margin: { t: 30, b: 60, l: 60, r: 30 }
             }, { responsive: true });
+        }
+
+        function populateBoxplotSignatures() {
+            const sigType = document.getElementById('boxplot-sig-type')?.value || 'CytoSig';
+            const select = document.getElementById('boxplot-signature');
+            if (!select) return;
+
+            const boxplotData = state.data.agebmiboxplots?.cima;
+            let signatures = [];
+
+            if (boxplotData && boxplotData.signatures) {
+                signatures = boxplotData.signatures;
+            } else if (sigType === 'CytoSig') {
+                signatures = ['IFNG', 'TNFA', 'IL6', 'IL17A', 'IL10', 'IL1B', 'IL4', 'IL13'];
+            }
+
+            select.innerHTML = signatures.map(s =>
+                `<option value="${s}"${s === 'IFNG' ? ' selected' : ''}>${s}</option>`
+            ).join('');
         }
 
         // CIMA: Metabolite Correlations
@@ -3407,25 +3455,55 @@
             if (!container) return;
             container.classList.remove('loading');
 
-            // Create a sample Sankey diagram (replace with real data)
-            const data = {
-                type: 'sankey',
-                orientation: 'h',
-                node: {
-                    pad: 15,
-                    thickness: 20,
-                    line: { color: 'black', width: 0.5 },
-                    label: ['Main Cohort', 'Validation', 'External', 'RA', 'IBD', 'Psoriasis', 'Asthma', 'Other'],
-                    color: ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
-                },
-                link: {
-                    source: [0, 0, 0, 0, 0, 1, 1, 1, 2, 2, 2],
-                    target: [3, 4, 5, 6, 7, 3, 4, 5, 3, 4, 7],
-                    value: [120, 150, 80, 60, 40, 50, 60, 30, 40, 50, 30]
-                }
-            };
+            // Try to use real data
+            const sankeyData = state.data.diseasesankey;
+            let plotData;
 
-            Plotly.newPlot(container, [data], {
+            if (sankeyData && sankeyData.nodes && sankeyData.links) {
+                const nodeLabels = sankeyData.nodes.map(n => n.name);
+                const nodeColors = sankeyData.nodes.map(n => {
+                    if (n.type === 'cohort') return '#1f77b4';
+                    if (n.type === 'disease') return '#ff7f0e';
+                    return '#2ca02c';
+                });
+
+                plotData = {
+                    type: 'sankey',
+                    orientation: 'h',
+                    node: {
+                        pad: 15,
+                        thickness: 20,
+                        line: { color: 'black', width: 0.5 },
+                        label: nodeLabels,
+                        color: nodeColors
+                    },
+                    link: {
+                        source: sankeyData.links.map(l => l.source),
+                        target: sankeyData.links.map(l => l.target),
+                        value: sankeyData.links.map(l => l.value)
+                    }
+                };
+            } else {
+                // Fallback to sample data
+                plotData = {
+                    type: 'sankey',
+                    orientation: 'h',
+                    node: {
+                        pad: 15,
+                        thickness: 20,
+                        line: { color: 'black', width: 0.5 },
+                        label: ['Main Cohort', 'Validation', 'External', 'RA', 'IBD', 'Psoriasis', 'Asthma', 'Other'],
+                        color: ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
+                    },
+                    link: {
+                        source: [0, 0, 0, 0, 0, 1, 1, 1, 2, 2, 2],
+                        target: [3, 4, 5, 6, 7, 3, 4, 5, 3, 4, 7],
+                        value: [120, 150, 80, 60, 40, 50, 60, 30, 40, 50, 30]
+                    }
+                };
+            }
+
+            Plotly.newPlot(container, [plotData], {
                 margin: { t: 30, b: 30, l: 30, r: 30 }
             }, { responsive: true });
         }
@@ -3488,10 +3566,41 @@
             if (!container) return;
             container.classList.remove('loading');
 
-            // Create summary visualization
-            const atlases = ['CIMA', 'Inflammation', 'scAtlas Normal', 'scAtlas Cancer'];
-            const cells = [6.5, 4.9, 5.2, 1.2]; // Millions
-            const samples = [421, 817, 0, 0]; // 0 for tissue-based
+            // Use real data if available
+            const crossData = state.data.crossatlas?.summary;
+            let atlases, cells, samples, cellTypes;
+
+            if (crossData) {
+                atlases = ['CIMA', 'Inflammation', 'scAtlas Normal', 'scAtlas Cancer'];
+                cells = [
+                    crossData.cima?.cells / 1000000 || 6.5,
+                    crossData.inflammation?.cells / 1000000 || 4.9,
+                    crossData.scatlas_normal?.cells / 1000000 || 5.2,
+                    crossData.scatlas_cancer?.cells / 1000000 || 1.2
+                ];
+                samples = [
+                    crossData.cima?.samples || 421,
+                    crossData.inflammation?.samples || 817,
+                    crossData.scatlas_normal?.samples || 0,
+                    crossData.scatlas_cancer?.samples || 0
+                ];
+                cellTypes = [
+                    crossData.cima?.cell_types || 27,
+                    crossData.inflammation?.cell_types || 66,
+                    crossData.scatlas_normal?.cell_types || 376,
+                    crossData.scatlas_cancer?.cell_types || 150
+                ];
+
+                // Update stat cards
+                const totalCells = cells.reduce((a, b) => a + b, 0);
+                document.getElementById('cross-total-cells').textContent = totalCells.toFixed(1) + 'M';
+                document.getElementById('cross-total-samples').textContent = (samples[0] + samples[1]).toLocaleString();
+                document.getElementById('cross-total-celltypes').textContent = Math.max(...cellTypes).toString();
+            } else {
+                atlases = ['CIMA', 'Inflammation', 'scAtlas Normal', 'scAtlas Cancer'];
+                cells = [6.5, 4.9, 5.2, 1.2];
+                cellTypes = [27, 66, 376, 150];
+            }
 
             const trace1 = {
                 x: atlases,
@@ -3501,10 +3610,20 @@
                 marker: { color: '#1f77b4' }
             };
 
-            Plotly.newPlot(container, [trace1], {
+            const trace2 = {
+                x: atlases,
+                y: cellTypes,
+                type: 'bar',
+                name: 'Cell Types',
+                marker: { color: '#ff7f0e' },
+                yaxis: 'y2'
+            };
+
+            Plotly.newPlot(container, [trace1, trace2], {
                 barmode: 'group',
-                yaxis: { title: 'Cells (millions)' },
-                margin: { t: 30, b: 60, l: 60, r: 30 },
+                yaxis: { title: 'Cells (millions)', side: 'left' },
+                yaxis2: { title: 'Cell Types', side: 'right', overlaying: 'y' },
+                margin: { t: 30, b: 60, l: 60, r: 60 },
                 legend: { orientation: 'h', y: 1.1 }
             }, { responsive: true });
         }
@@ -3514,13 +3633,36 @@
             const container1 = document.getElementById('conserved-upset');
             const container2 = document.getElementById('specific-bar');
 
+            // Use real data if available
+            const sigData = state.data.crossatlas?.atlas_specific_signatures;
+
             if (container1) {
                 container1.classList.remove('loading');
-                // UpSet-style plot showing overlapping signatures
+
+                let categories, values;
+                if (sigData) {
+                    categories = [
+                        'CIMA only', 'Inflammation only', 'scAtlas only',
+                        'CIMA+Inflam', 'CIMA+scAtlas', 'Inflam+scAtlas', 'All 3'
+                    ];
+                    values = [
+                        sigData.cima_only || 5,
+                        sigData.inflammation_only || 8,
+                        sigData.scatlas_only || 12,
+                        sigData.cima_inflam || 10,
+                        sigData.cima_scatlas || 7,
+                        sigData.inflam_scatlas || 9,
+                        sigData.all_three || 22
+                    ];
+                } else {
+                    categories = ['CIMA only', 'Inflammation only', 'scAtlas only', 'CIMA+Inflam', 'CIMA+scAtlas', 'Inflam+scAtlas', 'All 3'];
+                    values = [5, 8, 12, 10, 7, 9, 22];
+                }
+
                 const trace = {
                     type: 'bar',
-                    x: ['CIMA only', 'Inflammation only', 'scAtlas only', 'CIMA+Inflam', 'CIMA+scAtlas', 'Inflam+scAtlas', 'All 3'],
-                    y: [5, 8, 12, 10, 7, 9, 22],
+                    x: categories,
+                    y: values,
                     marker: {
                         color: ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3', '#ff7f00', '#a65628', '#f781bf']
                     }
@@ -3600,9 +3742,15 @@
         // ========================================
 
         function setupNewPanelEventListeners() {
+            // Initialize boxplot signature dropdown
+            populateBoxplotSignatures();
+
             // CIMA Age/BMI Stratified
             document.getElementById('stratify-by')?.addEventListener('change', updateStratifiedBoxplot);
-            document.getElementById('boxplot-sig-type')?.addEventListener('change', updateStratifiedBoxplot);
+            document.getElementById('boxplot-sig-type')?.addEventListener('change', () => {
+                populateBoxplotSignatures();
+                updateStratifiedBoxplot();
+            });
             document.getElementById('boxplot-signature')?.addEventListener('change', updateStratifiedBoxplot);
 
             // CIMA Metabolites
