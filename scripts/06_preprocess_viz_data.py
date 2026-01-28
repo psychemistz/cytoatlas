@@ -1632,7 +1632,7 @@ def preprocess_cross_atlas():
 
 
 def preprocess_cima_biochem_scatter():
-    """Preprocess CIMA sample-level biochemistry vs activity scatter data."""
+    """Preprocess CIMA sample-level biochemistry vs activity scatter data (CytoSig + SecAct)."""
     print("Processing CIMA biochem scatter data...")
 
     try:
@@ -1660,60 +1660,85 @@ def preprocess_cima_biochem_scatter():
     # Merge
     meta_with_biochem = sample_meta.merge(biochem_df, on='sample', how='inner')
 
-    # Load activity data
-    h5ad_file = CIMA_DIR / "CIMA_CytoSig_pseudobulk.h5ad"
-    if not h5ad_file.exists():
-        print("  Skipping - activity data not found")
+    # Helper function to aggregate activity to sample level
+    def aggregate_to_sample_level(h5ad_file):
+        if not h5ad_file.exists():
+            return None
+        adata = ad.read_h5ad(h5ad_file)
+        activity_df = pd.DataFrame(adata.X, index=adata.obs_names, columns=adata.var_names)
+        sample_info = adata.var[['sample', 'cell_type', 'n_cells']].copy()
+
+        sample_activity = {}
+        for sample in sample_info['sample'].unique():
+            sample_cols = sample_info[sample_info['sample'] == sample].index
+            weights = sample_info.loc[sample_cols, 'n_cells'].values
+            total_weight = weights.sum()
+            if total_weight > 0:
+                weighted_mean = (activity_df[sample_cols] * weights).sum(axis=1) / total_weight
+                sample_activity[sample] = weighted_mean
+        return pd.DataFrame(sample_activity).T  # rows=samples, columns=signatures
+
+    # Load CytoSig activity data
+    cytosig_file = CIMA_DIR / "CIMA_CytoSig_pseudobulk.h5ad"
+    cytosig_activity_df = aggregate_to_sample_level(cytosig_file)
+    if cytosig_activity_df is None:
+        print("  Skipping - CytoSig activity data not found")
         return None
 
-    adata = ad.read_h5ad(h5ad_file)
-    activity_df = pd.DataFrame(adata.X, index=adata.obs_names, columns=adata.var_names)
-    sample_info = adata.var[['sample', 'cell_type', 'n_cells']].copy()
-
-    # Aggregate activity to sample level (weighted by n_cells)
-    sample_activity = {}
-    for sample in sample_info['sample'].unique():
-        sample_cols = sample_info[sample_info['sample'] == sample].index
-        weights = sample_info.loc[sample_cols, 'n_cells'].values
-        total_weight = weights.sum()
-        if total_weight > 0:
-            weighted_mean = (activity_df[sample_cols] * weights).sum(axis=1) / total_weight
-            sample_activity[sample] = weighted_mean
-
-    sample_activity_df = pd.DataFrame(sample_activity).T
-    # After .T: rows=samples, columns=cytokines
+    # Load SecAct activity data
+    secact_file = CIMA_DIR / "CIMA_SecAct_pseudobulk.h5ad"
+    secact_activity_df = aggregate_to_sample_level(secact_file)
 
     # Merge activity with biochemistry
-    scatter_data = {'samples': [], 'biochem_features': [], 'cytokines': []}
+    scatter_data = {
+        'samples': [],
+        'biochem_features': [],
+        'cytokines': cytosig_activity_df.columns.tolist(),
+        'secact_proteins': secact_activity_df.columns.tolist() if secact_activity_df is not None else []
+    }
 
     # Get biochem columns (numeric only)
     biochem_cols = [c for c in biochem_df.columns if c != 'sample' and biochem_df[c].dtype in ['float64', 'int64']]
     scatter_data['biochem_features'] = biochem_cols[:20]  # Top 20 features
-    scatter_data['cytokines'] = sample_activity_df.columns.tolist()  # Cytokines are columns after .T
 
     # Create sample-level data
     for _, row in meta_with_biochem.iterrows():
         sample = row['sample']
-        if sample in sample_activity_df.index:  # Samples are in index after .T
+        if sample in cytosig_activity_df.index:
+            # Get sex value - use bracket notation for proper Series access
+            sex_val = row['sex'] if 'sex' in row.index and pd.notna(row['sex']) else None
+            age_val = row['Age'] if 'Age' in row.index and pd.notna(row['Age']) else None
+            bmi_val = row['BMI'] if 'BMI' in row.index and pd.notna(row['BMI']) else None
+
             sample_data = {
                 'sample': sample,
-                'age': row.get('Age', None),
-                'sex': row.get('sex', None),  # lowercase 'sex' in CIMA metadata
-                'bmi': row.get('BMI', None),
+                'age': int(age_val) if age_val is not None else None,
+                'sex': sex_val,
+                'bmi': round(float(bmi_val), 2) if bmi_val is not None else None,
                 'biochem': {},
-                'activity': {}
+                'activity': {},  # CytoSig activities
+                'secact_activity': {}  # SecAct activities
             }
+
             # Add biochem values
             for col in scatter_data['biochem_features']:
-                val = row.get(col, None)
-                if pd.notna(val):
-                    sample_data['biochem'][col] = round(float(val), 4)
+                if col in row.index:
+                    val = row[col]
+                    if pd.notna(val):
+                        sample_data['biochem'][col] = round(float(val), 4)
 
-            # Add activity values
+            # Add CytoSig activity values
             for cyt in scatter_data['cytokines']:
-                val = sample_activity_df.loc[sample, cyt]  # samples are rows, cytokines are columns
+                val = cytosig_activity_df.loc[sample, cyt]
                 if pd.notna(val):
                     sample_data['activity'][cyt] = round(float(val), 4)
+
+            # Add SecAct activity values
+            if secact_activity_df is not None and sample in secact_activity_df.index:
+                for prot in scatter_data['secact_proteins']:
+                    val = secact_activity_df.loc[sample, prot]
+                    if pd.notna(val):
+                        sample_data['secact_activity'][prot] = round(float(val), 4)
 
             scatter_data['samples'].append(sample_data)
 
@@ -1722,6 +1747,8 @@ def preprocess_cima_biochem_scatter():
 
     print(f"  Samples: {len(scatter_data['samples'])}")
     print(f"  Biochem features: {len(scatter_data['biochem_features'])}")
+    print(f"  CytoSig signatures: {len(scatter_data['cytokines'])}")
+    print(f"  SecAct proteins: {len(scatter_data['secact_proteins'])}")
     return scatter_data
 
 
