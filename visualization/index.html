@@ -2635,14 +2635,18 @@
                 `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td></tr>`
             ).join('');
 
-            // Inflammation Atlas data sources table
+            // Inflammation Atlas data sources table (10 analyses)
             const inflamData = [
-                ['Disease Differential', 'Disease vs healthy activity comparisons', '12+ diseases'],
-                ['Treatment Response', 'Responder vs non-responder prediction', '6 diseases'],
-                ['Cell Type Stratified', 'Disease differential per cell type', stats.inflammation?.n_cell_types + ' cell types' || '-'],
-                ['Driving Populations', 'Top cell types driving disease signatures', 'Per disease'],
-                ['Conserved Programs', 'Cytokine programs shared across diseases', '3+ diseases'],
-                ['Cross-Cohort Validation', 'Main, validation, external cohort comparison', '3 cohorts']
+                ['Cell Types', '66 cell types × (43 CytoSig + 100 SecAct proteins)', '9,438'],
+                ['Age & BMI', '143 proteins × 2 features (age, BMI) correlations', '286'],
+                ['Disease', 'Disease vs healthy differential across 12+ diseases', '54,137'],
+                ['Demographics', 'Sex, smoking, and other demographic associations', 'Per category'],
+                ['Treatment Response', 'Responder vs non-responder ML prediction (8 diseases)', '288'],
+                ['Disease Flow', 'Sankey diagram: 20 diseases × 6 disease groups × 3 cohorts', '136'],
+                ['Validation', 'Cross-cohort consistency (main, validation, external)', '23'],
+                ['Longitudinal', 'Time-course cytokine dynamics during treatment', 'Per disease'],
+                ['Severity', 'Disease severity correlation with cytokine activity', 'Per disease'],
+                ['Cell Drivers', 'Top driving cell types per disease-cytokine pair', 'Per disease']
             ];
             document.getElementById('data-sources-inflammation').innerHTML = inflamData.map(row =>
                 `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td></tr>`
