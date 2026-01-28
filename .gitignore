@@ -55,9 +55,10 @@ slurm_logs/
 *.out
 *.err
 
-# Visualization large data (too large for git)
+# Visualization data files (generated, can be regenerated)
+visualization/data/*.json
+visualization/data/*.js
 visualization/data/*.h5ad
-visualization/data/*_large.json
 
 # Coverage
 .coverage

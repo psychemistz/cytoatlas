@@ -149,15 +149,8 @@ def preprocess_inflammation():
         # Get cell type info
         celltype_info = adata.var[['sample', 'cell_type', 'n_cells']].copy()
 
-        # For SecAct, limit to top 100 most variable signatures
+        # Use all signatures (no filtering)
         signatures = activity_df.index.tolist()
-        if sig_type == 'SecAct' and len(signatures) > 100:
-            # Calculate variance across all samples for each signature
-            sig_variance = activity_df.var(axis=1)
-            top_signatures = sig_variance.nlargest(100).index.tolist()
-            activity_df = activity_df.loc[top_signatures]
-            signatures = top_signatures
-            print(f"    Filtered to top 100 most variable SecAct signatures")
 
         # Aggregate by cell type (mean across samples)
         for ct in celltype_info['cell_type'].unique():
@@ -203,14 +196,8 @@ def preprocess_scatlas_organs():
     # Process CytoSig (all signatures)
     cytosig_df = organ_df[organ_df['signature_type'] == 'CytoSig'].copy()
 
-    # Process SecAct (top 100 most variable signatures to limit file size)
+    # Process SecAct (all signatures)
     secact_df = organ_df[organ_df['signature_type'] == 'SecAct'].copy()
-    if len(secact_df) > 0:
-        # Calculate variance per signature across organs
-        sig_variance = secact_df.groupby('signature')['mean_activity'].var()
-        top_secact_sigs = sig_variance.nlargest(100).index.tolist()
-        secact_df = secact_df[secact_df['signature'].isin(top_secact_sigs)]
-        print(f"  SecAct: filtered to top 100 most variable signatures")
 
     # Combine CytoSig and SecAct
     combined_df = pd.concat([cytosig_df, secact_df], ignore_index=True)
@@ -259,16 +246,9 @@ def preprocess_scatlas_celltypes():
     cytosig_df = ct_df[ct_df['signature_type'] == 'CytoSig'].copy()
     cytosig_signatures = sorted(cytosig_df['signature'].unique().tolist())
 
-    # Process SecAct - top 50 most variable signatures
+    # Process SecAct - all signatures
     secact_df = ct_df[ct_df['signature_type'] == 'SecAct'].copy()
-    if len(secact_df) > 0:
-        sig_variance = secact_df.groupby('signature')['mean_activity'].var()
-        top_secact_sigs = sig_variance.nlargest(50).index.tolist()
-        secact_df = secact_df[secact_df['signature'].isin(top_secact_sigs)]
-        secact_signatures = sorted(secact_df['signature'].unique().tolist())
-        print(f"  SecAct: filtered to top 50 most variable signatures")
-    else:
-        secact_signatures = []
+    secact_signatures = sorted(secact_df['signature'].unique().tolist()) if len(secact_df) > 0 else []
 
     # Combine both signature types
     combined_df = pd.concat([cytosig_df, secact_df], ignore_index=True)
@@ -439,18 +419,13 @@ def preprocess_cancer_comparison():
     # Get SecAct signature names
     secact_beta = pd.read_csv(SCATLAS_DIR / "cancer_secact_beta.csv", index_col=0)
     secact_signatures = secact_beta.index.tolist()
+    print(f"  SecAct signatures: {len(secact_signatures)}")
 
-    # Get top 50 most variable SecAct signatures from the aggregated data
-    sig_variance = secact_beta.var(axis=1)
-    top_secact_sigs = sig_variance.nlargest(50).index.tolist()
-    top_secact_idx = [secact_signatures.index(s) for s in top_secact_sigs]
-    print(f"  Top 50 SecAct signatures selected")
-
-    # Load activities for paired cells (only top 50 signatures)
-    activities_secact_matrix = activity_secact[paired_indices, :][:, top_secact_idx].X
+    # Load activities for paired cells (all signatures)
+    activities_secact_matrix = activity_secact[paired_indices, :].X
     activities_secact = pd.DataFrame(
         activities_secact_matrix,
-        columns=top_secact_sigs
+        columns=secact_signatures
     )
     activities_secact['donorID'] = obs_paired['donorID'].values
     activities_secact['tissue'] = obs_paired['tissue'].values
@@ -468,7 +443,7 @@ def preprocess_cancer_comparison():
         adjacent_row = agg_secact[(agg_secact['donorID'] == donor) & (agg_secact['cell_type'] == ct) & (agg_secact['tissue'] == 'Adjacent')]
 
         if len(tumor_row) == 1 and len(adjacent_row) == 1:
-            for sig in top_secact_sigs:
+            for sig in secact_signatures:
                 tumor_val = tumor_row[sig].values[0]
                 adjacent_val = adjacent_row[sig].values[0]
                 diff = tumor_val - adjacent_val
@@ -567,14 +542,9 @@ def preprocess_cima_celltype():
         # Get cell type info
         celltype_info = adata.var[['sample', 'cell_type', 'n_cells']].copy()
 
-        # For SecAct, limit to top 100 most variable signatures
+        # Include all signatures (no filtering)
         signatures = activity_df.index.tolist()
-        if sig_type == 'SecAct' and len(signatures) > 100:
-            sig_variance = activity_df.var(axis=1)
-            top_signatures = sig_variance.nlargest(100).index.tolist()
-            activity_df = activity_df.loc[top_signatures]
-            signatures = top_signatures
-            print(f"    Filtered to top 100 most variable SecAct signatures")
+        print(f"    Including all {len(signatures)} {sig_type} signatures")
 
         # Aggregate by cell type (mean across samples)
         for ct in celltype_info['cell_type'].unique():
@@ -604,6 +574,119 @@ def preprocess_cima_celltype():
     print(f"  Total output records: {len(all_celltype_activity)}")
 
     return all_celltype_activity
+
+
+def preprocess_cima_celltype_correlations():
+    """Preprocess CIMA cell type-specific age/BMI correlations."""
+    print("Processing CIMA cell type-specific age/BMI correlations...")
+
+    from scipy.stats import spearmanr
+    from statsmodels.stats.multitest import multipletests
+
+    try:
+        import anndata as ad
+    except ImportError:
+        print("  Skipping - anndata not available")
+        return None
+
+    # Load sample metadata
+    CIMA_META_PATH = Path('/data/Jiang_Lab/Data/Seongyong/CIMA/Metadata/CIMA_Sample_Information_Metadata.csv')
+    if not CIMA_META_PATH.exists():
+        print(f"  Skipping - metadata not found")
+        return None
+
+    sample_meta = pd.read_csv(CIMA_META_PATH)
+    sample_meta = sample_meta.rename(columns={'Sample_name': 'sample', 'Age': 'age'})
+    meta_age = sample_meta[['sample', 'age']].dropna().set_index('sample')
+    meta_bmi = sample_meta[['sample', 'BMI']].dropna().set_index('sample')
+
+    correlations = {'age': [], 'bmi': []}
+
+    # Process both CytoSig and SecAct
+    for sig_type in ['CytoSig', 'SecAct']:
+        h5ad_file = CIMA_DIR / f"CIMA_{sig_type}_pseudobulk.h5ad"
+        if not h5ad_file.exists():
+            print(f"  Skipping {sig_type} - file not found")
+            continue
+
+        adata = ad.read_h5ad(h5ad_file)
+        print(f"  {sig_type} shape: {adata.shape}")
+
+        # Activity matrix: proteins x sample_celltype
+        activity_df = pd.DataFrame(
+            adata.X,
+            index=adata.obs_names,
+            columns=adata.var_names
+        )
+
+        # Cell type info
+        sample_info = adata.var[['sample', 'cell_type', 'n_cells']].copy()
+        cell_types = sample_info['cell_type'].unique()
+        proteins = activity_df.index.tolist()
+
+        print(f"  Computing correlations for {len(cell_types)} cell types × {len(proteins)} proteins...")
+
+        # Compute correlations per cell type
+        for ct in cell_types:
+            ct_cols = sample_info[sample_info['cell_type'] == ct].index
+            ct_samples = sample_info.loc[ct_cols, 'sample'].values
+
+            # Get activity values for this cell type
+            ct_activity = activity_df[ct_cols].T
+            ct_activity.index = ct_samples
+
+            # Age correlations
+            common_age = ct_activity.index.intersection(meta_age.index)
+            if len(common_age) >= 10:
+                for protein in proteins:
+                    x = meta_age.loc[common_age, 'age'].values
+                    y = ct_activity.loc[common_age, protein].values
+                    mask = ~(np.isnan(x) | np.isnan(y))
+                    if mask.sum() >= 10:
+                        rho, pval = spearmanr(x[mask], y[mask])
+                        correlations['age'].append({
+                            'cell_type': ct,
+                            'protein': protein,
+                            'signature': sig_type,
+                            'rho': round(rho, 4),
+                            'pvalue': pval,
+                            'n': int(mask.sum())
+                        })
+
+            # BMI correlations
+            common_bmi = ct_activity.index.intersection(meta_bmi.index)
+            if len(common_bmi) >= 10:
+                for protein in proteins:
+                    x = meta_bmi.loc[common_bmi, 'BMI'].values
+                    y = ct_activity.loc[common_bmi, protein].values
+                    mask = ~(np.isnan(x) | np.isnan(y))
+                    if mask.sum() >= 10:
+                        rho, pval = spearmanr(x[mask], y[mask])
+                        correlations['bmi'].append({
+                            'cell_type': ct,
+                            'protein': protein,
+                            'signature': sig_type,
+                            'rho': round(rho, 4),
+                            'pvalue': pval,
+                            'n': int(mask.sum())
+                        })
+
+    # FDR correction
+    for feature in ['age', 'bmi']:
+        if correlations[feature]:
+            pvals = [d['pvalue'] for d in correlations[feature]]
+            _, qvals, _, _ = multipletests(pvals, method='fdr_bh')
+            for i, d in enumerate(correlations[feature]):
+                d['qvalue'] = round(qvals[i], 4)
+
+    # Save
+    with open(OUTPUT_DIR / "cima_celltype_correlations.json", 'w') as f:
+        json.dump(correlations, f)
+
+    print(f"  Age correlations: {len(correlations['age'])}")
+    print(f"  BMI correlations: {len(correlations['bmi'])}")
+
+    return correlations
 
 
 def preprocess_inflammation_correlations():
@@ -665,13 +748,8 @@ def preprocess_inflammation_correlations():
 
         sample_activity_df = pd.DataFrame(sample_activity).T
 
-        # For SecAct, limit to top 100 signatures
+        # Use all signatures (no filtering)
         signatures = sample_activity_df.columns.tolist()
-        if sig_type == 'SecAct' and len(signatures) > 100:
-            sig_variance = sample_activity_df.var(axis=0)
-            top_signatures = sig_variance.nlargest(100).index.tolist()
-            sample_activity_df = sample_activity_df[top_signatures]
-            signatures = top_signatures
 
         # Compute correlations with age
         for sig in signatures:
@@ -844,10 +922,13 @@ def preprocess_age_bmi_boxplots():
         cima_meta['bmi_bin'] = pd.cut(cima_meta['BMI'], bins=[0, 18.5, 25, 30, 100],
                                        labels=['Underweight', 'Normal', 'Overweight', 'Obese'])
 
-        # Load CIMA pseudobulk for sample-level activity
-        cima_h5ad = CIMA_DIR / "CIMA_CytoSig_pseudobulk.h5ad"
-        if cima_h5ad.exists():
-            adata = ad.read_h5ad(cima_h5ad)
+        # Helper function to process activity data
+        def process_activity_file(h5ad_path, cima_meta, sig_type):
+            """Load and process activity h5ad file."""
+            if not h5ad_path.exists():
+                return None, []
+
+            adata = ad.read_h5ad(h5ad_path)
             activity_df = pd.DataFrame(
                 adata.X,
                 index=adata.obs_names,
@@ -866,26 +947,23 @@ def preprocess_age_bmi_boxplots():
                     sample_activity[sample] = weighted_mean
 
             sample_activity_df = pd.DataFrame(sample_activity).T
-
-            # Merge with metadata
             sample_activity_df = sample_activity_df.reset_index().rename(columns={'index': 'sample'})
             sample_activity_df = sample_activity_df.merge(
                 cima_meta[['sample', 'age_bin', 'bmi_bin']], on='sample', how='left'
             )
 
-            # Get top 10 most variable signatures
             sig_cols = [c for c in sample_activity_df.columns if c not in ['sample', 'age_bin', 'bmi_bin']]
-            sig_variance = sample_activity_df[sig_cols].var()
-            top_sigs = sig_variance.nlargest(20).index.tolist()
+            all_sigs = sorted(sig_cols)
 
             # Prepare boxplot data for age bins
             age_data = []
-            for sig in top_sigs:
+            for sig in all_sigs:
                 for bin_val in ['<30', '30-40', '40-50', '50-60', '>60']:
                     bin_data = sample_activity_df[sample_activity_df['age_bin'] == bin_val][sig].dropna()
                     if len(bin_data) >= 3:
                         age_data.append({
                             'signature': sig,
+                            'sig_type': sig_type,
                             'bin': bin_val,
                             'values': [round(v, 4) for v in bin_data.tolist()],
                             'mean': round(bin_data.mean(), 4),
@@ -895,12 +973,13 @@ def preprocess_age_bmi_boxplots():
 
             # Prepare boxplot data for BMI bins
             bmi_data = []
-            for sig in top_sigs:
+            for sig in all_sigs:
                 for bin_val in ['Underweight', 'Normal', 'Overweight', 'Obese']:
                     bin_data = sample_activity_df[sample_activity_df['bmi_bin'] == bin_val][sig].dropna()
                     if len(bin_data) >= 3:
                         bmi_data.append({
                             'signature': sig,
+                            'sig_type': sig_type,
                             'bin': bin_val,
                             'values': [round(v, 4) for v in bin_data.tolist()],
                             'mean': round(bin_data.mean(), 4),
@@ -908,13 +987,33 @@ def preprocess_age_bmi_boxplots():
                             'n': len(bin_data)
                         })
 
-            boxplot_data['cima'] = {
-                'age': age_data,
-                'bmi': bmi_data,
-                'signatures': top_sigs
-            }
-            print(f"    CIMA age boxplots: {len(age_data)}")
-            print(f"    CIMA BMI boxplots: {len(bmi_data)}")
+            return {'age': age_data, 'bmi': bmi_data}, all_sigs
+
+        # Process CytoSig
+        cytosig_data, cytosig_sigs = process_activity_file(
+            CIMA_DIR / "CIMA_CytoSig_pseudobulk.h5ad", cima_meta, 'CytoSig'
+        )
+
+        # Process SecAct
+        secact_data, secact_sigs = process_activity_file(
+            CIMA_DIR / "CIMA_SecAct_pseudobulk.h5ad", cima_meta, 'SecAct'
+        )
+
+        # Combine data
+        age_data = (cytosig_data['age'] if cytosig_data else []) + (secact_data['age'] if secact_data else [])
+        bmi_data = (cytosig_data['bmi'] if cytosig_data else []) + (secact_data['bmi'] if secact_data else [])
+
+        boxplot_data['cima'] = {
+            'age': age_data,
+            'bmi': bmi_data,
+            'cytosig_signatures': cytosig_sigs,
+            'secact_signatures': secact_sigs,
+            'all_signatures': cytosig_sigs + secact_sigs
+        }
+        print(f"    CIMA CytoSig: {len(cytosig_sigs)} proteins")
+        print(f"    CIMA SecAct: {len(secact_sigs)} proteins")
+        print(f"    CIMA age boxplots: {len(age_data)}")
+        print(f"    CIMA BMI boxplots: {len(bmi_data)}")
 
     # === Inflammation Atlas ===
     print("  Processing Inflammation Atlas...")
@@ -2028,12 +2127,20 @@ def create_embedded_data():
         'cima_metabolites_top.json',
         'cima_differential.json',
         'cima_celltype.json',
+        'cima_celltype_correlations.json',
         'cima_biochem_scatter.json',
         'cima_population_stratification.json',
+        # 'cima_eqtl.json',  # Excluded - lazy loaded separately (39 MB)
         'scatlas_organs.json',
         'scatlas_organs_top.json',
         'scatlas_celltypes.json',
         'cancer_comparison.json',
+        'cancer_types.json',  # NEW
+        'immune_infiltration.json',  # NEW
+        'exhaustion.json',  # NEW
+        'caf_signatures.json',  # NEW
+        'organ_cancer_matrix.json',  # NEW
+        'adjacent_tissue.json',  # NEW
         'inflammation_celltype.json',
         'inflammation_correlations.json',
         'inflammation_disease.json',
@@ -2060,6 +2167,27 @@ def create_embedded_data():
         else:
             print(f"  Skipping {json_file} (not found)")
 
+    # Add small subset of eQTL data for initial fast visualization (500 eQTLs)
+    # Full data (223K) is loaded on demand via "Load full data" button
+    eqtl_top_path = OUTPUT_DIR / 'cima_eqtl_top.json'
+    if eqtl_top_path.exists():
+        with open(eqtl_top_path) as f:
+            eqtl_data = json.load(f)
+            # Embed only first 500 eQTLs for fast initial rendering
+            embedded['cimaeqtltop'] = {
+                'summary': {
+                    **eqtl_data['summary'],
+                    'displayed_eqtls': 500,
+                    'note': 'Showing top 500 most significant eQTLs for fast initial loading. Click "Load full data" for all 223,405 eQTLs.'
+                },
+                'cell_types': eqtl_data['cell_types'],
+                'genes': eqtl_data['genes'][:50],  # Top 50 genes
+                'eqtls': eqtl_data['eqtls'][:500]  # Top 500 eQTLs
+            }
+            print(f"  Embedded cima_eqtl_top.json (subset): 500 eQTLs for initial view")
+    else:
+        print(f"  Skipping cima_eqtl_top.json (not found)")
+
     # Write as JavaScript
     js_content = f"const EMBEDDED_DATA = {json.dumps(embedded)};\n"
 
@@ -2072,6 +2200,256 @@ def create_embedded_data():
     return embedded
 
 
+def preprocess_cancer_types():
+    """Preprocess cancer type-specific signature data."""
+    print("Processing cancer type signatures...")
+
+    # Check for cancer type signatures file
+    cancer_types_path = SCATLAS_DIR / "cancer_type_signatures.csv"
+    if not cancer_types_path.exists():
+        print("  cancer_type_signatures.csv not found - skipping")
+        return None
+
+    df = pd.read_csv(cancer_types_path)
+    print(f"  Loaded {len(df)} records")
+
+    # Process for visualization
+    cancer_types = sorted(df['organ'].unique().tolist())  # organ column contains cancerType
+    signatures = sorted(df['signature'].unique().tolist())
+
+    # Filter to CytoSig for manageable size
+    cytosig_df = df[df['signature_type'] == 'CytoSig'].copy()
+
+    # Create output
+    cancer_data = {
+        'data': cytosig_df[['organ', 'signature', 'mean_activity', 'specificity_score', 'n_cells']].rename(
+            columns={'organ': 'cancer_type'}
+        ).round(4).to_dict('records'),
+        'cancer_types': cancer_types,
+        'signatures': [s for s in signatures if s in cytosig_df['signature'].values]
+    }
+
+    with open(OUTPUT_DIR / "cancer_types.json", 'w') as f:
+        json.dump(cancer_data, f)
+
+    print(f"  Cancer types: {len(cancer_types)}")
+    print(f"  Output records: {len(cancer_data['data'])}")
+    return cancer_data
+
+
+def preprocess_immune_infiltration():
+    """Preprocess immune infiltration data."""
+    print("Processing immune infiltration data...")
+
+    infiltration_path = SCATLAS_DIR / "cancer_immune_infiltration.csv"
+    if not infiltration_path.exists():
+        print("  cancer_immune_infiltration.csv not found - skipping")
+        return None
+
+    df = pd.read_csv(infiltration_path)
+    print(f"  Loaded {len(df)} records")
+
+    # Aggregate: mean per cancer type for each signature
+    agg = df.groupby(['cancer_type', 'signature']).agg({
+        'immune_proportion': 'first',
+        'n_immune': 'first',
+        'n_total': 'first',
+        'mean_immune_activity': 'mean',
+        'mean_nonimmune_activity': 'mean',
+        'immune_enrichment': 'mean'
+    }).reset_index()
+
+    infiltration_data = {
+        'data': agg.round(4).to_dict('records'),
+        'cancer_types': sorted(df['cancer_type'].unique().tolist()),
+        'signatures': sorted(df['signature'].unique().tolist())
+    }
+
+    with open(OUTPUT_DIR / "immune_infiltration.json", 'w') as f:
+        json.dump(infiltration_data, f)
+
+    print(f"  Output records: {len(infiltration_data['data'])}")
+    return infiltration_data
+
+
+def preprocess_exhaustion():
+    """Preprocess T cell exhaustion data."""
+    print("Processing T cell exhaustion data...")
+
+    exhaustion_path = SCATLAS_DIR / "cancer_tcell_exhaustion.csv"
+    if not exhaustion_path.exists():
+        print("  cancer_tcell_exhaustion.csv not found - skipping")
+        return None
+
+    df = pd.read_csv(exhaustion_path)
+    print(f"  Loaded {len(df)} records")
+
+    # Filter to significant results for visualization
+    if 'qvalue' in df.columns:
+        significant = df[df['qvalue'] < 0.1].copy()
+    else:
+        significant = df.copy()
+
+    exhaustion_data = {
+        'data': significant.round(4).to_dict('records'),
+        'signatures': sorted(df['signature'].unique().tolist()),
+        'n_exhausted': int(df['n_exhausted'].iloc[0]) if len(df) > 0 else 0,
+        'n_nonexhausted': int(df['n_nonexhausted'].iloc[0]) if len(df) > 0 else 0
+    }
+
+    with open(OUTPUT_DIR / "exhaustion.json", 'w') as f:
+        json.dump(exhaustion_data, f)
+
+    print(f"  Output records: {len(exhaustion_data['data'])}")
+    return exhaustion_data
+
+
+def preprocess_caf():
+    """Preprocess cancer-associated fibroblast (CAF) data."""
+    print("Processing CAF signatures...")
+
+    caf_path = SCATLAS_DIR / "cancer_caf_signatures.csv"
+    if not caf_path.exists():
+        print("  cancer_caf_signatures.csv not found - skipping")
+        return None
+
+    df = pd.read_csv(caf_path)
+    print(f"  Loaded {len(df)} records")
+
+    # Get unique cancer types and CAF subtypes
+    cancer_types = sorted(df['cancer_type'].unique().tolist())
+    cell_types = sorted(df['cell_type'].unique().tolist())
+
+    caf_data = {
+        'data': df.round(4).to_dict('records'),
+        'cancer_types': cancer_types,
+        'cell_types': cell_types,
+        'signatures': sorted(df['signature'].unique().tolist())
+    }
+
+    with open(OUTPUT_DIR / "caf_signatures.json", 'w') as f:
+        json.dump(caf_data, f)
+
+    print(f"  Cancer types: {len(cancer_types)}")
+    print(f"  CAF subtypes: {len(cell_types)}")
+    print(f"  Output records: {len(caf_data['data'])}")
+    return caf_data
+
+
+def preprocess_organ_cancer_matrix():
+    """Preprocess organ-cancer comparison matrix."""
+    print("Processing organ-cancer matrix...")
+
+    # Load normal organ signatures
+    normal_path = SCATLAS_DIR / "normal_organ_signatures.csv"
+    cancer_path = SCATLAS_DIR / "cancer_type_signatures.csv"
+
+    if not normal_path.exists():
+        print("  normal_organ_signatures.csv not found - skipping")
+        return None
+
+    normal_df = pd.read_csv(normal_path)
+    normal_df = normal_df[normal_df['signature_type'] == 'CytoSig']
+
+    # Organ-cancer mapping
+    organ_cancer_map = {
+        'Liver': ['HCC', 'ICC', 'LIHC'],
+        'Lung': ['LUAD', 'LUSC', 'NSCLC'],
+        'Breast': ['BRCA'],
+        'Colon': ['CRC', 'COAD'],
+        'Kidney': ['KIRC', 'KIRP'],
+        'Pancreas': ['PAAD'],
+        'Stomach': ['STAD'],
+        'Prostate': ['PRAD'],
+        'Ovary': ['OV'],
+        'Skin': ['SKCM', 'ALM'],
+        'Thyroid': ['THCA']
+    }
+
+    matrix_data = {
+        'normal_organs': [],
+        'cancer_types': [],
+        'comparisons': []
+    }
+
+    # Get organ means from normal atlas
+    organ_means = normal_df.groupby(['organ', 'signature'])['mean_activity'].mean().reset_index()
+
+    if cancer_path.exists():
+        cancer_df = pd.read_csv(cancer_path)
+        cancer_df = cancer_df[cancer_df['signature_type'] == 'CytoSig']
+        cancer_means = cancer_df.groupby(['organ', 'signature'])['mean_activity'].mean().reset_index()
+        cancer_means = cancer_means.rename(columns={'organ': 'cancer_type'})
+
+        # Build comparisons
+        for organ, cancer_list in organ_cancer_map.items():
+            organ_data = organ_means[organ_means['organ'].str.lower().str.contains(organ.lower())]
+            if len(organ_data) == 0:
+                continue
+
+            matrix_data['normal_organs'].append(organ)
+
+            for cancer_type in cancer_list:
+                cancer_data = cancer_means[cancer_means['cancer_type'] == cancer_type]
+                if len(cancer_data) == 0:
+                    continue
+
+                if cancer_type not in matrix_data['cancer_types']:
+                    matrix_data['cancer_types'].append(cancer_type)
+
+                # Compute mean difference across signatures
+                merged = organ_data.merge(cancer_data, on='signature', suffixes=('_normal', '_cancer'))
+                if len(merged) > 0:
+                    merged['difference'] = merged['mean_activity_cancer'] - merged['mean_activity_normal']
+                    for _, row in merged.iterrows():
+                        matrix_data['comparisons'].append({
+                            'organ': organ,
+                            'cancer_type': cancer_type,
+                            'signature': row['signature'],
+                            'normal_activity': round(row['mean_activity_normal'], 4),
+                            'cancer_activity': round(row['mean_activity_cancer'], 4),
+                            'difference': round(row['difference'], 4)
+                        })
+
+    with open(OUTPUT_DIR / "organ_cancer_matrix.json", 'w') as f:
+        json.dump(matrix_data, f)
+
+    print(f"  Normal organs: {len(matrix_data['normal_organs'])}")
+    print(f"  Cancer types: {len(matrix_data['cancer_types'])}")
+    print(f"  Comparisons: {len(matrix_data['comparisons'])}")
+    return matrix_data
+
+
+def preprocess_adjacent_tissue():
+    """Preprocess adjacent tissue field effect data."""
+    print("Processing adjacent tissue data...")
+
+    adjacent_path = SCATLAS_DIR / "cancer_adjacent_signatures.csv"
+    if not adjacent_path.exists():
+        print("  cancer_adjacent_signatures.csv not found - skipping")
+        return None
+
+    df = pd.read_csv(adjacent_path)
+    print(f"  Loaded {len(df)} records")
+
+    # Round and prepare for visualization
+    if 'qvalue' in df.columns:
+        df['neg_log10_qval'] = -np.log10(df['qvalue'].clip(lower=1e-100))
+
+    adjacent_data = {
+        'data': df.round(4).to_dict('records'),
+        'cancer_types': sorted(df['cancer_type'].unique().tolist()),
+        'signatures': sorted(df['signature'].unique().tolist())
+    }
+
+    with open(OUTPUT_DIR / "adjacent_tissue.json", 'w') as f:
+        json.dump(adjacent_data, f)
+
+    print(f"  Cancer types: {len(adjacent_data['cancer_types'])}")
+    print(f"  Output records: {len(adjacent_data['data'])}")
+    return adjacent_data
+
+
 def main():
     print("=" * 60)
     print("Preprocessing visualization data")
@@ -2082,11 +2460,18 @@ def main():
     preprocess_cima_metabolites()
     preprocess_cima_differential()
     preprocess_cima_celltype()
+    preprocess_cima_celltype_correlations()  # Cell type-specific age/BMI correlations
     preprocess_cima_biochem_scatter()  # NEW: sample-level scatter
     preprocess_cima_population_stratification()  # NEW: population stratification
     preprocess_scatlas_organs()
     preprocess_scatlas_celltypes()
     preprocess_cancer_comparison()
+    preprocess_cancer_types()  # NEW: cancer type signatures
+    preprocess_immune_infiltration()  # NEW: immune infiltration
+    preprocess_exhaustion()  # NEW: T cell exhaustion
+    preprocess_caf()  # NEW: CAF analysis
+    preprocess_organ_cancer_matrix()  # NEW: organ-cancer matrix
+    preprocess_adjacent_tissue()  # NEW: adjacent tissue field effect
     preprocess_inflammation()
     preprocess_inflammation_correlations()
     preprocess_inflammation_disease()
