@@ -114,8 +114,8 @@ echo "  Found $JSON_COUNT JSON data files"
 # 5. Check JavaScript syntax
 echo ""
 echo "5. Checking JavaScript files..."
-if command -v node &> /dev/null; then
-    for js_file in "$VIZ_DIR"/*.js "$VIZ_DIR"/data/*.js 2>/dev/null; do
+if command -v node > /dev/null 2>&1; then
+    for js_file in "$VIZ_DIR"/*.js "$VIZ_DIR"/data/*.js; do
         if [ -f "$js_file" ]; then
             if node --check "$js_file" 2>/dev/null; then
                 check_pass "$(basename "$js_file") syntax valid"

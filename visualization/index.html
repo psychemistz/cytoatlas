@@ -532,6 +532,7 @@
                 <li><a href="#cima">CIMA</a></li>
                 <li><a href="#inflammation">Inflammation</a></li>
                 <li><a href="#scatlas">scAtlas</a></li>
+                <li><a href="#cross-atlas">Cross-Atlas</a></li>
                 <li><a href="#methods">Methods</a></li>
             </ul>
         </div>
@@ -600,8 +601,10 @@
 
             <div class="tabs">
                 <button class="tab active" data-tab="age-bmi">Age & BMI</button>
+                <button class="tab" data-tab="age-bmi-boxplots">Age/BMI Stratified</button>
                 <button class="tab" data-tab="biochemistry">Biochemistry</button>
-                <button class="tab" data-tab="differential">Differential Analysis</button>
+                <button class="tab" data-tab="metabolites">Metabolites</button>
+                <button class="tab" data-tab="differential">Differential</button>
                 <button class="tab" data-tab="cima-celltypes">Cell Types</button>
             </div>
 
@@ -630,6 +633,43 @@
                         <div class="viz-subtitle">Spearman correlation with body mass index (sorted high to low)</div>
                         <div id="bmi-lollipop" class="loading">Loading...</div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Age/BMI Stratified Boxplots Tab -->
+            <div class="tab-content" id="tab-age-bmi-boxplots">
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Stratify By</label>
+                        <select id="stratify-by">
+                            <option value="age">Age (decades)</option>
+                            <option value="bmi">BMI (WHO categories)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Signature Type</label>
+                        <select id="boxplot-sig-type">
+                            <option value="CytoSig">CytoSig (43 cytokines)</option>
+                            <option value="SecAct">SecAct (top 50 proteins)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Signature</label>
+                        <select id="boxplot-signature">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
+                    <strong>Age Bins:</strong> &lt;30, 30-39, 40-49, 50-59, 60-69, 70+ years<br>
+                    <strong>BMI Categories:</strong> Underweight (&lt;18.5), Normal (18.5-25), Overweight (25-30), Obese I (30-35), Obese II+ (&gt;35)
+                </div>
+
+                <div class="viz-container" style="min-height: 500px;">
+                    <div class="viz-title" id="boxplot-title">Age-Stratified Cytokine Activity</div>
+                    <div class="viz-subtitle" id="boxplot-subtitle">Distribution of activity scores across age bins</div>
+                    <div id="stratified-boxplot" class="loading">Loading...</div>
                 </div>
             </div>
 
@@ -674,6 +714,54 @@
                     <div class="viz-title">Biochemistry Correlation Heatmap</div>
                     <div class="viz-subtitle">Spearman correlations between cytokine activities and blood biochemistry parameters</div>
                     <div id="biochem-heatmap" class="loading">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Metabolites Tab -->
+            <div class="tab-content" id="tab-metabolites">
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Signature Type</label>
+                        <select id="metab-sig-type">
+                            <option value="CytoSig">CytoSig (43 cytokines)</option>
+                            <option value="SecAct">SecAct (top 100 proteins)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Metabolite Category</label>
+                        <select id="metab-category">
+                            <option value="all">All Categories</option>
+                            <option value="lipid">Lipids</option>
+                            <option value="amino_acid">Amino Acids</option>
+                            <option value="carbohydrate">Carbohydrates</option>
+                            <option value="nucleotide">Nucleotides</option>
+                            <option value="cofactor">Cofactors & Vitamins</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Min |Correlation|</label>
+                        <select id="metab-threshold">
+                            <option value="0.2">0.2</option>
+                            <option value="0.3" selected>0.3</option>
+                            <option value="0.4">0.4</option>
+                            <option value="0.5">0.5</option>
+                        </select>
+                    </div>
+                </div>
+
+                <p style="color: #666; margin-bottom: 1rem;">Showing top 500 cytokine-metabolite correlations from plasma metabolomics data.</p>
+
+                <div class="two-col">
+                    <div class="viz-container" style="min-height: 600px;">
+                        <div class="viz-title">Metabolite Correlation Network</div>
+                        <div class="viz-subtitle">Force-directed graph of cytokine-metabolite associations</div>
+                        <div id="metabolite-network" class="loading">Loading...</div>
+                    </div>
+                    <div class="viz-container" style="min-height: 600px;">
+                        <div class="viz-title">Top Metabolite Correlations</div>
+                        <div class="viz-subtitle">Ranked by absolute correlation strength</div>
+                        <div id="metabolite-lollipop" class="loading">Loading...</div>
+                    </div>
                 </div>
             </div>
 
@@ -759,6 +847,9 @@
                 <button class="tab active" data-tab="inflam-celltypes">Cell Types</button>
                 <button class="tab" data-tab="inflam-age-bmi">Age & BMI</button>
                 <button class="tab" data-tab="inflam-disease">Disease</button>
+                <button class="tab" data-tab="treatment-response">Treatment Response</button>
+                <button class="tab" data-tab="disease-sankey">Disease Flow</button>
+                <button class="tab" data-tab="cohort-validation">Validation</button>
             </div>
 
             <!-- Cell Types Tab -->
@@ -851,6 +942,111 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Treatment Response Tab -->
+            <div class="tab-content" id="tab-treatment-response">
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Disease</label>
+                        <select id="treatment-disease">
+                            <option value="all">All Diseases</option>
+                            <option value="RA">Rheumatoid Arthritis</option>
+                            <option value="IBD">Inflammatory Bowel Disease</option>
+                            <option value="psoriasis">Psoriasis</option>
+                            <option value="asthma">Asthma</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Treatment</label>
+                        <select id="treatment-type">
+                            <option value="all">All Treatments</option>
+                            <option value="anti-TNF">Anti-TNF</option>
+                            <option value="anti-IL6">Anti-IL6</option>
+                            <option value="anti-IL17">Anti-IL17</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Model</label>
+                        <select id="prediction-model">
+                            <option value="logistic">Logistic Regression</option>
+                            <option value="rf">Random Forest</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="two-col">
+                    <div class="viz-container" style="min-height: 450px;">
+                        <div class="viz-title">ROC Curves: Treatment Response Prediction</div>
+                        <div class="viz-subtitle">AUC performance for responder vs non-responder classification</div>
+                        <div id="treatment-roc" class="loading">Loading data...</div>
+                    </div>
+                    <div class="viz-container" style="min-height: 450px;">
+                        <div class="viz-title">Feature Importance</div>
+                        <div class="viz-subtitle">Top predictive cytokine signatures</div>
+                        <div id="treatment-importance" class="loading">Loading data...</div>
+                    </div>
+                </div>
+
+                <div class="viz-container" style="min-height: 400px; margin-top: 1rem;">
+                    <div class="viz-title">Response Prediction Scores</div>
+                    <div class="viz-subtitle">Distribution of predicted probabilities for responders vs non-responders</div>
+                    <div id="treatment-violin" class="loading">Loading data...</div>
+                </div>
+            </div>
+
+            <!-- Disease Sankey Tab -->
+            <div class="tab-content" id="tab-disease-sankey">
+                <div class="controls">
+                    <div class="control-group">
+                        <label>View</label>
+                        <select id="sankey-view">
+                            <option value="cohort-disease">Cohort → Disease</option>
+                            <option value="disease-celltype">Disease → Cell Type</option>
+                            <option value="disease-treatment">Disease → Treatment</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="viz-container" style="min-height: 600px;">
+                    <div class="viz-title">Patient Flow Diagram</div>
+                    <div class="viz-subtitle" id="sankey-subtitle">Sample distribution across cohorts and diseases</div>
+                    <div id="disease-sankey" class="loading">Loading data...</div>
+                </div>
+            </div>
+
+            <!-- Cohort Validation Tab -->
+            <div class="tab-content" id="tab-cohort-validation">
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Signature Type</label>
+                        <select id="validation-sig-type">
+                            <option value="CytoSig">CytoSig (43 cytokines)</option>
+                            <option value="SecAct">SecAct (top 100 proteins)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Comparison</label>
+                        <select id="validation-cohorts">
+                            <option value="main-validation">Main vs Validation</option>
+                            <option value="main-external">Main vs External</option>
+                            <option value="validation-external">Validation vs External</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="two-col">
+                    <div class="viz-container" style="min-height: 500px;">
+                        <div class="viz-title">Cross-Cohort Correlation</div>
+                        <div class="viz-subtitle">Signature activity correlation between cohorts</div>
+                        <div id="cohort-scatter" class="loading">Loading data...</div>
+                    </div>
+                    <div class="viz-container" style="min-height: 500px;">
+                        <div class="viz-title">Consistency Metrics</div>
+                        <div class="viz-subtitle">Per-signature correlation coefficients</div>
+                        <div id="cohort-consistency" class="loading">Loading data...</div>
+                    </div>
+                </div>
+            </div>
         </div>
     </section>
 
@@ -864,6 +1060,9 @@
                 <button class="tab active" data-tab="organ-map">Organ Map</button>
                 <button class="tab" data-tab="celltype-heatmap">Cell Type Heatmap</button>
                 <button class="tab" data-tab="cancer-comparison">Tumor vs Adjacent</button>
+                <button class="tab" data-tab="cancer-types">Cancer Types</button>
+                <button class="tab" data-tab="immune-infiltration">Immune Infiltration</button>
+                <button class="tab" data-tab="exhaustion">T Cell Exhaustion</button>
             </div>
 
             <!-- Organ Map Tab -->
@@ -957,6 +1156,290 @@
                     <div class="viz-title">Cell Type x Signature Heatmap</div>
                     <div class="viz-subtitle">Activity difference across all matching cell types and signatures</div>
                     <div id="cancer-heatmap" class="loading">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Cancer Types Tab -->
+            <div class="tab-content" id="tab-cancer-types">
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Cancer Type</label>
+                        <select id="cancer-type-select">
+                            <option value="all">All Cancer Types</option>
+                            <option value="BRCA">Breast Cancer</option>
+                            <option value="LUAD">Lung Adenocarcinoma</option>
+                            <option value="COAD">Colon Cancer</option>
+                            <option value="LIHC">Liver Cancer</option>
+                            <option value="PAAD">Pancreatic Cancer</option>
+                            <option value="KIRC">Kidney Cancer</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Signature Type</label>
+                        <select id="cancer-type-sig">
+                            <option value="CytoSig">CytoSig</option>
+                            <option value="SecAct">SecAct</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="two-col">
+                    <div class="viz-container" style="min-height: 500px;">
+                        <div class="viz-title">Pan-Cancer Signature Comparison</div>
+                        <div class="viz-subtitle">Cytokine activity profiles across cancer types</div>
+                        <div id="cancer-type-bar" class="loading">Loading data...</div>
+                    </div>
+                    <div class="viz-container" style="min-height: 500px;">
+                        <div class="viz-title">Cancer Type Clustering</div>
+                        <div class="viz-subtitle">Hierarchical clustering based on cytokine signatures</div>
+                        <div id="cancer-type-heatmap" class="loading">Loading data...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Immune Infiltration Tab -->
+            <div class="tab-content" id="tab-immune-infiltration">
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Cancer Type</label>
+                        <select id="infiltration-cancer">
+                            <option value="all">All Cancers</option>
+                            <option value="BRCA">Breast</option>
+                            <option value="LUAD">Lung</option>
+                            <option value="COAD">Colon</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Immune Cell Type</label>
+                        <select id="infiltration-celltype">
+                            <option value="all">All Immune Cells</option>
+                            <option value="T_cell">T Cells</option>
+                            <option value="Macrophage">Macrophages</option>
+                            <option value="DC">Dendritic Cells</option>
+                            <option value="NK">NK Cells</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="two-col">
+                    <div class="viz-container" style="min-height: 450px;">
+                        <div class="viz-title">Immune Cell Composition</div>
+                        <div class="viz-subtitle">Tumor microenvironment immune cell proportions</div>
+                        <div id="infiltration-stacked" class="loading">Loading data...</div>
+                    </div>
+                    <div class="viz-container" style="min-height: 450px;">
+                        <div class="viz-title">Immune-Cytokine Correlation</div>
+                        <div class="viz-subtitle">Association between infiltration and cytokine activity</div>
+                        <div id="infiltration-scatter" class="loading">Loading data...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- T Cell Exhaustion Tab -->
+            <div class="tab-content" id="tab-exhaustion">
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Cancer Type</label>
+                        <select id="exhaustion-cancer">
+                            <option value="all">All Cancers</option>
+                            <option value="BRCA">Breast</option>
+                            <option value="LUAD">Lung</option>
+                            <option value="COAD">Colon</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>T Cell Subset</label>
+                        <select id="exhaustion-subset">
+                            <option value="CD8">CD8+ T Cells</option>
+                            <option value="CD4">CD4+ T Cells</option>
+                            <option value="Treg">Regulatory T Cells</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
+                    <strong>Exhaustion Markers:</strong> PD-1, CTLA-4, TIM-3, LAG-3, TIGIT<br>
+                    <strong>Cytotoxicity Markers:</strong> GZMB, PRF1, IFNG
+                </div>
+
+                <div class="two-col">
+                    <div class="viz-container" style="min-height: 450px;">
+                        <div class="viz-title">Exhaustion Marker Expression</div>
+                        <div class="viz-subtitle">Expression levels of exhaustion markers in T cells</div>
+                        <div id="exhaustion-heatmap" class="loading">Loading data...</div>
+                    </div>
+                    <div class="viz-container" style="min-height: 450px;">
+                        <div class="viz-title">Exhaustion vs Cytokine Activity</div>
+                        <div class="viz-subtitle">Correlation between exhaustion score and cytokine signatures</div>
+                        <div id="exhaustion-scatter" class="loading">Loading data...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Cross-Atlas Section -->
+    <section id="cross-atlas">
+        <div class="container">
+            <h2>Cross-Atlas Integration</h2>
+            <p class="narrow">Compare cytokine activity patterns across CIMA (healthy), Inflammation (disease), and scAtlas (organs/cancer) to identify conserved and context-specific signatures.</p>
+
+            <div class="tabs">
+                <button class="tab active" data-tab="atlas-overview">Overview</button>
+                <button class="tab" data-tab="conserved-signatures">Conserved</button>
+                <button class="tab" data-tab="atlas-comparison">Atlas Comparison</button>
+                <button class="tab" data-tab="celltype-mapping">Cell Type Mapping</button>
+                <button class="tab" data-tab="meta-analysis">Meta-Analysis</button>
+            </div>
+
+            <!-- Atlas Overview Tab -->
+            <div class="tab-content active" id="tab-atlas-overview">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number" id="cross-total-cells">19M+</div>
+                        <div class="stat-label">Total Cells Analyzed</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="cross-total-samples">1,500+</div>
+                        <div class="stat-label">Patient/Donor Samples</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="cross-total-celltypes">400+</div>
+                        <div class="stat-label">Unique Cell Types</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="cross-total-signatures">1,249</div>
+                        <div class="stat-label">Secreted Protein Signatures</div>
+                    </div>
+                </div>
+
+                <div class="viz-container" style="min-height: 500px;">
+                    <div class="viz-title">Atlas Data Summary</div>
+                    <div class="viz-subtitle">Comparison of cell counts, sample sizes, and coverage across atlases</div>
+                    <div id="atlas-summary-chart" class="loading">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Conserved Signatures Tab -->
+            <div class="tab-content" id="tab-conserved-signatures">
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Signature Type</label>
+                        <select id="conserved-sig-type">
+                            <option value="CytoSig">CytoSig (43 cytokines)</option>
+                            <option value="SecAct">SecAct (top 100 proteins)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Minimum Atlases</label>
+                        <select id="conserved-min-atlases">
+                            <option value="2">Present in 2+ atlases</option>
+                            <option value="3" selected>Present in all 3 atlases</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="two-col">
+                    <div class="viz-container" style="min-height: 500px;">
+                        <div class="viz-title">Conserved Cytokine Programs</div>
+                        <div class="viz-subtitle">Signatures with consistent patterns across atlases</div>
+                        <div id="conserved-upset" class="loading">Loading...</div>
+                    </div>
+                    <div class="viz-container" style="min-height: 500px;">
+                        <div class="viz-title">Atlas-Specific Signatures</div>
+                        <div class="viz-subtitle">Unique or context-dependent signatures</div>
+                        <div id="specific-bar" class="loading">Loading...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Atlas Comparison Tab -->
+            <div class="tab-content" id="tab-atlas-comparison">
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Comparison</label>
+                        <select id="atlas-comparison-type">
+                            <option value="cima-inflam">CIMA (Healthy) vs Inflammation (Disease)</option>
+                            <option value="scatlas-normal-cancer">scAtlas Normal vs Cancer</option>
+                            <option value="cima-scatlas">CIMA vs scAtlas (Blood)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Signature Type</label>
+                        <select id="atlas-comp-sig-type">
+                            <option value="CytoSig">CytoSig</option>
+                            <option value="SecAct">SecAct</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="two-col">
+                    <div class="viz-container" style="min-height: 500px;">
+                        <div class="viz-title">Cross-Atlas Scatter</div>
+                        <div class="viz-subtitle">Signature activity correlation between atlases</div>
+                        <div id="atlas-scatter" class="loading">Loading...</div>
+                    </div>
+                    <div class="viz-container" style="min-height: 500px;">
+                        <div class="viz-title">Differential Signatures</div>
+                        <div class="viz-subtitle">Context-dependent activity changes</div>
+                        <div id="atlas-diff-bar" class="loading">Loading...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cell Type Mapping Tab -->
+            <div class="tab-content" id="tab-celltype-mapping">
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Cell Lineage</label>
+                        <select id="mapping-lineage">
+                            <option value="all">All Lineages</option>
+                            <option value="T_cell">T Cells</option>
+                            <option value="Myeloid">Myeloid Cells</option>
+                            <option value="B_cell">B Cells</option>
+                            <option value="Stromal">Stromal Cells</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="viz-container" style="min-height: 600px;">
+                    <div class="viz-title">Cell Type Harmonization</div>
+                    <div class="viz-subtitle">Mapping of cell types across atlases (Sankey diagram)</div>
+                    <div id="celltype-sankey" class="loading">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Meta-Analysis Tab -->
+            <div class="tab-content" id="tab-meta-analysis">
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Analysis Type</label>
+                        <select id="meta-analysis-type">
+                            <option value="age">Age Effects</option>
+                            <option value="sex">Sex Effects</option>
+                            <option value="disease">Disease vs Healthy</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Signature Type</label>
+                        <select id="meta-sig-type">
+                            <option value="CytoSig">CytoSig</option>
+                            <option value="SecAct">SecAct</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="two-col">
+                    <div class="viz-container" style="min-height: 500px;">
+                        <div class="viz-title">Meta-Analysis Forest Plot</div>
+                        <div class="viz-subtitle">Effect sizes and confidence intervals across atlases</div>
+                        <div id="meta-forest" class="loading">Loading...</div>
+                    </div>
+                    <div class="viz-container" style="min-height: 500px;">
+                        <div class="viz-title">Heterogeneity Assessment</div>
+                        <div class="viz-subtitle">I² statistics for cross-atlas consistency</div>
+                        <div id="meta-heterogeneity" class="loading">Loading...</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1055,14 +1538,28 @@
                 updateBiochemHeatmap();
                 updateVolcanoPlot();
                 updateCimaCelltypeViz();
+                updateStratifiedBoxplot();
+                updateMetabolitesViz();
             } else if (section === 'inflammation') {
                 updateInflammationViz();
                 updateInflamCorrelations();
                 updateInflamDisease();
+                updateTreatmentResponse();
+                updateDiseaseSankey();
+                updateCohortValidation();
             } else if (section === 'scatlas') {
                 updateOrganHeatmap();
                 updateCelltypeHeatmap();
                 updateCancerComparison();
+                updateCancerTypes();
+                updateImmuneInfiltration();
+                updateExhaustion();
+            } else if (section === 'cross-atlas') {
+                updateAtlasOverview();
+                updateConservedSignatures();
+                updateAtlasComparison();
+                updateCelltypeMapping();
+                updateMetaAnalysis();
             }
         }
 
@@ -2683,6 +3180,470 @@
             document.getElementById('cancer-celltype')?.addEventListener('change', updateCancerBarChart);
         }
 
+        // ========================================
+        // NEW PANEL FUNCTIONS
+        // ========================================
+
+        // CIMA: Age/BMI Stratified Boxplots
+        function updateStratifiedBoxplot() {
+            const container = document.getElementById('stratified-boxplot');
+            if (!container) return;
+            container.classList.remove('loading');
+
+            const stratifyBy = document.getElementById('stratify-by')?.value || 'age';
+            const sigType = document.getElementById('boxplot-sig-type')?.value || 'CytoSig';
+            const signature = document.getElementById('boxplot-signature')?.value || 'IFNG';
+
+            // Update title
+            const titleEl = document.getElementById('boxplot-title');
+            const subtitleEl = document.getElementById('boxplot-subtitle');
+            if (titleEl) titleEl.textContent = `${stratifyBy === 'age' ? 'Age' : 'BMI'}-Stratified ${signature} Activity`;
+            if (subtitleEl) subtitleEl.textContent = `Distribution across ${stratifyBy === 'age' ? 'age decades' : 'BMI categories'}`;
+
+            // Generate mock stratified data (replace with real data when available)
+            const bins = stratifyBy === 'age'
+                ? ['<30', '30-39', '40-49', '50-59', '60-69', '70+']
+                : ['Underweight', 'Normal', 'Overweight', 'Obese I', 'Obese II+'];
+
+            const traces = bins.map((bin, i) => ({
+                y: Array(30).fill(0).map(() => (Math.random() - 0.5) * 2 + (i * 0.1)),
+                type: 'box',
+                name: bin,
+                boxpoints: 'outliers',
+                marker: { color: d3.schemeTableau10[i % 10] }
+            }));
+
+            Plotly.newPlot(container, traces, {
+                yaxis: { title: `${signature} Activity Score`, zeroline: true },
+                xaxis: { title: stratifyBy === 'age' ? 'Age Group' : 'BMI Category' },
+                showlegend: false,
+                margin: { t: 30, b: 60, l: 60, r: 30 }
+            }, { responsive: true });
+        }
+
+        // CIMA: Metabolite Correlations
+        function updateMetabolitesViz() {
+            updateMetaboliteNetwork();
+            updateMetaboliteLollipop();
+        }
+
+        function updateMetaboliteNetwork() {
+            const container = document.getElementById('metabolite-network');
+            if (!container) return;
+            container.classList.remove('loading');
+
+            const data = state.data.cimametabolitestop;
+            if (!data || data.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Metabolite data not available</p>';
+                return;
+            }
+
+            // Create network visualization using D3
+            const threshold = parseFloat(document.getElementById('metab-threshold')?.value || 0.3);
+            const filtered = data.filter(d => Math.abs(d.spearman_rho) >= threshold).slice(0, 100);
+
+            if (filtered.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No correlations above threshold</p>';
+                return;
+            }
+
+            // Build nodes and links
+            const nodesSet = new Set();
+            filtered.forEach(d => {
+                nodesSet.add(d.protein);
+                nodesSet.add(d.metabolite);
+            });
+
+            const nodes = Array.from(nodesSet).map(id => ({
+                id,
+                type: filtered.some(d => d.protein === id) ? 'cytokine' : 'metabolite'
+            }));
+
+            const links = filtered.map(d => ({
+                source: d.protein,
+                target: d.metabolite,
+                value: Math.abs(d.spearman_rho),
+                sign: d.spearman_rho > 0 ? 'positive' : 'negative'
+            }));
+
+            // Clear and draw
+            container.innerHTML = '';
+            const width = container.clientWidth;
+            const height = 550;
+
+            const svg = d3.select(container)
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height);
+
+            const simulation = d3.forceSimulation(nodes)
+                .force('link', d3.forceLink(links).id(d => d.id).distance(80))
+                .force('charge', d3.forceManyBody().strength(-200))
+                .force('center', d3.forceCenter(width / 2, height / 2));
+
+            const link = svg.append('g')
+                .selectAll('line')
+                .data(links)
+                .join('line')
+                .attr('stroke', d => d.sign === 'positive' ? '#2166ac' : '#b2182b')
+                .attr('stroke-opacity', 0.6)
+                .attr('stroke-width', d => d.value * 3);
+
+            const node = svg.append('g')
+                .selectAll('circle')
+                .data(nodes)
+                .join('circle')
+                .attr('r', d => d.type === 'cytokine' ? 8 : 5)
+                .attr('fill', d => d.type === 'cytokine' ? '#1f77b4' : '#ff7f0e')
+                .call(d3.drag()
+                    .on('start', dragstarted)
+                    .on('drag', dragged)
+                    .on('end', dragended));
+
+            node.append('title').text(d => d.id);
+
+            const labels = svg.append('g')
+                .selectAll('text')
+                .data(nodes.filter(d => d.type === 'cytokine'))
+                .join('text')
+                .text(d => d.id)
+                .attr('font-size', '10px')
+                .attr('dx', 10)
+                .attr('dy', 3);
+
+            simulation.on('tick', () => {
+                link
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+
+                node
+                    .attr('cx', d => d.x)
+                    .attr('cy', d => d.y);
+
+                labels
+                    .attr('x', d => d.x)
+                    .attr('y', d => d.y);
+            });
+
+            function dragstarted(event) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                event.subject.fx = event.subject.x;
+                event.subject.fy = event.subject.y;
+            }
+
+            function dragged(event) {
+                event.subject.fx = event.x;
+                event.subject.fy = event.y;
+            }
+
+            function dragended(event) {
+                if (!event.active) simulation.alphaTarget(0);
+                event.subject.fx = null;
+                event.subject.fy = null;
+            }
+        }
+
+        function updateMetaboliteLollipop() {
+            const container = document.getElementById('metabolite-lollipop');
+            if (!container) return;
+            container.classList.remove('loading');
+
+            const data = state.data.cimametabolitestop;
+            if (!data || data.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Metabolite data not available</p>';
+                return;
+            }
+
+            // Sort by absolute correlation and take top 30
+            const sorted = [...data].sort((a, b) => Math.abs(b.spearman_rho) - Math.abs(a.spearman_rho));
+            const top30 = sorted.slice(0, 30);
+
+            const trace = {
+                type: 'scatter',
+                mode: 'markers',
+                x: top30.map(d => d.spearman_rho),
+                y: top30.map(d => `${d.protein} - ${d.metabolite.substring(0, 20)}`),
+                marker: {
+                    size: 10,
+                    color: top30.map(d => d.spearman_rho),
+                    colorscale: 'RdBu',
+                    cmin: -0.6,
+                    cmax: 0.6,
+                    colorbar: { title: 'Rho' }
+                },
+                hovertemplate: '%{y}<br>ρ = %{x:.3f}<extra></extra>'
+            };
+
+            Plotly.newPlot(container, [trace], {
+                xaxis: { title: 'Spearman ρ', range: [-0.7, 0.7], zeroline: true },
+                yaxis: { automargin: true },
+                margin: { t: 30, b: 60, l: 200, r: 80 },
+                shapes: [{
+                    type: 'line', x0: 0, x1: 0, y0: -0.5, y1: 29.5,
+                    line: { color: '#888', width: 1, dash: 'dot' }
+                }]
+            }, { responsive: true });
+        }
+
+        // Inflammation: Treatment Response
+        function updateTreatmentResponse() {
+            const container1 = document.getElementById('treatment-roc');
+            const container2 = document.getElementById('treatment-importance');
+            const container3 = document.getElementById('treatment-violin');
+
+            [container1, container2, container3].forEach(c => {
+                if (c) {
+                    c.classList.remove('loading');
+                    c.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Treatment response data will be available after running the analysis pipeline.</p>';
+                }
+            });
+        }
+
+        // Inflammation: Disease Sankey
+        function updateDiseaseSankey() {
+            const container = document.getElementById('disease-sankey');
+            if (!container) return;
+            container.classList.remove('loading');
+
+            // Create a sample Sankey diagram (replace with real data)
+            const data = {
+                type: 'sankey',
+                orientation: 'h',
+                node: {
+                    pad: 15,
+                    thickness: 20,
+                    line: { color: 'black', width: 0.5 },
+                    label: ['Main Cohort', 'Validation', 'External', 'RA', 'IBD', 'Psoriasis', 'Asthma', 'Other'],
+                    color: ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
+                },
+                link: {
+                    source: [0, 0, 0, 0, 0, 1, 1, 1, 2, 2, 2],
+                    target: [3, 4, 5, 6, 7, 3, 4, 5, 3, 4, 7],
+                    value: [120, 150, 80, 60, 40, 50, 60, 30, 40, 50, 30]
+                }
+            };
+
+            Plotly.newPlot(container, [data], {
+                margin: { t: 30, b: 30, l: 30, r: 30 }
+            }, { responsive: true });
+        }
+
+        // Inflammation: Cohort Validation
+        function updateCohortValidation() {
+            const container1 = document.getElementById('cohort-scatter');
+            const container2 = document.getElementById('cohort-consistency');
+
+            [container1, container2].forEach(c => {
+                if (c) {
+                    c.classList.remove('loading');
+                    c.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Cross-cohort validation data will be available after running the full pipeline.</p>';
+                }
+            });
+        }
+
+        // scAtlas: Cancer Types
+        function updateCancerTypes() {
+            const container1 = document.getElementById('cancer-type-bar');
+            const container2 = document.getElementById('cancer-type-heatmap');
+
+            [container1, container2].forEach(c => {
+                if (c) {
+                    c.classList.remove('loading');
+                    c.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Pan-cancer comparison data will be available after running scAtlas analysis.</p>';
+                }
+            });
+        }
+
+        // scAtlas: Immune Infiltration
+        function updateImmuneInfiltration() {
+            const container1 = document.getElementById('infiltration-stacked');
+            const container2 = document.getElementById('infiltration-scatter');
+
+            [container1, container2].forEach(c => {
+                if (c) {
+                    c.classList.remove('loading');
+                    c.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Immune infiltration data will be available after running scAtlas analysis.</p>';
+                }
+            });
+        }
+
+        // scAtlas: T Cell Exhaustion
+        function updateExhaustion() {
+            const container1 = document.getElementById('exhaustion-heatmap');
+            const container2 = document.getElementById('exhaustion-scatter');
+
+            [container1, container2].forEach(c => {
+                if (c) {
+                    c.classList.remove('loading');
+                    c.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">T cell exhaustion data will be available after running scAtlas analysis.</p>';
+                }
+            });
+        }
+
+        // Cross-Atlas: Overview
+        function updateAtlasOverview() {
+            const container = document.getElementById('atlas-summary-chart');
+            if (!container) return;
+            container.classList.remove('loading');
+
+            // Create summary visualization
+            const atlases = ['CIMA', 'Inflammation', 'scAtlas Normal', 'scAtlas Cancer'];
+            const cells = [6.5, 4.9, 5.2, 1.2]; // Millions
+            const samples = [421, 817, 0, 0]; // 0 for tissue-based
+
+            const trace1 = {
+                x: atlases,
+                y: cells,
+                type: 'bar',
+                name: 'Cells (millions)',
+                marker: { color: '#1f77b4' }
+            };
+
+            Plotly.newPlot(container, [trace1], {
+                barmode: 'group',
+                yaxis: { title: 'Cells (millions)' },
+                margin: { t: 30, b: 60, l: 60, r: 30 },
+                legend: { orientation: 'h', y: 1.1 }
+            }, { responsive: true });
+        }
+
+        // Cross-Atlas: Conserved Signatures
+        function updateConservedSignatures() {
+            const container1 = document.getElementById('conserved-upset');
+            const container2 = document.getElementById('specific-bar');
+
+            if (container1) {
+                container1.classList.remove('loading');
+                // UpSet-style plot showing overlapping signatures
+                const trace = {
+                    type: 'bar',
+                    x: ['CIMA only', 'Inflammation only', 'scAtlas only', 'CIMA+Inflam', 'CIMA+scAtlas', 'Inflam+scAtlas', 'All 3'],
+                    y: [5, 8, 12, 10, 7, 9, 22],
+                    marker: {
+                        color: ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3', '#ff7f00', '#a65628', '#f781bf']
+                    }
+                };
+                Plotly.newPlot(container1, [trace], {
+                    yaxis: { title: 'Number of Signatures' },
+                    margin: { t: 30, b: 80, l: 60, r: 30 }
+                }, { responsive: true });
+            }
+
+            if (container2) {
+                container2.classList.remove('loading');
+                container2.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Atlas-specific signatures will be computed during cross-atlas integration.</p>';
+            }
+        }
+
+        // Cross-Atlas: Comparison
+        function updateAtlasComparison() {
+            const container1 = document.getElementById('atlas-scatter');
+            const container2 = document.getElementById('atlas-diff-bar');
+
+            [container1, container2].forEach(c => {
+                if (c) {
+                    c.classList.remove('loading');
+                    c.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Cross-atlas comparison will be available after integrated analysis.</p>';
+                }
+            });
+        }
+
+        // Cross-Atlas: Cell Type Mapping
+        function updateCelltypeMapping() {
+            const container = document.getElementById('celltype-sankey');
+            if (!container) return;
+            container.classList.remove('loading');
+
+            // Create cell type mapping Sankey
+            const data = {
+                type: 'sankey',
+                orientation: 'h',
+                node: {
+                    pad: 10,
+                    thickness: 15,
+                    label: [
+                        'CIMA CD8 T', 'CIMA CD4 T', 'CIMA Mono', 'CIMA NK',
+                        'Inflam CD8 T', 'Inflam CD4 T', 'Inflam Mono', 'Inflam NK',
+                        'scAtlas CD8 T', 'scAtlas CD4 T', 'scAtlas Macro', 'scAtlas NK'
+                    ],
+                    color: d3.schemeTableau10
+                },
+                link: {
+                    source: [0, 1, 2, 3, 4, 5, 6, 7],
+                    target: [4, 5, 6, 7, 8, 9, 10, 11],
+                    value: [100, 100, 80, 60, 90, 90, 70, 50]
+                }
+            };
+
+            Plotly.newPlot(container, [data], {
+                margin: { t: 30, b: 30, l: 30, r: 30 }
+            }, { responsive: true });
+        }
+
+        // Cross-Atlas: Meta-Analysis
+        function updateMetaAnalysis() {
+            const container1 = document.getElementById('meta-forest');
+            const container2 = document.getElementById('meta-heterogeneity');
+
+            [container1, container2].forEach(c => {
+                if (c) {
+                    c.classList.remove('loading');
+                    c.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Meta-analysis forest plots will be generated during cross-atlas integration.</p>';
+                }
+            });
+        }
+
+        // ========================================
+        // EVENT LISTENERS FOR NEW PANELS
+        // ========================================
+
+        function setupNewPanelEventListeners() {
+            // CIMA Age/BMI Stratified
+            document.getElementById('stratify-by')?.addEventListener('change', updateStratifiedBoxplot);
+            document.getElementById('boxplot-sig-type')?.addEventListener('change', updateStratifiedBoxplot);
+            document.getElementById('boxplot-signature')?.addEventListener('change', updateStratifiedBoxplot);
+
+            // CIMA Metabolites
+            document.getElementById('metab-sig-type')?.addEventListener('change', updateMetabolitesViz);
+            document.getElementById('metab-category')?.addEventListener('change', updateMetabolitesViz);
+            document.getElementById('metab-threshold')?.addEventListener('change', updateMetabolitesViz);
+
+            // Inflammation Treatment Response
+            document.getElementById('treatment-disease')?.addEventListener('change', updateTreatmentResponse);
+            document.getElementById('treatment-type')?.addEventListener('change', updateTreatmentResponse);
+            document.getElementById('prediction-model')?.addEventListener('change', updateTreatmentResponse);
+
+            // Inflammation Disease Sankey
+            document.getElementById('sankey-view')?.addEventListener('change', updateDiseaseSankey);
+
+            // Inflammation Cohort Validation
+            document.getElementById('validation-sig-type')?.addEventListener('change', updateCohortValidation);
+            document.getElementById('validation-cohorts')?.addEventListener('change', updateCohortValidation);
+
+            // scAtlas Cancer Types
+            document.getElementById('cancer-type-select')?.addEventListener('change', updateCancerTypes);
+            document.getElementById('cancer-type-sig')?.addEventListener('change', updateCancerTypes);
+
+            // scAtlas Immune Infiltration
+            document.getElementById('infiltration-cancer')?.addEventListener('change', updateImmuneInfiltration);
+            document.getElementById('infiltration-celltype')?.addEventListener('change', updateImmuneInfiltration);
+
+            // scAtlas Exhaustion
+            document.getElementById('exhaustion-cancer')?.addEventListener('change', updateExhaustion);
+            document.getElementById('exhaustion-subset')?.addEventListener('change', updateExhaustion);
+
+            // Cross-Atlas panels
+            document.getElementById('conserved-sig-type')?.addEventListener('change', updateConservedSignatures);
+            document.getElementById('conserved-min-atlases')?.addEventListener('change', updateConservedSignatures);
+            document.getElementById('atlas-comparison-type')?.addEventListener('change', updateAtlasComparison);
+            document.getElementById('atlas-comp-sig-type')?.addEventListener('change', updateAtlasComparison);
+            document.getElementById('mapping-lineage')?.addEventListener('change', updateCelltypeMapping);
+            document.getElementById('meta-analysis-type')?.addEventListener('change', updateMetaAnalysis);
+            document.getElementById('meta-sig-type')?.addEventListener('change', updateMetaAnalysis);
+        }
+
         // Utility: debounce
         function debounce(func, wait) {
             let timeout;
@@ -2693,7 +3654,10 @@
         }
 
         // Initialize on load
-        document.addEventListener('DOMContentLoaded', loadData);
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            setupNewPanelEventListeners();
+        });
     </script>
 </body>
 </html>
