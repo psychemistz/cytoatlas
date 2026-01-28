@@ -4138,10 +4138,10 @@
         function initBiochemScatterSigs() {
             const scatterData = state.data.cimabiochemscatter;
             if (!scatterData) return;
-            // Data uses 'cytokines' key for CytoSig cytokine names
+            // CytoSig cytokine names
             biochemScatterSigs.cytosig = scatterData.cytokines || [];
-            // SecAct not available in scatter data - show CytoSig as fallback
-            biochemScatterSigs.secact = scatterData.cytokines || [];
+            // SecAct protein names
+            biochemScatterSigs.secact = scatterData.secact_proteins || [];
         }
 
         function getBiochemScatterSigs() {
@@ -4200,8 +4200,8 @@
             }
 
             const samples = scatterData.samples;
-            // Data uses 'activity' key for all cytokines (CytoSig only currently)
-            const activityKey = 'activity';
+            // Use 'activity' for CytoSig, 'secact_activity' for SecAct
+            const activityKey = sigType === 'CytoSig' ? 'activity' : 'secact_activity';
 
             // Color mapping
             const colorMap = {
@@ -4889,7 +4889,7 @@
                         <div style="max-height: 450px; overflow-y: auto;">
                             <table class="data-table" style="font-size: 0.85rem;">
                                 <thead>
-                                    <tr><th>Gene</th><th>Variant</th><th>Cell Type</th><th>P-value</th><th>Beta</th><th>AF</th></tr>
+                                    <tr><th>Gene</th><th>Variant</th><th>Cell Type</th><th>P-value</th><th>Beta</th><th>Q-value</th></tr>
                                 </thead>
                                 <tbody>
                                     ${topHits.map(d => `
@@ -4899,7 +4899,7 @@
                                             <td style="font-size:0.8rem;">${d.celltype.replace(/_/g, ' ')}</td>
                                             <td>${d.pvalue.toExponential(2)}</td>
                                             <td style="color: ${d.beta > 0 ? '#d62728' : '#1f77b4'}">${d.beta.toFixed(3)}</td>
-                                            <td>${d.af.toFixed(3)}</td>
+                                            <td>${d.qvalue !== undefined ? d.qvalue.toExponential(2) : 'N/A'}</td>
                                         </tr>
                                     `).join('')}
                                 </tbody>
@@ -8404,9 +8404,14 @@
             // CIMA Biochemistry Scatter
             document.getElementById('biochem-x-axis')?.addEventListener('change', updateBiochemScatter);
             document.getElementById('biochem-scatter-sig-type')?.addEventListener('change', () => {
-                // Reset protein search to a default for the new sig type
+                // Reset protein search to a valid default for the new sig type
                 const searchInput = document.getElementById('biochem-scatter-protein-search');
-                if (searchInput) searchInput.value = 'IFNG';
+                const sigType = document.getElementById('biochem-scatter-sig-type')?.value || 'CytoSig';
+                const sigs = sigType === 'CytoSig' ? biochemScatterSigs.cytosig : biochemScatterSigs.secact;
+                // Use IFNG if available (common in both), otherwise first available
+                if (searchInput) {
+                    searchInput.value = sigs.includes('IFNG') ? 'IFNG' : (sigs[0] || '');
+                }
                 updateBiochemScatter();
             });
             document.getElementById('biochem-color-by')?.addEventListener('change', updateBiochemScatter);
