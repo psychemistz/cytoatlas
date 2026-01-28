@@ -807,6 +807,118 @@ def preprocess_inflammation_correlations():
     return correlations
 
 
+def preprocess_inflammation_celltype_correlations():
+    """Preprocess Inflammation Atlas cell type-specific age/BMI correlations."""
+    print("Processing Inflammation Atlas cell type-specific age/BMI correlations...")
+
+    from scipy.stats import spearmanr
+    from statsmodels.stats.multitest import multipletests
+
+    try:
+        import anndata as ad
+    except ImportError:
+        print("  Skipping - anndata not available")
+        return None
+
+    # Load sample metadata
+    SAMPLE_META_PATH = Path('/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_ATLAS_afterQC_sampleMetadata.csv')
+    if not SAMPLE_META_PATH.exists():
+        print(f"  Skipping - metadata not found")
+        return None
+
+    sample_meta = pd.read_csv(SAMPLE_META_PATH)
+    meta_age = sample_meta[['sampleID', 'age']].dropna().set_index('sampleID')
+    meta_bmi = sample_meta[['sampleID', 'BMI']].dropna().set_index('sampleID')
+
+    correlations = {'age': [], 'bmi': []}
+
+    # Process both CytoSig and SecAct
+    for sig_type in ['CytoSig', 'SecAct']:
+        h5ad_file = INFLAM_DIR / f"main_{sig_type}_pseudobulk.h5ad"
+        if not h5ad_file.exists():
+            print(f"  Skipping {sig_type} - file not found")
+            continue
+
+        adata = ad.read_h5ad(h5ad_file)
+        print(f"  {sig_type} shape: {adata.shape}")
+
+        # Activity matrix: proteins x sample_celltype
+        activity_df = pd.DataFrame(
+            adata.X,
+            index=adata.obs_names,
+            columns=adata.var_names
+        )
+
+        # Cell type info
+        sample_info = adata.var[['sample', 'cell_type', 'n_cells']].copy()
+        cell_types = sample_info['cell_type'].unique()
+        proteins = activity_df.index.tolist()
+
+        print(f"  Computing correlations for {len(cell_types)} cell types × {len(proteins)} proteins...")
+
+        # Compute correlations per cell type
+        for ct in cell_types:
+            ct_cols = sample_info[sample_info['cell_type'] == ct].index
+            ct_samples = sample_info.loc[ct_cols, 'sample'].values
+
+            # Get activity values for this cell type
+            ct_activity = activity_df[ct_cols].T
+            ct_activity.index = ct_samples
+
+            # Age correlations
+            common_age = ct_activity.index.intersection(meta_age.index)
+            if len(common_age) >= 10:
+                for protein in proteins:
+                    x = meta_age.loc[common_age, 'age'].values
+                    y = ct_activity.loc[common_age, protein].values
+                    mask = ~(np.isnan(x) | np.isnan(y))
+                    if mask.sum() >= 10:
+                        rho, pval = spearmanr(x[mask], y[mask])
+                        correlations['age'].append({
+                            'cell_type': ct,
+                            'protein': protein,
+                            'signature': sig_type,
+                            'rho': round(rho, 4),
+                            'pvalue': pval,
+                            'n': int(mask.sum())
+                        })
+
+            # BMI correlations
+            common_bmi = ct_activity.index.intersection(meta_bmi.index)
+            if len(common_bmi) >= 10:
+                for protein in proteins:
+                    x = meta_bmi.loc[common_bmi, 'BMI'].values
+                    y = ct_activity.loc[common_bmi, protein].values
+                    mask = ~(np.isnan(x) | np.isnan(y))
+                    if mask.sum() >= 10:
+                        rho, pval = spearmanr(x[mask], y[mask])
+                        correlations['bmi'].append({
+                            'cell_type': ct,
+                            'protein': protein,
+                            'signature': sig_type,
+                            'rho': round(rho, 4),
+                            'pvalue': pval,
+                            'n': int(mask.sum())
+                        })
+
+    # FDR correction
+    for feature in ['age', 'bmi']:
+        if correlations[feature]:
+            pvals = [d['pvalue'] for d in correlations[feature]]
+            _, qvals, _, _ = multipletests(pvals, method='fdr_bh')
+            for i, d in enumerate(correlations[feature]):
+                d['qvalue'] = round(qvals[i], 4)
+
+    # Save
+    with open(OUTPUT_DIR / "inflammation_celltype_correlations.json", 'w') as f:
+        json.dump(correlations, f)
+
+    print(f"  Age correlations: {len(correlations['age'])}")
+    print(f"  BMI correlations: {len(correlations['bmi'])}")
+
+    return correlations
+
+
 def preprocess_inflammation_disease():
     """Preprocess Inflammation Atlas disease-specific activity data."""
     print("Processing Inflammation Atlas disease activity...")
@@ -2215,6 +2327,7 @@ def create_embedded_data():
         'adjacent_tissue.json',  # NEW
         'inflammation_celltype.json',
         'inflammation_correlations.json',
+        'inflammation_celltype_correlations.json',  # Cell type-specific age/BMI correlations
         'inflammation_disease.json',
         'inflammation_longitudinal.json',
         'inflammation_cell_drivers.json',
@@ -2525,6 +2638,7 @@ def main():
     preprocess_adjacent_tissue()  # NEW: adjacent tissue field effect
     preprocess_inflammation()
     preprocess_inflammation_correlations()
+    preprocess_inflammation_celltype_correlations()  # Cell type-specific age/BMI correlations
     preprocess_inflammation_disease()
     preprocess_inflammation_longitudinal()  # NEW: longitudinal data
     preprocess_inflammation_cell_drivers()  # NEW: cell type drivers

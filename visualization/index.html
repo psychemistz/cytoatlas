@@ -763,20 +763,20 @@
             <p class="narrow">Explore correlations between cytokine activities and clinical parameters in 421 healthy donors from the CIMA cohort.</p>
 
             <div class="tabs">
-                <button class="tab active" data-tab="age-bmi">Age & BMI</button>
+                <button class="tab active" data-tab="cima-celltypes">Cell Types</button>
+                <button class="tab" data-tab="age-bmi">Age & BMI</button>
                 <button class="tab" data-tab="age-bmi-boxplots">Age/BMI Stratified</button>
                 <button class="tab" data-tab="biochemistry">Biochemistry</button>
                 <button class="tab" data-tab="biochem-scatter">Biochem Scatter</button>
                 <button class="tab" data-tab="metabolites">Metabolites</button>
                 <button class="tab" data-tab="differential">Differential</button>
-                <button class="tab" data-tab="cima-celltypes">Cell Types</button>
                 <button class="tab" data-tab="cima-multiomics">Multi-omics</button>
                 <button class="tab" data-tab="cima-population">Population</button>
                 <button class="tab" data-tab="cima-eqtl">eQTL Browser</button>
             </div>
 
             <!-- Age/BMI Tab -->
-            <div class="tab-content active" id="tab-age-bmi">
+            <div class="tab-content" id="tab-age-bmi">
                 <div class="controls">
                     <div class="control-group">
                         <label>Signature Type</label>
@@ -1037,7 +1037,7 @@
             </div>
 
             <!-- CIMA Cell Types Tab -->
-            <div class="tab-content" id="tab-cima-celltypes">
+            <div class="tab-content active" id="tab-cima-celltypes">
                 <div class="controls">
                     <div class="control-group">
                         <label>Signature Type</label>
@@ -1274,6 +1274,7 @@
             <div class="tabs">
                 <button class="tab active" data-tab="inflam-celltypes">Cell Types</button>
                 <button class="tab" data-tab="inflam-age-bmi">Age & BMI</button>
+                <button class="tab" data-tab="inflam-age-bmi-stratified">Age/BMI Stratified</button>
                 <button class="tab" data-tab="inflam-disease">Disease</button>
                 <button class="tab" data-tab="inflam-demographics">Demographics</button>
                 <button class="tab" data-tab="treatment-response">Treatment Response</button>
@@ -1340,6 +1341,56 @@
                         <div class="viz-subtitle">Spearman correlation with body mass index (sorted high to low)</div>
                         <div id="inflam-bmi-lollipop" class="loading">Loading...</div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Age/BMI Stratified Tab -->
+            <div class="tab-content" id="tab-inflam-age-bmi-stratified">
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Stratify By</label>
+                        <select id="inflam-stratify-by">
+                            <option value="age">Age (decades)</option>
+                            <option value="bmi">BMI (WHO categories)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Cell Type</label>
+                        <select id="inflam-boxplot-celltype">
+                            <option value="All">All (sample-level)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Signature Type</label>
+                        <select id="inflam-boxplot-sig-type">
+                            <option value="CytoSig">CytoSig (43 cytokines)</option>
+                            <option value="SecAct">SecAct (1,170 proteins)</option>
+                        </select>
+                    </div>
+                    <div class="control-group" style="position: relative;">
+                        <label>Search Protein</label>
+                        <input type="text" id="inflam-boxplot-search" placeholder="Type to search (e.g., IFNG, IL6)"
+                               style="width: 180px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" autocomplete="off" value="IFNG">
+                        <div id="inflam-boxplot-suggestions" style="position: absolute; top: 100%; left: 0; width: 180px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
+                    <strong>Age Bins:</strong> &lt;30, 30-39, 40-49, 50-59, 60-69, 70+ years<br>
+                    <strong>BMI Categories:</strong> Underweight (&lt;18.5), Normal (18.5-25), Overweight (25-30), Obese (&gt;30)
+                </div>
+
+                <div class="viz-container" style="min-height: 500px;">
+                    <div class="viz-title" id="inflam-boxplot-title">Age-Stratified Cytokine Activity</div>
+                    <div class="viz-subtitle" id="inflam-boxplot-subtitle">Distribution of activity scores across age bins</div>
+                    <div id="inflam-stratified-boxplot" class="loading">Loading...</div>
+                </div>
+
+                <!-- Cell Type Heatmap -->
+                <div class="viz-container" style="min-height: 400px; margin-top: 2rem;">
+                    <div class="viz-title" id="inflam-celltype-stratified-title">Cell Type-Specific Activity Heatmap</div>
+                    <div class="viz-subtitle" id="inflam-celltype-stratified-subtitle">Median activity across cell types and age/BMI bins</div>
+                    <div id="inflam-celltype-stratified-heatmap" class="loading">Loading...</div>
                 </div>
             </div>
 
@@ -2504,6 +2555,8 @@
             } else if (section === 'inflammation') {
                 updateInflammationViz();
                 updateInflamCorrelations();
+                initInflamBoxplotSignatures();
+                updateInflamStratifiedBoxplot();
                 updateInflamDisease();
                 updateInflamDemographics();
                 updateTreatmentResponse();
@@ -5139,6 +5192,108 @@
             }, {responsive: true});
         }
 
+        // Inflammation Atlas Age/BMI Stratified functions
+        let inflamBoxplotSignatures = { cytosig: [], secact: [] };
+
+        function initInflamBoxplotSignatures() {
+            const data = state.data.agebmiboxplots?.inflammation;
+            if (!data) return;
+            inflamBoxplotSignatures.cytosig = data.cytosig_signatures || [];
+            inflamBoxplotSignatures.secact = data.secact_signatures || [];
+        }
+
+        function getInflamBoxplotSignatures() {
+            const sigType = document.getElementById('inflam-boxplot-sig-type')?.value || 'CytoSig';
+            return sigType === 'SecAct' ? inflamBoxplotSignatures.secact : inflamBoxplotSignatures.cytosig;
+        }
+
+        function showInflamBoxplotSuggestions() {
+            const input = document.getElementById('inflam-boxplot-search');
+            const div = document.getElementById('inflam-boxplot-suggestions');
+            if (!input || !div) return;
+
+            const query = input.value.toLowerCase();
+            const sigs = getInflamBoxplotSignatures();
+            const filtered = sigs.filter(s => s.toLowerCase().includes(query)).slice(0, 15);
+
+            if (filtered.length === 0) { div.style.display = 'none'; return; }
+
+            div.innerHTML = filtered.map(s =>
+                `<div style="padding:6px 10px;cursor:pointer;border-bottom:1px solid #eee"
+                     onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'"
+                     onclick="selectInflamBoxplotSig('${s}')">${s}</div>`
+            ).join('');
+            div.style.display = 'block';
+        }
+
+        function selectInflamBoxplotSig(sig) {
+            document.getElementById('inflam-boxplot-search').value = sig;
+            document.getElementById('inflam-boxplot-suggestions').style.display = 'none';
+            updateInflamStratifiedBoxplot();
+        }
+
+        function updateInflamStratifiedBoxplot() {
+            const container = document.getElementById('inflam-stratified-boxplot');
+            if (!container) return;
+            container.classList.remove('loading');
+
+            const stratifyBy = document.getElementById('inflam-stratify-by')?.value || 'age';
+            const sigType = document.getElementById('inflam-boxplot-sig-type')?.value || 'CytoSig';
+            const signature = document.getElementById('inflam-boxplot-search')?.value || 'IFNG';
+
+            // Update titles
+            const titleEl = document.getElementById('inflam-boxplot-title');
+            const subtitleEl = document.getElementById('inflam-boxplot-subtitle');
+            if (titleEl) titleEl.textContent = `${stratifyBy === 'age' ? 'Age' : 'BMI'}-Stratified ${signature} Activity`;
+            if (subtitleEl) subtitleEl.textContent = `${sigType} activity distribution across ${stratifyBy === 'age' ? 'age decades' : 'BMI categories'}`;
+
+            const boxplotData = state.data.agebmiboxplots?.inflammation;
+            if (!boxplotData || !boxplotData[stratifyBy] || !boxplotData[stratifyBy][signature]) {
+                container.innerHTML = '<p style="text-align:center;color:#666;padding:2rem;">No data available for this signature</p>';
+                return;
+            }
+
+            const sigData = boxplotData[stratifyBy][signature]['All'];
+            if (!sigData) {
+                container.innerHTML = '<p style="text-align:center;color:#666;padding:2rem;">No data available</p>';
+                return;
+            }
+
+            const bins = stratifyBy === 'age'
+                ? ['<30', '30-39', '40-49', '50-59', '60-69', '70+']
+                : ['Underweight', 'Normal', 'Overweight', 'Obese'];
+
+            const traces = bins.map((bin, i) => ({
+                y: sigData[bin] || [],
+                type: 'box',
+                name: bin,
+                boxpoints: 'outliers',
+                marker: { color: d3.schemeTableau10[i % 10] }
+            })).filter(t => t.y.length > 0);
+
+            if (traces.length === 0) {
+                container.innerHTML = '<p style="text-align:center;color:#666;padding:2rem;">No data available for selected bins</p>';
+                return;
+            }
+
+            Plotly.newPlot(container, traces, {
+                yaxis: { title: `${signature} Activity Score`, zeroline: true },
+                xaxis: { title: stratifyBy === 'age' ? 'Age Group' : 'BMI Category' },
+                showlegend: false,
+                margin: { t: 30, b: 60, l: 60, r: 30 },
+                height: 450
+            }, { responsive: true });
+        }
+
+        function updateInflamCelltypeStratifiedHeatmap() {
+            const container = document.getElementById('inflam-celltype-stratified-heatmap');
+            if (!container) return;
+            container.classList.remove('loading');
+
+            // Placeholder - would need cell-type level data
+            container.innerHTML = '<p style="text-align:center;color:#666;padding:2rem;">Cell type-specific stratification data not yet available.</p>';
+        }
+
         // Inflammation Atlas Disease functions
         function updateInflamDisease() {
             const data = state.data.inflammationdisease;
@@ -5599,6 +5754,30 @@
 
             // Control changes - Inflammation Age/BMI
             document.getElementById('inflam-corr-sig-type')?.addEventListener('change', updateInflamCorrelations);
+
+            // Control changes - Inflammation Age/BMI Stratified
+            document.getElementById('inflam-stratify-by')?.addEventListener('change', updateInflamStratifiedBoxplot);
+            document.getElementById('inflam-boxplot-sig-type')?.addEventListener('change', () => {
+                const input = document.getElementById('inflam-boxplot-search');
+                if (input) input.value = 'IFNG';
+                updateInflamStratifiedBoxplot();
+            });
+            const inflamBoxplotSearch = document.getElementById('inflam-boxplot-search');
+            if (inflamBoxplotSearch) {
+                inflamBoxplotSearch.addEventListener('focus', showInflamBoxplotSuggestions);
+                inflamBoxplotSearch.addEventListener('input', showInflamBoxplotSuggestions);
+                inflamBoxplotSearch.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        document.getElementById('inflam-boxplot-suggestions').style.display = 'none';
+                        updateInflamStratifiedBoxplot();
+                    }
+                });
+                inflamBoxplotSearch.addEventListener('blur', () => {
+                    setTimeout(() => {
+                        document.getElementById('inflam-boxplot-suggestions').style.display = 'none';
+                    }, 200);
+                });
+            }
 
             // Control changes - Inflammation Disease
             document.getElementById('inflam-disease-group')?.addEventListener('change', () => {
