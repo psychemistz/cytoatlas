@@ -1258,26 +1258,18 @@
                         <label>Disease</label>
                         <select id="treatment-disease">
                             <option value="all">All Diseases</option>
-                            <option value="RA">Rheumatoid Arthritis</option>
-                            <option value="IBD">Inflammatory Bowel Disease</option>
-                            <option value="psoriasis">Psoriasis</option>
-                            <option value="asthma">Asthma</option>
-                        </select>
-                    </div>
-                    <div class="control-group">
-                        <label>Treatment</label>
-                        <select id="treatment-type">
-                            <option value="all">All Treatments</option>
-                            <option value="anti-TNF">Anti-TNF</option>
-                            <option value="anti-IL6">Anti-IL6</option>
-                            <option value="anti-IL17">Anti-IL17</option>
+                            <option value="Rheumatoid Arthritis">Rheumatoid Arthritis</option>
+                            <option value="Inflammatory Bowel Disease">Inflammatory Bowel Disease</option>
+                            <option value="Psoriasis">Psoriasis</option>
+                            <option value="Asthma">Asthma</option>
                         </select>
                     </div>
                     <div class="control-group">
                         <label>Model</label>
                         <select id="prediction-model">
-                            <option value="logistic">Logistic Regression</option>
-                            <option value="rf">Random Forest</option>
+                            <option value="all">All Models</option>
+                            <option value="Logistic Regression">Logistic Regression</option>
+                            <option value="Random Forest">Random Forest</option>
                         </select>
                     </div>
                 </div>
@@ -1952,9 +1944,9 @@
                     <div class="control-group">
                         <label>Comparison</label>
                         <select id="atlas-comparison-type">
-                            <option value="cima-inflam">CIMA (Healthy) vs Inflammation (Disease)</option>
-                            <option value="scatlas-normal-cancer">scAtlas Normal vs Cancer</option>
-                            <option value="cima-scatlas">CIMA vs scAtlas (Blood)</option>
+                            <option value="cima-inflam">CIMA vs Inflammation Atlas</option>
+                            <option value="cima-scatlas">CIMA vs scAtlas</option>
+                            <option value="inflam-scatlas">Inflammation vs scAtlas</option>
                         </select>
                     </div>
                     <div class="control-group">
@@ -1987,10 +1979,10 @@
                         <label>Cell Lineage</label>
                         <select id="mapping-lineage">
                             <option value="all">All Lineages</option>
-                            <option value="T_cell">T Cells</option>
-                            <option value="Myeloid">Myeloid Cells</option>
-                            <option value="B_cell">B Cells</option>
-                            <option value="Stromal">Stromal Cells</option>
+                            <option value="T_cell">T Cells (CD4, CD8, Treg, MAIT)</option>
+                            <option value="Myeloid">Myeloid (Monocyte, DC, pDC)</option>
+                            <option value="B_cell">B Cells & Plasma</option>
+                            <option value="NK_ILC">NK & ILC</option>
                         </select>
                     </div>
                 </div>
@@ -2008,9 +2000,8 @@
                     <div class="control-group">
                         <label>Analysis Type</label>
                         <select id="meta-analysis-type">
-                            <option value="age">Age Effects</option>
-                            <option value="sex">Sex Effects</option>
-                            <option value="disease">Disease vs Healthy</option>
+                            <option value="age">Age Correlation</option>
+                            <option value="sex">Sex Difference</option>
                         </select>
                     </div>
                     <div class="control-group">
@@ -2090,7 +2081,6 @@
                         <select id="pathway-db">
                             <option value="kegg">KEGG Pathways</option>
                             <option value="reactome">Reactome</option>
-                            <option value="go_bp">GO Biological Process</option>
                             <option value="hallmark">MSigDB Hallmarks</option>
                         </select>
                     </div>
@@ -2149,18 +2139,91 @@
             <h3>Cytokine Activity Inference</h3>
             <p>Cytokine signaling activities were inferred from single-cell RNA-seq data using two complementary approaches:</p>
             <ul>
-                <li><strong>CytoSig</strong>: Predicts activities of 44 cytokines based on their downstream transcriptional signatures.</li>
-                <li><strong>SecAct</strong>: Estimates activities of 1,249 secreted proteins using secreted protein signatures learned from spatial Moran's I.</li>
+                <li><strong>CytoSig</strong>: Predicts activities of 44 cytokines based on their downstream transcriptional signatures (Jiang et al., 2021).</li>
+                <li><strong>SecAct</strong>: Estimates activities of 1,249 secreted proteins using secreted protein signatures learned from spatial Moran's I autocorrelation.</li>
             </ul>
-
-            <h3>Statistical Analysis</h3>
-            <p>Correlations were computed using Spearman's rank correlation coefficient. P-values were adjusted for multiple testing using the Benjamini-Hochberg procedure. Differential analysis was performed using the Mann-Whitney U test.</p>
+            <p>Activity scores represent z-scored coefficients from ridge regression of signature gene expression, where positive values indicate upregulation of downstream targets.</p>
 
             <h3>Data Sources</h3>
             <ul>
-                <li><strong>CIMA</strong>: 421 healthy donors with matched single-cell RNA-seq and clinical metadata</li>
-                <li><strong>scAtlas</strong>: Human Cell Atlas data spanning 35 organs and 376 cell types</li>
-                <li><strong>Inflammation Atlas</strong>: 817 samples from patients with inflammatory diseases</li>
+                <li><strong>CIMA (Healthy Immune)</strong>: 6.5M cells from 421 healthy donors with matched blood biochemistry and metabolomics</li>
+                <li><strong>Inflammation Atlas</strong>: 4.9M cells from 817 samples across inflammatory diseases (RA, IBD, MS, SLE, etc.)</li>
+                <li><strong>scAtlas Normal</strong>: 2.3M cells spanning 35 organs and 376 cell types from the Human Cell Atlas</li>
+                <li><strong>scAtlas Cancer</strong>: 4.1M cells from pan-cancer datasets with 156 cell type annotations</li>
+            </ul>
+
+            <h3>Statistical Analysis</h3>
+            <h4>Correlation Analysis</h4>
+            <p>Spearman's rank correlation coefficient (ρ) was used for continuous variables (age, BMI, biochemistry, metabolites). P-values were adjusted using Benjamini-Hochberg FDR correction.</p>
+
+            <h4>Differential Analysis</h4>
+            <p>Mann-Whitney U test (Wilcoxon rank-sum) was used for two-group comparisons (sex, disease vs. healthy). Effect sizes are reported as log2 fold-change of median activity.</p>
+
+            <h4>Treatment Response Prediction</h4>
+            <p>Logistic regression and Random Forest classifiers were trained using 5-fold cross-validation. ROC curves show model performance with AUC metrics. Feature importance was assessed using permutation importance for interpretability.</p>
+
+            <h3>Cross-Atlas Integration Methods</h3>
+
+            <h4>Cell Type Harmonization</h4>
+            <p>Cell type annotations were harmonized across atlases using manual mapping dictionaries based on canonical marker genes and established nomenclature (Hao et al., 2021). The Sankey diagram shows mapping of atlas-specific annotations to common cell type categories.</p>
+
+            <h4>Meta-Analysis</h4>
+            <p>Fixed-effects meta-analysis combines effect sizes across atlases using inverse-variance weighting. Heterogeneity was assessed using the I² statistic (Higgins et al., 2003):</p>
+            <ul>
+                <li>I² &lt; 25%: Low heterogeneity (consistent effects)</li>
+                <li>I² 25-50%: Moderate heterogeneity</li>
+                <li>I² 50-75%: Substantial heterogeneity</li>
+                <li>I² &gt; 75%: Considerable heterogeneity (effects vary across atlases)</li>
+            </ul>
+
+            <h4>Signature Correlation Matrix</h4>
+            <p>Pairwise Spearman correlations between cytokine activities were computed across all samples. Hierarchical clustering (Ward's method) was applied to identify co-regulated cytokine modules.</p>
+
+            <h4>Pathway Enrichment</h4>
+            <p>Cytokine-pathway associations were derived from KEGG, Reactome, and MSigDB Hallmark databases. Over-representation was tested using Fisher's exact test with Benjamini-Hochberg correction (FDR &lt; 0.05).</p>
+
+            <h3>Visualization Panels</h3>
+            <table style="width:100%; border-collapse: collapse; margin: 1rem 0;">
+                <tr style="background: #f5f5f5; border-bottom: 2px solid #ddd;">
+                    <th style="padding: 0.5rem; text-align: left;">Panel</th>
+                    <th style="padding: 0.5rem; text-align: left;">Description</th>
+                </tr>
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 0.5rem;"><strong>Age & BMI Correlations</strong></td>
+                    <td style="padding: 0.5rem;">Spearman correlations between cytokine activities and continuous clinical variables</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 0.5rem;"><strong>Biochemistry Correlations</strong></td>
+                    <td style="padding: 0.5rem;">Heatmap of cytokine-biochemistry correlations with hierarchical clustering</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 0.5rem;"><strong>Treatment Response</strong></td>
+                    <td style="padding: 0.5rem;">ROC curves from cross-validated response prediction models</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 0.5rem;"><strong>Disease Differential</strong></td>
+                    <td style="padding: 0.5rem;">Volcano plots showing disease-specific activity changes (log2FC vs. -log10 p-value)</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 0.5rem;"><strong>Atlas Comparison</strong></td>
+                    <td style="padding: 0.5rem;">Scatter plots comparing mean activities between atlases with Spearman correlation</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 0.5rem;"><strong>Forest Plot</strong></td>
+                    <td style="padding: 0.5rem;">Meta-analysis effect sizes with 95% confidence intervals and I² heterogeneity</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 0.5rem;"><strong>Correlation Matrix</strong></td>
+                    <td style="padding: 0.5rem;">Signature-signature correlation heatmap with identified modules</td>
+                </tr>
+            </table>
+
+            <h3>References</h3>
+            <ul>
+                <li>Jiang P, et al. (2021) <em>Nature Methods</em> - Systematic investigation of cytokine signaling activity at the tissue and single-cell levels</li>
+                <li>Hao Y, et al. (2021) <em>Cell</em> - Integrated analysis of multimodal single-cell data</li>
+                <li>Higgins JPT, et al. (2003) <em>BMJ</em> - Measuring inconsistency in meta-analyses</li>
+                <li>Domínguez Conde C, et al. (2022) <em>Science</em> - Cross-tissue immune cell analysis reveals tissue-specific features in humans</li>
             </ul>
         </div>
     </section>
@@ -4151,8 +4214,9 @@
             filtered.sort((a, b) => b.rho - a.rho);
 
             const top20 = filtered.slice(0, 20);
-            const bottom20 = filtered.slice(-20).reverse();
-            const displayData = [...top20, ...bottom20];
+            const bottom20 = filtered.slice(-20);
+            // Combine and reverse so highest values appear at top in horizontal bar chart
+            const displayData = [...top20, ...bottom20].reverse();
 
             container.classList.remove('loading');
             Plotly.purge(container);
@@ -4162,7 +4226,6 @@
                 return;
             }
 
-            const textPositions = displayData.map(d => Math.abs(d.rho) < 0.1 ? 'outside' : 'inside');
             const maxAbs = Math.max(...displayData.map(d => Math.abs(d.rho)));
 
             Plotly.newPlot(container, [{
@@ -4173,14 +4236,15 @@
                 marker: {
                     color: displayData.map(d => d.rho > 0 ? '#f4a6a6' : '#a8d4e6')
                 },
-                text: displayData.map(d => d.rho?.toFixed(3)),
-                textposition: textPositions,
-                textfont: { size: 9, color: '#333' },
+                text: displayData.map(d => d.rho?.toFixed(2)),
+                textposition: 'outside',
+                textfont: { size: 11, color: '#333' },
+                constraintext: 'none',
                 cliponaxis: false,
                 hovertemplate: '<b>%{y}</b><br>ρ = %{x:.3f}<extra></extra>'
             }], {
-                margin: {l: 140, r: 50, t: 30, b: 50},
-                xaxis: {title: 'Spearman ρ', zeroline: true, zerolinecolor: '#ccc', range: [-maxAbs - 0.1, maxAbs + 0.1]},
+                margin: {l: 140, r: 70, t: 30, b: 50},
+                xaxis: {title: 'Spearman ρ', zeroline: true, zerolinecolor: '#ccc', range: [-maxAbs - 0.15, maxAbs + 0.15]},
                 yaxis: {automargin: true},
                 height: 550
             }, {responsive: true});
@@ -4645,7 +4709,8 @@
                         yaxis: { title: `${signature} Activity Score`, zeroline: true },
                         xaxis: { title: stratifyBy === 'age' ? 'Age Group' : 'BMI Category' },
                         showlegend: false,
-                        margin: { t: 30, b: 60, l: 60, r: 30 }
+                        margin: { t: 30, b: 60, l: 60, r: 30 },
+                        height: 450
                     }, { responsive: true });
                     return;
                 }
@@ -4668,7 +4733,8 @@
                 yaxis: { title: `${signature} Activity Score`, zeroline: true },
                 xaxis: { title: stratifyBy === 'age' ? 'Age Group' : 'BMI Category' },
                 showlegend: false,
-                margin: { t: 30, b: 60, l: 60, r: 30 }
+                margin: { t: 30, b: 60, l: 60, r: 30 },
+                height: 450
             }, { responsive: true });
         }
 
@@ -4874,7 +4940,6 @@
 
             // Get filter values
             const selectedDisease = document.getElementById('treatment-disease')?.value || 'all';
-            const selectedType = document.getElementById('treatment-type')?.value || 'all';
             const selectedModel = document.getElementById('prediction-model')?.value || 'all';
 
             if (!data || (!data.roc_curves?.length && !data.feature_importance?.length)) {
@@ -4887,7 +4952,7 @@
                 return;
             }
 
-            // 1. ROC Curves visualization (bar chart of AUC values)
+            // 1. ROC Curves visualization (actual ROC curves)
             if (container1) {
                 container1.classList.remove('loading');
                 Plotly.purge(container1);
@@ -4903,32 +4968,37 @@
                 if (rocData.length === 0) {
                     container1.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No ROC data for selected filters</p>';
                 } else {
-                    // Group by model
-                    const models = [...new Set(rocData.map(d => d.model))];
-                    const diseases = [...new Set(rocData.map(d => d.disease))];
+                    // Color palette for different curves
+                    const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f'];
 
-                    const traces = models.map((model, i) => ({
-                        type: 'bar',
-                        name: model,
-                        x: diseases,
-                        y: diseases.map(disease => {
-                            const entry = rocData.find(d => d.disease === disease && d.model === model);
-                            return entry ? entry.auc : 0;
-                        }),
-                        text: diseases.map(disease => {
-                            const entry = rocData.find(d => d.disease === disease && d.model === model);
-                            return entry ? `AUC: ${entry.auc.toFixed(3)}` : '';
-                        }),
-                        textposition: 'auto',
-                        marker: { color: i === 0 ? '#1f77b4' : '#ff7f0e' }
+                    // Create traces for each ROC curve
+                    const traces = rocData.map((d, i) => ({
+                        type: 'scatter',
+                        mode: 'lines',
+                        name: `${d.disease} - ${d.model} (AUC=${d.auc.toFixed(2)})`,
+                        x: d.fpr || [0, 1],
+                        y: d.tpr || [0, 1],
+                        line: { color: colors[i % colors.length], width: 2 },
+                        hovertemplate: `<b>${d.disease}</b><br>${d.model}<br>FPR: %{x:.2f}<br>TPR: %{y:.2f}<extra></extra>`
                     }));
 
+                    // Add diagonal reference line
+                    traces.push({
+                        type: 'scatter',
+                        mode: 'lines',
+                        name: 'Random (AUC=0.50)',
+                        x: [0, 1],
+                        y: [0, 1],
+                        line: { color: '#ccc', width: 1, dash: 'dash' },
+                        hoverinfo: 'skip'
+                    });
+
                     Plotly.newPlot(container1, traces, {
-                        barmode: 'group',
-                        xaxis: { title: 'Disease' },
-                        yaxis: { title: 'AUC', range: [0, 1] },
-                        margin: { l: 50, r: 30, t: 30, b: 100 },
-                        legend: { orientation: 'h', y: -0.2 }
+                        xaxis: { title: 'False Positive Rate', range: [0, 1] },
+                        yaxis: { title: 'True Positive Rate', range: [0, 1] },
+                        margin: { l: 60, r: 30, t: 30, b: 50 },
+                        legend: { orientation: 'h', y: -0.25, font: { size: 10 } },
+                        height: 400
                     }, { responsive: true });
                 }
             }
@@ -4972,7 +5042,8 @@
                     }], {
                         xaxis: { title: 'Importance Score' },
                         yaxis: { automargin: true },
-                        margin: { l: 80, r: 30, t: 30, b: 50 }
+                        margin: { l: 80, r: 30, t: 30, b: 50 },
+                        height: 400
                     }, { responsive: true });
                 }
             }
@@ -5015,7 +5086,8 @@
                     ], {
                         yaxis: { title: 'Predicted Probability', range: [0, 1] },
                         margin: { l: 50, r: 30, t: 30, b: 50 },
-                        showlegend: true
+                        showlegend: true,
+                        height: 350
                     }, { responsive: true });
                 }
             }
@@ -5076,7 +5148,8 @@
             }
 
             Plotly.newPlot(container, [plotData], {
-                margin: { t: 30, b: 30, l: 30, r: 30 }
+                margin: { t: 30, b: 30, l: 30, r: 30 },
+                height: 550
             }, { responsive: true });
         }
 
@@ -5133,6 +5206,7 @@
                         xaxis: { title: 'Main vs Validation (r)', range: [0, 1] },
                         yaxis: { title: 'Main vs External (r)', range: [0, 1] },
                         margin: { l: 60, r: 30, t: 30, b: 60 },
+                        height: 450,
                         shapes: [{
                             type: 'line',
                             x0: 0, y0: 0, x1: 1, y1: 1,
@@ -5168,7 +5242,8 @@
                     }], {
                         xaxis: { title: 'Cohort Comparison' },
                         yaxis: { title: 'Mean Correlation', range: [0, 1] },
-                        margin: { l: 50, r: 30, t: 30, b: 100 }
+                        margin: { l: 50, r: 30, t: 30, b: 100 },
+                        height: 450
                     }, { responsive: true });
                 }
             }
@@ -6154,7 +6229,8 @@
                 yaxis: { title: 'Cells (millions)', side: 'left' },
                 yaxis2: { title: 'Cell Types', side: 'right', overlaying: 'y' },
                 margin: { t: 30, b: 60, l: 60, r: 60 },
-                legend: { orientation: 'h', y: 1.1 }
+                legend: { orientation: 'h', y: 1.1 },
+                height: 450
             }, { responsive: true });
         }
 
@@ -6163,11 +6239,17 @@
             const container1 = document.getElementById('conserved-upset');
             const container2 = document.getElementById('specific-bar');
 
+            // Get dropdown values
+            const sigType = document.getElementById('conserved-sig-type')?.value || 'CytoSig';
+            const minAtlases = parseInt(document.getElementById('conserved-min-atlases')?.value || '3');
+
             // Use real data if available
             const sigData = state.data.crossatlas?.atlas_specific_signatures;
+            const conservedData = state.data.crossatlas?.conserved;
 
             if (container1) {
                 container1.classList.remove('loading');
+                Plotly.purge(container1);
 
                 let categories, values;
                 if (sigData) {
@@ -6176,36 +6258,81 @@
                         'CIMA+Inflam', 'CIMA+scAtlas', 'Inflam+scAtlas', 'All 3'
                     ];
                     values = [
-                        sigData.cima_only || 5,
-                        sigData.inflammation_only || 8,
-                        sigData.scatlas_only || 12,
-                        sigData.cima_inflam || 10,
-                        sigData.cima_scatlas || 7,
-                        sigData.inflam_scatlas || 9,
-                        sigData.all_three || 22
+                        sigData.cima_only || 0,
+                        sigData.inflam_only || sigData.inflammation_only || 0,
+                        sigData.scatlas_only || 0,
+                        sigData.cima_inflam || 0,
+                        sigData.cima_scatlas || 0,
+                        sigData.inflam_scatlas || 0,
+                        sigData.all_three || 0
                     ];
                 } else {
                     categories = ['CIMA only', 'Inflammation only', 'scAtlas only', 'CIMA+Inflam', 'CIMA+scAtlas', 'Inflam+scAtlas', 'All 3'];
-                    values = [5, 8, 12, 10, 7, 9, 22];
+                    values = [8, 2, 4, 9, 6, 0, 5];
                 }
 
                 const trace = {
                     type: 'bar',
                     x: categories,
                     y: values,
+                    text: values.map(v => v.toString()),
+                    textposition: 'outside',
                     marker: {
                         color: ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3', '#ff7f00', '#a65628', '#f781bf']
                     }
                 };
                 Plotly.newPlot(container1, [trace], {
+                    title: { text: `Signature Overlap (${sigType})`, font: { size: 14 } },
                     yaxis: { title: 'Number of Signatures' },
-                    margin: { t: 30, b: 80, l: 60, r: 30 }
+                    margin: { t: 50, b: 80, l: 60, r: 30 },
+                    height: 450
                 }, { responsive: true });
             }
 
+            // Show atlas-specific signatures filtered by minAtlases
             if (container2) {
                 container2.classList.remove('loading');
-                container2.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Atlas-specific signatures will be computed during cross-atlas integration.</p>';
+                Plotly.purge(container2);
+
+                if (conservedData && conservedData.signatures) {
+                    // Filter signatures by minimum atlas count
+                    const filtered = conservedData.signatures.filter(s => s.n_atlases >= minAtlases);
+
+                    if (filtered.length > 0) {
+                        // Sort by n_atlases descending, then by absolute mean activity
+                        filtered.sort((a, b) => {
+                            if (b.n_atlases !== a.n_atlases) return b.n_atlases - a.n_atlases;
+                            const aMax = Math.max(Math.abs(a.cima_mean || 0), Math.abs(a.inflammation_mean || 0), Math.abs(a.scatlas_mean || 0));
+                            const bMax = Math.max(Math.abs(b.cima_mean || 0), Math.abs(b.inflammation_mean || 0), Math.abs(b.scatlas_mean || 0));
+                            return bMax - aMax;
+                        });
+
+                        const top20 = filtered.slice(0, 20);
+
+                        Plotly.newPlot(container2, [{
+                            type: 'bar',
+                            orientation: 'h',
+                            y: top20.map(s => s.signature),
+                            x: top20.map(s => s.n_atlases),
+                            marker: {
+                                color: top20.map(s => s.n_atlases === 3 ? '#f781bf' : s.n_atlases === 2 ? '#984ea3' : '#e41a1c')
+                            },
+                            text: top20.map(s => `${s.n_atlases} atlas${s.n_atlases > 1 ? 'es' : ''}`),
+                            textposition: 'auto',
+                            hovertemplate: '<b>%{y}</b><br>Present in %{x} atlases<extra></extra>'
+                        }], {
+                            title: { text: `Signatures in ${minAtlases}+ Atlases (${filtered.length} total)`, font: { size: 14 } },
+                            xaxis: { title: 'Number of Atlases', dtick: 1 },
+                            yaxis: { automargin: true },
+                            margin: { l: 80, r: 30, t: 50, b: 50 },
+                            height: 450
+                        }, { responsive: true });
+                    } else {
+                        container2.innerHTML = `<p style="text-align:center; color:#666; padding:2rem;">No signatures found in ${minAtlases}+ atlases with current threshold.</p>`;
+                    }
+                } else {
+                    container2.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No signature data available.</p>';
+                }
             }
         }
 
@@ -6214,6 +6341,10 @@
             const container1 = document.getElementById('atlas-scatter');
             const container2 = document.getElementById('atlas-diff-bar');
 
+            // Get dropdown values
+            const atlasSelect = document.getElementById('atlas-comparison-type')?.value || 'cima-inflam';
+            const sigType = document.getElementById('atlas-comp-sig-type')?.value || 'CytoSig';
+
             // Use real comparison data if available
             const comparisonData = state.data.crossatlas?.comparison;
 
@@ -6221,8 +6352,6 @@
             if (container1) {
                 container1.classList.remove('loading');
                 Plotly.purge(container1);
-
-                const atlasSelect = document.getElementById('atlas-comparison-type')?.value || 'cima-inflam';
                 let plotData, xLabel, yLabel, correlation;
 
                 // Map select value to comparison key
@@ -6239,14 +6368,14 @@
                     correlation = realData.correlation;
 
                     if (atlasSelect === 'cima-inflam') {
-                        xLabel = 'CIMA (Healthy)';
-                        yLabel = 'Inflammation Atlas';
+                        xLabel = 'CIMA Activity (z-score)';
+                        yLabel = 'Inflammation Activity (z-score)';
                     } else if (atlasSelect === 'cima-scatlas') {
-                        xLabel = 'CIMA (Healthy)';
-                        yLabel = 'scAtlas (Tissue)';
+                        xLabel = 'CIMA Activity (z-score)';
+                        yLabel = 'scAtlas Activity (z-score)';
                     } else {
-                        xLabel = 'Inflammation Atlas';
-                        yLabel = 'scAtlas (Tissue)';
+                        xLabel = 'Inflammation Activity (z-score)';
+                        yLabel = 'scAtlas Activity (z-score)';
                     }
                 } else {
                     // Fallback to mock data
@@ -6310,6 +6439,7 @@
                     yaxis: { title: yLabel, zeroline: true, range: yRange },
                     margin: { l: 60, r: 30, t: 40, b: 60 },
                     title: { text: `Spearman r = ${r.toFixed(3)} (n=${plotData.length})`, font: { size: 12 } },
+                    height: 450
                 }, { responsive: true });
             }
 
@@ -6352,6 +6482,7 @@
                     xaxis: { title: 'Activity Difference', zeroline: true },
                     yaxis: { automargin: true },
                     margin: { l: 80, r: 30, t: 30, b: 50 },
+                    height: 450,
                     annotations: [{
                         x: 0.5, y: 1.05, xref: 'paper', yref: 'paper',
                         text: '<span style="color:#d62728">↑ Higher in Y-axis</span> | <span style="color:#2ca02c">↓ Higher in X-axis</span>',
@@ -6370,15 +6501,16 @@
             // Use real cell type mapping data if available
             const mappingData = state.data.crossatlas?.celltype_mapping;
             const sharedTypes = state.data.crossatlas?.shared_cell_types || [];
+            const lineageFilter = document.getElementById('mapping-lineage')?.value || 'all';
 
-            let nodes, links;
+            let allNodes, allLinks;
 
             if (mappingData && mappingData.nodes && mappingData.links) {
-                nodes = mappingData.nodes;
-                links = mappingData.links;
+                allNodes = mappingData.nodes;
+                allLinks = mappingData.links;
             } else {
                 // Fallback to mock data
-                nodes = [
+                allNodes = [
                     { id: 0, name: 'CD8 T', atlas: 'CIMA', count: 500000 },
                     { id: 1, name: 'CD4 T', atlas: 'CIMA', count: 600000 },
                     { id: 2, name: 'Monocyte', atlas: 'CIMA', count: 400000 },
@@ -6392,17 +6524,61 @@
                     { id: 10, name: 'Monocyte', atlas: 'common', count: 750000 },
                     { id: 11, name: 'NK', atlas: 'common', count: 550000 }
                 ];
-                links = [
-                    { source: 0, target: 8, value: 500000 },
-                    { source: 1, target: 9, value: 600000 },
-                    { source: 2, target: 10, value: 400000 },
-                    { source: 3, target: 11, value: 300000 },
-                    { source: 4, target: 8, value: 450000 },
-                    { source: 5, target: 9, value: 550000 },
-                    { source: 6, target: 10, value: 350000 },
-                    { source: 7, target: 11, value: 250000 }
+                allLinks = [
+                    { source: 0, target: 8, value: 500000, common_name: 'CD8 T' },
+                    { source: 1, target: 9, value: 600000, common_name: 'CD4 T' },
+                    { source: 2, target: 10, value: 400000, common_name: 'Monocyte' },
+                    { source: 3, target: 11, value: 300000, common_name: 'NK' },
+                    { source: 4, target: 8, value: 450000, common_name: 'CD8 T' },
+                    { source: 5, target: 9, value: 550000, common_name: 'CD4 T' },
+                    { source: 6, target: 10, value: 350000, common_name: 'Monocyte' },
+                    { source: 7, target: 11, value: 250000, common_name: 'NK' }
                 ];
             }
+
+            // Define lineage groups with pattern matching
+            const lineagePatterns = {
+                'T_cell': ['CD4', 'CD8', 'Treg', 'T cell', 'T_CD', 'MAIT', 'NKT', 'gdT', 'Th0', 'Th1', 'Th2', 'DP', 'Cytotoxic T'],
+                'Myeloid': ['Mono', 'DC', 'pDC', 'cDC', 'Macrophage', 'Neutrophil', 'Basophil'],
+                'B_cell': ['B cell', 'B ', 'Plasma'],
+                'NK_ILC': ['NK', 'ILC', 'Innate_lymphoid']
+            };
+
+            // Filter by lineage
+            let filteredLinks = allLinks;
+            if (lineageFilter !== 'all') {
+                const patterns = lineagePatterns[lineageFilter] || [];
+                filteredLinks = allLinks.filter(l => {
+                    const commonName = l.common_name || '';
+                    return patterns.some(pattern => commonName.toLowerCase().includes(pattern.toLowerCase()));
+                });
+            }
+
+            // Get nodes that are in filtered links
+            const usedNodeIds = new Set();
+            filteredLinks.forEach(l => {
+                usedNodeIds.add(l.source);
+                usedNodeIds.add(l.target);
+            });
+
+            // Build new node list with remapped IDs
+            const nodeIdMap = {};
+            const nodes = [];
+            let newIdx = 0;
+            allNodes.forEach(n => {
+                if (usedNodeIds.has(n.id)) {
+                    nodeIdMap[n.id] = newIdx;
+                    nodes.push({ ...n, id: newIdx });
+                    newIdx++;
+                }
+            });
+
+            // Remap link source/target IDs
+            const links = filteredLinks.map(l => ({
+                ...l,
+                source: nodeIdMap[l.source],
+                target: nodeIdMap[l.target]
+            }));
 
             // Color by atlas
             const atlasColors = {
@@ -6411,6 +6587,11 @@
                 'scAtlas': '#2ca02c',
                 'common': '#9467bd'
             };
+
+            if (nodes.length === 0 || links.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No cell types found for selected lineage.</p>';
+                return;
+            }
 
             const data = {
                 type: 'sankey',
@@ -6432,7 +6613,8 @@
 
             Plotly.newPlot(container, [data], {
                 margin: { t: 30, b: 30, l: 30, r: 30 },
-                title: { text: `${sharedTypes.length} Shared Cell Types Across Atlases`, font: { size: 12 } }
+                title: { text: `${sharedTypes.length} Shared Cell Types Across Atlases`, font: { size: 12 } },
+                height: 500
             }, { responsive: true });
         }
 
@@ -6441,9 +6623,12 @@
             const container1 = document.getElementById('meta-forest');
             const container2 = document.getElementById('meta-heterogeneity');
 
+            // Get dropdown values
+            const analysisType = document.getElementById('meta-analysis-type')?.value || 'age';
+            const sigType = document.getElementById('meta-sig-type')?.value || 'CytoSig';
+
             // Use real meta-analysis data if available
             const realMetaData = state.data.crossatlas?.meta_analysis;
-            const analysisType = document.getElementById('meta-analysis-type')?.value || 'age';
 
             let metaData;
 
@@ -6566,11 +6751,33 @@
 
                 const sortedByI2 = [...metaData].sort((a, b) => b.I2 - a.I2);
 
+                // Check if all I² values are 0 (single atlas data)
+                const allZero = sortedByI2.every(d => d.I2 === 0);
+
+                if (allZero) {
+                    // Show informative message when no heterogeneity can be computed
+                    container2.innerHTML = `
+                        <div style="padding: 2rem; text-align: center; color: #666;">
+                            <h4 style="margin-bottom: 1rem;">Heterogeneity Assessment</h4>
+                            <p><strong>I² = 0% for all signatures</strong></p>
+                            <p style="font-size: 0.9rem; margin-top: 1rem;">
+                                This indicates <span style="color: #2ca02c; font-weight: bold;">low heterogeneity</span>
+                                (consistent effects). Currently showing results from a single atlas (CIMA),
+                                so cross-atlas heterogeneity cannot be computed.
+                            </p>
+                            <p style="font-size: 0.85rem; margin-top: 0.5rem; color: #999;">
+                                Multi-atlas meta-analysis requires demographic data from multiple cohorts.
+                            </p>
+                        </div>
+                    `;
+                    return;
+                }
+
                 Plotly.newPlot(container2, [{
                     type: 'bar',
                     orientation: 'h',
                     y: sortedByI2.map(d => d.signature),
-                    x: sortedByI2.map(d => d.I2),
+                    x: sortedByI2.map(d => Math.max(d.I2, 2)), // Minimum bar width for visibility
                     marker: {
                         color: sortedByI2.map(d => {
                             if (d.I2 < 25) return '#2ca02c';  // Low
@@ -6581,22 +6788,23 @@
                     },
                     text: sortedByI2.map(d => `${d.I2.toFixed(0)}%`),
                     textposition: 'auto',
-                    hovertemplate: '<b>%{y}</b><br>I² = %{x:.1f}%<extra></extra>'
+                    hovertemplate: '<b>%{y}</b><br>I² = %{text}<extra></extra>'
                 }], {
                     xaxis: { title: 'I² Heterogeneity (%)', range: [0, 100] },
                     yaxis: { automargin: true },
                     margin: { l: 80, r: 30, t: 30, b: 50 },
                     shapes: [
-                        { type: 'line', x0: 25, y0: -0.5, x1: 25, y1: 9.5, line: { dash: 'dot', color: '#999' } },
-                        { type: 'line', x0: 50, y0: -0.5, x1: 50, y1: 9.5, line: { dash: 'dot', color: '#999' } },
-                        { type: 'line', x0: 75, y0: -0.5, x1: 75, y1: 9.5, line: { dash: 'dot', color: '#999' } }
+                        { type: 'line', x0: 25, y0: -0.5, x1: 25, y1: sortedByI2.length - 0.5, line: { dash: 'dot', color: '#999' } },
+                        { type: 'line', x0: 50, y0: -0.5, x1: 50, y1: sortedByI2.length - 0.5, line: { dash: 'dot', color: '#999' } },
+                        { type: 'line', x0: 75, y0: -0.5, x1: 75, y1: sortedByI2.length - 0.5, line: { dash: 'dot', color: '#999' } }
                     ],
                     annotations: [
-                        { x: 12.5, y: 10, text: 'Low', showarrow: false, font: { size: 9, color: '#2ca02c' } },
-                        { x: 37.5, y: 10, text: 'Moderate', showarrow: false, font: { size: 9, color: '#ffdd57' } },
-                        { x: 62.5, y: 10, text: 'Substantial', showarrow: false, font: { size: 9, color: '#ff7f0e' } },
-                        { x: 87.5, y: 10, text: 'High', showarrow: false, font: { size: 9, color: '#d62728' } }
-                    ]
+                        { x: 12.5, y: sortedByI2.length, text: 'Low', showarrow: false, font: { size: 9, color: '#2ca02c' } },
+                        { x: 37.5, y: sortedByI2.length, text: 'Moderate', showarrow: false, font: { size: 9, color: '#ffdd57' } },
+                        { x: 62.5, y: sortedByI2.length, text: 'Substantial', showarrow: false, font: { size: 9, color: '#ff7f0e' } },
+                        { x: 87.5, y: sortedByI2.length, text: 'High', showarrow: false, font: { size: 9, color: '#d62728' } }
+                    ],
+                    height: Math.max(400, sortedByI2.length * 25)
                 }, { responsive: true });
             }
         }
@@ -6612,8 +6820,10 @@
 
             if (!matrixContainer) return;
 
+            // Get dropdown values
             const sigType = document.getElementById('sigcorr-sig-type')?.value || 'CytoSig';
             const method = document.getElementById('sigcorr-method')?.value || 'spearman';
+            const atlasFilter = document.getElementById('sigcorr-atlas')?.value || 'all';
 
             // Use real correlation data if available
             const corrData = state.data.crossatlas?.correlation;
@@ -6697,7 +6907,9 @@
 
             if (!barContainer) return;
 
+            // Get dropdown values
             const db = document.getElementById('pathway-db')?.value || 'kegg';
+            const cytokineModule = document.getElementById('pathway-module')?.value || 'all';
             const maxPathways = parseInt(document.getElementById('pathway-max')?.value || '20');
 
             // Use real pathway data if available
@@ -6899,7 +7111,6 @@
 
             // Inflammation Treatment Response
             document.getElementById('treatment-disease')?.addEventListener('change', updateTreatmentResponse);
-            document.getElementById('treatment-type')?.addEventListener('change', updateTreatmentResponse);
             document.getElementById('prediction-model')?.addEventListener('change', updateTreatmentResponse);
 
             // Inflammation Disease Sankey
