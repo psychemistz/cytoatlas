@@ -1286,39 +1286,204 @@ def preprocess_cohort_validation():
 
 
 def preprocess_cross_atlas():
-    """Preprocess cross-atlas integration summary data."""
+    """Preprocess cross-atlas integration data from computed results."""
     print("Processing cross-atlas integration data...")
 
-    cross_atlas = {
-        'summary': {
-            'cima': {'cells': 6500000, 'samples': 421, 'cell_types': 27},
-            'inflammation': {'cells': 4900000, 'samples': 817, 'cell_types': 66},
-            'scatlas_normal': {'cells': 5200000, 'samples': 0, 'cell_types': 376, 'organs': 35},
-            'scatlas_cancer': {'cells': 1200000, 'samples': 0, 'cell_types': 150}
-        },
-        'shared_cell_types': [],
-        'atlas_specific_signatures': {
-            'cima_only': 5,
-            'inflammation_only': 8,
-            'scatlas_only': 12,
-            'cima_inflam': 10,
-            'cima_scatlas': 7,
-            'inflam_scatlas': 9,
-            'all_three': 22
+    integrated_dir = RESULTS_DIR / 'integrated'
+
+    # Check if computed data exists
+    if not integrated_dir.exists():
+        print("  WARNING: No integrated results found. Run 07_cross_atlas_analysis.py first.")
+        print("  Using placeholder data.")
+        cross_atlas = {
+            'summary': {
+                'cima': {'cells': 6500000, 'samples': 421, 'cell_types': 27},
+                'inflammation': {'cells': 4900000, 'samples': 817, 'cell_types': 66},
+                'scatlas_normal': {'cells': 5200000, 'samples': 0, 'cell_types': 376, 'organs': 35},
+                'scatlas_cancer': {'cells': 1200000, 'samples': 0, 'cell_types': 150}
+            },
+            'shared_cell_types': ['CD8 T', 'CD4 T', 'NK', 'B cell', 'Monocyte'],
+            'atlas_specific_signatures': {'cima_only': 5, 'inflammation_only': 8, 'scatlas_only': 12,
+                                          'cima_inflam': 10, 'cima_scatlas': 7, 'inflam_scatlas': 9, 'all_three': 22}
         }
-    }
+        with open(OUTPUT_DIR / "cross_atlas.json", 'w') as f:
+            json.dump(cross_atlas, f)
+        return cross_atlas
 
-    # Find common cell types across atlases (simplified)
-    common_types = [
-        'CD8 T', 'CD4 T', 'NK', 'B cell', 'Monocyte', 'Macrophage',
-        'DC', 'Plasma', 'Treg', 'Neutrophil'
-    ]
-    cross_atlas['shared_cell_types'] = common_types
+    # Load computed results
+    cross_atlas = {}
 
+    # 1. Atlas Summary
+    summary_path = integrated_dir / 'atlas_summary.json'
+    if summary_path.exists():
+        with open(summary_path) as f:
+            cross_atlas['summary'] = json.load(f)
+        print(f"  Summary: {len(cross_atlas['summary'])} atlases")
+
+    # 2. Signature Overlap
+    overlap_path = integrated_dir / 'signature_overlap.csv'
+    if overlap_path.exists():
+        overlap_df = pd.read_csv(overlap_path)
+        # Compute overlap counts
+        all_three = len(overlap_df[(overlap_df['cima']) & (overlap_df['inflammation']) & (overlap_df['scatlas'])])
+        cima_inflam = len(overlap_df[(overlap_df['cima']) & (overlap_df['inflammation']) & (~overlap_df['scatlas'])])
+        cima_scatlas = len(overlap_df[(overlap_df['cima']) & (~overlap_df['inflammation']) & (overlap_df['scatlas'])])
+        inflam_scatlas = len(overlap_df[(~overlap_df['cima']) & (overlap_df['inflammation']) & (overlap_df['scatlas'])])
+        cima_only = len(overlap_df[(overlap_df['cima']) & (~overlap_df['inflammation']) & (~overlap_df['scatlas'])])
+        inflam_only = len(overlap_df[(~overlap_df['cima']) & (overlap_df['inflammation']) & (~overlap_df['scatlas'])])
+        scatlas_only = len(overlap_df[(~overlap_df['cima']) & (~overlap_df['inflammation']) & (overlap_df['scatlas'])])
+
+        cross_atlas['conserved'] = {
+            'signatures': overlap_df.to_dict('records'),
+            'overlap_counts': {
+                'all_three': all_three,
+                'cima_inflam': cima_inflam,
+                'cima_scatlas': cima_scatlas,
+                'inflam_scatlas': inflam_scatlas,
+                'cima_only': cima_only,
+                'inflam_only': inflam_only,
+                'scatlas_only': scatlas_only
+            }
+        }
+        # For backward compatibility
+        cross_atlas['atlas_specific_signatures'] = cross_atlas['conserved']['overlap_counts']
+        print(f"  Overlap: {all_three} in all 3 atlases")
+
+    # 3. Atlas Comparison
+    comparison_path = integrated_dir / 'atlas_comparison.csv'
+    if comparison_path.exists():
+        comp_df = pd.read_csv(comparison_path)
+        comparison_data = {}
+        for comp_type in comp_df['comparison'].unique():
+            comp_subset = comp_df[comp_df['comparison'] == comp_type]
+            # Compute overall correlation
+            from scipy import stats
+            rho, pval = stats.spearmanr(comp_subset['x'], comp_subset['y'])
+            comparison_data[comp_type] = {
+                'data': comp_subset[['signature', 'cell_type', 'x', 'y']].to_dict('records'),
+                'correlation': float(rho),
+                'pvalue': float(pval),
+                'n': len(comp_subset)
+            }
+        cross_atlas['comparison'] = comparison_data
+        print(f"  Comparison: {len(comparison_data)} pairs")
+
+    # 4. Cell Type Harmonization (Sankey data)
+    harm_path = integrated_dir / 'celltype_harmonization.csv'
+    if harm_path.exists():
+        harm_df = pd.read_csv(harm_path)
+        # Create Sankey nodes and links
+        nodes = []
+        node_map = {}
+        idx = 0
+
+        # Add atlas-specific cell types as nodes
+        for atlas in harm_df['atlas'].unique():
+            atlas_df = harm_df[harm_df['atlas'] == atlas]
+            for _, row in atlas_df.iterrows():
+                node_key = f"{atlas}_{row['original_name']}"
+                if node_key not in node_map:
+                    node_map[node_key] = idx
+                    nodes.append({
+                        'id': idx,
+                        'name': row['original_name'],
+                        'atlas': atlas,
+                        'count': int(row['n_cells'])
+                    })
+                    idx += 1
+
+        # Add common cell types as middle nodes
+        common_counts = harm_df.groupby('common_name')['n_cells'].sum()
+        common_node_map = {}
+        for common_name, count in common_counts.items():
+            common_node_map[common_name] = idx
+            nodes.append({
+                'id': idx,
+                'name': common_name,
+                'atlas': 'common',
+                'count': int(count)
+            })
+            idx += 1
+
+        # Create links from atlas nodes to common nodes
+        links = []
+        for _, row in harm_df.iterrows():
+            source_key = f"{row['atlas']}_{row['original_name']}"
+            source_id = node_map.get(source_key)
+            target_id = common_node_map.get(row['common_name'])
+            if source_id is not None and target_id is not None:
+                links.append({
+                    'source': source_id,
+                    'target': target_id,
+                    'value': int(row['n_cells']),
+                    'common_name': row['common_name']
+                })
+
+        # Get shared cell types (present in multiple atlases)
+        common_atlas_counts = harm_df.groupby('common_name')['atlas'].nunique()
+        shared_cell_types = common_atlas_counts[common_atlas_counts >= 2].index.tolist()
+
+        cross_atlas['celltype_mapping'] = {
+            'nodes': nodes[:100],  # Limit for visualization
+            'links': links[:200],
+        }
+        cross_atlas['shared_cell_types'] = shared_cell_types[:20]  # Top shared types
+        print(f"  Cell types: {len(shared_cell_types)} shared")
+
+    # 5. Meta-Analysis
+    meta_path = integrated_dir / 'meta_analysis.csv'
+    if meta_path.exists():
+        meta_df = pd.read_csv(meta_path)
+        meta_analysis = {}
+        for analysis_type in meta_df['analysis'].unique():
+            analysis_subset = meta_df[meta_df['analysis'] == analysis_type]
+            meta_analysis[analysis_type] = analysis_subset.to_dict('records')
+        cross_atlas['meta_analysis'] = meta_analysis
+        print(f"  Meta-analysis: {len(meta_analysis)} types")
+
+    # 6. Signature Correlation
+    corr_path = integrated_dir / 'signature_correlation.csv'
+    modules_path = integrated_dir / 'signature_modules.csv'
+    if corr_path.exists():
+        corr_df = pd.read_csv(corr_path, index_col=0)
+        modules_df = pd.read_csv(modules_path) if modules_path.exists() else None
+
+        # Format modules
+        modules = []
+        if modules_df is not None:
+            module_colors = {'Inflammatory': '#d62728', 'Th2': '#ff7f0e', 'Regulatory': '#2ca02c',
+                            'Th17': '#9467bd', 'Chemokines': '#1f77b4'}
+            for mod_name in modules_df['module_name'].unique():
+                members = modules_df[modules_df['module_name'] == mod_name]['signature'].tolist()
+                modules.append({
+                    'name': mod_name,
+                    'members': members,
+                    'color': module_colors.get(mod_name, '#999999')
+                })
+
+        cross_atlas['correlation'] = {
+            'signatures': list(corr_df.columns),
+            'matrix': corr_df.values.tolist(),
+            'modules': modules
+        }
+        print(f"  Correlation: {corr_df.shape} matrix")
+
+    # 7. Pathway Enrichment
+    pathway_path = integrated_dir / 'pathway_enrichment.csv'
+    if pathway_path.exists():
+        pathway_df = pd.read_csv(pathway_path)
+        pathways = {}
+        for db in pathway_df['database'].unique():
+            db_subset = pathway_df[pathway_df['database'] == db].sort_values('neg_log_fdr', ascending=False)
+            pathways[db] = db_subset.head(20).to_dict('records')
+        cross_atlas['pathways'] = pathways
+        print(f"  Pathways: {len(pathways)} databases")
+
+    # Save
     with open(OUTPUT_DIR / "cross_atlas.json", 'w') as f:
         json.dump(cross_atlas, f)
 
-    print(f"  Cross-atlas summary created")
+    print(f"  Cross-atlas data saved")
     return cross_atlas
 
 

@@ -6214,96 +6214,102 @@
             const container1 = document.getElementById('atlas-scatter');
             const container2 = document.getElementById('atlas-diff-bar');
 
-            // Generate comparison data from available atlases
-            // Use CIMA and Inflammation cell type data if available
-            const cimaData = state.data.cimacelltype;
-            const inflamData = state.data.inflammationcelltype;
+            // Use real comparison data if available
+            const comparisonData = state.data.crossatlas?.comparison;
 
-            // Mock comparison data for signatures shared across atlases
-            const signatures = ['IFNG', 'TNF', 'IL6', 'IL10', 'IL17A', 'IL1B', 'IL4', 'IL13', 'TGFB1', 'CCL2',
-                               'CXCL10', 'IL2', 'IL21', 'IL23A', 'CSF2', 'IL12A', 'IL18', 'CCL5', 'CXCL8', 'VEGFA'];
-
-            // Generate mock correlation data between atlases
-            const mockComparison = signatures.map(sig => {
-                const cimaVal = (Math.random() - 0.5) * 2;
-                const inflamVal = cimaVal + (Math.random() - 0.5) * 0.5;  // Correlated but noisy
-                const scatlasVal = cimaVal + (Math.random() - 0.5) * 0.6;
-                return {
-                    signature: sig,
-                    cima: cimaVal,
-                    inflammation: inflamVal,
-                    scatlas: scatlasVal
-                };
-            });
-
-            // 1. Scatter plot: CIMA vs Inflammation signatures
+            // 1. Scatter plot: Atlas comparisons
             if (container1) {
                 container1.classList.remove('loading');
                 Plotly.purge(container1);
 
                 const atlasSelect = document.getElementById('atlas-comparison-type')?.value || 'cima-inflam';
-                let xData, yData, xLabel, yLabel;
+                let plotData, xLabel, yLabel, correlation;
 
-                if (atlasSelect === 'cima-inflam') {
-                    xData = mockComparison.map(d => d.cima);
-                    yData = mockComparison.map(d => d.inflammation);
-                    xLabel = 'CIMA (Healthy)';
-                    yLabel = 'Inflammation (Disease)';
-                } else if (atlasSelect === 'cima-scatlas') {
-                    xData = mockComparison.map(d => d.cima);
-                    yData = mockComparison.map(d => d.scatlas);
-                    xLabel = 'CIMA (Healthy)';
-                    yLabel = 'scAtlas (Tissue)';
+                // Map select value to comparison key
+                const compKeyMap = {
+                    'cima-inflam': 'cima_vs_inflammation',
+                    'cima-scatlas': 'cima_vs_scatlas',
+                    'inflam-scatlas': 'inflam_vs_scatlas'
+                };
+                const compKey = compKeyMap[atlasSelect] || 'cima_vs_inflammation';
+
+                if (comparisonData && comparisonData[compKey]) {
+                    const realData = comparisonData[compKey];
+                    plotData = realData.data;
+                    correlation = realData.correlation;
+
+                    if (atlasSelect === 'cima-inflam') {
+                        xLabel = 'CIMA (Healthy)';
+                        yLabel = 'Inflammation Atlas';
+                    } else if (atlasSelect === 'cima-scatlas') {
+                        xLabel = 'CIMA (Healthy)';
+                        yLabel = 'scAtlas (Tissue)';
+                    } else {
+                        xLabel = 'Inflammation Atlas';
+                        yLabel = 'scAtlas (Tissue)';
+                    }
                 } else {
-                    xData = mockComparison.map(d => d.inflammation);
-                    yData = mockComparison.map(d => d.scatlas);
-                    xLabel = 'Inflammation (Disease)';
-                    yLabel = 'scAtlas (Tissue)';
+                    // Fallback to mock data
+                    const signatures = ['IFNG', 'TNF', 'IL6', 'IL10', 'IL17A', 'IL1B', 'IL4', 'IL13', 'TGFB1', 'CCL2'];
+                    plotData = signatures.map(sig => {
+                        const x = (Math.random() - 0.5) * 2;
+                        return { signature: sig, x: x, y: x + (Math.random() - 0.5) * 0.5, cell_type: 'Mock' };
+                    });
+                    xLabel = 'Atlas 1';
+                    yLabel = 'Atlas 2';
+                    correlation = 0.75;
                 }
 
-                // Calculate correlation
-                const n = xData.length;
-                const meanX = xData.reduce((a, b) => a + b, 0) / n;
-                const meanY = yData.reduce((a, b) => a + b, 0) / n;
-                const ssX = xData.reduce((a, x) => a + (x - meanX) ** 2, 0);
-                const ssY = yData.reduce((a, y) => a + (y - meanY) ** 2, 0);
-                const ssXY = xData.reduce((a, x, i) => a + (x - meanX) * (yData[i] - meanY), 0);
-                const r = ssXY / Math.sqrt(ssX * ssY);
+                const xData = plotData.map(d => d.x);
+                const yData = plotData.map(d => d.y);
+
+                // Use real or computed correlation
+                const r = correlation !== undefined ? correlation : (() => {
+                    const n = xData.length;
+                    const meanX = xData.reduce((a, b) => a + b, 0) / n;
+                    const meanY = yData.reduce((a, b) => a + b, 0) / n;
+                    const ssX = xData.reduce((a, x) => a + (x - meanX) ** 2, 0);
+                    const ssY = yData.reduce((a, y) => a + (y - meanY) ** 2, 0);
+                    const ssXY = xData.reduce((a, x, i) => a + (x - meanX) * (yData[i] - meanY), 0);
+                    return ssXY / Math.sqrt(ssX * ssY);
+                })();
+
+                // Calculate axis range based on data
+                const xMin = Math.min(...xData), xMax = Math.max(...xData);
+                const yMin = Math.min(...yData), yMax = Math.max(...yData);
+                const padding = 0.2;
+                const xRange = [xMin - padding, xMax + padding];
+                const yRange = [yMin - padding, yMax + padding];
 
                 Plotly.newPlot(container1, [{
                     type: 'scatter',
-                    mode: 'markers+text',
+                    mode: 'markers',
                     x: xData,
                     y: yData,
-                    text: mockComparison.map(d => d.signature),
+                    text: plotData.map(d => `${d.signature} (${d.cell_type || ''})`),
                     textposition: 'top center',
-                    textfont: { size: 9 },
+                    textfont: { size: 8 },
                     marker: {
-                        size: 12,
-                        color: mockComparison.map(d => Math.abs(d.cima - d.inflammation)),
+                        size: 8,
+                        color: plotData.map(d => Math.abs(d.x - d.y)),
                         colorscale: 'Viridis',
                         reversescale: true,
-                        colorbar: { title: '|Diff|' }
+                        colorbar: { title: '|Diff|', len: 0.5 }
                     },
                     hovertemplate: '<b>%{text}</b><br>' + xLabel + ': %{x:.2f}<br>' + yLabel + ': %{y:.2f}<extra></extra>'
                 }, {
                     type: 'scatter',
                     mode: 'lines',
-                    x: [-1.5, 1.5],
-                    y: [-1.5, 1.5],
+                    x: [Math.min(xMin, yMin), Math.max(xMax, yMax)],
+                    y: [Math.min(xMin, yMin), Math.max(xMax, yMax)],
                     line: { dash: 'dash', color: '#ccc' },
                     showlegend: false,
                     hoverinfo: 'skip'
                 }], {
-                    xaxis: { title: xLabel, zeroline: true, range: [-1.5, 1.5] },
-                    yaxis: { title: yLabel, zeroline: true, range: [-1.5, 1.5] },
+                    xaxis: { title: xLabel, zeroline: true, range: xRange },
+                    yaxis: { title: yLabel, zeroline: true, range: yRange },
                     margin: { l: 60, r: 30, t: 40, b: 60 },
-                    title: { text: `Correlation: r = ${r.toFixed(3)}`, font: { size: 12 } },
-                    annotations: [{
-                        x: 1, y: -1.2, xref: 'x', yref: 'y',
-                        text: `r = ${r.toFixed(3)}`, showarrow: false,
-                        font: { size: 14, color: '#333' }
-                    }]
+                    title: { text: `Spearman r = ${r.toFixed(3)} (n=${plotData.length})`, font: { size: 12 } },
                 }, { responsive: true });
             }
 
@@ -6312,14 +6318,23 @@
                 container2.classList.remove('loading');
                 Plotly.purge(container2);
 
-                // Calculate difference between healthy (CIMA) and disease (Inflammation)
-                const differences = mockComparison.map(d => ({
+                // Calculate difference from plotData
+                const differences = plotData.map(d => ({
                     signature: d.signature,
-                    diff: d.inflammation - d.cima
+                    cell_type: d.cell_type,
+                    diff: d.y - d.x
                 })).sort((a, b) => b.diff - a.diff);
 
-                const top10 = differences.slice(0, 10);
-                const bottom10 = differences.slice(-10).reverse();
+                // Get unique signatures with largest differences
+                const sigDiffs = {};
+                differences.forEach(d => {
+                    if (!sigDiffs[d.signature] || Math.abs(d.diff) > Math.abs(sigDiffs[d.signature].diff)) {
+                        sigDiffs[d.signature] = d;
+                    }
+                });
+                const uniqueDiffs = Object.values(sigDiffs).sort((a, b) => b.diff - a.diff);
+                const top10 = uniqueDiffs.slice(0, 10);
+                const bottom10 = uniqueDiffs.slice(-10).reverse();
                 const display = [...top10, ...bottom10];
 
                 Plotly.newPlot(container2, [{
@@ -6332,14 +6347,14 @@
                     },
                     text: display.map(d => d.diff.toFixed(2)),
                     textposition: 'auto',
-                    hovertemplate: '<b>%{y}</b><br>Disease - Healthy: %{x:.3f}<extra></extra>'
+                    hovertemplate: '<b>%{y}</b><br>Difference: %{x:.3f}<extra></extra>'
                 }], {
-                    xaxis: { title: 'Activity Difference (Disease - Healthy)', zeroline: true },
+                    xaxis: { title: 'Activity Difference', zeroline: true },
                     yaxis: { automargin: true },
                     margin: { l: 80, r: 30, t: 30, b: 50 },
                     annotations: [{
                         x: 0.5, y: 1.05, xref: 'paper', yref: 'paper',
-                        text: '<span style="color:#d62728">↑ Higher in Disease</span> | <span style="color:#2ca02c">↓ Higher in Healthy</span>',
+                        text: '<span style="color:#d62728">↑ Higher in Y-axis</span> | <span style="color:#2ca02c">↓ Higher in X-axis</span>',
                         showarrow: false, font: { size: 10 }
                     }]
                 }, { responsive: true });
@@ -6352,29 +6367,72 @@
             if (!container) return;
             container.classList.remove('loading');
 
-            // Create cell type mapping Sankey
+            // Use real cell type mapping data if available
+            const mappingData = state.data.crossatlas?.celltype_mapping;
+            const sharedTypes = state.data.crossatlas?.shared_cell_types || [];
+
+            let nodes, links;
+
+            if (mappingData && mappingData.nodes && mappingData.links) {
+                nodes = mappingData.nodes;
+                links = mappingData.links;
+            } else {
+                // Fallback to mock data
+                nodes = [
+                    { id: 0, name: 'CD8 T', atlas: 'CIMA', count: 500000 },
+                    { id: 1, name: 'CD4 T', atlas: 'CIMA', count: 600000 },
+                    { id: 2, name: 'Monocyte', atlas: 'CIMA', count: 400000 },
+                    { id: 3, name: 'NK', atlas: 'CIMA', count: 300000 },
+                    { id: 4, name: 'CD8 T', atlas: 'Inflammation', count: 450000 },
+                    { id: 5, name: 'CD4 T', atlas: 'Inflammation', count: 550000 },
+                    { id: 6, name: 'Monocyte', atlas: 'Inflammation', count: 350000 },
+                    { id: 7, name: 'NK', atlas: 'Inflammation', count: 250000 },
+                    { id: 8, name: 'CD8 T', atlas: 'common', count: 950000 },
+                    { id: 9, name: 'CD4 T', atlas: 'common', count: 1150000 },
+                    { id: 10, name: 'Monocyte', atlas: 'common', count: 750000 },
+                    { id: 11, name: 'NK', atlas: 'common', count: 550000 }
+                ];
+                links = [
+                    { source: 0, target: 8, value: 500000 },
+                    { source: 1, target: 9, value: 600000 },
+                    { source: 2, target: 10, value: 400000 },
+                    { source: 3, target: 11, value: 300000 },
+                    { source: 4, target: 8, value: 450000 },
+                    { source: 5, target: 9, value: 550000 },
+                    { source: 6, target: 10, value: 350000 },
+                    { source: 7, target: 11, value: 250000 }
+                ];
+            }
+
+            // Color by atlas
+            const atlasColors = {
+                'CIMA': '#1f77b4',
+                'Inflammation': '#ff7f0e',
+                'scAtlas': '#2ca02c',
+                'common': '#9467bd'
+            };
+
             const data = {
                 type: 'sankey',
                 orientation: 'h',
                 node: {
                     pad: 10,
                     thickness: 15,
-                    label: [
-                        'CIMA CD8 T', 'CIMA CD4 T', 'CIMA Mono', 'CIMA NK',
-                        'Inflam CD8 T', 'Inflam CD4 T', 'Inflam Mono', 'Inflam NK',
-                        'scAtlas CD8 T', 'scAtlas CD4 T', 'scAtlas Macro', 'scAtlas NK'
-                    ],
-                    color: d3.schemeTableau10
+                    label: nodes.map(n => `${n.name} (${n.atlas})`),
+                    color: nodes.map(n => atlasColors[n.atlas] || '#999'),
+                    hovertemplate: '<b>%{label}</b><br>Cells: %{value:,}<extra></extra>'
                 },
                 link: {
-                    source: [0, 1, 2, 3, 4, 5, 6, 7],
-                    target: [4, 5, 6, 7, 8, 9, 10, 11],
-                    value: [100, 100, 80, 60, 90, 90, 70, 50]
+                    source: links.map(l => l.source),
+                    target: links.map(l => l.target),
+                    value: links.map(l => l.value),
+                    hovertemplate: '%{source.label} → %{target.label}<br>Cells: %{value:,}<extra></extra>'
                 }
             };
 
             Plotly.newPlot(container, [data], {
-                margin: { t: 30, b: 30, l: 30, r: 30 }
+                margin: { t: 30, b: 30, l: 30, r: 30 },
+                title: { text: `${sharedTypes.length} Shared Cell Types Across Atlases`, font: { size: 12 } }
             }, { responsive: true });
         }
 
@@ -6383,44 +6441,52 @@
             const container1 = document.getElementById('meta-forest');
             const container2 = document.getElementById('meta-heterogeneity');
 
-            // Generate mock meta-analysis data
-            const signatures = ['IFNG', 'TNF', 'IL6', 'IL10', 'IL17A', 'IL1B', 'IL4', 'IL13', 'TGFB1', 'CCL2'];
-            const atlases = ['CIMA', 'Inflammation', 'scAtlas'];
+            // Use real meta-analysis data if available
+            const realMetaData = state.data.crossatlas?.meta_analysis;
+            const analysisType = document.getElementById('meta-analysis-type')?.value || 'age';
 
-            // Mock effect sizes and confidence intervals
-            const metaData = signatures.map(sig => {
-                const effects = atlases.map(atlas => {
-                    const effect = (Math.random() - 0.3) * 1.5;  // Slightly positive bias
-                    const se = Math.random() * 0.3 + 0.1;
-                    return {
-                        atlas,
-                        effect,
-                        se,
-                        ci_low: effect - 1.96 * se,
-                        ci_high: effect + 1.96 * se
+            let metaData;
+
+            if (realMetaData && realMetaData[analysisType]) {
+                // Format real data grouped by signature
+                const sigGroups = {};
+                realMetaData[analysisType].forEach(d => {
+                    if (!sigGroups[d.signature]) {
+                        sigGroups[d.signature] = {
+                            signature: d.signature,
+                            effects: [],
+                            I2: d.I2 || 0
+                        };
+                    }
+                    sigGroups[d.signature].effects.push({
+                        atlas: d.atlas,
+                        effect: d.effect,
+                        se: d.se,
+                        ci_low: d.ci_low,
+                        ci_high: d.ci_high
+                    });
+                    sigGroups[d.signature].pooled = {
+                        effect: d.pooled_effect,
+                        se: d.pooled_se,
+                        ci_low: d.pooled_effect - 1.96 * d.pooled_se,
+                        ci_high: d.pooled_effect + 1.96 * d.pooled_se
                     };
                 });
-
-                // Calculate pooled effect (simple average for mock)
-                const pooledEffect = effects.reduce((a, e) => a + e.effect, 0) / effects.length;
-                const pooledSE = Math.sqrt(effects.reduce((a, e) => a + e.se ** 2, 0)) / effects.length;
-
-                // Calculate I² heterogeneity (mock)
-                const Q = effects.reduce((a, e) => a + ((e.effect - pooledEffect) ** 2) / (e.se ** 2), 0);
-                const I2 = Math.max(0, Math.min(100, ((Q - (atlases.length - 1)) / Q) * 100));
-
-                return {
-                    signature: sig,
-                    effects,
-                    pooled: {
-                        effect: pooledEffect,
-                        se: pooledSE,
-                        ci_low: pooledEffect - 1.96 * pooledSE,
-                        ci_high: pooledEffect + 1.96 * pooledSE
-                    },
-                    I2
-                };
-            });
+                metaData = Object.values(sigGroups).slice(0, 15); // Limit for visualization
+            } else {
+                // Fallback mock data
+                const signatures = ['IFNG', 'TNF', 'IL6', 'IL10', 'IL17A', 'IL1B', 'IL4', 'IL13', 'TGFB1', 'CCL2'];
+                metaData = signatures.map(sig => {
+                    const effect = (Math.random() - 0.3) * 0.5;
+                    const se = Math.random() * 0.1 + 0.05;
+                    return {
+                        signature: sig,
+                        effects: [{ atlas: 'CIMA', effect, se, ci_low: effect - 1.96 * se, ci_high: effect + 1.96 * se }],
+                        pooled: { effect, se, ci_low: effect - 1.96 * se, ci_high: effect + 1.96 * se },
+                        I2: 0
+                    };
+                });
+            }
 
             // 1. Forest plot
             if (container1) {
@@ -6548,43 +6614,44 @@
 
             const sigType = document.getElementById('sigcorr-sig-type')?.value || 'CytoSig';
             const method = document.getElementById('sigcorr-method')?.value || 'spearman';
-            const atlas = document.getElementById('sigcorr-atlas')?.value || 'all';
 
-            // Define cytokines
-            const cytokines = sigType === 'CytoSig' ?
-                ['IFNG', 'TNF', 'IL6', 'IL1B', 'IL10', 'IL17A', 'IL4', 'IL13', 'TGFB1', 'CCL2', 'CXCL10', 'IL2',
-                 'IL21', 'IL23A', 'IL12A', 'CSF2', 'IL18', 'CCL5', 'CXCL8', 'VEGFA'] :
-                ['CCL2', 'CCL5', 'CXCL1', 'CXCL8', 'CXCL10', 'VEGFA', 'MMP9', 'MMP2', 'TIMP1', 'SERPINE1',
-                 'COL1A1', 'FN1', 'ACTA2', 'FAP', 'PDGFRA'];
+            // Use real correlation data if available
+            const corrData = state.data.crossatlas?.correlation;
+            let cytokines, corrMatrix, modules;
 
-            // Generate correlation matrix (mock data with realistic structure)
-            // Create modules by making within-module correlations higher
-            const modules = {
-                'inflammatory': ['IFNG', 'TNF', 'IL6', 'IL1B', 'IL12A', 'IL18'],
-                'th2': ['IL4', 'IL13', 'IL5'],
-                'regulatory': ['IL10', 'TGFB1'],
-                'th17': ['IL17A', 'IL21', 'IL22', 'IL23A'],
-                'chemokines': ['CCL2', 'CCL5', 'CXCL8', 'CXCL10']
-            };
+            if (corrData && corrData.matrix && corrData.signatures) {
+                cytokines = corrData.signatures;
+                corrMatrix = corrData.matrix;
+                modules = corrData.modules || [];
+            } else {
+                // Fallback mock data
+                cytokines = ['IFNG', 'TNF', 'IL6', 'IL1B', 'IL10', 'IL17A', 'IL4', 'IL13', 'TGFB1', 'CCL2'];
 
-            // Determine module for each cytokine
-            const getModule = (c) => {
-                for (const [mod, members] of Object.entries(modules)) {
-                    if (members.includes(c)) return mod;
-                }
-                return 'other';
-            };
-
-            // Generate correlation matrix
-            const corrMatrix = cytokines.map((c1, i) =>
-                cytokines.map((c2, j) => {
-                    if (i === j) return 1.0;
-                    const mod1 = getModule(c1);
-                    const mod2 = getModule(c2);
-                    const baseCorr = mod1 === mod2 && mod1 !== 'other' ? 0.6 : 0.1;
-                    return baseCorr + (Math.random() - 0.5) * 0.4;
-                })
-            );
+                const mockModules = {
+                    'inflammatory': ['IFNG', 'TNF', 'IL6', 'IL1B'],
+                    'regulatory': ['IL10', 'TGFB1'],
+                    'th17': ['IL17A'],
+                    'th2': ['IL4', 'IL13']
+                };
+                const getModule = (c) => {
+                    for (const [mod, members] of Object.entries(mockModules)) {
+                        if (members.includes(c)) return mod;
+                    }
+                    return 'other';
+                };
+                corrMatrix = cytokines.map((c1, i) =>
+                    cytokines.map((c2, j) => {
+                        if (i === j) return 1.0;
+                        const mod1 = getModule(c1);
+                        const mod2 = getModule(c2);
+                        const baseCorr = mod1 === mod2 && mod1 !== 'other' ? 0.6 : 0.1;
+                        return baseCorr + (Math.random() - 0.5) * 0.4;
+                    })
+                );
+                modules = Object.entries(mockModules).map(([name, members]) => ({
+                    name, members, color: '#999'
+                }));
+            }
 
             // 1. Correlation heatmap
             matrixContainer.classList.remove('loading');
@@ -6598,7 +6665,7 @@
                 colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
                 zmin: -1,
                 zmax: 1,
-                colorbar: { title: method === 'spearman' ? 'Spearman ρ' : 'Pearson r' },
+                colorbar: { title: 'Spearman ρ' },
                 hovertemplate: '<b>%{x} vs %{y}</b><br>r = %{z:.3f}<extra></extra>'
             }], {
                 margin: { l: 80, r: 50, t: 30, b: 80 },
@@ -6610,25 +6677,14 @@
             if (modulesContainer) {
                 modulesContainer.classList.remove('loading');
 
-                const moduleColors = {
-                    'inflammatory': '#d62728',
-                    'th2': '#ff7f0e',
-                    'regulatory': '#2ca02c',
-                    'th17': '#9467bd',
-                    'chemokines': '#1f77b4'
-                };
-
                 let html = '<div style="padding: 1rem;"><h4 style="margin-top: 0;">Identified Modules</h4>';
-                for (const [mod, members] of Object.entries(modules)) {
-                    const presentMembers = members.filter(m => cytokines.includes(m));
-                    if (presentMembers.length > 0) {
-                        html += `<div style="margin-bottom: 0.8rem;">
-                            <span class="badge" style="background: ${moduleColors[mod]}; color: white;">${mod.toUpperCase()}</span>
-                            <span style="margin-left: 0.5rem; font-size: 0.9rem;">${presentMembers.join(', ')}</span>
-                        </div>`;
-                    }
-                }
-                html += '<p style="color: #666; font-size: 0.85rem; margin-top: 1rem;">Modules identified by hierarchical clustering of correlation matrix.</p></div>';
+                modules.forEach(mod => {
+                    html += `<div style="margin-bottom: 0.8rem;">
+                        <span class="badge" style="background: ${mod.color || '#999'}; color: white;">${mod.name.toUpperCase()}</span>
+                        <span style="margin-left: 0.5rem; font-size: 0.9rem;">${mod.members.join(', ')}</span>
+                    </div>`;
+                });
+                html += '<p style="color: #666; font-size: 0.85rem; margin-top: 1rem;">Modules identified by hierarchical clustering (Ward linkage).</p></div>';
                 modulesContainer.innerHTML = html;
             }
         }
@@ -6642,48 +6698,38 @@
             if (!barContainer) return;
 
             const db = document.getElementById('pathway-db')?.value || 'kegg';
-            const module = document.getElementById('pathway-module')?.value || 'all';
             const maxPathways = parseInt(document.getElementById('pathway-max')?.value || '20');
 
-            // Database-specific pathways
-            const pathwayDBs = {
-                'kegg': [
+            // Use real pathway data if available
+            const pathwayData = state.data.crossatlas?.pathways;
+            let enrichmentData;
+
+            if (pathwayData && pathwayData[db]) {
+                enrichmentData = pathwayData[db].slice(0, maxPathways).map(p => ({
+                    pathway: p.pathway.length > 40 ? p.pathway.substring(0, 37) + '...' : p.pathway,
+                    fullName: p.pathway,
+                    negLogFDR: p.neg_log_fdr,
+                    nGenes: p.n_genes,
+                    genes: p.genes || '',
+                    enrichment: p.odds_ratio > 1 ? Math.log2(p.odds_ratio) : 0
+                }));
+            } else {
+                // Fallback mock data
+                const mockPathways = [
                     'Cytokine-cytokine receptor interaction', 'JAK-STAT signaling', 'NF-kappa B signaling',
-                    'TNF signaling pathway', 'IL-17 signaling pathway', 'Th1 and Th2 cell differentiation',
-                    'Th17 cell differentiation', 'T cell receptor signaling', 'B cell receptor signaling',
-                    'Chemokine signaling pathway', 'Toll-like receptor signaling', 'NOD-like receptor signaling',
-                    'Inflammatory bowel disease', 'Rheumatoid arthritis', 'Systemic lupus erythematosus'
-                ],
-                'reactome': [
-                    'Interleukin-6 signaling', 'Interferon gamma signaling', 'Interferon alpha/beta signaling',
-                    'Signaling by Interleukins', 'Cytokine Signaling in Immune system', 'Adaptive Immune System',
-                    'Innate Immune System', 'TRAF6 mediated NF-kB activation', 'MyD88 cascade',
-                    'Toll Like Receptor Cascades', 'TNF signaling', 'IL-12 signaling'
-                ],
-                'go_bp': [
-                    'inflammatory response', 'defense response', 'immune system process',
-                    'cytokine-mediated signaling', 'response to cytokine', 'leukocyte activation',
-                    'T cell activation', 'lymphocyte proliferation', 'macrophage activation',
-                    'cellular response to interferon-gamma', 'positive regulation of NF-kappaB'
-                ],
-                'hallmark': [
-                    'HALLMARK_INFLAMMATORY_RESPONSE', 'HALLMARK_INTERFERON_GAMMA_RESPONSE',
-                    'HALLMARK_INTERFERON_ALPHA_RESPONSE', 'HALLMARK_IL6_JAK_STAT3_SIGNALING',
-                    'HALLMARK_IL2_STAT5_SIGNALING', 'HALLMARK_TNFA_SIGNALING_VIA_NFKB',
-                    'HALLMARK_COMPLEMENT', 'HALLMARK_ALLOGRAFT_REJECTION'
-                ]
-            };
+                    'TNF signaling pathway', 'IL-17 signaling pathway', 'Th1 and Th2 cell differentiation'
+                ];
+                enrichmentData = mockPathways.slice(0, maxPathways).map(p => ({
+                    pathway: p,
+                    fullName: p,
+                    negLogFDR: Math.random() * 10 + 2,
+                    nGenes: Math.floor(Math.random() * 10 + 3),
+                    genes: '',
+                    enrichment: Math.random() * 2
+                }));
+            }
 
-            const pathways = pathwayDBs[db] || pathwayDBs['kegg'];
-
-            // Generate mock enrichment data
-            const enrichmentData = pathways.slice(0, maxPathways).map(p => ({
-                pathway: p.length > 40 ? p.substring(0, 37) + '...' : p,
-                fullName: p,
-                negLogFDR: Math.random() * 15 + 1,
-                nGenes: Math.floor(Math.random() * 50 + 5),
-                enrichment: (Math.random() - 0.3) * 3
-            })).sort((a, b) => b.negLogFDR - a.negLogFDR);
+            enrichmentData.sort((a, b) => b.negLogFDR - a.negLogFDR);
 
             // 1. Bar chart
             barContainer.classList.remove('loading');

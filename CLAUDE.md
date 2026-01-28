@@ -324,3 +324,18 @@ No formal test framework. Validation through:
    - Gene overlap >80% of signature genes
    - Correlation with pre-computed scAtlas activities r > 0.9
    - Treatment response prediction AUC > 0.7
+
+## Git Workflow
+
+When committing changes:
+
+```bash
+# Configure git user for this repository
+git config user.email "seongyong.park@nih.gov"
+git config user.name "Seongyong Park"
+
+# Commit with descriptive message
+git commit -m "Brief description of changes"
+```
+
+Do not use co-authored-by or other attribution lines in commit messages.

@@ -823,6 +823,91 @@ merged = merged.merge(biochemistry, on='Sample', how='left')
 
 ---
 
+---
+
+## Cross-Atlas Integration Implementation
+
+### Script: 07_cross_atlas_analysis.py
+
+This script computes real cross-atlas statistics for visualization panels:
+
+**Analyses performed:**
+
+1. **Atlas Summary Statistics** (`atlas_summary.json`)
+   - Cell counts per atlas: CIMA (6.5M), Inflammation (4.9M), scAtlas Normal (2.3M), scAtlas Cancer (4.1M)
+   - Sample and cell type counts
+
+2. **Signature Overlap** (`signature_overlap.csv`)
+   - Determines which CytoSig signatures are active (|mean| > 0.5) in each atlas
+   - Computes overlap categories (all 3, pairs, singles)
+
+3. **Atlas Pairwise Comparison** (`atlas_comparison.csv`)
+   - Spearman correlations between atlas pairs for common cell types
+   - Cell type mapping via harmonization dictionaries
+   - CIMA vs Inflammation: healthy blood cells comparison
+   - CIMA/Inflammation vs scAtlas: blood vs tissue comparison
+
+4. **Cell Type Harmonization** (`celltype_harmonization.csv`)
+   - Maps original cell type names to common nomenclature
+   - CIMA L2 (27 types) → common names
+   - Inflammation Level2 (66 types) → common names
+   - Creates Sankey diagram data for visualization
+
+5. **Meta-Analysis** (`meta_analysis.csv`)
+   - Fixed-effects meta-analysis of age/sex correlations
+   - Effect sizes with confidence intervals
+   - Heterogeneity statistics (I²)
+
+6. **Signature Correlation** (`signature_correlation.csv`, `signature_modules.csv`)
+   - Spearman correlation matrix between all 43 CytoSig signatures
+   - Hierarchical clustering with Ward linkage
+   - Module detection (Inflammatory, Th2, Regulatory, Th17, Chemokines)
+
+7. **Pathway Enrichment** (`pathway_enrichment.csv`)
+   - Fisher's exact test for cytokine-pathway associations
+   - KEGG, Reactome, and Hallmark pathway databases
+   - FDR correction per database
+
+### Visualization Panels (index.html)
+
+The 7 Cross-Atlas panels use data from `cross_atlas.json`:
+
+| Panel | Data Key | Visualization |
+|-------|----------|---------------|
+| Atlas Overview | `summary` | Grouped bar chart (cells vs cell types) |
+| Conserved Signatures | `conserved.overlap_counts` | UpSet-style bar chart |
+| Atlas Comparison | `comparison` | Scatter plot with correlation |
+| Cell Type Mapping | `celltype_mapping` | Sankey diagram |
+| Meta-Analysis | `meta_analysis` | Forest plot with error bars |
+| Signature Correlation | `correlation` | Clustered heatmap |
+| Pathway Enrichment | `pathways` | Horizontal bar chart |
+
+### Running the Analysis
+
+```bash
+# 1. Run cross-atlas analysis
+python scripts/07_cross_atlas_analysis.py
+
+# 2. Update visualization data
+python scripts/06_preprocess_viz_data.py
+
+# 3. Verify output
+ls results/integrated/
+ls visualization/data/cross_atlas.json
+```
+
+### Data Dependencies
+
+Required input files:
+- `results/cima/CIMA_CytoSig_pseudobulk.h5ad`
+- `results/cima/CIMA_correlation_age.csv`
+- `results/cima/CIMA_differential_demographics.csv`
+- `results/inflammation/main_CytoSig_pseudobulk.h5ad`
+- `results/scatlas/normal_celltype_signatures.csv`
+- `results/scatlas/normal_aggregation_meta.csv`
+
+---
+
 ## Contact
 
 For questions about this analysis, refer to the SecActpy documentation:
