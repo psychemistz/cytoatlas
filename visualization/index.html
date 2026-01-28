@@ -2307,10 +2307,13 @@
             populateSignatureDropdowns();
             setupEventListeners();
 
-            // Initialize first visible section
-            updateCorrelationPlots();
-            updateBiochemHeatmap();
-            updateVolcanoPlot();
+            // Initialize all sections immediately (no lazy loading needed with embedded data)
+            console.log('Initializing all sections...');
+            initSection('cima');
+            initSection('inflammation');
+            initSection('scatlas');
+            initSection('cross-atlas');
+            console.log('All sections initialized');
         }
 
         function showDataLoadError() {
@@ -3274,8 +3277,17 @@
         // Update inflammation visualization
         function updateInflammationViz() {
             const data = state.data.inflammationcelltype;
-            if (!data) {
+            console.log('updateInflammationViz called, data length:', data ? data.length : 'null');
+            if (!data || data.length === 0) {
                 console.log('Inflammation data not loaded');
+                // Show message in containers
+                ['inflam-celltype-bar', 'inflam-heatmap'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.classList.remove('loading');
+                        el.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Inflammation cell type data not available. Check console for details.</p>';
+                    }
+                });
                 return;
             }
 
@@ -3676,6 +3688,13 @@
             if (!container) return;
 
             container.classList.remove('loading');
+
+            // Check if container is visible (has valid dimensions)
+            const containerWidth = container.offsetWidth;
+            if (containerWidth < 100) {
+                // Container is likely hidden; defer rendering
+                return;
+            }
 
             const analysisType = document.getElementById('multiomics-analysis')?.value || 'correlation';
             const threshold = parseFloat(document.getElementById('multiomics-threshold')?.value || '0.4');
@@ -4458,15 +4477,34 @@
 
         // Event listeners
         function setupEventListeners() {
-            // Tab switching
+            // Tab switching with redraw on visibility
             document.querySelectorAll('.tab').forEach(tab => {
                 tab.addEventListener('click', function() {
                     const tabGroup = this.closest('section');
+                    const sectionId = tabGroup.id;
                     tabGroup.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
                     tabGroup.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
 
                     this.classList.add('active');
-                    document.getElementById('tab-' + this.dataset.tab).classList.add('active');
+                    const tabId = this.dataset.tab;
+                    document.getElementById('tab-' + tabId).classList.add('active');
+
+                    // Trigger redraw for D3 charts when their tab becomes visible
+                    setTimeout(() => {
+                        if (sectionId === 'cima') {
+                            if (tabId === 'metabolites') updateMetaboliteNetwork();
+                            if (tabId === 'cima-multiomics') updateMultiomicsViz();
+                        }
+                        // Resize any Plotly charts in the newly visible tab
+                        const activeTab = document.getElementById('tab-' + tabId);
+                        if (activeTab) {
+                            activeTab.querySelectorAll('div[id]').forEach(div => {
+                                if (div._fullLayout) {
+                                    try { Plotly.Plots.resize(div); } catch(e) {}
+                                }
+                            });
+                        }
+                    }, 50);
                 });
             });
 
@@ -4480,7 +4518,7 @@
                     const target = document.getElementById(sectionId);
 
                     // Lazy load section data
-                    if (!sectionsInitialized[sectionId] && ['cima', 'inflammation', 'scatlas'].includes(sectionId)) {
+                    if (!sectionsInitialized[sectionId] && ['cima', 'inflammation', 'scatlas', 'cross-atlas'].includes(sectionId)) {
                         sectionsInitialized[sectionId] = true;
                         await initSection(sectionId);
                     }
@@ -4498,7 +4536,7 @@
                 for (const entry of entries) {
                     if (entry.isIntersecting) {
                         const sectionId = entry.target.id;
-                        if (!sectionsInitialized[sectionId] && ['cima', 'inflammation', 'scatlas'].includes(sectionId)) {
+                        if (!sectionsInitialized[sectionId] && ['cima', 'inflammation', 'scatlas', 'cross-atlas'].includes(sectionId)) {
                             sectionsInitialized[sectionId] = true;
                             await initSection(sectionId);
                         }
@@ -4506,7 +4544,7 @@
                 }
             }, { threshold: 0.1 });
 
-            ['cima', 'inflammation', 'scatlas'].forEach(id => {
+            ['cima', 'inflammation', 'scatlas', 'cross-atlas'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) observer.observe(el);
             });
@@ -4667,6 +4705,13 @@
             const data = state.data.cimametabolitestop;
             if (!data || data.length === 0) {
                 container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Metabolite data not available</p>';
+                return;
+            }
+
+            // Check if container is visible (has valid dimensions)
+            const width = container.clientWidth;
+            if (width < 100) {
+                // Container is likely hidden; defer rendering
                 return;
             }
 
