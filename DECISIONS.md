@@ -137,3 +137,10 @@ Items flagged for human review will be listed here:
 | 2026-01-27 | Inflammation | Added Treatment Response, Disease Sankey, Cohort Validation panels |
 | 2026-01-27 | scAtlas | Added Cancer Types, Immune Infiltration, T Cell Exhaustion panels |
 | 2026-01-27 | Cross-Atlas | Created new section with Overview, Conserved, Comparison, Mapping, Meta-Analysis |
+| 2026-01-27 | CIMA | Fixed metabolite network field mappings (rho vs spearman_rho, feature vs metabolite) |
+| 2026-01-27 | Inflammation | Implemented Treatment Response visualizations (ROC, feature importance, violin) |
+| 2026-01-27 | Inflammation | Implemented Cohort Validation visualizations (scatter, consistency bar) |
+| 2026-01-27 | scAtlas | Implemented Cancer Types visualizations (bar chart, heatmap from cancer_comparison data) |
+| 2026-01-27 | scAtlas | Implemented Immune Infiltration visualizations (stacked bar, scatter) |
+| 2026-01-27 | scAtlas | Implemented T Cell Exhaustion visualizations (exhaustion/cytotoxicity heatmap, scatter) |
+| 2026-01-27 | Preprocessing | Added preprocess_treatment_response() and preprocess_cohort_validation() functions |

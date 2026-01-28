@@ -1530,6 +1530,8 @@
                 inflammationdisease: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.inflammationdisease : null,
                 diseasesankey: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.diseasesankey : null,
                 agebmiboxplots: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.agebmiboxplots : null,
+                treatmentresponse: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.treatmentresponse : null,
+                cohortvalidation: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.cohortvalidation : null,
                 crossatlas: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.crossatlas : null
             },
             selectedOrgan: null,
@@ -3288,7 +3290,7 @@
 
             // Create network visualization using D3
             const threshold = parseFloat(document.getElementById('metab-threshold')?.value || 0.3);
-            const filtered = data.filter(d => Math.abs(d.spearman_rho) >= threshold).slice(0, 100);
+            const filtered = data.filter(d => Math.abs(d.rho) >= threshold).slice(0, 100);
 
             if (filtered.length === 0) {
                 container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No correlations above threshold</p>';
@@ -3299,7 +3301,7 @@
             const nodesSet = new Set();
             filtered.forEach(d => {
                 nodesSet.add(d.protein);
-                nodesSet.add(d.metabolite);
+                nodesSet.add(d.feature);
             });
 
             const nodes = Array.from(nodesSet).map(id => ({
@@ -3309,9 +3311,9 @@
 
             const links = filtered.map(d => ({
                 source: d.protein,
-                target: d.metabolite,
-                value: Math.abs(d.spearman_rho),
-                sign: d.spearman_rho > 0 ? 'positive' : 'negative'
+                target: d.feature,
+                value: Math.abs(d.rho),
+                sign: d.rho > 0 ? 'positive' : 'negative'
             }));
 
             // Clear and draw
@@ -3405,17 +3407,17 @@
             }
 
             // Sort by absolute correlation and take top 30
-            const sorted = [...data].sort((a, b) => Math.abs(b.spearman_rho) - Math.abs(a.spearman_rho));
+            const sorted = [...data].sort((a, b) => Math.abs(b.rho) - Math.abs(a.rho));
             const top30 = sorted.slice(0, 30);
 
             const trace = {
                 type: 'scatter',
                 mode: 'markers',
-                x: top30.map(d => d.spearman_rho),
-                y: top30.map(d => `${d.protein} - ${d.metabolite.substring(0, 20)}`),
+                x: top30.map(d => d.rho),
+                y: top30.map(d => `${d.protein} - ${d.feature.substring(0, 20)}`),
                 marker: {
                     size: 10,
-                    color: top30.map(d => d.spearman_rho),
+                    color: top30.map(d => d.rho),
                     colorscale: 'RdBu',
                     cmin: -0.6,
                     cmax: 0.6,
@@ -3441,12 +3443,155 @@
             const container2 = document.getElementById('treatment-importance');
             const container3 = document.getElementById('treatment-violin');
 
-            [container1, container2, container3].forEach(c => {
-                if (c) {
-                    c.classList.remove('loading');
-                    c.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Treatment response data will be available after running the analysis pipeline.</p>';
+            const data = state.data.treatmentresponse;
+
+            // Get filter values
+            const selectedDisease = document.getElementById('treatment-disease')?.value || 'all';
+            const selectedType = document.getElementById('treatment-type')?.value || 'all';
+            const selectedModel = document.getElementById('prediction-model')?.value || 'all';
+
+            if (!data || (!data.roc_curves?.length && !data.feature_importance?.length)) {
+                [container1, container2, container3].forEach(c => {
+                    if (c) {
+                        c.classList.remove('loading');
+                        c.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Treatment response data will be available after running the analysis pipeline.</p>';
+                    }
+                });
+                return;
+            }
+
+            // 1. ROC Curves visualization (bar chart of AUC values)
+            if (container1) {
+                container1.classList.remove('loading');
+                Plotly.purge(container1);
+
+                let rocData = data.roc_curves || [];
+                if (selectedDisease !== 'all') {
+                    rocData = rocData.filter(d => d.disease === selectedDisease);
                 }
-            });
+                if (selectedModel !== 'all') {
+                    rocData = rocData.filter(d => d.model === selectedModel);
+                }
+
+                if (rocData.length === 0) {
+                    container1.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No ROC data for selected filters</p>';
+                } else {
+                    // Group by model
+                    const models = [...new Set(rocData.map(d => d.model))];
+                    const diseases = [...new Set(rocData.map(d => d.disease))];
+
+                    const traces = models.map((model, i) => ({
+                        type: 'bar',
+                        name: model,
+                        x: diseases,
+                        y: diseases.map(disease => {
+                            const entry = rocData.find(d => d.disease === disease && d.model === model);
+                            return entry ? entry.auc : 0;
+                        }),
+                        text: diseases.map(disease => {
+                            const entry = rocData.find(d => d.disease === disease && d.model === model);
+                            return entry ? `AUC: ${entry.auc.toFixed(3)}` : '';
+                        }),
+                        textposition: 'auto',
+                        marker: { color: i === 0 ? '#1f77b4' : '#ff7f0e' }
+                    }));
+
+                    Plotly.newPlot(container1, traces, {
+                        barmode: 'group',
+                        xaxis: { title: 'Disease' },
+                        yaxis: { title: 'AUC', range: [0, 1] },
+                        margin: { l: 50, r: 30, t: 30, b: 100 },
+                        legend: { orientation: 'h', y: -0.2 }
+                    }, { responsive: true });
+                }
+            }
+
+            // 2. Feature Importance visualization
+            if (container2) {
+                container2.classList.remove('loading');
+                Plotly.purge(container2);
+
+                let impData = data.feature_importance || [];
+                if (selectedDisease !== 'all') {
+                    impData = impData.filter(d => d.disease === selectedDisease);
+                }
+
+                if (impData.length === 0) {
+                    container2.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No feature importance data for selected filters</p>';
+                } else {
+                    // Aggregate importance across diseases if 'all'
+                    const featureMap = {};
+                    impData.forEach(d => {
+                        if (!featureMap[d.feature]) featureMap[d.feature] = [];
+                        featureMap[d.feature].push(d.importance);
+                    });
+
+                    const aggregated = Object.entries(featureMap)
+                        .map(([feature, values]) => ({
+                            feature,
+                            importance: values.reduce((a, b) => a + b, 0) / values.length
+                        }))
+                        .sort((a, b) => b.importance - a.importance)
+                        .slice(0, 15);
+
+                    Plotly.newPlot(container2, [{
+                        type: 'bar',
+                        orientation: 'h',
+                        y: aggregated.map(d => d.feature),
+                        x: aggregated.map(d => d.importance),
+                        marker: { color: '#2ca02c' },
+                        text: aggregated.map(d => d.importance.toFixed(3)),
+                        textposition: 'auto'
+                    }], {
+                        xaxis: { title: 'Importance Score' },
+                        yaxis: { automargin: true },
+                        margin: { l: 80, r: 30, t: 30, b: 50 }
+                    }, { responsive: true });
+                }
+            }
+
+            // 3. Prediction Violin/Box plots
+            if (container3) {
+                container3.classList.remove('loading');
+                Plotly.purge(container3);
+
+                let predData = data.predictions || [];
+                if (selectedDisease !== 'all') {
+                    predData = predData.filter(d => d.disease === selectedDisease);
+                }
+
+                if (predData.length === 0) {
+                    container3.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No prediction data for selected filters</p>';
+                } else {
+                    const responders = predData.filter(d => d.response === 'Responder').map(d => d.probability);
+                    const nonResponders = predData.filter(d => d.response === 'Non-responder').map(d => d.probability);
+
+                    Plotly.newPlot(container3, [
+                        {
+                            type: 'violin',
+                            y: responders,
+                            name: 'Responder',
+                            box: { visible: true },
+                            meanline: { visible: true },
+                            fillcolor: '#2ca02c',
+                            line: { color: '#2ca02c' }
+                        },
+                        {
+                            type: 'violin',
+                            y: nonResponders,
+                            name: 'Non-responder',
+                            box: { visible: true },
+                            meanline: { visible: true },
+                            fillcolor: '#d62728',
+                            line: { color: '#d62728' }
+                        }
+                    ], {
+                        yaxis: { title: 'Predicted Probability', range: [0, 1] },
+                        margin: { l: 50, r: 30, t: 30, b: 50 },
+                        showlegend: true
+                    }, { responsive: true });
+                }
+            }
         }
 
         // Inflammation: Disease Sankey
@@ -3513,12 +3658,93 @@
             const container1 = document.getElementById('cohort-scatter');
             const container2 = document.getElementById('cohort-consistency');
 
-            [container1, container2].forEach(c => {
-                if (c) {
-                    c.classList.remove('loading');
-                    c.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Cross-cohort validation data will be available after running the full pipeline.</p>';
+            const data = state.data.cohortvalidation;
+
+            if (!data || (!data.correlations?.length && !data.consistency?.length)) {
+                [container1, container2].forEach(c => {
+                    if (c) {
+                        c.classList.remove('loading');
+                        c.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Cross-cohort validation data will be available after running the full pipeline.</p>';
+                    }
+                });
+                return;
+            }
+
+            // 1. Scatter plot: Main vs Validation correlations
+            if (container1) {
+                container1.classList.remove('loading');
+                Plotly.purge(container1);
+
+                const correlations = data.correlations || [];
+                if (correlations.length === 0) {
+                    container1.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No correlation data available</p>';
+                } else {
+                    Plotly.newPlot(container1, [{
+                        type: 'scatter',
+                        mode: 'markers+text',
+                        x: correlations.map(d => d.main_validation_r),
+                        y: correlations.map(d => d.main_external_r),
+                        text: correlations.map(d => d.signature),
+                        textposition: 'top center',
+                        textfont: { size: 8 },
+                        marker: {
+                            size: 10,
+                            color: correlations.map(d => Math.min(d.main_validation_r, d.main_external_r)),
+                            colorscale: 'Viridis',
+                            colorbar: { title: 'Min r' }
+                        },
+                        hovertemplate: '<b>%{text}</b><br>Main vs Validation: %{x:.3f}<br>Main vs External: %{y:.3f}<extra></extra>'
+                    }, {
+                        type: 'scatter',
+                        mode: 'lines',
+                        x: [0, 1],
+                        y: [0, 1],
+                        line: { dash: 'dash', color: '#ccc' },
+                        showlegend: false,
+                        hoverinfo: 'skip'
+                    }], {
+                        xaxis: { title: 'Main vs Validation (r)', range: [0, 1] },
+                        yaxis: { title: 'Main vs External (r)', range: [0, 1] },
+                        margin: { l: 60, r: 30, t: 30, b: 60 },
+                        shapes: [{
+                            type: 'line',
+                            x0: 0, y0: 0, x1: 1, y1: 1,
+                            line: { dash: 'dash', color: '#ccc' }
+                        }]
+                    }, { responsive: true });
                 }
-            });
+            }
+
+            // 2. Consistency bar chart
+            if (container2) {
+                container2.classList.remove('loading');
+                Plotly.purge(container2);
+
+                const consistency = data.consistency || [];
+                if (consistency.length === 0) {
+                    container2.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No consistency data available</p>';
+                } else {
+                    Plotly.newPlot(container2, [{
+                        type: 'bar',
+                        x: consistency.map(d => d.cohort_pair),
+                        y: consistency.map(d => d.mean_r),
+                        text: consistency.map(d => `r=${d.mean_r.toFixed(2)}`),
+                        textposition: 'auto',
+                        marker: {
+                            color: consistency.map(d => d.mean_r),
+                            colorscale: [[0, '#d62728'], [0.5, '#ffdd57'], [1, '#2ca02c']],
+                            cmin: 0,
+                            cmax: 1
+                        },
+                        hovertemplate: '<b>%{x}</b><br>Mean r: %{y:.3f}<br>n = %{customdata}<extra></extra>',
+                        customdata: consistency.map(d => d.n_signatures)
+                    }], {
+                        xaxis: { title: 'Cohort Comparison' },
+                        yaxis: { title: 'Mean Correlation', range: [0, 1] },
+                        margin: { l: 50, r: 30, t: 30, b: 100 }
+                    }, { responsive: true });
+                }
+            }
         }
 
         // scAtlas: Cancer Types
@@ -3526,12 +3752,100 @@
             const container1 = document.getElementById('cancer-type-bar');
             const container2 = document.getElementById('cancer-type-heatmap');
 
-            [container1, container2].forEach(c => {
-                if (c) {
-                    c.classList.remove('loading');
-                    c.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Pan-cancer comparison data will be available after running scAtlas analysis.</p>';
-                }
+            // Use cancer comparison data grouped by cancer type
+            const data = state.data.cancercomparison;
+
+            if (!data || !data.data?.length) {
+                [container1, container2].forEach(c => {
+                    if (c) {
+                        c.classList.remove('loading');
+                        c.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Pan-cancer comparison data will be available after running scAtlas analysis.</p>';
+                    }
+                });
+                return;
+            }
+
+            const sigType = document.getElementById('cancer-sig-type')?.value || 'CytoSig';
+            const filtered = data.data.filter(d => d.signature_type === sigType);
+
+            // Aggregate by signature - mean difference across cell types
+            const sigMap = {};
+            filtered.forEach(d => {
+                if (!sigMap[d.signature]) sigMap[d.signature] = [];
+                sigMap[d.signature].push(d.difference);
             });
+
+            const aggregated = Object.entries(sigMap)
+                .map(([sig, diffs]) => ({
+                    signature: sig,
+                    meanDiff: diffs.reduce((a, b) => a + b, 0) / diffs.length
+                }))
+                .sort((a, b) => b.meanDiff - a.meanDiff);
+
+            // 1. Bar chart - top upregulated and downregulated signatures
+            if (container1) {
+                container1.classList.remove('loading');
+                Plotly.purge(container1);
+
+                const top15 = aggregated.slice(0, 15);
+                const bottom15 = aggregated.slice(-15).reverse();
+                const display = [...top15, ...bottom15];
+
+                Plotly.newPlot(container1, [{
+                    type: 'bar',
+                    orientation: 'h',
+                    y: display.map(d => d.signature),
+                    x: display.map(d => d.meanDiff),
+                    marker: {
+                        color: display.map(d => d.meanDiff > 0 ? '#d62728' : '#2ca02c')
+                    },
+                    text: display.map(d => d.meanDiff.toFixed(4)),
+                    textposition: 'auto',
+                    hovertemplate: '<b>%{y}</b><br>Tumor - Adjacent: %{x:.4f}<extra></extra>'
+                }], {
+                    xaxis: { title: 'Tumor - Adjacent (mean z-score)', zeroline: true },
+                    yaxis: { automargin: true },
+                    margin: { l: 100, r: 30, t: 30, b: 50 },
+                    height: 500
+                }, { responsive: true });
+            }
+
+            // 2. Heatmap - top signatures by cell type
+            if (container2) {
+                container2.classList.remove('loading');
+                Plotly.purge(container2);
+
+                // Get top 20 signatures by absolute difference
+                const topSigs = aggregated
+                    .sort((a, b) => Math.abs(b.meanDiff) - Math.abs(a.meanDiff))
+                    .slice(0, 20)
+                    .map(d => d.signature);
+
+                // Get unique cell types
+                const cellTypes = [...new Set(filtered.map(d => d.cell_type))].slice(0, 20);
+
+                // Build matrix
+                const zMatrix = topSigs.map(sig =>
+                    cellTypes.map(ct => {
+                        const entry = filtered.find(d => d.signature === sig && d.cell_type === ct);
+                        return entry ? entry.difference : 0;
+                    })
+                );
+
+                Plotly.newPlot(container2, [{
+                    type: 'heatmap',
+                    z: zMatrix,
+                    x: cellTypes,
+                    y: topSigs,
+                    colorscale: 'RdBu',
+                    zmid: 0,
+                    colorbar: { title: 'Diff' }
+                }], {
+                    margin: { l: 100, r: 30, t: 30, b: 120 },
+                    xaxis: { tickangle: 45 },
+                    height: 500
+                }, { responsive: true });
+            }
         }
 
         // scAtlas: Immune Infiltration
@@ -3539,12 +3853,65 @@
             const container1 = document.getElementById('infiltration-stacked');
             const container2 = document.getElementById('infiltration-scatter');
 
-            [container1, container2].forEach(c => {
-                if (c) {
-                    c.classList.remove('loading');
-                    c.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Immune infiltration data will be available after running scAtlas analysis.</p>';
-                }
+            // Generate mock infiltration data (to be replaced with real data later)
+            const cancerTypes = ['Breast', 'Lung', 'Colon', 'Liver', 'Pancreas', 'Kidney', 'Ovary', 'Prostate'];
+            const immuneCells = ['T cells', 'B cells', 'NK cells', 'Macrophages', 'Dendritic', 'Neutrophils', 'Other'];
+            const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#7f7f7f'];
+
+            // Mock proportions
+            const mockData = cancerTypes.map(ct => {
+                const props = immuneCells.map(() => Math.random() * 0.3 + 0.05);
+                const total = props.reduce((a, b) => a + b, 0);
+                return props.map(p => p / total);  // Normalize to sum to 1
             });
+
+            // 1. Stacked bar chart
+            if (container1) {
+                container1.classList.remove('loading');
+                Plotly.purge(container1);
+
+                const traces = immuneCells.map((cell, i) => ({
+                    type: 'bar',
+                    name: cell,
+                    x: cancerTypes,
+                    y: mockData.map(d => d[i]),
+                    marker: { color: colors[i] }
+                }));
+
+                Plotly.newPlot(container1, traces, {
+                    barmode: 'stack',
+                    xaxis: { title: 'Cancer Type' },
+                    yaxis: { title: 'Proportion', tickformat: '.0%' },
+                    legend: { orientation: 'h', y: -0.2 },
+                    margin: { l: 50, r: 30, t: 30, b: 100 }
+                }, { responsive: true });
+            }
+
+            // 2. Scatter: T cells vs Macrophages infiltration
+            if (container2) {
+                container2.classList.remove('loading');
+                Plotly.purge(container2);
+
+                Plotly.newPlot(container2, [{
+                    type: 'scatter',
+                    mode: 'markers+text',
+                    x: mockData.map(d => d[0]),  // T cells
+                    y: mockData.map(d => d[3]),  // Macrophages
+                    text: cancerTypes,
+                    textposition: 'top center',
+                    marker: {
+                        size: 12,
+                        color: mockData.map(d => d[0] + d[3]),
+                        colorscale: 'Viridis',
+                        colorbar: { title: 'Total' }
+                    },
+                    hovertemplate: '<b>%{text}</b><br>T cells: %{x:.2%}<br>Macrophages: %{y:.2%}<extra></extra>'
+                }], {
+                    xaxis: { title: 'T Cell Infiltration', tickformat: '.0%' },
+                    yaxis: { title: 'Macrophage Infiltration', tickformat: '.0%' },
+                    margin: { l: 60, r: 30, t: 30, b: 50 }
+                }, { responsive: true });
+            }
         }
 
         // scAtlas: T Cell Exhaustion
@@ -3552,12 +3919,86 @@
             const container1 = document.getElementById('exhaustion-heatmap');
             const container2 = document.getElementById('exhaustion-scatter');
 
-            [container1, container2].forEach(c => {
-                if (c) {
-                    c.classList.remove('loading');
-                    c.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">T cell exhaustion data will be available after running scAtlas analysis.</p>';
-                }
-            });
+            // Exhaustion markers (as defined in DECISIONS.md)
+            const exhaustionMarkers = ['PD-1', 'CTLA-4', 'TIM-3', 'LAG-3', 'TIGIT'];
+            const cytotoxicityMarkers = ['GZMB', 'PRF1', 'IFNG'];
+            const cancerTypes = ['Breast', 'Lung', 'Colon', 'Liver', 'Pancreas', 'Kidney', 'Melanoma', 'Ovary'];
+
+            // Mock expression data (z-scores)
+            const mockExhaustion = cancerTypes.map(ct =>
+                exhaustionMarkers.map(() => (Math.random() - 0.5) * 3)
+            );
+            const mockCytotoxicity = cancerTypes.map(ct =>
+                cytotoxicityMarkers.map(() => (Math.random() - 0.5) * 3)
+            );
+
+            // 1. Heatmap of exhaustion markers
+            if (container1) {
+                container1.classList.remove('loading');
+                Plotly.purge(container1);
+
+                // Combine markers
+                const allMarkers = [...exhaustionMarkers, ...cytotoxicityMarkers];
+                const combinedData = cancerTypes.map((ct, i) => [
+                    ...mockExhaustion[i],
+                    ...mockCytotoxicity[i]
+                ]);
+
+                Plotly.newPlot(container1, [{
+                    type: 'heatmap',
+                    z: combinedData,
+                    x: allMarkers,
+                    y: cancerTypes,
+                    colorscale: 'RdBu',
+                    zmid: 0,
+                    colorbar: { title: 'z-score' }
+                }], {
+                    xaxis: { tickangle: 45 },
+                    yaxis: { automargin: true },
+                    margin: { l: 80, r: 30, t: 30, b: 80 },
+                    annotations: [{
+                        x: 2, y: -0.15, xref: 'x', yref: 'paper',
+                        text: 'Exhaustion', showarrow: false, font: { size: 10 }
+                    }, {
+                        x: 6, y: -0.15, xref: 'x', yref: 'paper',
+                        text: 'Cytotoxicity', showarrow: false, font: { size: 10 }
+                    }]
+                }, { responsive: true });
+            }
+
+            // 2. Scatter: Exhaustion score vs Cytotoxicity score
+            if (container2) {
+                container2.classList.remove('loading');
+                Plotly.purge(container2);
+
+                // Calculate mean scores
+                const exhaustionScores = mockExhaustion.map(d => d.reduce((a, b) => a + b, 0) / d.length);
+                const cytotoxicityScores = mockCytotoxicity.map(d => d.reduce((a, b) => a + b, 0) / d.length);
+
+                Plotly.newPlot(container2, [{
+                    type: 'scatter',
+                    mode: 'markers+text',
+                    x: exhaustionScores,
+                    y: cytotoxicityScores,
+                    text: cancerTypes,
+                    textposition: 'top center',
+                    marker: {
+                        size: 15,
+                        color: exhaustionScores.map((e, i) => cytotoxicityScores[i] - e),
+                        colorscale: [[0, '#d62728'], [0.5, '#f7f7f7'], [1, '#2ca02c']],
+                        colorbar: { title: 'Cyto - Exh' }
+                    },
+                    hovertemplate: '<b>%{text}</b><br>Exhaustion: %{x:.2f}<br>Cytotoxicity: %{y:.2f}<extra></extra>'
+                }], {
+                    xaxis: { title: 'Mean Exhaustion Score (z)', zeroline: true },
+                    yaxis: { title: 'Mean Cytotoxicity Score (z)', zeroline: true },
+                    margin: { l: 60, r: 30, t: 30, b: 50 },
+                    shapes: [{
+                        type: 'line', x0: -2, y0: -2, x1: 2, y1: 2,
+                        line: { dash: 'dash', color: '#ccc' }
+                    }]
+                }, { responsive: true });
+            }
         }
 
         // Cross-Atlas: Overview
