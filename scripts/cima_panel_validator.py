@@ -827,3 +827,67 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+def check_json_files_for_nan():
+    """Check all JSON files for NaN values (invalid in JSON)."""
+    import re
+    from pathlib import Path
+    
+    DATA_DIR = Path('/vf/users/parks34/projects/2secactpy/visualization/data')
+    issues = []
+    
+    for json_file in DATA_DIR.glob('*.json'):
+        content = json_file.read_text()
+        nan_count = len(re.findall(r'\bNaN\b', content))
+        inf_count = len(re.findall(r'\b-?Infinity\b', content))
+        
+        if nan_count > 0 or inf_count > 0:
+            issues.append({
+                'file': json_file.name,
+                'nan_count': nan_count,
+                'inf_count': inf_count
+            })
+    
+    return issues
+
+
+def fix_json_nan_values():
+    """Fix NaN and Infinity values in all JSON files."""
+    import re
+    from pathlib import Path
+    
+    DATA_DIR = Path('/vf/users/parks34/projects/2secactpy/visualization/data')
+    fixed = []
+    
+    for json_file in DATA_DIR.glob('*.json'):
+        content = json_file.read_text()
+        original = content
+        
+        # Replace NaN and Infinity with null
+        content = re.sub(r'\bNaN\b', 'null', content)
+        content = re.sub(r'\b-?Infinity\b', 'null', content)
+        
+        if content != original:
+            json_file.write_text(content)
+            fixed.append(json_file.name)
+    
+    return fixed
+
+
+if __name__ == '__main__' and '--check-nan' in sys.argv:
+    issues = check_json_files_for_nan()
+    if issues:
+        print("Found NaN/Infinity values in JSON files:")
+        for issue in issues:
+            print(f"  {issue['file']}: {issue['nan_count']} NaN, {issue['inf_count']} Infinity")
+        print("\nRun with --fix-nan to fix these issues")
+    else:
+        print("No NaN/Infinity values found in JSON files")
+
+if __name__ == '__main__' and '--fix-nan' in sys.argv:
+    fixed = fix_json_nan_values()
+    if fixed:
+        print(f"Fixed NaN/Infinity values in: {fixed}")
+    else:
+        print("No files needed fixing")
