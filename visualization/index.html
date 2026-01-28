@@ -5506,13 +5506,32 @@
                 });
             }
 
-            // Control changes - Inflammation
+            // Control changes - Inflammation Cell Types
             document.getElementById('inflam-sig-type')?.addEventListener('change', () => {
-                populateInflammationSignatures();
+                // Reset search to default when switching sig type
+                const searchInput = document.getElementById('inflam-signature-search');
+                if (searchInput) searchInput.value = 'IFNG';
                 updateInflammationBar();
                 updateInflammationHeatmap();
             });
-            document.getElementById('inflam-signature')?.addEventListener('change', updateInflammationBar);
+
+            // Inflammation signature search with autocomplete
+            const inflamSearchInput = document.getElementById('inflam-signature-search');
+            if (inflamSearchInput) {
+                inflamSearchInput.addEventListener('focus', showInflamSignatureSuggestions);
+                inflamSearchInput.addEventListener('input', showInflamSignatureSuggestions);
+                inflamSearchInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        document.getElementById('inflam-signature-suggestions').style.display = 'none';
+                        updateInflammationBar();
+                    }
+                });
+                inflamSearchInput.addEventListener('blur', () => {
+                    setTimeout(() => {
+                        document.getElementById('inflam-signature-suggestions').style.display = 'none';
+                    }, 200);
+                });
+            }
 
             // Control changes - Inflammation Age/BMI
             document.getElementById('inflam-corr-sig-type')?.addEventListener('change', updateInflamCorrelations);
