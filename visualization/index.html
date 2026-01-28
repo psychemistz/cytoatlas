@@ -1291,8 +1291,7 @@
                         <label>Signature Type</label>
                         <select id="inflam-sig-type">
                             <option value="CytoSig">CytoSig (43 cytokines)</option>
-                            <option value="SecAct">SecAct (100 proteins)</option>
-                            <option value="all">All signatures (143)</option>
+                            <option value="SecAct">SecAct (1,170 proteins)</option>
                         </select>
                     </div>
                     <div class="control-group" style="position: relative;">
@@ -2637,7 +2636,7 @@
 
             // Inflammation Atlas data sources table (10 analyses)
             const inflamData = [
-                ['Cell Types', '66 cell types × (43 CytoSig + 100 SecAct proteins)', '9,438'],
+                ['Cell Types', '66 cell types × (43 CytoSig + 1,170 SecAct proteins)', '80,058'],
                 ['Age & BMI', '143 proteins × 2 features (age, BMI) correlations', '286'],
                 ['Disease', 'Disease vs healthy differential across 12+ diseases', '54,137'],
                 ['Demographics', 'Sex, smoking, and other demographic associations', 'Per category'],
@@ -3866,7 +3865,6 @@
 
         function getInflammationSignatures() {
             const sigType = document.getElementById('inflam-sig-type')?.value || 'CytoSig';
-            if (sigType === 'all') return inflammationSignatures.all;
             if (sigType === 'SecAct') return inflammationSignatures.secact;
             return inflammationSignatures.cytosig;
         }
@@ -3912,16 +3910,11 @@
             const sigType = document.getElementById('inflam-sig-type')?.value || 'CytoSig';
             const signature = document.getElementById('inflam-signature-search')?.value || 'IFNG';
 
-            // Filter to selected signature (and optionally by type)
-            let filtered;
-            if (sigType === 'all') {
-                filtered = data.filter(d => d.signature === signature);
-            } else {
-                filtered = data.filter(d =>
-                    d.signature === signature &&
-                    (d.signature_type === sigType || (!d.signature_type && sigType === 'CytoSig'))
-                );
-            }
+            // Filter to selected signature type and signature
+            const filtered = data.filter(d =>
+                d.signature === signature &&
+                (d.signature_type === sigType || (!d.signature_type && sigType === 'CytoSig'))
+            );
             filtered.sort((a, b) => b.mean_activity - a.mean_activity);
 
             // Take top 30 cell types
