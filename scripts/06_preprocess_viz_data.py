@@ -2205,7 +2205,7 @@ def create_embedded_data():
                 'summary': {
                     **eqtl_data['summary'],
                     'displayed_eqtls': 500,
-                    'note': 'Showing top 500 most significant eQTLs for fast initial loading. Click "Load full data" for all 223,405 eQTLs.'
+                    'note': 'Showing top 500 most significant cis-eQTLs for fast initial loading. Click "Load full data" for all 71,530 eQTLs.'
                 },
                 'cell_types': eqtl_data['cell_types'],
                 'genes': eqtl_data['genes'][:50],  # Top 50 genes

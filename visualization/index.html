@@ -1238,10 +1238,10 @@
                 </div>
 
                 <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
-                    <strong>cis-eQTL Browser:</strong> <span id="eqtl-count-display">Showing top 500 most significant eQTLs</span> (of 223,405 total) across 69 immune cell types.
+                    <strong>cis-eQTL Browser:</strong> <span id="eqtl-count-display">Showing top 500 most significant eQTLs</span> (of 71,530 total) across 69 immune cell types.
                     Explore genetic variants (SNPs) associated with gene expression in immune cells.
-                    <br><small style="color: #666;">Data: CIMA Lead cis-xQTL (study-wise FDR < 0.05). 126,647 unique variants across 61,961 genes.</small>
-                    <br><button id="eqtl-load-full" onclick="loadFullEqtlData()" style="margin-top: 0.5rem; padding: 0.3rem 0.8rem; cursor: pointer;">Load full data (223,405 eQTLs, ~40 MB)</button>
+                    <br><small style="color: #666;">Data: CIMA Lead cis-eQTL (study-wise FDR < 0.05). 9,600 genes with significant eQTLs.</small>
+                    <br><button id="eqtl-load-full" onclick="loadFullEqtlData()" style="margin-top: 0.5rem; padding: 0.3rem 0.8rem; cursor: pointer;">Load full data (71,530 eQTLs, ~14 MB)</button>
                 </div>
 
                 <div class="two-col">
@@ -2630,7 +2630,7 @@
                 ['Cell Type Correlations', '27 cell types × (43 CytoSig + 100 SecAct) × 2 (age, BMI)', '7,722'],
                 ['Multi-omics', 'Cytokine-Biochemistry (21,859) + Cytokine-Metabolite (500)', '22,359'],
                 ['Population', '421 donors × demographic subgroups (sex, age, BMI, blood type, smoking)', '6,065'],
-                ['eQTL Browser', '223,405 significant cis-eQTLs across 69 cell types (61,961 genes)', '223,405']
+                ['eQTL Browser', '71,530 significant cis-eQTLs across 69 cell types (9,600 genes)', '71,530']
             ];
             document.getElementById('data-sources-cima').innerHTML = cimaData.map(row =>
                 `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td></tr>`
@@ -4775,8 +4775,8 @@
                 state.data.cimaeqtl = await response.json();
                 eqtlFullDataLoaded = true;
                 console.log('Full eQTL data loaded:', state.data.cimaeqtl.summary);
-                if (btn) btn.textContent = 'Full data loaded (223,405 eQTLs)';
-                if (countDisplay) countDisplay.textContent = 'Showing all 223,405 eQTLs';
+                if (btn) btn.textContent = 'Full data loaded (71,530 eQTLs)';
+                if (countDisplay) countDisplay.textContent = 'Showing all 71,530 eQTLs';
                 populateEqtlCellTypes();
                 updateEqtlBrowser();
             } catch (error) {
@@ -4889,7 +4889,7 @@
                         <div style="max-height: 450px; overflow-y: auto;">
                             <table class="data-table" style="font-size: 0.85rem;">
                                 <thead>
-                                    <tr><th>Gene</th><th>Variant</th><th>Cell Type</th><th>P-value</th><th>Beta</th><th>Q-value</th></tr>
+                                    <tr><th>Gene</th><th>Variant</th><th>Cell Type</th><th>P-value</th><th>Beta</th><th>AF</th></tr>
                                 </thead>
                                 <tbody>
                                     ${topHits.map(d => `
@@ -4899,7 +4899,7 @@
                                             <td style="font-size:0.8rem;">${d.celltype.replace(/_/g, ' ')}</td>
                                             <td>${d.pvalue.toExponential(2)}</td>
                                             <td style="color: ${d.beta > 0 ? '#d62728' : '#1f77b4'}">${d.beta.toFixed(3)}</td>
-                                            <td>${d.qvalue !== undefined ? d.qvalue.toExponential(2) : 'N/A'}</td>
+                                            <td>${d.af !== undefined ? d.af.toFixed(3) : 'N/A'}</td>
                                         </tr>
                                     `).join('')}
                                 </tbody>
