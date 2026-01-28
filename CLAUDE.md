@@ -2,6 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## github instruction
+Do not use "Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>" in github commit message
+
 ## Project Overview
 
 Pan-Disease Single-Cell Cytokine Activity Atlas - computes cytokine and secreted protein activity signatures across 12+ million human immune cells from three major single-cell atlases (CIMA, Inflammation Atlas, scAtlas) to identify disease-specific and conserved signaling patterns, with applications to treatment response prediction.
