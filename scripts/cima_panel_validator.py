@@ -473,6 +473,182 @@ class CIMAPanelValidator:
         functional = all(r.passed for r in results if r.severity == "error")
         return PanelStatus(panel, functional, results)
 
+    def validate_age_bmi_panel(self) -> PanelStatus:
+        """Validate Age & BMI Correlations panel."""
+        panel = "Age & BMI"
+        results = []
+        data = self.data.get('cimacorrelations', {})
+
+        results.append(self._check(
+            panel, "data_exists", bool(data),
+            "cimacorrelations data missing",
+            fix_hint="Run: preprocess_cima_correlations()"
+        ))
+
+        if data:
+            # Check age correlations
+            age_data = data.get('age', [])
+            results.append(self._check(
+                panel, "has_age_correlations", len(age_data) > 0,
+                f"No age correlations found"
+            ))
+            if age_data:
+                results.append(self._check(
+                    panel, "age_correlation_count", len(age_data) >= 20,
+                    f"Only {len(age_data)} age correlations (expected ≥20)",
+                    severity="warning"
+                ))
+
+            # Check BMI correlations
+            bmi_data = data.get('bmi', [])
+            results.append(self._check(
+                panel, "has_bmi_correlations", len(bmi_data) > 0,
+                f"No BMI correlations found"
+            ))
+            if bmi_data:
+                results.append(self._check(
+                    panel, "bmi_correlation_count", len(bmi_data) >= 20,
+                    f"Only {len(bmi_data)} BMI correlations (expected ≥20)",
+                    severity="warning"
+                ))
+
+        functional = all(r.passed for r in results if r.severity == "error")
+        return PanelStatus(panel, functional, results)
+
+    def validate_age_bmi_boxplots_panel(self) -> PanelStatus:
+        """Validate Age/BMI Stratified Boxplots panel."""
+        panel = "Age/BMI Boxplots"
+        results = []
+        data = self.data.get('agebmiboxplots', {})
+
+        results.append(self._check(
+            panel, "data_exists", bool(data),
+            "agebmiboxplots data missing",
+            fix_hint="Run: preprocess_age_bmi_boxplots()"
+        ))
+
+        if data:
+            # Data structure: {'cima': {'age': [...], 'bmi': [...], 'cytosig_signatures': [...]}}
+            cima_data = data.get('cima', {})
+            results.append(self._check(
+                panel, "has_cima_data", bool(cima_data),
+                "No CIMA data found in boxplots"
+            ))
+
+            if cima_data:
+                # Check for age data
+                age_data = cima_data.get('age', [])
+                results.append(self._check(
+                    panel, "has_age_data", len(age_data) > 0,
+                    "No age stratified data found"
+                ))
+
+                # Check for BMI data
+                bmi_data = cima_data.get('bmi', [])
+                results.append(self._check(
+                    panel, "has_bmi_data", len(bmi_data) > 0,
+                    "No BMI stratified data found"
+                ))
+
+                # Check signatures lists
+                cytosig_sigs = cima_data.get('cytosig_signatures', [])
+                results.append(self._check(
+                    panel, "has_cytosig_signatures", len(cytosig_sigs) > 0,
+                    "No CytoSig signatures list found",
+                    severity="warning"
+                ))
+
+        functional = all(r.passed for r in results if r.severity == "error")
+        return PanelStatus(panel, functional, results)
+
+    def validate_biochemistry_panel(self) -> PanelStatus:
+        """Validate Biochemistry Correlations panel."""
+        panel = "Biochemistry"
+        results = []
+        data = self.data.get('cimacorrelations', {})
+
+        results.append(self._check(
+            panel, "data_exists", bool(data),
+            "cimacorrelations data missing",
+            fix_hint="Run: preprocess_cima_correlations()"
+        ))
+
+        if data:
+            # Check biochemistry correlations
+            biochem_data = data.get('biochemistry', [])
+            results.append(self._check(
+                panel, "has_biochemistry", len(biochem_data) > 0,
+                "No biochemistry correlations found"
+            ))
+
+            if biochem_data:
+                results.append(self._check(
+                    panel, "biochemistry_count", len(biochem_data) >= 50,
+                    f"Only {len(biochem_data)} biochemistry correlations (expected ≥50)",
+                    severity="warning"
+                ))
+
+                # Check required fields
+                first = biochem_data[0]
+                for field in ['protein', 'feature', 'rho', 'pvalue']:
+                    results.append(self._check(
+                        panel, f"biochem_has_{field}", field in first,
+                        f"Biochemistry records missing '{field}' field"
+                    ))
+
+        functional = all(r.passed for r in results if r.severity == "error")
+        return PanelStatus(panel, functional, results)
+
+    def validate_differential_panel(self) -> PanelStatus:
+        """Validate Differential Analysis panel."""
+        panel = "Differential"
+        results = []
+        data = self.data.get('cimadifferential')
+
+        results.append(self._check(
+            panel, "data_exists", bool(data),
+            "cimadifferential data missing",
+            fix_hint="Run: preprocess_cima_differential()"
+        ))
+
+        if data:
+            # Data is a list of differential records [{protein, comparison, log2fc, pvalue, ...}, ...]
+            if isinstance(data, list):
+                results.append(self._check(
+                    panel, "record_count", len(data) >= 100,
+                    f"Only {len(data)} differential records (expected ≥100)"
+                ))
+
+                if data:
+                    first = data[0]
+                    # Check required fields
+                    required_fields = ['protein', 'comparison', 'log2fc', 'pvalue']
+                    for field in required_fields:
+                        results.append(self._check(
+                            panel, f"has_{field}", field in first,
+                            f"Differential records missing '{field}' field"
+                        ))
+
+                    # Check for sex comparison
+                    comparisons = set(d.get('comparison', '') for d in data)
+                    has_sex = any('sex' in c.lower() or 'male' in c.lower() for c in comparisons)
+                    results.append(self._check(
+                        panel, "has_sex_comparison", has_sex,
+                        f"No sex comparison found. Comparisons: {list(comparisons)[:3]}",
+                        severity="warning"
+                    ))
+
+            elif isinstance(data, dict):
+                # Alternative dict format with 'sex', 'smoking' keys
+                sex_data = data.get('sex', [])
+                results.append(self._check(
+                    panel, "has_sex_differential", len(sex_data) > 0,
+                    "No sex differential data found"
+                ))
+
+        functional = all(r.passed for r in results if r.severity == "error")
+        return PanelStatus(panel, functional, results)
+
     # =========================================================================
     # Main Validation
     # =========================================================================
@@ -485,13 +661,17 @@ class CIMAPanelValidator:
         print("="*60 + "\n")
 
         validators = [
-            self.validate_celltype_panel,
+            # 10 CIMA panels
+            self.validate_age_bmi_panel,
+            self.validate_age_bmi_boxplots_panel,
+            self.validate_biochemistry_panel,
             self.validate_biochem_scatter_panel,
-            self.validate_population_panel,
-            self.validate_multiomics_panel,
-            self.validate_eqtl_panel,
             self.validate_metabolites_panel,
-            self.validate_celltype_correlations_panel,
+            self.validate_differential_panel,
+            self.validate_celltype_panel,
+            self.validate_multiomics_panel,
+            self.validate_population_panel,
+            self.validate_eqtl_panel,
         ]
 
         for validator in validators:
@@ -503,16 +683,24 @@ class CIMAPanelValidator:
     def validate_panel(self, panel_name: str) -> Optional[PanelStatus]:
         """Validate a specific panel."""
         panel_map = {
-            'celltype': self.validate_celltype_panel,
-            'cell_type': self.validate_celltype_panel,
+            # 10 CIMA panels with aliases
+            'age_bmi': self.validate_age_bmi_panel,
+            'age-bmi': self.validate_age_bmi_panel,
+            'age_bmi_boxplots': self.validate_age_bmi_boxplots_panel,
+            'age-bmi-boxplots': self.validate_age_bmi_boxplots_panel,
+            'boxplots': self.validate_age_bmi_boxplots_panel,
+            'biochemistry': self.validate_biochemistry_panel,
             'biochem': self.validate_biochem_scatter_panel,
             'biochem_scatter': self.validate_biochem_scatter_panel,
-            'population': self.validate_population_panel,
+            'metabolites': self.validate_metabolites_panel,
+            'differential': self.validate_differential_panel,
+            'celltype': self.validate_celltype_panel,
+            'cell_type': self.validate_celltype_panel,
+            'cell_types': self.validate_celltype_panel,
             'multiomics': self.validate_multiomics_panel,
             'multi_omics': self.validate_multiomics_panel,
+            'population': self.validate_population_panel,
             'eqtl': self.validate_eqtl_panel,
-            'metabolites': self.validate_metabolites_panel,
-            'celltype_correlations': self.validate_celltype_correlations_panel,
         }
 
         validator = panel_map.get(panel_name.lower().replace('-', '_'))

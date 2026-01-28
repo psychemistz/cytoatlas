@@ -137,8 +137,60 @@ print(f"\\nWrote {output_file.name}: {output_file.stat().st_size / 1024 / 1024:.
             return False
 
     # =========================================================================
-    # Panel-specific fixers
+    # Panel-specific fixers (10 CIMA panels)
     # =========================================================================
+
+    def fix_age_bmi_panel(self) -> bool:
+        """Fix Age & BMI Correlations panel."""
+        self.log("\n" + "="*50)
+        self.log("Fixing Age & BMI Panel")
+        self.log("="*50)
+
+        success = self.run_preprocessing('preprocess_cima_correlations')
+        if success:
+            self.fixes_applied.append(('Age & BMI', 'preprocess_cima_correlations'))
+        else:
+            self.fixes_failed.append(('Age & BMI', 'preprocess_cima_correlations'))
+        return success
+
+    def fix_age_bmi_boxplots_panel(self) -> bool:
+        """Fix Age/BMI Stratified Boxplots panel."""
+        self.log("\n" + "="*50)
+        self.log("Fixing Age/BMI Boxplots Panel")
+        self.log("="*50)
+
+        success = self.run_preprocessing('preprocess_age_bmi_boxplots')
+        if success:
+            self.fixes_applied.append(('Age/BMI Boxplots', 'preprocess_age_bmi_boxplots'))
+        else:
+            self.fixes_failed.append(('Age/BMI Boxplots', 'preprocess_age_bmi_boxplots'))
+        return success
+
+    def fix_biochemistry_panel(self) -> bool:
+        """Fix Biochemistry Correlations panel."""
+        self.log("\n" + "="*50)
+        self.log("Fixing Biochemistry Panel")
+        self.log("="*50)
+
+        success = self.run_preprocessing('preprocess_cima_correlations')
+        if success:
+            self.fixes_applied.append(('Biochemistry', 'preprocess_cima_correlations'))
+        else:
+            self.fixes_failed.append(('Biochemistry', 'preprocess_cima_correlations'))
+        return success
+
+    def fix_differential_panel(self) -> bool:
+        """Fix Differential Analysis panel."""
+        self.log("\n" + "="*50)
+        self.log("Fixing Differential Panel")
+        self.log("="*50)
+
+        success = self.run_preprocessing('preprocess_cima_differential')
+        if success:
+            self.fixes_applied.append(('Differential', 'preprocess_cima_differential'))
+        else:
+            self.fixes_failed.append(('Differential', 'preprocess_cima_differential'))
+        return success
 
     def fix_celltype_panel(self) -> bool:
         """Fix Cell Type Overview panel."""
@@ -246,16 +298,24 @@ print(f"\\nWrote {output_file.name}: {output_file.stat().st_size / 1024 / 1024:.
     def fix_panel(self, panel_name: str) -> bool:
         """Fix a specific panel."""
         panel_map = {
-            'celltype': self.fix_celltype_panel,
-            'cell_type': self.fix_celltype_panel,
+            # 10 CIMA panels with aliases
+            'age_bmi': self.fix_age_bmi_panel,
+            'age-bmi': self.fix_age_bmi_panel,
+            'age_bmi_boxplots': self.fix_age_bmi_boxplots_panel,
+            'age-bmi-boxplots': self.fix_age_bmi_boxplots_panel,
+            'boxplots': self.fix_age_bmi_boxplots_panel,
+            'biochemistry': self.fix_biochemistry_panel,
             'biochem': self.fix_biochem_scatter_panel,
             'biochem_scatter': self.fix_biochem_scatter_panel,
-            'population': self.fix_population_panel,
+            'metabolites': self.fix_metabolites_panel,
+            'differential': self.fix_differential_panel,
+            'celltype': self.fix_celltype_panel,
+            'cell_type': self.fix_celltype_panel,
+            'cell_types': self.fix_celltype_panel,
             'multiomics': self.fix_multiomics_panel,
             'multi_omics': self.fix_multiomics_panel,
+            'population': self.fix_population_panel,
             'eqtl': self.fix_eqtl_panel,
-            'metabolites': self.fix_metabolites_panel,
-            'celltype_correlations': self.fix_celltype_correlations_panel,
         }
 
         fixer = panel_map.get(panel_name.lower().replace('-', '_'))
@@ -267,21 +327,25 @@ print(f"\\nWrote {output_file.name}: {output_file.stat().st_size / 1024 / 1024:.
             return False
 
     def fix_all(self) -> bool:
-        """Fix all panels."""
+        """Fix all 10 CIMA panels."""
         self.log("\n" + "="*60)
-        self.log("CIMA Panel Fixer - Fixing All Panels")
+        self.log("CIMA Panel Fixer - Fixing All 10 Panels")
         self.log(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         self.log("="*60)
 
         all_success = True
         fixers = [
-            self.fix_celltype_panel,
+            # 10 CIMA panels in tab order
+            self.fix_age_bmi_panel,
+            self.fix_age_bmi_boxplots_panel,
+            self.fix_biochemistry_panel,
             self.fix_biochem_scatter_panel,
-            self.fix_population_panel,
-            self.fix_multiomics_panel,
-            self.fix_eqtl_panel,
             self.fix_metabolites_panel,
-            self.fix_celltype_correlations_panel,
+            self.fix_differential_panel,
+            self.fix_celltype_panel,
+            self.fix_multiomics_panel,
+            self.fix_population_panel,
+            self.fix_eqtl_panel,
         ]
 
         for fixer in fixers:
