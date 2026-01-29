@@ -1,13 +1,18 @@
 """FastAPI application factory and entry point."""
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
+
+# Static files directory
+STATIC_DIR = Path(__file__).parent.parent / "static"
 from app.core.cache import CacheService
 from app.core.database import close_db, init_db
 from app.routers import (
@@ -118,16 +123,38 @@ def create_app() -> FastAPI:
     app.include_router(validation_router, prefix=api_prefix)
     app.include_router(export_router, prefix=api_prefix)
 
-    # Root endpoint
+    # Mount static files (CSS, JS, assets)
+    if STATIC_DIR.exists():
+        app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+        print(f"Static files: Serving from {STATIC_DIR}")
+
+    # Root endpoint - serve frontend HTML
     @app.get("/")
-    async def root() -> dict:
-        """API root endpoint."""
+    async def root():
+        """Serve the frontend application."""
+        index_path = STATIC_DIR / "index.html"
+        if index_path.exists():
+            return FileResponse(index_path)
+        # Fallback to API info if no frontend
         return {
             "name": settings.app_name,
             "version": settings.app_version,
             "docs": "/docs",
             "api": settings.api_v1_prefix,
         }
+
+    # SPA catch-all route for client-side routing
+    @app.get("/{path:path}")
+    async def spa_catch_all(path: str):
+        """Catch-all route for SPA client-side routing."""
+        # Don't catch API routes or static files
+        if path.startswith("api/") or path.startswith("static/") or path in ["docs", "redoc", "openapi.json"]:
+            return JSONResponse(status_code=404, content={"error": "Not found"})
+
+        index_path = STATIC_DIR / "index.html"
+        if index_path.exists():
+            return FileResponse(index_path)
+        return JSONResponse(status_code=404, content={"error": "Not found"})
 
     return app
 

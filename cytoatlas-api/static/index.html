@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CytoAtlas - Pan-Disease Cytokine Activity Atlas</title>
+    <meta name="description" content="Explore cytokine and secreted protein activities across 17+ million immune cells from multiple single-cell atlases">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Plotly for visualizations -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-container">
+            <a href="/" class="logo">
+                <span class="logo-icon">&#129516;</span>
+                <span class="logo-text">CytoAtlas</span>
+            </a>
+
+            <nav class="nav">
+                <a href="/" class="nav-link active" data-page="home">Home</a>
+                <a href="/explore" class="nav-link" data-page="explore">Explore</a>
+                <a href="/compare" class="nav-link" data-page="compare">Compare</a>
+                <a href="/validate" class="nav-link" data-page="validate">Validate</a>
+                <a href="/submit" class="nav-link" data-page="submit">Submit</a>
+            </nav>
+
+            <div class="header-search">
+                <input type="text" id="global-search" placeholder="Search cytokines, cell types, diseases..." class="search-input">
+                <button class="search-btn" onclick="handleSearch()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="header-actions">
+                <a href="/docs" class="btn btn-secondary" target="_blank">API Docs</a>
+                <!-- <a href="/login" class="btn btn-primary">Login</a> -->
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main id="app">
+        <!-- Content will be loaded here by router -->
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-container">
+            <div class="footer-info">
+                <p>&copy; 2025 CytoAtlas. Developed at NIH/NCI.</p>
+                <p>Data from CIMA, Inflammation Atlas, and scAtlas.</p>
+            </div>
+            <div class="footer-links">
+                <a href="/docs" target="_blank">API Documentation</a>
+                <a href="https://github.com/psychemistz/cytoatlas" target="_blank">GitHub</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Templates -->
+    <template id="home-template">
+        <div class="page home-page">
+            <!-- Hero Section -->
+            <section class="hero">
+                <div class="hero-content">
+                    <h1 class="hero-title">Pan-Disease Cytokine Activity Atlas</h1>
+                    <p class="hero-subtitle">
+                        Explore cytokine and secreted protein activities across
+                        <strong>17+ million immune cells</strong> from multiple single-cell atlases
+                    </p>
+
+                    <div class="hero-search">
+                        <input type="text" id="hero-search-input" placeholder="Search IFNG, IL17A, CD8, Th17, COVID-19..." class="hero-search-input">
+                        <button class="hero-search-btn" onclick="handleHeroSearch()">Search</button>
+                    </div>
+
+                    <div class="hero-examples">
+                        <span>Try:</span>
+                        <button class="example-btn" onclick="searchExample('IFNG')">IFNG</button>
+                        <button class="example-btn" onclick="searchExample('IL17A')">IL17A</button>
+                        <button class="example-btn" onclick="searchExample('TNF')">TNF</button>
+                        <button class="example-btn" onclick="searchExample('CD8')">CD8</button>
+                        <button class="example-btn" onclick="searchExample('Monocyte')">Monocyte</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Stats Section -->
+            <section class="stats-section">
+                <div class="stats-container">
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-cells">17.8M</div>
+                        <div class="stat-label">Total Cells</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-cytokines">44</div>
+                        <div class="stat-label">Cytokines (CytoSig)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-proteins">1,249</div>
+                        <div class="stat-label">Proteins (SecAct)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-diseases">12+</div>
+                        <div class="stat-label">Diseases</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Atlas Cards Section -->
+            <section class="atlases-section">
+                <h2 class="section-title">Core Atlases</h2>
+                <div class="atlas-cards" id="atlas-cards">
+                    <!-- Cards will be loaded dynamically -->
+                    <div class="loading">Loading atlases...</div>
+                </div>
+            </section>
+
+            <!-- Features Section -->
+            <section class="features-section">
+                <h2 class="section-title">What You Can Do</h2>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">&#128270;</div>
+                        <h3>Search</h3>
+                        <p>Query cytokines, cell types, and diseases across all atlases</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">&#128202;</div>
+                        <h3>Explore</h3>
+                        <p>Interactive heatmaps, scatter plots, and correlation analyses</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">&#128200;</div>
+                        <h3>Compare</h3>
+                        <p>Cross-atlas comparison of cytokine activities</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">&#9989;</div>
+                        <h3>Validate</h3>
+                        <p>5-type credibility assessment for inference quality</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </template>
+
+    <template id="explore-template">
+        <div class="page explore-page">
+            <div class="page-header">
+                <h1>Explore Atlases</h1>
+                <p>Browse and analyze cytokine activities across single-cell atlases</p>
+            </div>
+
+            <div class="filters-bar">
+                <select id="filter-type" class="filter-select">
+                    <option value="all">All Types</option>
+                    <option value="builtin">Core Atlases</option>
+                    <option value="published">Published</option>
+                    <option value="user">Community</option>
+                </select>
+                <select id="filter-tissue" class="filter-select">
+                    <option value="all">All Tissues</option>
+                    <option value="pbmc">PBMC</option>
+                    <option value="tissue">Tissue</option>
+                </select>
+                <select id="sort-by" class="filter-select">
+                    <option value="cells">Sort by Cells</option>
+                    <option value="name">Sort by Name</option>
+                    <option value="grade">Sort by Grade</option>
+                </select>
+            </div>
+
+            <div class="atlas-list" id="atlas-list">
+                <!-- Atlas cards will be loaded here -->
+                <div class="loading">Loading atlases...</div>
+            </div>
+        </div>
+    </template>
+
+    <template id="atlas-detail-template">
+        <div class="page atlas-detail-page">
+            <div class="atlas-header" id="atlas-header">
+                <!-- Atlas header will be loaded -->
+            </div>
+
+            <div class="analysis-tabs" id="analysis-tabs">
+                <!-- Tabs will be loaded based on atlas -->
+            </div>
+
+            <div class="analysis-content" id="analysis-content">
+                <!-- Analysis panels will be loaded here -->
+            </div>
+        </div>
+    </template>
+
+    <template id="validate-template">
+        <div class="page validate-page">
+            <div class="page-header">
+                <h1>Validation & Credibility Assessment</h1>
+                <p>Assess the quality and reliability of CytoSig/SecAct inferences</p>
+            </div>
+
+            <div class="validation-controls">
+                <select id="val-atlas" class="filter-select">
+                    <option value="">Select Atlas</option>
+                </select>
+                <select id="val-signature" class="filter-select">
+                    <option value="">Select Signature</option>
+                </select>
+                <select id="val-type" class="filter-select">
+                    <option value="CytoSig">CytoSig</option>
+                    <option value="SecAct">SecAct</option>
+                </select>
+            </div>
+
+            <div class="validation-summary" id="validation-summary">
+                <!-- Summary will be loaded -->
+            </div>
+
+            <div class="validation-panels" id="validation-panels">
+                <!-- 6 validation panels -->
+            </div>
+        </div>
+    </template>
+
+    <template id="compare-template">
+        <div class="page compare-page">
+            <div class="page-header">
+                <h1>Cross-Atlas Comparison</h1>
+                <p>Compare cytokine activities across different atlases and cohorts</p>
+            </div>
+
+            <div class="compare-content" id="compare-content">
+                <!-- Comparison panels will be loaded -->
+            </div>
+        </div>
+    </template>
+
+    <template id="submit-template">
+        <div class="page submit-page">
+            <div class="page-header">
+                <h1>Submit Your Dataset</h1>
+                <p>Upload your single-cell dataset for CytoSig/SecAct activity inference</p>
+            </div>
+
+            <div class="submit-form">
+                <div class="upload-zone" id="upload-zone">
+                    <div class="upload-icon">&#128193;</div>
+                    <p>Drag and drop H5AD file here, or click to browse</p>
+                    <p class="upload-hint">Supported format: .h5ad (AnnData) | Max size: 50 GB</p>
+                    <input type="file" id="file-input" accept=".h5ad" hidden>
+                </div>
+
+                <div class="submit-fields">
+                    <div class="form-group">
+                        <label for="dataset-name">Dataset Name</label>
+                        <input type="text" id="dataset-name" placeholder="My Immune Atlas">
+                    </div>
+                    <div class="form-group">
+                        <label for="dataset-desc">Description</label>
+                        <textarea id="dataset-desc" placeholder="Single-cell profiling of..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="cell-type-col">Cell Type Column</label>
+                        <select id="cell-type-col">
+                            <option value="">Auto-detect from obs</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="sample-col">Sample Column</label>
+                        <select id="sample-col">
+                            <option value="">Auto-detect from obs</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Visibility</label>
+                        <div class="radio-group">
+                            <label><input type="radio" name="visibility" value="private" checked> Private</label>
+                            <label><input type="radio" name="visibility" value="public"> Public</label>
+                            <label><input type="radio" name="visibility" value="unlisted"> Unlisted</label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="doi">Publication DOI (optional)</label>
+                        <input type="text" id="doi" placeholder="10.1038/s41586-024-xxxxx">
+                    </div>
+                </div>
+
+                <div class="submit-actions">
+                    <button class="btn btn-secondary" onclick="router.navigate('/')">Cancel</button>
+                    <button class="btn btn-primary" onclick="submitDataset()" disabled>Submit for Processing</button>
+                </div>
+
+                <p class="submit-note">Processing typically takes 2-4 hours per million cells</p>
+            </div>
+        </div>
+    </template>
+
+    <!-- JavaScript -->
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/router.js"></script>
+    <script src="/static/js/components/atlas-card.js"></script>
+    <script src="/static/js/components/heatmap.js"></script>
+    <script src="/static/js/components/scatter.js"></script>
+    <script src="/static/js/pages/home.js"></script>
+    <script src="/static/js/pages/explore.js"></script>
+    <script src="/static/js/pages/atlas-detail.js"></script>
+    <script src="/static/js/pages/validate.js"></script>
+    <script src="/static/js/pages/compare.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
