@@ -244,6 +244,10 @@ const AtlasDetailPage = {
                 <div class="panel-header">
                     <h3>CIMA: Chinese Immune Multi-omics Atlas</h3>
                     <p>Comprehensive immune monitoring atlas of healthy donors with matched blood biochemistry and plasma metabolomics data.</p>
+                    <p class="citation" style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">
+                        <strong>Citation:</strong> Yin et al. (2026) <em>Science</em>.
+                        <a href="https://www.science.org/doi/10.1126/science.adt3130" target="_blank" rel="noopener">DOI: 10.1126/science.adt3130</a>
+                    </p>
                 </div>
 
                 <div class="stats-grid">
