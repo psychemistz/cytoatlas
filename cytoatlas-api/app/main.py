@@ -1,0 +1,151 @@
+"""FastAPI application factory and entry point."""
+
+from contextlib import asynccontextmanager
+from typing import AsyncGenerator
+
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from app.config import get_settings
+from app.core.cache import CacheService
+from app.core.database import close_db, init_db
+from app.routers import (
+    auth_router,
+    cima_router,
+    cross_atlas_router,
+    export_router,
+    health_router,
+    inflammation_router,
+    scatlas_router,
+    validation_router,
+)
+
+settings = get_settings()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator:
+    """Application lifespan manager."""
+    # Startup
+    print(f"Starting {settings.app_name} v{settings.app_version}")
+    print(f"Environment: {settings.environment}")
+    print(f"Data path: {settings.viz_data_path}")
+
+    # Initialize database (if configured)
+    if settings.use_database:
+        try:
+            await init_db()
+            print("Database: Connected")
+        except Exception as e:
+            print(f"Database: Skipped ({e})")
+    else:
+        print("Database: Not configured (running without persistence)")
+
+    # Initialize cache
+    try:
+        cache = CacheService()
+        await cache.connect()
+    except Exception as e:
+        print(f"Cache: Error ({e})")
+
+    yield
+
+    # Shutdown
+    print("Shutting down...")
+    try:
+        cache = CacheService()
+        await cache.disconnect()
+    except Exception:
+        pass
+
+    if settings.use_database:
+        try:
+            await close_db()
+        except Exception:
+            pass
+
+
+def create_app() -> FastAPI:
+    """Create and configure FastAPI application."""
+    app = FastAPI(
+        title=settings.app_name,
+        description=(
+            "REST API for the CytoAtlas single-cell cytokine activity visualization. "
+            "Provides access to computed cytokine and secreted protein activity signatures "
+            "across three major human immune cell atlases: CIMA, Inflammation Atlas, and scAtlas."
+        ),
+        version=settings.app_version,
+        docs_url="/docs",
+        redoc_url="/redoc",
+        openapi_url="/openapi.json",
+        lifespan=lifespan,
+    )
+
+    # CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Global exception handler
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        """Handle uncaught exceptions."""
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": "Internal server error",
+                "detail": str(exc) if settings.debug else None,
+            },
+        )
+
+    # Include routers
+    api_prefix = settings.api_v1_prefix
+
+    app.include_router(health_router, prefix=api_prefix)
+    app.include_router(auth_router, prefix=api_prefix)
+    app.include_router(cima_router, prefix=api_prefix)
+    app.include_router(inflammation_router, prefix=api_prefix)
+    app.include_router(scatlas_router, prefix=api_prefix)
+    app.include_router(cross_atlas_router, prefix=api_prefix)
+    app.include_router(validation_router, prefix=api_prefix)
+    app.include_router(export_router, prefix=api_prefix)
+
+    # Root endpoint
+    @app.get("/")
+    async def root() -> dict:
+        """API root endpoint."""
+        return {
+            "name": settings.app_name,
+            "version": settings.app_version,
+            "docs": "/docs",
+            "api": settings.api_v1_prefix,
+        }
+
+    return app
+
+
+# Create app instance
+app = create_app()
+
+
+def main() -> None:
+    """Run the application with uvicorn."""
+    import uvicorn
+
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=settings.debug,
+        workers=1 if settings.debug else 4,
+    )
+
+
+if __name__ == "__main__":
+    main()

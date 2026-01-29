@@ -1,0 +1,109 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      target: production
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://cytoatlas:cytoatlas@postgres:5432/cytoatlas
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - ENVIRONMENT=development
+      - DEBUG=true
+    volumes:
+      # Mount data directories (read-only)
+      - /data/Jiang_Lab/Data/Seongyong:/data/Jiang_Lab/Data/Seongyong:ro
+      - /vf/users/parks34/projects/2secactpy/results:/app/results:ro
+      - /vf/users/parks34/projects/2secactpy/visualization/data:/app/visualization/data:ro
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - cytoatlas
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=cytoatlas
+      - POSTGRES_PASSWORD=cytoatlas
+      - POSTGRES_DB=cytoatlas
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - cytoatlas
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cytoatlas"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - cytoatlas
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: Nginx reverse proxy for production
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - api
+    networks:
+      - cytoatlas
+    restart: unless-stopped
+    profiles:
+      - production
+
+  # Optional: Celery worker for background tasks
+  celery-worker:
+    build:
+      context: .
+      target: production
+    command: celery -A app.tasks.celery worker --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://cytoatlas:cytoatlas@postgres:5432/cytoatlas
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    volumes:
+      - /data/Jiang_Lab/Data/Seongyong:/data/Jiang_Lab/Data/Seongyong:ro
+      - /vf/users/parks34/projects/2secactpy/results:/app/results:ro
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - cytoatlas
+    restart: unless-stopped
+    profiles:
+      - workers
+
+networks:
+  cytoatlas:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:

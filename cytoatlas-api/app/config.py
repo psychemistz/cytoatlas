@@ -1,0 +1,180 @@
+"""Application configuration using Pydantic Settings."""
+
+from functools import lru_cache
+from pathlib import Path
+from typing import Literal
+
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Application settings loaded from environment variables."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    # Application
+    app_name: str = "CytoAtlas API"
+    app_version: str = "0.1.0"
+    debug: bool = False
+    environment: Literal["development", "staging", "production"] = "development"
+
+    @field_validator("environment", mode="before")
+    @classmethod
+    def normalize_environment(cls, v: str) -> str:
+        """Normalize environment value, mapping HPC values to standard ones."""
+        if isinstance(v, str):
+            v = v.strip().strip('"').strip("'").lower()
+            # Map HPC-specific values
+            if v in ("batch", "prod", "prd"):
+                return "production"
+            if v in ("dev", "local"):
+                return "development"
+            if v in ("stage", "stg"):
+                return "staging"
+        return v
+
+    @field_validator("debug", mode="before")
+    @classmethod
+    def normalize_debug(cls, v) -> bool:
+        """Normalize debug value, handling quoted strings."""
+        if isinstance(v, str):
+            v = v.strip().strip('"').strip("'").lower()
+            return v in ("true", "1", "yes", "on")
+        return bool(v)
+
+    @field_validator("api_v1_prefix", mode="before")
+    @classmethod
+    def normalize_api_prefix(cls, v: str) -> str:
+        """Strip quotes from API prefix."""
+        if isinstance(v, str):
+            return v.strip().strip('"').strip("'")
+
+    # API
+    api_v1_prefix: str = "/api/v1"
+    allowed_origins: str = Field(default="*")  # Comma-separated or "*" for all
+
+    @property
+    def cors_origins(self) -> list[str]:
+        """Get CORS origins as list."""
+        if self.allowed_origins == "*":
+            return ["*"]
+        return [o.strip() for o in self.allowed_origins.split(",")]
+
+    # Database (optional - leave empty for no database)
+    database_url: str | None = Field(default=None)
+    database_pool_size: int = 5
+    database_max_overflow: int = 10
+    database_pool_timeout: int = 30
+
+    # Redis (optional - leave empty for in-memory cache)
+    redis_url: str | None = Field(default=None)
+    redis_cache_ttl: int = 3600  # 1 hour default
+
+    @property
+    def use_database(self) -> bool:
+        """Check if database is configured."""
+        return bool(self.database_url)
+
+    @property
+    def use_redis(self) -> bool:
+        """Check if Redis is configured."""
+        return bool(self.redis_url)
+
+    # Authentication
+    secret_key: str = Field(default="change-me-in-production-use-openssl-rand-hex-32")
+    algorithm: str = "HS256"
+    access_token_expire_minutes: int = 30
+    api_key_header: str = "X-API-Key"
+
+    # Rate Limiting
+    rate_limit_requests: int = 100
+    rate_limit_window: int = 60  # seconds
+
+    # Data Paths
+    h5ad_base_path: Path = Field(default=Path("/data/Jiang_Lab/Data/Seongyong"))
+    results_base_path: Path = Field(
+        default=Path("/vf/users/parks34/projects/2secactpy/results")
+    )
+    viz_data_path: Path = Field(
+        default=Path("/vf/users/parks34/projects/2secactpy/visualization/data")
+    )
+
+    # CIMA paths
+    cima_h5ad: Path = Field(
+        default=Path(
+            "/data/Jiang_Lab/Data/Seongyong/CIMA/Cell_Atlas/"
+            "CIMA_RNA_6484974cells_36326genes_compressed.h5ad"
+        )
+    )
+    cima_biochem: Path = Field(
+        default=Path(
+            "/data/Jiang_Lab/Data/Seongyong/CIMA/Cell_Atlas/"
+            "CIMA_Sample_Blood_Biochemistry_Results.csv"
+        )
+    )
+    cima_metabolites: Path = Field(
+        default=Path(
+            "/data/Jiang_Lab/Data/Seongyong/CIMA/Cell_Atlas/"
+            "CIMA_Sample_Plasma_Metabolites_and_Lipids_Results.csv"
+        )
+    )
+
+    # Inflammation Atlas paths
+    inflammation_main_h5ad: Path = Field(
+        default=Path(
+            "/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/"
+            "INFLAMMATION_ATLAS_main_afterQC.h5ad"
+        )
+    )
+    inflammation_validation_h5ad: Path = Field(
+        default=Path(
+            "/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/"
+            "INFLAMMATION_ATLAS_validation_afterQC.h5ad"
+        )
+    )
+    inflammation_external_h5ad: Path = Field(
+        default=Path(
+            "/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/"
+            "INFLAMMATION_ATLAS_external_afterQC.h5ad"
+        )
+    )
+
+    # scAtlas paths
+    scatlas_normal_h5ad: Path = Field(
+        default=Path(
+            "/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/igt_s9_fine_counts.h5ad"
+        )
+    )
+    scatlas_cancer_h5ad: Path = Field(
+        default=Path(
+            "/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/PanCancer_igt_s9_fine_counts.h5ad"
+        )
+    )
+
+    # Celery
+    celery_broker_url: str = Field(default="redis://localhost:6379/1")
+    celery_result_backend: str = Field(default="redis://localhost:6379/2")
+
+    @property
+    def cima_results_dir(self) -> Path:
+        return self.results_base_path / "cima"
+
+    @property
+    def inflammation_results_dir(self) -> Path:
+        return self.results_base_path / "inflammation"
+
+    @property
+    def scatlas_results_dir(self) -> Path:
+        return self.results_base_path / "scatlas"
+
+
+@lru_cache
+def get_settings() -> Settings:
+    """Get cached settings instance."""
+    return Settings()

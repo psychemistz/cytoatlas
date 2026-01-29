@@ -1,0 +1,64 @@
+Bootstrap: docker
+From: python:3.11-slim
+
+%labels
+    Author Seongyong Park
+    Version 0.1.0
+    Description CytoAtlas API - FastAPI server for single-cell cytokine activity visualization
+
+%files
+    ../app /app/app
+    ../pyproject.toml /app/pyproject.toml
+    ../alembic /app/alembic
+    ../alembic.ini /app/alembic.ini
+
+%post
+    # Install system dependencies
+    apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        curl \
+        && rm -rf /var/lib/apt/lists/*
+
+    # Install Python dependencies
+    cd /app
+    pip install --no-cache-dir -e .
+
+    # Clean up
+    apt-get remove -y build-essential
+    apt-get autoremove -y
+    apt-get clean
+
+%environment
+    export PATH="/app/.venv/bin:$PATH"
+    export PYTHONPATH="/app:$PYTHONPATH"
+    export PYTHONUNBUFFERED=1
+
+%runscript
+    cd /app
+    exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
+
+%startscript
+    cd /app
+    exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
+
+%help
+    CytoAtlas API Server
+
+    Build:
+        singularity build cytoatlas-api.sif cytoatlas-api.def
+
+    Run:
+        singularity run cytoatlas-api.sif
+
+    Run with custom port:
+        PORT=8080 singularity run cytoatlas-api.sif
+
+    Run with bind mounts:
+        singularity run \
+            --bind /data/Jiang_Lab/Data/Seongyong:/data/Jiang_Lab/Data/Seongyong:ro \
+            --bind /vf/users/parks34/projects/2secactpy/results:/app/results:ro \
+            --bind /vf/users/parks34/projects/2secactpy/visualization/data:/app/visualization/data:ro \
+            cytoatlas-api.sif
+
+    Interactive shell:
+        singularity shell cytoatlas-api.sif
