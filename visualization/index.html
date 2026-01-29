@@ -2612,6 +2612,7 @@
                 updateInflamCelltypeCorrelationHeatmap();
                 initInflamBoxplotSignatures();
                 updateInflamStratifiedBoxplot();
+                updateInflamCelltypeStratifiedHeatmap();
                 updateInflamDisease();
                 updateInflamDifferential();
                 updateTreatmentResponse();
@@ -5410,6 +5411,19 @@
             if (!data) return;
             inflamBoxplotSignatures.cytosig = data.cytosig_signatures || [];
             inflamBoxplotSignatures.secact = data.secact_signatures || [];
+
+            // Populate cell type dropdown from actual data (not metadata which may be incomplete)
+            const ageData = data.age || [];
+            const cellTypesFromData = [...new Set(ageData.map(d => d.cell_type).filter(ct => ct))].sort();
+            // Ensure 'All' is first
+            const cellTypes = ['All', ...cellTypesFromData.filter(ct => ct !== 'All')];
+
+            const select = document.getElementById('inflam-boxplot-celltype');
+            if (select) {
+                select.innerHTML = cellTypes.map(ct =>
+                    `<option value="${ct}"${ct === 'All' ? ' selected' : ''}>${ct}${ct === 'All' ? ' (sample-level)' : ''}</option>`
+                ).join('');
+            }
         }
 
         function getInflamBoxplotSignatures() {
@@ -5440,6 +5454,7 @@
             document.getElementById('inflam-boxplot-search').value = sig;
             document.getElementById('inflam-boxplot-suggestions').style.display = 'none';
             updateInflamStratifiedBoxplot();
+            updateInflamCelltypeStratifiedHeatmap();
         }
 
         function updateInflamStratifiedBoxplot() {
@@ -5514,7 +5529,7 @@
 
             const stratifyBy = document.getElementById('inflam-stratify-by')?.value || 'age';
             const sigType = document.getElementById('inflam-boxplot-sig-type')?.value || 'CytoSig';
-            const signature = document.getElementById('inflam-boxplot-signature-search')?.value || 'IFNG';
+            const signature = document.getElementById('inflam-boxplot-search')?.value || 'IFNG';
 
             // Update titles
             const titleEl = document.getElementById('inflam-celltype-stratified-title');
@@ -6132,11 +6147,19 @@
             document.getElementById('inflam-ct-corr-metric')?.addEventListener('change', updateInflamCelltypeCorrelationHeatmap);
 
             // Control changes - Inflammation Age/BMI Stratified
-            document.getElementById('inflam-stratify-by')?.addEventListener('change', updateInflamStratifiedBoxplot);
+            document.getElementById('inflam-stratify-by')?.addEventListener('change', () => {
+                updateInflamStratifiedBoxplot();
+                updateInflamCelltypeStratifiedHeatmap();
+            });
+            document.getElementById('inflam-boxplot-celltype')?.addEventListener('change', () => {
+                updateInflamStratifiedBoxplot();
+                updateInflamCelltypeStratifiedHeatmap();
+            });
             document.getElementById('inflam-boxplot-sig-type')?.addEventListener('change', () => {
                 const input = document.getElementById('inflam-boxplot-search');
                 if (input) input.value = 'IFNG';
                 updateInflamStratifiedBoxplot();
+                updateInflamCelltypeStratifiedHeatmap();
             });
             const inflamBoxplotSearch = document.getElementById('inflam-boxplot-search');
             if (inflamBoxplotSearch) {
@@ -6146,6 +6169,7 @@
                     if (e.key === 'Enter') {
                         document.getElementById('inflam-boxplot-suggestions').style.display = 'none';
                         updateInflamStratifiedBoxplot();
+                        updateInflamCelltypeStratifiedHeatmap();
                     }
                 });
                 inflamBoxplotSearch.addEventListener('blur', () => {
