@@ -1258,7 +1258,7 @@ const AtlasDetailPage = {
         content.innerHTML = `
             <div class="panel-header">
                 <h3>Metabolite Correlations</h3>
-                <p>Top 500 cytokine-metabolite correlations from plasma metabolomics data</p>
+                <p>Top 500 cytokine-metabolite correlations from plasma metabolomics data (${this.signatureType})</p>
             </div>
 
             <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
@@ -1287,29 +1287,31 @@ const AtlasDetailPage = {
             <div class="viz-grid">
                 <div class="sub-panel">
                     <div class="panel-header">
+                        <h4>Metabolite Correlation Network</h4>
+                        <p>Force-directed graph of cytokine-metabolite associations</p>
+                    </div>
+                    <div id="metabolite-network" class="plot-container" style="height: 550px;"></div>
+                </div>
+                <div class="sub-panel">
+                    <div class="panel-header">
                         <h4>Top Metabolite Correlations</h4>
                         <p>Ranked by absolute correlation strength</p>
                     </div>
                     <div id="metabolite-lollipop" class="plot-container" style="height: 550px;"></div>
                 </div>
-                <div class="sub-panel">
-                    <div class="panel-header">
-                        <h4>Correlation Heatmap</h4>
-                        <p>Cytokines × Metabolites</p>
-                    </div>
-                    <div id="metabolite-heatmap" class="plot-container" style="height: 550px;"></div>
-                </div>
             </div>
         `;
 
-        // Load metabolite data
+        // Load metabolite data with current signature type
         this.metaboliteData = await API.get('/cima/correlations/metabolites', { signature_type: this.signatureType, limit: 500 });
         this.updateMetabolitePlots();
     },
 
     updateMetabolitePlots() {
-        const data = this.metaboliteData;
-        if (!data || !data.correlations) {
+        // API returns list directly, not {correlations: [...]}
+        const data = Array.isArray(this.metaboliteData) ? this.metaboliteData : (this.metaboliteData?.correlations || []);
+        if (!data || data.length === 0) {
+            document.getElementById('metabolite-network').innerHTML = '<p class="loading">No metabolite data</p>';
             document.getElementById('metabolite-lollipop').innerHTML = '<p class="loading">No metabolite data</p>';
             return;
         }
@@ -1318,33 +1320,39 @@ const AtlasDetailPage = {
         const category = document.getElementById('metab-category')?.value || 'all';
 
         // Filter by threshold
-        let filtered = data.correlations.filter(d => Math.abs(d.rho || d.correlation) >= threshold);
+        let filtered = data.filter(d => Math.abs(d.rho || d.correlation) >= threshold);
 
-        // Filter by category (simple keyword matching)
+        // Filter by category using prefix matching (like visualization/index.html)
         if (category !== 'all') {
-            const categoryKeywords = {
-                'lipid': ['lipid', 'fatty', 'cholesterol', 'phospho', 'sphingo', 'sterol', 'PS ', 'PC ', 'PE ', 'LPC', 'LPE'],
-                'amino_acid': ['amino', 'amine', 'glutam', 'glycine', 'alanine', 'serine', 'proline', 'valine', 'leucine', 'isoleucine'],
-                'carbohydrate': ['glucose', 'fructose', 'sugar', 'sacchar', 'hexose', 'pentose'],
-                'nucleotide': ['nucleotide', 'purine', 'pyrimidine', 'adenine', 'guanine', 'cytosine', 'uracil'],
-                'cofactor': ['vitamin', 'cofactor', 'NAD', 'FAD', 'coenzyme']
+            const categoryPrefixes = {
+                'lipid': ['PS ', 'PC ', 'PE ', 'PG ', 'PI ', 'SM ', 'LPC', 'Cer', 'TG ', 'DG ', 'LPE', 'FA '],
+                'amino_acid': ['L-Histidine', 'L-Tryptophan', '3-Nitrotyrosine'],
+                'carbohydrate': ['Gluconic', 'Glucosamine', 'D-Gluconolactone', 'Glycolic', 'Citric', 'Erythronic'],
+                'nucleotide': ['ATP', 'ADP', 'AMP', 'GTP', 'GDP', 'UTP', 'CTP', 'NAD', 'NADP'],
+                'cofactor': ['CoA', 'FAD', 'FMN', 'B12', 'Biotin', 'Folate', 'Thiamine']
             };
-            const keywords = categoryKeywords[category] || [];
+            const prefixes = categoryPrefixes[category] || [];
             filtered = filtered.filter(d => {
-                const metab = (d.metabolite || d.feature || '').toLowerCase();
-                return keywords.some(k => metab.includes(k.toLowerCase()));
+                const metab = d.metabolite || d.feature || '';
+                return prefixes.some(p => metab.startsWith(p));
             });
         }
 
-        // Sort by absolute correlation
+        // Limit for network visualization
+        const networkData = filtered.slice(0, 100);
+
+        // D3 Force-directed network
+        this.renderMetaboliteNetwork(networkData, threshold);
+
+        // Sort by absolute correlation for lollipop
         filtered.sort((a, b) => Math.abs(b.rho || b.correlation) - Math.abs(a.rho || a.correlation));
         const top50 = filtered.slice(0, 50);
 
         // Lollipop chart
         if (top50.length > 0) {
-            const labels = top50.map(d => `${d.signature || d.protein} × ${d.metabolite || d.feature}`);
+            const labels = top50.map(d => `${d.signature} × ${d.metabolite}`);
             const values = top50.map(d => d.rho || d.correlation);
-            const colors = values.map(v => v >= 0 ? '#ef4444' : '#2563eb');
+            const colors = values.map(v => v >= 0 ? '#b2182b' : '#2166ac');
 
             Plotly.newPlot('metabolite-lollipop', [{
                 type: 'bar',
@@ -1357,23 +1365,138 @@ const AtlasDetailPage = {
                 title: `Top ${top50.length} Correlations (|ρ| ≥ ${threshold})`,
                 xaxis: { title: 'Spearman ρ', range: [-1, 1] },
                 yaxis: { tickfont: { size: 9 } },
-                margin: { l: 200, r: 20, t: 40, b: 40 },
+                margin: { l: 180, r: 20, t: 40, b: 40 },
                 font: { family: 'Inter, sans-serif' }
             }, { responsive: true });
         } else {
             document.getElementById('metabolite-lollipop').innerHTML = '<p class="loading">No correlations above threshold</p>';
         }
+    },
 
-        // Heatmap
-        if (data.z && data.x && data.y) {
-            Heatmap.create('metabolite-heatmap', data, {
-                title: 'Metabolite Correlations',
-                colorbarTitle: 'Spearman ρ',
-                symmetric: true,
-            });
-        } else {
-            document.getElementById('metabolite-heatmap').innerHTML = '<p class="loading">Heatmap data not available</p>';
+    renderMetaboliteNetwork(data, threshold) {
+        const container = document.getElementById('metabolite-network');
+        if (!container) return;
+
+        // Clear previous content
+        container.innerHTML = '';
+
+        if (!data || data.length === 0) {
+            container.innerHTML = '<p class="loading">No correlations above threshold</p>';
+            return;
         }
+
+        // Build nodes and links
+        const nodesSet = new Set();
+        data.forEach(d => {
+            nodesSet.add(d.signature);
+            nodesSet.add(d.metabolite);
+        });
+
+        const nodes = Array.from(nodesSet).map(id => ({
+            id,
+            type: data.some(d => d.signature === id) ? 'cytokine' : 'metabolite'
+        }));
+
+        const links = data.map(d => ({
+            source: d.signature,
+            target: d.metabolite,
+            value: Math.abs(d.rho),
+            sign: (d.rho || 0) > 0 ? 'positive' : 'negative'
+        }));
+
+        // Set up SVG
+        const width = container.clientWidth || 500;
+        const height = 500;
+
+        const svg = d3.select(container)
+            .append('svg')
+            .attr('width', width)
+            .attr('height', height);
+
+        // Force simulation
+        const simulation = d3.forceSimulation(nodes)
+            .force('link', d3.forceLink(links).id(d => d.id).distance(80))
+            .force('charge', d3.forceManyBody().strength(-200))
+            .force('center', d3.forceCenter(width / 2, height / 2));
+
+        // Draw links
+        const link = svg.append('g')
+            .selectAll('line')
+            .data(links)
+            .join('line')
+            .attr('stroke', d => d.sign === 'positive' ? '#b2182b' : '#2166ac')
+            .attr('stroke-opacity', 0.6)
+            .attr('stroke-width', d => d.value * 3);
+
+        // Draw nodes
+        const node = svg.append('g')
+            .selectAll('circle')
+            .data(nodes)
+            .join('circle')
+            .attr('r', d => d.type === 'cytokine' ? 8 : 5)
+            .attr('fill', d => d.type === 'cytokine' ? '#1f77b4' : '#ff7f0e')
+            .call(d3.drag()
+                .on('start', (event) => {
+                    if (!event.active) simulation.alphaTarget(0.3).restart();
+                    event.subject.fx = event.subject.x;
+                    event.subject.fy = event.subject.y;
+                })
+                .on('drag', (event) => {
+                    event.subject.fx = event.x;
+                    event.subject.fy = event.y;
+                })
+                .on('end', (event) => {
+                    if (!event.active) simulation.alphaTarget(0);
+                    event.subject.fx = null;
+                    event.subject.fy = null;
+                }));
+
+        node.append('title').text(d => d.id);
+
+        // Labels for cytokines only
+        const labels = svg.append('g')
+            .selectAll('text')
+            .data(nodes.filter(d => d.type === 'cytokine'))
+            .join('text')
+            .text(d => d.id)
+            .attr('font-size', '10px')
+            .attr('dx', 10)
+            .attr('dy', 3);
+
+        // Legend annotations
+        const anno1 = svg.append('text').attr('x', 10).attr('y', height - 45).attr('font-size', '11px');
+        anno1.append('tspan').attr('fill', '#666').text('Lines: ');
+        anno1.append('tspan').attr('fill', '#b2182b').text('red');
+        anno1.append('tspan').attr('fill', '#666').text(' = positive, ');
+        anno1.append('tspan').attr('fill', '#2166ac').text('blue');
+        anno1.append('tspan').attr('fill', '#666').text(' = negative');
+
+        const anno2 = svg.append('text').attr('x', 10).attr('y', height - 28).attr('font-size', '11px');
+        anno2.append('tspan').attr('fill', '#666').text('Nodes: ');
+        anno2.append('tspan').attr('fill', '#1f77b4').text('blue');
+        anno2.append('tspan').attr('fill', '#666').text(' = cytokine, ');
+        anno2.append('tspan').attr('fill', '#ff7f0e').text('orange');
+        anno2.append('tspan').attr('fill', '#666').text(' = metabolite');
+
+        const anno3 = svg.append('text').attr('x', 10).attr('y', height - 11).attr('font-size', '11px').attr('fill', '#666');
+        anno3.text(`Showing ${data.length} correlations (|ρ| ≥ ${threshold})`);
+
+        // Update positions on tick
+        simulation.on('tick', () => {
+            link
+                .attr('x1', d => d.source.x)
+                .attr('y1', d => d.source.y)
+                .attr('x2', d => d.target.x)
+                .attr('y2', d => d.target.y);
+
+            node
+                .attr('cx', d => d.x)
+                .attr('cy', d => d.y);
+
+            labels
+                .attr('x', d => d.x)
+                .attr('y', d => d.y);
+        });
     },
 
     // Store differential data
@@ -1582,9 +1705,9 @@ const AtlasDetailPage = {
         };
         const cytokineFilter = subset === 'all' ? null : subsetMap[subset] || null;
 
-        // Filter and combine data
+        // Filter and combine data (API returns arrays directly)
         let biochemFiltered = (biochemData || []).filter(d => Math.abs(d.rho) >= threshold);
-        let metabFiltered = ((metabData?.correlations) || []).filter(d => Math.abs(d.rho || d.correlation) >= threshold);
+        let metabFiltered = (Array.isArray(metabData) ? metabData : (metabData?.correlations || [])).filter(d => Math.abs(d.rho || d.correlation) >= threshold);
 
         if (cytokineFilter) {
             biochemFiltered = biochemFiltered.filter(d => cytokineFilter.includes(d.signature));

@@ -117,8 +117,28 @@ class CIMAService(BaseService):
         """
         data = await self.load_json("cima_metabolites_top.json")
 
+        # Transform field names to match schema
+        # JSON has: protein, feature, signature (type), rho, pvalue, qvalue, n
+        # Schema expects: signature, metabolite, signature_type, rho, p_value, q_value
+        transformed = []
+        for r in data:
+            # The JSON "signature" field contains the type (CytoSig/SecAct)
+            data_sig_type = r.get("signature", "CytoSig")
+
+            record = {
+                "cell_type": r.get("cell_type", "All"),
+                "signature": r.get("protein"),  # Cytokine/protein name
+                "signature_type": data_sig_type,
+                "metabolite": r.get("feature"),  # Metabolite name
+                "metabolite_class": r.get("metabolite_class"),
+                "rho": r.get("rho", 0),
+                "pvalue": r.get("pvalue", r.get("p_value", 1)),
+                "qvalue": r.get("qvalue", r.get("q_value")),
+            }
+            transformed.append(record)
+
         # Filter by signature type
-        results = self.filter_by_signature_type(data, signature_type)
+        results = [r for r in transformed if r.get("signature_type") == signature_type]
 
         # Filter by cell type
         if cell_type:
@@ -153,10 +173,32 @@ class CIMAService(BaseService):
         """
         data = await self.load_json("cima_differential.json")
 
-        results = data
+        # Transform field names to match schema
+        # JSON has: protein, signature (type), comparison, group1, group2, log2fc, etc.
+        # Schema expects: signature (protein name), signature_type
+        transformed = []
+        for r in data:
+            # The JSON "signature" field contains the type (CytoSig/SecAct)
+            data_sig_type = r.get("signature", "CytoSig")
+
+            record = {
+                "cell_type": r.get("cell_type", "All"),
+                "signature": r.get("protein"),  # Cytokine/protein name
+                "signature_type": data_sig_type,
+                "comparison": r.get("comparison"),
+                "group1": r.get("group1"),
+                "group2": r.get("group2"),
+                "log2fc": r.get("log2fc", 0),
+                "median_g1": r.get("median_g1", 0),
+                "median_g2": r.get("median_g2", 0),
+                "pvalue": r.get("pvalue", r.get("p_value", 1)),
+                "qvalue": r.get("qvalue", r.get("q_value")),
+                "neg_log10_pval": r.get("neg_log10_pval"),
+            }
+            transformed.append(record)
 
         # Filter by signature type
-        results = self.filter_by_signature_type(results, signature_type)
+        results = [r for r in transformed if r.get("signature_type") == signature_type]
 
         # Filter by comparison
         if comparison:
