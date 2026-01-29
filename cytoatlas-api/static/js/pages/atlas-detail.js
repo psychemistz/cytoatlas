@@ -911,9 +911,10 @@ const AtlasDetailPage = {
             SecAct: secactData || [],
         };
 
-        // Build protein lists for autocomplete (data uses 'protein' field)
-        this.biochemAllProteins.CytoSig = [...new Set(this.biochemData.CytoSig.map(d => d.protein))].sort();
-        this.biochemAllProteins.SecAct = [...new Set(this.biochemData.SecAct.map(d => d.protein))].sort();
+        // Build protein lists for autocomplete
+        // API returns: signature (protein name), variable (blood marker)
+        this.biochemAllProteins.CytoSig = [...new Set(this.biochemData.CytoSig.map(d => d.signature))].sort();
+        this.biochemAllProteins.SecAct = [...new Set(this.biochemData.SecAct.map(d => d.signature))].sort();
     },
 
     showBiochemSuggestions(query) {
@@ -968,12 +969,13 @@ const AtlasDetailPage = {
         }
 
         // Get all unique proteins and their max correlations
-        // Data format: {protein, feature, rho, ...}
+        // API format: {signature (protein name), variable (blood marker), rho, ...}
         const proteinMaxCorr = {};
         data.forEach(d => {
+            const protein = d.signature;  // API uses 'signature' for protein name
             const absRho = Math.abs(d.rho);
-            if (!proteinMaxCorr[d.protein] || absRho > proteinMaxCorr[d.protein]) {
-                proteinMaxCorr[d.protein] = absRho;
+            if (!proteinMaxCorr[protein] || absRho > proteinMaxCorr[protein]) {
+                proteinMaxCorr[protein] = absRho;
             }
         });
 
@@ -999,7 +1001,7 @@ const AtlasDetailPage = {
         }
 
         // Filter data to selected proteins
-        const filteredData = data.filter(d => proteins.includes(d.protein));
+        const filteredData = data.filter(d => proteins.includes(d.signature));
 
         this.renderBiochemHeatmap('biochem-heatmap', filteredData, proteins);
     },
@@ -2347,10 +2349,10 @@ const AtlasDetailPage = {
     },
 
     renderBiochemHeatmap(containerId, data, orderedProteins = null) {
-        // Group by protein and biochem marker (feature)
-        // Data format: {protein, feature, rho, pvalue, n, qvalue, signature}
-        const proteins = orderedProteins || [...new Set(data.map(d => d.protein))];
-        const markers = [...new Set(data.map(d => d.feature || d.variable || d.marker))].filter(m => m);
+        // Group by protein and biochem marker
+        // API format: {signature (protein name), variable (blood marker), rho, pvalue, qvalue, n_samples}
+        const proteins = orderedProteins || [...new Set(data.map(d => d.signature))];
+        const markers = [...new Set(data.map(d => d.variable))].filter(m => m);
 
         if (markers.length === 0 || proteins.length === 0) {
             document.getElementById(containerId).innerHTML = '<p class="loading">No data available</p>';
@@ -2359,8 +2361,8 @@ const AtlasDetailPage = {
 
         const z = proteins.map(protein =>
             markers.map(m => {
-                const item = data.find(d => d.protein === protein && (d.feature === m || d.variable === m || d.marker === m));
-                return item ? (item.rho ?? item.correlation ?? 0) : 0;
+                const item = data.find(d => d.signature === protein && d.variable === m);
+                return item ? (item.rho ?? 0) : 0;
             })
         );
 

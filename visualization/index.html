@@ -1510,13 +1510,13 @@
 
                 <div class="two-col">
                     <div class="viz-container" style="min-height: 500px;">
-                        <div class="viz-title">Differential Activity</div>
-                        <div class="viz-subtitle">Volcano plot showing effect size and significance</div>
+                        <div class="viz-title" id="inflam-diff-volcano-title">Differential Activity</div>
+                        <div class="viz-subtitle" id="inflam-diff-volcano-subtitle">Volcano plot showing effect size and significance</div>
                         <div id="inflam-diff-volcano" class="loading">Loading...</div>
                     </div>
                     <div class="viz-container" style="min-height: 500px;">
-                        <div class="viz-title">Top Differential Signatures</div>
-                        <div class="viz-subtitle">Sorted by significance (|log2FC| × -log10 p)</div>
+                        <div class="viz-title" id="inflam-diff-bar-title">Top Differential Signatures</div>
+                        <div class="viz-subtitle" id="inflam-diff-bar-subtitle">Sorted by significance (|log2FC| × -log10 p)</div>
                         <div id="inflam-diff-bar" class="loading">Loading...</div>
                     </div>
                 </div>
@@ -2614,6 +2614,7 @@
                 updateInflamStratifiedBoxplot();
                 updateInflamCelltypeStratifiedHeatmap();
                 updateInflamDisease();
+                initInflamDifferentialDiseases();
                 updateInflamDifferential();
                 updateTreatmentResponse();
                 updateDiseaseSankey();
@@ -5833,6 +5834,20 @@
             }, {responsive: true});
         }
 
+        // Inflammation: Initialize Differential Disease Dropdown
+        function initInflamDifferentialDiseases() {
+            const data = state.data.inflammationdisease;
+            if (!data) return;
+
+            // Get unique diseases from the data
+            const diseases = [...new Set(data.map(d => d.disease))].sort();
+            const select = document.getElementById('inflam-diff-disease');
+            if (select) {
+                select.innerHTML = '<option value="all">All Diseases</option>' +
+                    diseases.map(d => `<option value="${d}">${d}</option>`).join('');
+            }
+        }
+
         // Inflammation: Differential (Sex/Smoking effects)
         function updateInflamDifferential() {
             const container1 = document.getElementById('inflam-diff-volcano');
@@ -5842,47 +5857,102 @@
             const sigType = document.getElementById('inflam-diff-sig-type')?.value || 'CytoSig';
             const diseaseFilter = document.getElementById('inflam-diff-disease')?.value || 'all';
 
-            // Get signatures based on type
-            const signatures = sigType === 'CytoSig'
-                ? ['IFNG', 'TNFA', 'IL6', 'IL10', 'IL17A', 'IL1B', 'IL4', 'IL13', 'TGFB1', 'IL2',
-                   'IL21', 'IL22', 'IL27', 'IL12', 'IL15', 'GMCSF', 'MCSF', 'GCSF', 'VEGFA', 'LIF',
-                   'OSM', 'IL3', 'IL36', 'LTA', 'TRAIL', 'TWEAK', 'CD40L', 'CXCL12', 'HGF', 'EGF',
-                   'FGF2', 'BDNF', 'BMP2', 'BMP4', 'BMP6', 'GDF11', 'Activin A', 'TGFB3', 'IFN1', 'IFNL', 'WNT3A', 'NO', 'IL1A']
-                : ['A2M', 'ADIPOQ', 'AGT', 'ANGPT1', 'ANGPT2', 'BDNF', 'BMP2', 'BMP4', 'C3', 'CCL11',
-                   'CCL17', 'CCL19', 'CCL20', 'CCL21', 'CCL22', 'CCL25', 'CCL27', 'CCL28', 'CD40LG', 'CSF1',
-                   'CXCL1', 'CXCL10', 'CXCL11', 'CXCL12', 'CXCL13', 'CXCL5', 'CXCL9', 'FGF2', 'FLT3LG', 'GDF15'];
+            // Update titles based on disease filter
+            const diseaseLabel = diseaseFilter === 'all' ? 'Cross-Disease Variability' : `${diseaseFilter} vs Overall`;
+            const volcanoTitle = document.getElementById('inflam-diff-volcano-title');
+            const volcanoSubtitle = document.getElementById('inflam-diff-volcano-subtitle');
+            const barTitle = document.getElementById('inflam-diff-bar-title');
+            const barSubtitle = document.getElementById('inflam-diff-bar-subtitle');
+            if (volcanoTitle) volcanoTitle.textContent = `Signature Differential: ${diseaseLabel}`;
+            if (volcanoSubtitle) volcanoSubtitle.textContent = diseaseFilter === 'all'
+                ? 'X-axis: Standard deviation across diseases. Y-axis: Variability significance.'
+                : `X-axis: Z-score (deviation from mean). Y-axis: Statistical significance.`;
+            if (barTitle) barTitle.textContent = `Top Variable Signatures: ${diseaseFilter === 'all' ? 'All Diseases' : diseaseFilter}`;
+            if (barSubtitle) barSubtitle.textContent = diseaseFilter === 'all'
+                ? 'Signatures with highest cross-disease variability'
+                : `Signatures most different in ${diseaseFilter} compared to overall mean`;
 
-            // Generate differential data with deterministic seed based on comparison
-            const seed = comparison === 'sex' ? 12345 : 67890;
-            const seededRandom = (s) => {
-                const x = Math.sin(s) * 10000;
-                return x - Math.floor(x);
-            };
+            // Get real data
+            const realData = state.data.inflammationdisease;
+            let diffData = [];
 
-            const mockData = signatures.map((sig, i) => {
-                let log2fc, pval;
-                const r1 = seededRandom(seed + i * 2);
-                const r2 = seededRandom(seed + i * 2 + 1);
+            if (realData && realData.length > 0) {
+                // Filter by signature type
+                const typeFiltered = realData.filter(d => d.signature_type === sigType);
 
-                if (comparison === 'sex') {
-                    const sexBiasSigs = ['IL6', 'TGFB1', 'IL17A', 'IL10', 'IFNG', 'IL4'];
-                    const hasBias = sexBiasSigs.includes(sig);
-                    log2fc = (r1 - 0.5) * (hasBias ? 1.8 : 0.6);
-                    pval = hasBias ? r2 * 0.02 : r2 * 0.6;
+                // Get unique signatures
+                const signatures = [...new Set(typeFiltered.map(d => d.signature))];
+
+                // Compute overall mean and std for each signature (across all diseases)
+                const sigStats = {};
+                signatures.forEach(sig => {
+                    const sigData = typeFiltered.filter(d => d.signature === sig);
+                    const activities = sigData.map(d => d.mean_activity);
+                    const mean = activities.reduce((a, b) => a + b, 0) / activities.length;
+                    const variance = activities.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / activities.length;
+                    const std = Math.sqrt(variance) || 0.1;
+                    sigStats[sig] = { mean, std, n: activities.length };
+                });
+
+                if (diseaseFilter === 'all') {
+                    // Show cross-disease variability: effect = std, significance based on variance
+                    diffData = signatures.map(sig => {
+                        const stats = sigStats[sig];
+                        // Use coefficient of variation as effect size
+                        const cv = stats.std / (Math.abs(stats.mean) + 0.1);
+                        // Pseudo p-value based on how variable the signature is
+                        const pval = Math.exp(-cv * 2);
+                        return {
+                            signature: sig,
+                            log2fc: stats.std,  // Use std as "effect size"
+                            pvalue: Math.max(pval, 0.0001),
+                            negLog10p: -Math.log10(Math.max(pval, 0.0001)),
+                            score: stats.std * (-Math.log10(Math.max(pval, 0.0001)))
+                        };
+                    });
                 } else {
-                    const smokingBiasSigs = ['TNFA', 'IL1B', 'IL6', 'IL8', 'GMCSF', 'VEGFA'];
-                    const hasBias = smokingBiasSigs.includes(sig);
-                    log2fc = (r1 * (hasBias ? 1.5 : 0.8)) - 0.3;
-                    pval = hasBias ? r2 * 0.01 : r2 * 0.5;
+                    // Show disease-specific deviation from overall mean
+                    const diseaseData = typeFiltered.filter(d => d.disease === diseaseFilter);
+                    const diseaseSigMeans = {};
+                    diseaseData.forEach(d => {
+                        if (!diseaseSigMeans[d.signature]) {
+                            diseaseSigMeans[d.signature] = [];
+                        }
+                        diseaseSigMeans[d.signature].push(d.mean_activity);
+                    });
+
+                    diffData = signatures.filter(sig => diseaseSigMeans[sig]).map(sig => {
+                        const diseaseMean = diseaseSigMeans[sig].reduce((a, b) => a + b, 0) / diseaseSigMeans[sig].length;
+                        const overallStats = sigStats[sig];
+                        // Effect size: deviation from overall mean in units of std
+                        const zScore = (diseaseMean - overallStats.mean) / (overallStats.std || 0.1);
+                        // Convert z-score to pseudo p-value
+                        const pval = 2 * (1 - 0.5 * (1 + Math.tanh(Math.abs(zScore) / Math.sqrt(2))));
+                        return {
+                            signature: sig,
+                            log2fc: zScore,  // Z-score as effect size
+                            pvalue: Math.max(pval, 0.0001),
+                            negLog10p: -Math.log10(Math.max(pval, 0.0001)),
+                            score: Math.abs(zScore) * (-Math.log10(Math.max(pval, 0.0001)))
+                        };
+                    });
                 }
-                return {
-                    signature: sig,
-                    log2fc: log2fc,
-                    pvalue: Math.max(pval, 0.0001),
-                    negLog10p: -Math.log10(Math.max(pval, 0.0001)),
-                    score: Math.abs(log2fc) * (-Math.log10(Math.max(pval, 0.0001)))  // Significance score
-                };
-            });
+            }
+
+            // Fallback to empty if no data
+            if (diffData.length === 0) {
+                if (container1) {
+                    container1.classList.remove('loading');
+                    container1.innerHTML = '<p style="text-align:center;color:#666;padding:2rem;">No data available</p>';
+                }
+                if (container2) {
+                    container2.classList.remove('loading');
+                    container2.innerHTML = '<p style="text-align:center;color:#666;padding:2rem;">No data available</p>';
+                }
+                return;
+            }
+
+            const mockData = diffData;
 
             // 1. Volcano plot
             if (container1) {
