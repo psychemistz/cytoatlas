@@ -298,16 +298,16 @@ async def get_eqtl(
 
 @router.get("/eqtl/top", response_model=list[dict])
 async def get_top_eqtl(
-    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
+    cell_type: str | None = Query(None, description="Filter by cell type"),
     limit: int = Query(100, ge=1, le=1000),
     service: CIMAService = Depends(get_cima_service),
 ) -> list[dict]:
     """
     Get top eQTL results by significance.
 
-    Returns most significant genetic associations.
+    Returns most significant genetic associations with cytokine genes.
     """
-    return await service.get_eqtl_top(signature_type, limit)
+    return await service.get_eqtl_top(cell_type, limit)
 
 
 # Heatmap Data

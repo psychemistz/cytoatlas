@@ -310,14 +310,14 @@ class CIMAService(BaseService):
     @cached(prefix="cima", ttl=86400)
     async def get_eqtl_top(
         self,
-        signature_type: str = "CytoSig",
+        cell_type: str | None = None,
         limit: int = 100,
     ) -> list[dict]:
         """
         Get top eQTL results.
 
         Args:
-            signature_type: 'CytoSig' or 'SecAct'
+            cell_type: Optional cell type filter
             limit: Maximum results
 
         Returns:
@@ -325,7 +325,14 @@ class CIMAService(BaseService):
         """
         data = await self.load_json("cima_eqtl_top.json")
 
-        results = self.filter_by_signature_type(data, signature_type)
+        # eQTL data structure: {summary, cell_types, genes, eqtls}
+        results = data.get("eqtls", [])
+
+        if cell_type:
+            results = [r for r in results if r.get("celltype") == cell_type]
+
+        # Sort by p-value and limit
+        results = sorted(results, key=lambda x: x.get("pvalue", 1))
 
         return results[:limit]
 
