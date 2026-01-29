@@ -5440,22 +5440,30 @@
             const stratifyBy = document.getElementById('inflam-stratify-by')?.value || 'age';
             const sigType = document.getElementById('inflam-boxplot-sig-type')?.value || 'CytoSig';
             const signature = document.getElementById('inflam-boxplot-search')?.value || 'IFNG';
+            const cellType = document.getElementById('inflam-boxplot-celltype')?.value || 'All';
 
             // Update titles
             const titleEl = document.getElementById('inflam-boxplot-title');
             const subtitleEl = document.getElementById('inflam-boxplot-subtitle');
-            if (titleEl) titleEl.textContent = `${stratifyBy === 'age' ? 'Age' : 'BMI'}-Stratified ${signature} Activity`;
+            const cellTypeLabel = cellType === 'All' ? '' : ` in ${cellType}`;
+            if (titleEl) titleEl.textContent = `${stratifyBy === 'age' ? 'Age' : 'BMI'}-Stratified ${signature} Activity${cellTypeLabel}`;
             if (subtitleEl) subtitleEl.textContent = `${sigType} activity distribution across ${stratifyBy === 'age' ? 'age decades' : 'BMI categories'}`;
 
             const boxplotData = state.data.agebmiboxplots?.inflammation;
-            if (!boxplotData || !boxplotData[stratifyBy] || !boxplotData[stratifyBy][signature]) {
+            if (!boxplotData || !boxplotData[stratifyBy]) {
                 container.innerHTML = '<p style="text-align:center;color:#666;padding:2rem;">No data available for this signature</p>';
                 return;
             }
 
-            const sigData = boxplotData[stratifyBy][signature]['All'];
-            if (!sigData) {
-                container.innerHTML = '<p style="text-align:center;color:#666;padding:2rem;">No data available</p>';
+            // New format: flat array with signature, sig_type, cell_type, bin fields
+            let sigData = boxplotData[stratifyBy].filter(d =>
+                d.signature === signature &&
+                d.sig_type === sigType &&
+                d.cell_type === cellType
+            );
+
+            if (sigData.length === 0) {
+                container.innerHTML = '<p style="text-align:center;color:#666;padding:2rem;">No data available for this selection</p>';
                 return;
             }
 
@@ -5463,13 +5471,17 @@
                 ? ['<30', '30-39', '40-49', '50-59', '60-69', '70+']
                 : ['Underweight', 'Normal', 'Overweight', 'Obese'];
 
-            const traces = bins.map((bin, i) => ({
-                y: sigData[bin] || [],
+            // Sort by bin order
+            sigData.sort((a, b) => bins.indexOf(a.bin) - bins.indexOf(b.bin));
+
+            const traces = sigData.map((d, i) => ({
+                y: d.values || generateBoxplotValues(d),
                 type: 'box',
-                name: bin,
-                boxpoints: 'outliers',
-                marker: { color: d3.schemeTableau10[i % 10] }
-            })).filter(t => t.y.length > 0);
+                name: d.bin,
+                boxpoints: d.values ? 'outliers' : false,
+                marker: { color: d3.schemeTableau10[i % 10] },
+                hovertemplate: `${d.bin}<br>median: ${d.median?.toFixed(2) || 'N/A'}<br>n: ${d.n || 'N/A'}<extra></extra>`
+            }));
 
             if (traces.length === 0) {
                 container.innerHTML = '<p style="text-align:center;color:#666;padding:2rem;">No data available for selected bins</p>';
@@ -6255,12 +6267,13 @@
             if (boxplotData && boxplotData[stratifyBy]) {
                 // Handle "both" - show CytoSig and SecAct side by side
                 if (sigType === 'both') {
-                    const cytosigData = boxplotData[stratifyBy].filter(d => d.signature === signature && d.sig_type === 'CytoSig' && d.cell_type === effectiveCellType);
-                    const secactData = boxplotData[stratifyBy].filter(d => d.signature === signature && d.sig_type === 'SecAct' && d.cell_type === 'All');
+                    // Filter without cell_type requirement for CIMA
+                    const cytosigData = boxplotData[stratifyBy].filter(d => d.signature === signature && d.sig_type === 'CytoSig');
+                    const secactData = boxplotData[stratifyBy].filter(d => d.signature === signature && d.sig_type === 'SecAct');
 
                     if (cytosigData.length > 0 || secactData.length > 0) {
                         const bins = stratifyBy === 'age'
-                            ? ['<30', '30-40', '40-50', '50-60', '>60']
+                            ? ['<30', '30-39', '40-49', '50-59', '60-69', '70+']
                             : ['Underweight', 'Normal', 'Overweight', 'Obese'];
 
                         const traces = [];
@@ -6270,26 +6283,26 @@
 
                             if (cytoD) {
                                 traces.push({
-                                    y: cytoD.values,
+                                    y: cytoD.values || generateBoxplotValues(cytoD),
                                     type: 'box',
                                     name: `${bin}`,
                                     legendgroup: 'CytoSig',
-                                    boxpoints: 'outliers',
+                                    boxpoints: cytoD.values ? 'outliers' : false,
                                     marker: { color: '#1f77b4' },
                                     offsetgroup: 'CytoSig',
-                                    hovertemplate: `CytoSig ${bin}<br>%{y:.2f}<extra></extra>`
+                                    hovertemplate: `CytoSig ${bin}<br>median: ${cytoD.median?.toFixed(2) || 'N/A'}<br>n: ${cytoD.n || 'N/A'}<extra></extra>`
                                 });
                             }
                             if (secD) {
                                 traces.push({
-                                    y: secD.values,
+                                    y: secD.values || generateBoxplotValues(secD),
                                     type: 'box',
                                     name: `${bin}`,
                                     legendgroup: 'SecAct',
-                                    boxpoints: 'outliers',
+                                    boxpoints: secD.values ? 'outliers' : false,
                                     marker: { color: '#ff7f0e' },
                                     offsetgroup: 'SecAct',
-                                    hovertemplate: `SecAct ${bin}<br>%{y:.2f}<extra></extra>`
+                                    hovertemplate: `SecAct ${bin}<br>median: ${secD.median?.toFixed(2) || 'N/A'}<br>n: ${secD.n || 'N/A'}<extra></extra>`
                                 });
                             }
                         });
@@ -6316,11 +6329,16 @@
                     }
                 }
 
-                // Single signature type - filter by sig_type and cell_type
-                let sigData = boxplotData[stratifyBy].filter(d =>
-                    d.signature === signature &&
-                    d.cell_type === effectiveCellType
-                );
+                // Single signature type - filter by sig_type and optionally cell_type
+                let sigData = boxplotData[stratifyBy].filter(d => d.signature === signature);
+
+                // Filter by cell_type only if it exists in data
+                const hasCtField = sigData.length > 0 && sigData[0].cell_type !== undefined;
+                if (hasCtField) {
+                    sigData = sigData.filter(d => d.cell_type === effectiveCellType);
+                }
+
+                // Filter by sig_type
                 if (sigType !== 'both' && sigData.length > 0 && sigData[0].sig_type) {
                     sigData = sigData.filter(d => d.sig_type === sigType);
                 }
@@ -6328,7 +6346,7 @@
                 if (sigData.length > 0) {
                     // Sort by bin order
                     const binOrder = stratifyBy === 'age'
-                        ? ['<30', '30-40', '40-50', '50-60', '>60']
+                        ? ['<30', '30-39', '40-49', '50-59', '60-69', '70+']
                         : ['Underweight', 'Normal', 'Overweight', 'Obese'];
                     sigData.sort((a, b) => binOrder.indexOf(a.bin) - binOrder.indexOf(b.bin));
 
@@ -6337,7 +6355,8 @@
                         type: 'box',
                         name: d.bin,
                         boxpoints: d.values ? 'outliers' : false,
-                        marker: { color: d3.schemeTableau10[i % 10] }
+                        marker: { color: d3.schemeTableau10[i % 10] },
+                        hovertemplate: `${d.bin}<br>median: ${d.median?.toFixed(2) || 'N/A'}<br>n: ${d.n || 'N/A'}<extra></extra>`
                     }));
 
                     Plotly.newPlot(container, traces, {
