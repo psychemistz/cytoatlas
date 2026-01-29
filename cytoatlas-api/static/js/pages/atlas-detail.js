@@ -285,34 +285,64 @@ const AtlasDetailPage = {
                         </thead>
                         <tbody>
                             <tr>
-                                <td>Cell Type Activity</td>
-                                <td>Mean ${this.signatureType} activity per cell type</td>
-                                <td>${this.signatureType === 'CytoSig' ? '27 × 43' : '27 × 1,170'}</td>
+                                <td>Cell Types</td>
+                                <td>27 cell types × (43 CytoSig + 1,170 SecAct)</td>
+                                <td>32,751</td>
                             </tr>
                             <tr>
                                 <td>Age Correlations</td>
-                                <td>Spearman correlation with donor age</td>
-                                <td>${stats?.n_age_correlations || 'N/A'}</td>
+                                <td>1,213 proteins × Age</td>
+                                <td>${stats?.n_age_correlations?.toLocaleString() || 'N/A'}</td>
                             </tr>
                             <tr>
                                 <td>BMI Correlations</td>
-                                <td>Spearman correlation with body mass index</td>
-                                <td>${stats?.n_bmi_correlations || 'N/A'}</td>
+                                <td>1,213 proteins × BMI</td>
+                                <td>${stats?.n_bmi_correlations?.toLocaleString() || 'N/A'}</td>
                             </tr>
                             <tr>
-                                <td>Biochemistry Correlations</td>
-                                <td>Correlation with 19 blood markers</td>
-                                <td>${stats?.n_biochem_correlations || 'N/A'}</td>
+                                <td>Age/BMI Stratified</td>
+                                <td>1,213 proteins × 28 cell types × 9 bins</td>
+                                <td>21,366</td>
                             </tr>
                             <tr>
-                                <td>Metabolite Correlations</td>
-                                <td>Correlation with plasma metabolomics</td>
-                                <td>${stats?.n_metabolite_correlations || 'N/A'}</td>
+                                <td>Biochemistry</td>
+                                <td>1,190 proteins × 19 biomarkers</td>
+                                <td>${stats?.n_biochem_correlations?.toLocaleString() || 'N/A'}</td>
                             </tr>
                             <tr>
-                                <td>Differential Analysis</td>
-                                <td>Sex, smoking, blood type comparisons</td>
-                                <td>${stats?.n_differential_tests || 'N/A'}</td>
+                                <td>Biochem Scatter</td>
+                                <td>396 samples × 19 biomarkers × (43 CytoSig + 1,170 SecAct)</td>
+                                <td>${(396 * (43 + 1170)).toLocaleString()}</td>
+                            </tr>
+                            <tr>
+                                <td>Metabolites</td>
+                                <td>1,213 proteins × 500 metabolites (top)</td>
+                                <td>${stats?.n_metabolite_correlations?.toLocaleString() || 'N/A'}</td>
+                            </tr>
+                            <tr>
+                                <td>Differential</td>
+                                <td>1,213 proteins × 10 categories</td>
+                                <td>${stats?.n_differential?.toLocaleString() || 'N/A'}</td>
+                            </tr>
+                            <tr>
+                                <td>Cell Type Correlations</td>
+                                <td>27 cell types × (43 CytoSig + 100 SecAct) × 2 (age, BMI)</td>
+                                <td>7,722</td>
+                            </tr>
+                            <tr>
+                                <td>Multi-omics</td>
+                                <td>Cytokine-Biochemistry (21,859) + Cytokine-Metabolite (500)</td>
+                                <td>22,359</td>
+                            </tr>
+                            <tr>
+                                <td>Population</td>
+                                <td>421 donors × demographic subgroups (sex, age, BMI, blood type, smoking)</td>
+                                <td>6,065</td>
+                            </tr>
+                            <tr>
+                                <td>eQTL Browser</td>
+                                <td>71,530 significant cis-eQTLs across 69 cell types (9,600 genes)</td>
+                                <td>71,530</td>
                             </tr>
                         </tbody>
                     </table>
@@ -1016,29 +1046,64 @@ const AtlasDetailPage = {
                         </thead>
                         <tbody>
                             <tr>
-                                <td>Cell Type Activity</td>
-                                <td>Mean ${this.signatureType} activity per cell type and disease</td>
-                                <td>${this.signatureType === 'CytoSig' ? '35 × 43' : '35 × 1,170'}</td>
+                                <td>Cell Types</td>
+                                <td>66 cell types × (43 CytoSig + 1,170 SecAct proteins)</td>
+                                <td>80,058</td>
                             </tr>
                             <tr>
-                                <td>Disease Differential</td>
-                                <td>Disease vs healthy comparison per cell type</td>
-                                <td>${stats?.n_diseases || 12} diseases</td>
+                                <td>Age Correlations</td>
+                                <td>1,213 proteins × Age correlation per cell type</td>
+                                <td>~80,000</td>
+                            </tr>
+                            <tr>
+                                <td>BMI Correlations</td>
+                                <td>1,213 proteins × BMI correlation per cell type</td>
+                                <td>~80,000</td>
+                            </tr>
+                            <tr>
+                                <td>Age/BMI Stratified</td>
+                                <td>1,213 proteins × 66 cell types × bins (boxplots)</td>
+                                <td>~500,000</td>
+                            </tr>
+                            <tr>
+                                <td>Disease</td>
+                                <td>Disease vs healthy differential across 12+ diseases</td>
+                                <td>54,137</td>
+                            </tr>
+                            <tr>
+                                <td>Differential</td>
+                                <td>Sex, smoking differential activity analysis</td>
+                                <td>Per comparison</td>
                             </tr>
                             <tr>
                                 <td>Treatment Response</td>
-                                <td>Responder vs non-responder prediction</td>
-                                <td>4 diseases with treatment data</td>
+                                <td>Responder vs non-responder ML prediction (8 diseases)</td>
+                                <td>288</td>
                             </tr>
                             <tr>
-                                <td>Age/BMI Correlations</td>
-                                <td>Spearman correlation with clinical parameters</td>
-                                <td>Cell type-stratified</td>
+                                <td>Disease Flow</td>
+                                <td>Sankey diagram: 20 diseases × 6 disease groups × 3 cohorts</td>
+                                <td>136</td>
                             </tr>
                             <tr>
-                                <td>Cross-Cohort Validation</td>
-                                <td>Main → Validation → External consistency</td>
-                                <td>3 cohorts</td>
+                                <td>Validation</td>
+                                <td>Cross-cohort consistency (main, validation, external)</td>
+                                <td>23</td>
+                            </tr>
+                            <tr>
+                                <td>Longitudinal</td>
+                                <td>Time-course cytokine dynamics during treatment</td>
+                                <td>Per disease</td>
+                            </tr>
+                            <tr>
+                                <td>Severity</td>
+                                <td>Disease severity correlation with cytokine activity</td>
+                                <td>Per disease</td>
+                            </tr>
+                            <tr>
+                                <td>Cell Drivers</td>
+                                <td>Top driving cell types per disease-cytokine pair</td>
+                                <td>Per disease</td>
                             </tr>
                         </tbody>
                     </table>
@@ -1655,29 +1720,49 @@ const AtlasDetailPage = {
                         </thead>
                         <tbody>
                             <tr>
-                                <td>Normal Organ Signatures</td>
-                                <td>Mean ${this.signatureType} activity per organ and cell type</td>
-                                <td>${stats?.n_organs || 35} organs</td>
+                                <td>Organ Signatures</td>
+                                <td>Mean cytokine activities per organ (normal tissue)</td>
+                                <td>${stats?.n_organ_signatures?.toLocaleString() || 'N/A'}</td>
                             </tr>
                             <tr>
-                                <td>Cancer Cell Types</td>
-                                <td>Activity in tumor-infiltrating immune cells</td>
-                                <td>${stats?.n_cancer_celltypes || 214} cell types</td>
+                                <td>Cell Type Signatures</td>
+                                <td>Mean activities per cell type across organs</td>
+                                <td>${stats?.n_celltype_signatures?.toLocaleString() || 'N/A'}</td>
                             </tr>
                             <tr>
                                 <td>Tumor vs Adjacent</td>
-                                <td>Paired tumor-normal tissue comparison</td>
-                                <td>${stats?.n_cancer_types || 25} cancer types</td>
+                                <td>Differential activity between tumor and adjacent tissue</td>
+                                <td>${stats?.n_cancer_celltypes || 214} cell types</td>
+                            </tr>
+                            <tr>
+                                <td>Normal vs Cancer</td>
+                                <td>Matched organ-cancer type comparisons</td>
+                                <td>13 organ-cancer pairs</td>
                             </tr>
                             <tr>
                                 <td>Immune Infiltration</td>
-                                <td>Cytokine activity by immune subset in tumors</td>
+                                <td>Immune cell proportions and activity per cancer type</td>
                                 <td>Per cancer type</td>
                             </tr>
                             <tr>
                                 <td>T Cell Exhaustion</td>
-                                <td>Exhaustion signature across tumor types</td>
-                                <td>Exhaustion markers</td>
+                                <td>Exhausted vs non-exhausted T cell signatures</td>
+                                <td>Tex vs non-Tex</td>
+                            </tr>
+                            <tr>
+                                <td>CAF Signatures</td>
+                                <td>Cancer-associated fibroblast subtype activities</td>
+                                <td>Per cancer type</td>
+                            </tr>
+                            <tr>
+                                <td>Adjacent Tissue</td>
+                                <td>Field effect analysis in tumor-adjacent tissue</td>
+                                <td>Per cancer type</td>
+                            </tr>
+                            <tr>
+                                <td>Pan-Cancer Signatures</td>
+                                <td>Signatures consistent across multiple cancers</td>
+                                <td>Cross-cancer</td>
                             </tr>
                         </tbody>
                     </table>
