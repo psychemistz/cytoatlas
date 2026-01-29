@@ -967,6 +967,9 @@ const AtlasDetailPage = {
                 <div class="panel-header">
                     <h3>Inflammation Atlas</h3>
                     <p>Multi-disease cohort spanning RA, IBD, MS, SLE, and other inflammatory conditions with treatment response data.</p>
+                    <p class="citation" style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">
+                        <strong>Citation:</strong> Jiménez-Gracia et al. (2026) <em>Nature Medicine</em>.
+                    </p>
                 </div>
 
                 <div class="stats-grid">
@@ -1041,13 +1044,6 @@ const AtlasDetailPage = {
                     </table>
                 </div>
 
-                <div class="card" style="margin-top: 1rem;">
-                    <div class="card-title">Data Citation</div>
-                    <p style="font-size: 0.9rem; color: #666;">
-                        Inflammation Atlas Consortium. Multi-disease single-cell immune profiling.
-                        <a href="#" target="_blank">Manuscript in preparation</a>
-                    </p>
-                </div>
             </div>
         `;
     },
