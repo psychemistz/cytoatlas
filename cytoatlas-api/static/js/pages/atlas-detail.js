@@ -837,13 +837,6 @@ const AtlasDetailPage = {
             </div>
 
             <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
-                <div class="control-group">
-                    <label>Signature Type</label>
-                    <select id="biochem-signature-type" class="filter-select" onchange="AtlasDetailPage.updateBiochemHeatmap()">
-                        <option value="CytoSig" ${this.signatureType === 'CytoSig' ? 'selected' : ''}>CytoSig (43 cytokines)</option>
-                        <option value="SecAct" ${this.signatureType === 'SecAct' ? 'selected' : ''}>SecAct (1,170 proteins)</option>
-                    </select>
-                </div>
                 <div class="control-group" style="position: relative;">
                     <label>Search Protein</label>
                     <input type="text" id="biochem-protein-search" class="filter-select"
@@ -921,7 +914,7 @@ const AtlasDetailPage = {
         const suggestionsDiv = document.getElementById('biochem-suggestions');
         if (!suggestionsDiv) return;
 
-        const sigType = document.getElementById('biochem-signature-type')?.value || 'CytoSig';
+        const sigType = this.signatureType;
         const proteins = this.biochemAllProteins[sigType] || [];
 
         if (!query || query.length < 1) {
@@ -957,7 +950,7 @@ const AtlasDetailPage = {
         const container = document.getElementById('biochem-heatmap');
         if (!container || !this.biochemData) return;
 
-        const sigType = document.getElementById('biochem-signature-type')?.value || 'CytoSig';
+        const sigType = this.signatureType;
         const searchQuery = document.getElementById('biochem-protein-search')?.value?.trim() || '';
         const topN = document.getElementById('biochem-top-n')?.value || '50';
 
@@ -2366,7 +2359,7 @@ const AtlasDetailPage = {
             })
         );
 
-        const sigType = document.getElementById('biochem-signature-type')?.value || 'CytoSig';
+        const sigType = this.signatureType;
 
         Heatmap.create(containerId, {
             z, x: markers, y: proteins,
