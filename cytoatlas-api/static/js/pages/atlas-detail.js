@@ -999,24 +999,256 @@ const AtlasDetailPage = {
         this.renderBiochemHeatmap('biochem-heatmap', filteredData, proteins);
     },
 
+    // Store scatter data
+    biochemScatterData: null,
+
     async loadCimaBiochemScatter(content) {
         content.innerHTML = `
             <div class="panel-header">
                 <h3>Biochemistry Scatter Plots</h3>
-                <p>Individual correlation plots for top associations</p>
+                <p>Interactive exploration of clinical-cytokine relationships</p>
             </div>
-            <div class="scatter-controls">
-                <select id="biochem-marker" class="filter-select" onchange="AtlasDetailPage.updateBiochemScatter()">
-                    <option value="">Select Marker</option>
-                </select>
-                <select id="biochem-signature" class="filter-select" onchange="AtlasDetailPage.updateBiochemScatter()">
-                    <option value="IFNG">IFNG</option>
-                </select>
+
+            <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+                <div class="control-group">
+                    <label>X-Axis (Biochemistry)</label>
+                    <select id="biochem-x-axis" class="filter-select" onchange="AtlasDetailPage.updateBiochemScatterPlot()">
+                        <option value="ALT">ALT (Liver enzyme)</option>
+                        <option value="AST">AST (Liver enzyme)</option>
+                        <option value="GGT">GGT (Liver/bile duct)</option>
+                        <option value="CHOL">Total Cholesterol</option>
+                        <option value="HDL-C">HDL Cholesterol</option>
+                        <option value="LDL-C">LDL Cholesterol</option>
+                        <option value="TG">Triglycerides</option>
+                        <option value="GLU">Glucose</option>
+                        <option value="Cr">Creatinine</option>
+                        <option value="UA">Uric Acid</option>
+                    </select>
+                </div>
+                <div class="control-group" style="position: relative;">
+                    <label>Y-Axis (Protein)</label>
+                    <input type="text" id="biochem-scatter-protein" class="filter-select"
+                           placeholder="Search protein..."
+                           value="IFNG"
+                           style="width: 150px;" autocomplete="off"
+                           oninput="AtlasDetailPage.showScatterProteinSuggestions(this.value)"
+                           onkeyup="if(event.key==='Enter') AtlasDetailPage.updateBiochemScatterPlot()">
+                    <div id="scatter-protein-suggestions" style="position: absolute; top: 100%; left: 0; width: 150px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                </div>
+                <div class="control-group">
+                    <label>Color By</label>
+                    <select id="biochem-color-by" class="filter-select" onchange="AtlasDetailPage.updateBiochemScatterPlot()">
+                        <option value="sex">Sex</option>
+                        <option value="age_bin">Age Group</option>
+                        <option value="bmi_bin">BMI Category</option>
+                    </select>
+                </div>
             </div>
-            <div id="biochem-scatter" class="plot-container" style="height: 500px;"></div>
+
+            <div class="viz-grid">
+                <div class="sub-panel" style="flex: 2;">
+                    <div id="biochem-scatter-plot" class="plot-container" style="height: 500px;">
+                        <p class="loading">Loading scatter data...</p>
+                    </div>
+                </div>
+                <div class="sub-panel" style="flex: 1;">
+                    <div class="panel-header">
+                        <h4>Regression Statistics</h4>
+                    </div>
+                    <div id="biochem-regression-stats" style="padding: 1rem; font-size: 0.9rem;">
+                        <p class="loading">Loading...</p>
+                    </div>
+                </div>
+            </div>
         `;
 
-        await this.populateBiochemDropdowns();
+        // Load scatter data
+        await this.loadBiochemScatterData();
+        this.updateBiochemScatterPlot();
+    },
+
+    async loadBiochemScatterData() {
+        this.biochemScatterData = await API.get('/cima/scatter/biochem-samples');
+    },
+
+    showScatterProteinSuggestions(query) {
+        const suggestionsDiv = document.getElementById('scatter-protein-suggestions');
+        if (!suggestionsDiv || !this.biochemScatterData) return;
+
+        const proteins = this.signatureType === 'CytoSig'
+            ? this.biochemScatterData.cytokines || []
+            : this.biochemScatterData.secact_proteins || [];
+
+        if (!query || query.length < 1) {
+            suggestionsDiv.style.display = 'none';
+            return;
+        }
+
+        const matches = proteins.filter(p => p.toLowerCase().includes(query.toLowerCase())).slice(0, 10);
+
+        if (matches.length === 0) {
+            suggestionsDiv.style.display = 'none';
+            return;
+        }
+
+        suggestionsDiv.innerHTML = matches.map(p =>
+            `<div style="padding: 8px; cursor: pointer; border-bottom: 1px solid #eee;"
+                  onmouseover="this.style.background='#f0f0f0'"
+                  onmouseout="this.style.background='white'"
+                  onclick="AtlasDetailPage.selectScatterProtein('${p}')">${p}</div>`
+        ).join('');
+        suggestionsDiv.style.display = 'block';
+    },
+
+    selectScatterProtein(protein) {
+        const input = document.getElementById('biochem-scatter-protein');
+        const suggestionsDiv = document.getElementById('scatter-protein-suggestions');
+        if (input) input.value = protein;
+        if (suggestionsDiv) suggestionsDiv.style.display = 'none';
+        this.updateBiochemScatterPlot();
+    },
+
+    updateBiochemScatterPlot() {
+        const container = document.getElementById('biochem-scatter-plot');
+        const statsContainer = document.getElementById('biochem-regression-stats');
+        if (!container) return;
+
+        const scatterData = this.biochemScatterData;
+        if (!scatterData || !scatterData.samples) {
+            container.innerHTML = '<p class="loading">Scatter data not available</p>';
+            return;
+        }
+
+        const xAxis = document.getElementById('biochem-x-axis')?.value || 'ALT';
+        const yProtein = document.getElementById('biochem-scatter-protein')?.value || 'IFNG';
+        const colorBy = document.getElementById('biochem-color-by')?.value || 'sex';
+
+        const samples = scatterData.samples;
+        const activityKey = this.signatureType === 'CytoSig' ? 'activity' : 'secact_activity';
+
+        // Color mapping
+        const colorMap = {
+            'Male': '#1f77b4', 'Female': '#ff7f0e', 'Unknown': '#999',
+            '<30': '#1f77b4', '30-39': '#2ca02c', '40-49': '#ff7f0e', '50-59': '#d62728', '60+': '#9467bd',
+            'Normal': '#2ca02c', 'Overweight': '#ff7f0e', 'Obese': '#d62728', 'Underweight': '#17becf'
+        };
+
+        // Process data
+        const plotData = [];
+        samples.forEach(s => {
+            const xVal = s.biochem?.[xAxis];
+            const yVal = s[activityKey]?.[yProtein];
+            if (xVal == null || yVal == null) return;
+
+            let group;
+            if (colorBy === 'sex') {
+                group = s.sex || 'Unknown';
+            } else if (colorBy === 'age_bin') {
+                const age = s.age;
+                if (age == null) group = 'Unknown';
+                else if (age < 30) group = '<30';
+                else if (age < 40) group = '30-39';
+                else if (age < 50) group = '40-49';
+                else if (age < 60) group = '50-59';
+                else group = '60+';
+            } else if (colorBy === 'bmi_bin') {
+                const bmi = s.bmi;
+                if (bmi == null) group = 'Unknown';
+                else if (bmi < 18.5) group = 'Underweight';
+                else if (bmi < 25) group = 'Normal';
+                else if (bmi < 30) group = 'Overweight';
+                else group = 'Obese';
+            } else {
+                group = 'All';
+            }
+
+            plotData.push({ x: xVal, y: yVal, group, sample: s.sample, age: s.age, sex: s.sex, bmi: s.bmi });
+        });
+
+        if (plotData.length === 0) {
+            container.innerHTML = `<p class="loading">No data available for "${yProtein}" in ${this.signatureType}</p>`;
+            return;
+        }
+
+        // Get unique groups
+        let groups = [...new Set(plotData.map(d => d.group))];
+        if (colorBy === 'sex') {
+            groups = groups.sort((a, b) => {
+                const order = ['Male', 'Female', 'Unknown'];
+                return order.indexOf(a) - order.indexOf(b);
+            });
+        } else {
+            groups = groups.sort();
+        }
+
+        // Create traces
+        const traces = groups.map(group => {
+            const groupData = plotData.filter(d => d.group === group);
+            return {
+                type: 'scatter',
+                mode: 'markers',
+                name: `${group} (n=${groupData.length})`,
+                x: groupData.map(d => d.x),
+                y: groupData.map(d => d.y),
+                text: groupData.map(d => `${d.sample}<br>Sex: ${d.sex || 'NA'}<br>Age: ${d.age || 'NA'}<br>BMI: ${d.bmi?.toFixed(1) || 'NA'}`),
+                marker: { size: 8, color: colorMap[group] || '#999', opacity: 0.7 },
+                hovertemplate: '<b>%{text}</b><br>' + xAxis + ': %{x:.2f}<br>' + yProtein + ': %{y:.3f}<extra></extra>'
+            };
+        });
+
+        // Calculate trend line
+        const allX = plotData.map(d => d.x);
+        const allY = plotData.map(d => d.y);
+        const n = allX.length;
+        const sumX = allX.reduce((a, b) => a + b, 0);
+        const sumY = allY.reduce((a, b) => a + b, 0);
+        const sumXY = allX.reduce((sum, x, i) => sum + x * allY[i], 0);
+        const sumX2 = allX.reduce((sum, x) => sum + x * x, 0);
+
+        const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+        const intercept = (sumY - slope * sumX) / n;
+
+        // Correlation
+        const meanX = sumX / n, meanY = sumY / n;
+        const ssX = allX.reduce((sum, x) => sum + Math.pow(x - meanX, 2), 0);
+        const ssY = allY.reduce((sum, y) => sum + Math.pow(y - meanY, 2), 0);
+        const ssXY = allX.reduce((sum, x, i) => sum + (x - meanX) * (allY[i] - meanY), 0);
+        const r = ssXY / Math.sqrt(ssX * ssY);
+        const r2 = r * r;
+
+        // Add trend line
+        const xMin = Math.min(...allX), xMax = Math.max(...allX);
+        traces.push({
+            type: 'scatter',
+            mode: 'lines',
+            name: 'Trend',
+            x: [xMin, xMax],
+            y: [slope * xMin + intercept, slope * xMax + intercept],
+            line: { color: '#333', dash: 'dash', width: 2 },
+            hoverinfo: 'skip'
+        });
+
+        Plotly.newPlot(container, traces, {
+            title: `${yProtein} vs ${xAxis}`,
+            xaxis: { title: xAxis },
+            yaxis: { title: `${yProtein} Activity (z-score)` },
+            margin: { l: 60, r: 20, t: 40, b: 50 },
+            legend: { x: 1, xanchor: 'right', y: 1 },
+            font: { family: 'Inter, sans-serif' }
+        }, { responsive: true });
+
+        // Update stats
+        if (statsContainer) {
+            statsContainer.innerHTML = `
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr><td style="padding: 0.5rem; border-bottom: 1px solid #eee;"><strong>N samples</strong></td><td style="padding: 0.5rem; border-bottom: 1px solid #eee;">${n}</td></tr>
+                    <tr><td style="padding: 0.5rem; border-bottom: 1px solid #eee;"><strong>Pearson r</strong></td><td style="padding: 0.5rem; border-bottom: 1px solid #eee;">${r.toFixed(4)}</td></tr>
+                    <tr><td style="padding: 0.5rem; border-bottom: 1px solid #eee;"><strong>R²</strong></td><td style="padding: 0.5rem; border-bottom: 1px solid #eee;">${r2.toFixed(4)}</td></tr>
+                    <tr><td style="padding: 0.5rem; border-bottom: 1px solid #eee;"><strong>Slope</strong></td><td style="padding: 0.5rem; border-bottom: 1px solid #eee;">${slope.toFixed(4)}</td></tr>
+                    <tr><td style="padding: 0.5rem;"><strong>Intercept</strong></td><td style="padding: 0.5rem;">${intercept.toFixed(4)}</td></tr>
+                </table>
+            `;
+        }
     },
 
     async loadCimaMetabolites(content) {

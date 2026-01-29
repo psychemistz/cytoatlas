@@ -292,6 +292,19 @@ async def get_biochem_scatter(
     return result
 
 
+@router.get("/scatter/biochem-samples")
+async def get_biochem_scatter_samples(
+    service: CIMAService = Depends(get_cima_service),
+) -> dict:
+    """
+    Get all biochemistry scatter plot samples data.
+
+    Returns sample-level data with biochemistry values and activity scores
+    for interactive scatter plot visualization.
+    """
+    return await service.get_biochem_scatter_samples()
+
+
 # Population Stratification
 @router.get("/stratification/{signature}")
 async def get_population_stratification(

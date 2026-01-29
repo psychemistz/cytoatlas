@@ -330,6 +330,16 @@ class CIMAService(BaseService):
         return None
 
     @cached(prefix="cima", ttl=3600)
+    async def get_biochem_scatter_samples(self) -> dict:
+        """
+        Get all biochemistry scatter plot samples data.
+
+        Returns:
+            Dict with samples, biochem_features, cytokines, secact_proteins
+        """
+        return await self.load_json("cima_biochem_scatter.json")
+
+    @cached(prefix="cima", ttl=3600)
     async def get_cell_type_correlations(
         self,
         signature_type: str = "CytoSig",
