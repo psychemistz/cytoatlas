@@ -318,13 +318,6 @@ const AtlasDetailPage = {
                     </table>
                 </div>
 
-                <div class="card" style="margin-top: 1rem;">
-                    <div class="card-title">Data Citation</div>
-                    <p style="font-size: 0.9rem; color: #666;">
-                        Zhang et al. (2023). A human cell atlas of fetal gene expression. <i>Science</i>.
-                        <a href="https://doi.org/10.1126/science.aba7721" target="_blank">DOI: 10.1126/science.aba7721</a>
-                    </p>
-                </div>
             </div>
         `;
     },
@@ -690,10 +683,6 @@ const AtlasDetailPage = {
                 <p>Activity distribution across age groups and BMI categories, with cell type stratification</p>
             </div>
             <div class="stratified-controls">
-                <select id="stratified-view" class="filter-select" onchange="AtlasDetailPage.updateStratifiedPlot()">
-                    <option value="boxplot">Boxplot View</option>
-                    <option value="heatmap">Cell Type Heatmap</option>
-                </select>
                 <select id="stratified-variable" class="filter-select" onchange="AtlasDetailPage.updateStratifiedPlot()">
                     <option value="age">Age Groups</option>
                     <option value="bmi">BMI Categories</option>
@@ -709,10 +698,18 @@ const AtlasDetailPage = {
             </div>
             <div class="card" style="margin-bottom: 1rem; padding: 0.75rem; font-size: 0.9rem;">
                 <strong>Age Bins:</strong> &lt;30, 30-39, 40-49, 50-59, 60-69, 70+ years<br>
-                <strong>BMI Categories:</strong> Underweight (&lt;18.5), Normal (18.5-25), Overweight (25-30), Obese (30+)<br>
-                <em>Boxplot: Select cell type for specific view. Heatmap: Shows all cell types × bins.</em>
+                <strong>BMI Categories:</strong> Underweight (&lt;18.5), Normal (18.5-25), Overweight (25-30), Obese (30+)
             </div>
-            <div id="stratified-plot" class="plot-container" style="height: 500px;"></div>
+            <div class="stacked-panels">
+                <div class="panel-section">
+                    <h4 style="margin: 0 0 0.5rem 0; font-size: 1rem;">Activity Boxplot</h4>
+                    <div id="stratified-plot" class="plot-container" style="height: 400px;"></div>
+                </div>
+                <div class="panel-section" style="margin-top: 1.5rem;">
+                    <h4 style="margin: 0 0 0.5rem 0; font-size: 1rem;">Cell Type Heatmap</h4>
+                    <div id="stratified-heatmap" class="plot-container" style="height: 500px;"></div>
+                </div>
+            </div>
         `;
 
         // Load signatures for autocomplete and cell types for dropdown
@@ -1328,10 +1325,6 @@ const AtlasDetailPage = {
                 <p>Activity distribution across age groups and BMI categories, with cell type stratification</p>
             </div>
             <div class="stratified-controls">
-                <select id="inflam-strat-view" class="filter-select" onchange="AtlasDetailPage.updateInflamStratifiedPlot()">
-                    <option value="boxplot">Boxplot View</option>
-                    <option value="heatmap">Cell Type Heatmap</option>
-                </select>
                 <select id="inflam-strat-variable" class="filter-select" onchange="AtlasDetailPage.updateInflamStratifiedPlot()">
                     <option value="age">Age Groups</option>
                     <option value="bmi">BMI Categories</option>
@@ -1347,10 +1340,18 @@ const AtlasDetailPage = {
             </div>
             <div class="card" style="margin-bottom: 1rem; padding: 0.75rem; font-size: 0.9rem;">
                 <strong>Age Bins:</strong> &lt;30, 30-39, 40-49, 50-59, 60-69, 70+ years<br>
-                <strong>BMI Categories:</strong> Underweight (&lt;18.5), Normal (18.5-25), Overweight (25-30), Obese (30+)<br>
-                <em>Boxplot: Select cell type for specific view. Heatmap: Shows all cell types × bins.</em>
+                <strong>BMI Categories:</strong> Underweight (&lt;18.5), Normal (18.5-25), Overweight (25-30), Obese (30+)
             </div>
-            <div id="inflam-stratified-plot" class="plot-container" style="height: 500px;"></div>
+            <div class="stacked-panels">
+                <div class="panel-section">
+                    <h4 style="margin: 0 0 0.5rem 0; font-size: 1rem;">Activity Boxplot</h4>
+                    <div id="inflam-stratified-plot" class="plot-container" style="height: 400px;"></div>
+                </div>
+                <div class="panel-section" style="margin-top: 1.5rem;">
+                    <h4 style="margin: 0 0 0.5rem 0; font-size: 1rem;">Cell Type Heatmap</h4>
+                    <div id="inflam-stratified-heatmap" class="plot-container" style="height: 500px;"></div>
+                </div>
+            </div>
         `;
 
         // Load signatures for autocomplete and cell types for dropdown
@@ -2206,47 +2207,26 @@ const AtlasDetailPage = {
 
     // Update functions for interactive controls
     async updateStratifiedPlot() {
-        const viewType = document.getElementById('stratified-view')?.value || 'boxplot';
         const variable = document.getElementById('stratified-variable')?.value || 'age';
         const signature = document.getElementById('stratified-signature-search')?.value || 'IFNG';
         const cellType = document.getElementById('cima-strat-celltype')?.value || 'All';
 
         const plotContainer = document.getElementById('stratified-plot');
-        if (!plotContainer) return;
-
-        // Hide/show cell type dropdown based on view type
-        const cellTypeSelect = document.getElementById('cima-strat-celltype');
-        if (cellTypeSelect) {
-            cellTypeSelect.style.display = viewType === 'heatmap' ? 'none' : '';
-        }
+        const heatmapContainer = document.getElementById('stratified-heatmap');
 
         if (!signature) {
-            plotContainer.innerHTML = '<p class="loading">Enter a signature name to view distribution</p>';
+            if (plotContainer) plotContainer.innerHTML = '<p class="loading">Enter a signature name to view distribution</p>';
+            if (heatmapContainer) heatmapContainer.innerHTML = '';
             return;
         }
 
-        try {
-            plotContainer.innerHTML = '<p class="loading">Loading...</p>';
+        const endpoint = variable === 'age' ? 'age' : 'bmi';
 
-            const endpoint = variable === 'age' ? 'age' : 'bmi';
+        // Load boxplot
+        if (plotContainer) {
+            try {
+                plotContainer.innerHTML = '<p class="loading">Loading...</p>';
 
-            if (viewType === 'heatmap') {
-                // Fetch all cell types data for heatmap
-                const data = await API.get(`/cima/boxplots/${endpoint}/${signature}/heatmap`, {
-                    signature_type: this.signatureType
-                });
-
-                if (data && data.cell_types && data.bins && data.medians) {
-                    this.renderCellTypeHeatmap('stratified-plot', data, {
-                        title: `${signature} Activity: Cell Types × ${variable === 'age' ? 'Age Groups' : 'BMI Categories'}`,
-                        xLabel: variable === 'age' ? 'Age Group' : 'BMI Category',
-                        yLabel: 'Cell Type',
-                    });
-                } else {
-                    plotContainer.innerHTML = `<p class="loading">No heatmap data available for "${signature}"</p>`;
-                }
-            } else {
-                // Show boxplots (sample-level or cell-type specific)
                 const params = { signature_type: this.signatureType };
                 if (cellType && cellType !== 'All') {
                     params.cell_type = cellType;
@@ -2263,9 +2243,32 @@ const AtlasDetailPage = {
                 } else {
                     plotContainer.innerHTML = `<p class="loading">No data available for "${signature}"${cellType !== 'All' ? ` in ${cellType}` : ''}</p>`;
                 }
+            } catch (e) {
+                plotContainer.innerHTML = `<p class="loading">Error: ${e.message}</p>`;
             }
-        } catch (e) {
-            plotContainer.innerHTML = `<p class="loading">Error: ${e.message}</p>`;
+        }
+
+        // Load heatmap
+        if (heatmapContainer) {
+            try {
+                heatmapContainer.innerHTML = '<p class="loading">Loading heatmap...</p>';
+
+                const data = await API.get(`/cima/boxplots/${endpoint}/${signature}/heatmap`, {
+                    signature_type: this.signatureType
+                });
+
+                if (data && data.cell_types && data.bins && data.medians && data.cell_types.length > 0) {
+                    this.renderCellTypeHeatmap('stratified-heatmap', data, {
+                        title: `${signature} Activity: Cell Types × ${variable === 'age' ? 'Age Groups' : 'BMI Categories'}`,
+                        xLabel: variable === 'age' ? 'Age Group' : 'BMI Category',
+                        yLabel: 'Cell Type',
+                    });
+                } else {
+                    heatmapContainer.innerHTML = `<p class="loading">No cell-type specific data available for "${signature}"</p>`;
+                }
+            } catch (e) {
+                heatmapContainer.innerHTML = `<p class="loading">Error loading heatmap: ${e.message}</p>`;
+            }
         }
     },
 
@@ -2304,47 +2307,26 @@ const AtlasDetailPage = {
     },
 
     async updateInflamStratifiedPlot() {
-        const viewType = document.getElementById('inflam-strat-view')?.value || 'boxplot';
         const variable = document.getElementById('inflam-strat-variable')?.value || 'age';
         const signature = document.getElementById('inflam-strat-signature-search')?.value || 'IFNG';
         const cellType = document.getElementById('inflam-strat-celltype')?.value || 'All';
 
         const plotContainer = document.getElementById('inflam-stratified-plot');
-        if (!plotContainer) return;
-
-        // Hide/show cell type dropdown based on view type
-        const cellTypeSelect = document.getElementById('inflam-strat-celltype');
-        if (cellTypeSelect) {
-            cellTypeSelect.style.display = viewType === 'heatmap' ? 'none' : '';
-        }
+        const heatmapContainer = document.getElementById('inflam-stratified-heatmap');
 
         if (!signature) {
-            plotContainer.innerHTML = '<p class="loading">Enter a signature name to view distribution</p>';
+            if (plotContainer) plotContainer.innerHTML = '<p class="loading">Enter a signature name to view distribution</p>';
+            if (heatmapContainer) heatmapContainer.innerHTML = '';
             return;
         }
 
-        try {
-            plotContainer.innerHTML = '<p class="loading">Loading...</p>';
+        const endpoint = variable === 'age' ? 'age' : 'bmi';
 
-            const endpoint = variable === 'age' ? 'age' : 'bmi';
+        // Load boxplot
+        if (plotContainer) {
+            try {
+                plotContainer.innerHTML = '<p class="loading">Loading...</p>';
 
-            if (viewType === 'heatmap') {
-                // Fetch all cell types data for heatmap
-                const data = await API.get(`/inflammation/boxplots/${endpoint}/${signature}/heatmap`, {
-                    signature_type: this.signatureType
-                });
-
-                if (data && data.cell_types && data.bins && data.medians) {
-                    this.renderCellTypeHeatmap('inflam-stratified-plot', data, {
-                        title: `${signature} Activity: Cell Types × ${variable === 'age' ? 'Age Groups' : 'BMI Categories'}`,
-                        xLabel: variable === 'age' ? 'Age Group' : 'BMI Category',
-                        yLabel: 'Cell Type',
-                    });
-                } else {
-                    plotContainer.innerHTML = `<p class="loading">No heatmap data available for "${signature}"</p>`;
-                }
-            } else {
-                // Show boxplots
                 const params = { signature_type: this.signatureType };
                 if (cellType && cellType !== 'All') {
                     params.cell_type = cellType;
@@ -2361,9 +2343,32 @@ const AtlasDetailPage = {
                 } else {
                     plotContainer.innerHTML = `<p class="loading">No data available for "${signature}"${cellType !== 'All' ? ` in ${cellType}` : ''}</p>`;
                 }
+            } catch (e) {
+                plotContainer.innerHTML = `<p class="loading">Error: ${e.message}</p>`;
             }
-        } catch (e) {
-            plotContainer.innerHTML = `<p class="loading">Error: ${e.message}</p>`;
+        }
+
+        // Load heatmap
+        if (heatmapContainer) {
+            try {
+                heatmapContainer.innerHTML = '<p class="loading">Loading heatmap...</p>';
+
+                const data = await API.get(`/inflammation/boxplots/${endpoint}/${signature}/heatmap`, {
+                    signature_type: this.signatureType
+                });
+
+                if (data && data.cell_types && data.bins && data.medians && data.cell_types.length > 0) {
+                    this.renderCellTypeHeatmap('inflam-stratified-heatmap', data, {
+                        title: `${signature} Activity: Cell Types × ${variable === 'age' ? 'Age Groups' : 'BMI Categories'}`,
+                        xLabel: variable === 'age' ? 'Age Group' : 'BMI Category',
+                        yLabel: 'Cell Type',
+                    });
+                } else {
+                    heatmapContainer.innerHTML = `<p class="loading">No cell-type specific data available for "${signature}"</p>`;
+                }
+            } catch (e) {
+                heatmapContainer.innerHTML = `<p class="loading">Error loading heatmap: ${e.message}</p>`;
+            }
         }
     },
 
