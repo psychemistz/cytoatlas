@@ -3,6 +3,22 @@
 ## Session Date: 2026-01-28
 
 ### User Prompts (from previous session that ran out of context)
+ there is one more objective in this service. that's validating cytosig & secact inference results with respect to atlas data.
+  This step enable user to understand how cytosig and secact inference and association results are credible for each atlas. so, for
+  example,
+  1) perform sample level pseudobulk generation & use that pseudobulk to predict sample level cytosig/secact signature activities.
+  compare cytosig/secact signature gene expression level in pseudobulk samples and these activities. provide scatterplot to
+  visualize sample level correlation between cytokine/secreted protein expression level and activities or additional visualizations
+  2) perform cell type level pseudobulk generation & use that pseudobulk to predict celltype levle cytosig/secact signature
+  activities. compare these gene levels in celltype agnostic manner and compare celltype specific activities and visualize with
+  scatterplot and others
+  3) perform cell type level pseudobulk generation & use single cell level expressions to prediction single cell level
+  cytosig/secact signature activities. compare pseudobulk gene expression & mean/median cytokine/secact activity levels. visualize
+  with scatterplot & others.
+  4) perform comparison between single cell gene expression and activity inference directly, while control cytokine/secreted
+  protein unexpressed cells. visualize.
+  5) any other process which can provide estimated credibility of  cytosig/secact inference methods (reference cytosig paper)
+
 keep in mind that we are not restricting 3 atlas already archived here. the service should be also applicable to new atlas dataset published or deposited datasets from user.
 
 1. **Initial Request**: Full development plan for CytoAtlas FastAPI Server (see plan file at `~/.claude/plans/snuggly-soaring-canyon.md`)

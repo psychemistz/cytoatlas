@@ -413,10 +413,17 @@ const AtlasDetailPage = {
         `;
 
         // Load correlation data
-        const [ageData, bmiData] = await Promise.all([
-            API.get('/cima/correlations/age', { signature_type: this.signatureType }),
-            API.get('/cima/correlations/bmi', { signature_type: this.signatureType }),
-        ]);
+        let ageData = null, bmiData = null;
+        try {
+            [ageData, bmiData] = await Promise.all([
+                API.get('/cima/correlations/age', { signature_type: this.signatureType }),
+                API.get('/cima/correlations/bmi', { signature_type: this.signatureType }),
+            ]);
+            console.log('CIMA Age data:', ageData?.length, 'records', ageData?.[0]);
+            console.log('CIMA BMI data:', bmiData?.length, 'records');
+        } catch (e) {
+            console.error('Failed to load CIMA correlations:', e);
+        }
 
         // Store data for cell type heatmap
         this.cimaAgeCorrelations = ageData;
@@ -426,6 +433,7 @@ const AtlasDetailPage = {
         if (ageData && ageData.length > 0) {
             this.renderCorrelationLollipop('cima-age-lollipop', ageData, 'Age');
         } else {
+            console.warn('No CIMA age data - ageData:', ageData);
             document.getElementById('cima-age-lollipop').innerHTML = '<p class="loading">No age correlation data</p>';
         }
 
