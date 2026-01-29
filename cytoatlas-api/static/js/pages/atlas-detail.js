@@ -231,26 +231,139 @@ const AtlasDetailPage = {
 
     async loadCimaCelltypes(content) {
         content.innerHTML = `
-            <div class="panel-header">
-                <h3>Cell Type Activity Heatmap</h3>
-                <p>Mean ${this.signatureType} activity z-scores across cell types</p>
+            <div class="viz-grid">
+                <!-- Sub-panel 1: Activity Profile with Search -->
+                <div class="sub-panel">
+                    <div class="panel-header">
+                        <h3>Cell Type Activity Profile</h3>
+                        <p>Search and view activity of a specific ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'}</p>
+                    </div>
+                    <div class="search-controls">
+                        <input type="text" id="cima-protein-search" class="search-input"
+                               placeholder="Search ${this.signatureType === 'CytoSig' ? 'cytokine (e.g., IFNG, IL17A, TNF)' : 'protein'}..."
+                               onkeyup="AtlasDetailPage.filterProteinList(this.value, 'cima')">
+                        <select id="cima-protein-select" class="filter-select" onchange="AtlasDetailPage.updateCimaActivityProfile()">
+                            <option value="">Select ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'}...</option>
+                        </select>
+                    </div>
+                    <div id="cima-activity-profile" class="plot-container" style="height: 450px;">
+                        <p class="loading">Select a ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'} to view its activity profile</p>
+                    </div>
+                </div>
+
+                <!-- Sub-panel 2: Activity Heatmap -->
+                <div class="sub-panel">
+                    <div class="panel-header">
+                        <h3>Activity Heatmap</h3>
+                        <p>Mean ${this.signatureType} activity z-scores across all cell types</p>
+                    </div>
+                    <div id="cima-celltype-heatmap" class="plot-container" style="height: 500px;"></div>
+                </div>
             </div>
-            <div id="celltype-heatmap" class="plot-container" style="height: 600px;"></div>
         `;
 
-        const data = await API.get('/cima/heatmap/activity', { signature_type: this.signatureType });
-        if (data && data.values) {
-            // Transform API response to heatmap component format
-            const heatmapData = {
-                z: data.values,
-                cell_types: data.rows,
-                signatures: data.columns,
+        // Load signatures for dropdown and heatmap data
+        const [signatures, heatmapData] = await Promise.all([
+            API.get('/cima/signatures', { signature_type: this.signatureType }),
+            API.get('/cima/heatmap/activity', { signature_type: this.signatureType }),
+        ]);
+
+        // Populate protein dropdown
+        const select = document.getElementById('cima-protein-select');
+        if (signatures && select) {
+            this.cimaSignatures = signatures; // Store for filtering
+            select.innerHTML = `<option value="">Select ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'}...</option>` +
+                signatures.map(s => `<option value="${s}">${s}</option>`).join('');
+
+            // Auto-select first signature
+            if (signatures.length > 0) {
+                select.value = signatures[0];
+                this.updateCimaActivityProfile();
+            }
+        }
+
+        // Render heatmap
+        if (heatmapData && heatmapData.values) {
+            const data = {
+                z: heatmapData.values,
+                cell_types: heatmapData.rows,
+                signatures: heatmapData.columns,
             };
-            Heatmap.createActivityHeatmap('celltype-heatmap', heatmapData, {
+            Heatmap.createActivityHeatmap('cima-celltype-heatmap', data, {
                 title: `${this.signatureType} Activity by Cell Type`,
             });
         } else {
-            document.getElementById('celltype-heatmap').innerHTML = '<p class="loading">No data available</p>';
+            document.getElementById('cima-celltype-heatmap').innerHTML = '<p class="loading">No heatmap data available</p>';
+        }
+    },
+
+    async updateCimaActivityProfile() {
+        const protein = document.getElementById('cima-protein-select')?.value;
+        const container = document.getElementById('cima-activity-profile');
+        if (!container || !protein) return;
+
+        container.innerHTML = '<p class="loading">Loading...</p>';
+
+        try {
+            const data = await API.get('/cima/activity', { signature_type: this.signatureType });
+
+            if (data && data.length > 0) {
+                // Filter for selected protein
+                const proteinData = data.filter(d => d.signature === protein);
+
+                if (proteinData.length > 0) {
+                    // Sort by activity
+                    proteinData.sort((a, b) => b.mean_activity - a.mean_activity);
+
+                    const cellTypes = proteinData.map(d => d.cell_type);
+                    const activities = proteinData.map(d => d.mean_activity);
+                    const colors = activities.map(v => v >= 0 ? '#ef4444' : '#2563eb');
+
+                    Plotly.newPlot('cima-activity-profile', [{
+                        type: 'bar',
+                        x: activities,
+                        y: cellTypes,
+                        orientation: 'h',
+                        marker: { color: colors },
+                        hovertemplate: '<b>%{y}</b><br>Activity: %{x:.3f}<extra></extra>',
+                    }], {
+                        title: `${protein} Activity Across Cell Types`,
+                        xaxis: { title: 'Activity (z-score)', zeroline: true, zerolinecolor: '#888' },
+                        yaxis: { title: '', automargin: true },
+                        margin: { l: 150, r: 20, t: 40, b: 40 },
+                        font: { family: 'Inter, sans-serif' },
+                    });
+                } else {
+                    container.innerHTML = `<p class="loading">No data found for ${protein}</p>`;
+                }
+            } else {
+                container.innerHTML = '<p class="loading">No activity data available</p>';
+            }
+        } catch (e) {
+            container.innerHTML = `<p class="loading">Error: ${e.message}</p>`;
+        }
+    },
+
+    filterProteinList(searchText, atlas) {
+        const selectId = atlas === 'cima' ? 'cima-protein-select' :
+                         atlas === 'inflammation' ? 'inflam-protein-select' : 'scatlas-protein-select';
+        const select = document.getElementById(selectId);
+        const signatures = atlas === 'cima' ? this.cimaSignatures :
+                          atlas === 'inflammation' ? this.inflamSignatures : this.scatlasSignatures;
+
+        if (!select || !signatures) return;
+
+        const filtered = searchText ?
+            signatures.filter(s => s.toLowerCase().includes(searchText.toLowerCase())) :
+            signatures;
+
+        const currentValue = select.value;
+        select.innerHTML = `<option value="">Select ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'}...</option>` +
+            filtered.map(s => `<option value="${s}">${s}</option>`).join('');
+
+        // Restore selection if still in filtered list
+        if (filtered.includes(currentValue)) {
+            select.value = currentValue;
         }
     },
 
@@ -467,26 +580,113 @@ const AtlasDetailPage = {
 
     async loadInflamCelltypes(content) {
         content.innerHTML = `
-            <div class="panel-header">
-                <h3>Cell Type Activity Heatmap</h3>
-                <p>Mean ${this.signatureType} activity z-scores across cell types in inflammatory diseases</p>
+            <div class="viz-grid">
+                <!-- Sub-panel 1: Activity Profile with Search -->
+                <div class="sub-panel">
+                    <div class="panel-header">
+                        <h3>Cell Type Activity Profile</h3>
+                        <p>Search and view activity of a specific ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'}</p>
+                    </div>
+                    <div class="search-controls">
+                        <input type="text" id="inflam-protein-search" class="search-input"
+                               placeholder="Search ${this.signatureType === 'CytoSig' ? 'cytokine (e.g., IFNG, IL17A, TNF)' : 'protein'}..."
+                               onkeyup="AtlasDetailPage.filterProteinList(this.value, 'inflammation')">
+                        <select id="inflam-protein-select" class="filter-select" onchange="AtlasDetailPage.updateInflamActivityProfile()">
+                            <option value="">Select ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'}...</option>
+                        </select>
+                    </div>
+                    <div id="inflam-activity-profile" class="plot-container" style="height: 450px;">
+                        <p class="loading">Select a ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'} to view its activity profile</p>
+                    </div>
+                </div>
+
+                <!-- Sub-panel 2: Activity Heatmap -->
+                <div class="sub-panel">
+                    <div class="panel-header">
+                        <h3>Activity Heatmap</h3>
+                        <p>Mean ${this.signatureType} activity z-scores across all cell types</p>
+                    </div>
+                    <div id="inflam-celltype-heatmap" class="plot-container" style="height: 500px;"></div>
+                </div>
             </div>
-            <div id="inflam-celltype-heatmap" class="plot-container" style="height: 600px;"></div>
         `;
 
-        const data = await API.get('/inflammation/heatmap/activity', { signature_type: this.signatureType });
-        if (data && data.values) {
-            // Transform API response to heatmap component format
-            const heatmapData = {
-                z: data.values,
-                cell_types: data.rows,
-                signatures: data.columns,
+        // Load signatures for dropdown and heatmap data
+        const [signatures, heatmapData] = await Promise.all([
+            API.get('/cima/signatures', { signature_type: this.signatureType }), // Use CIMA signatures as reference
+            API.get('/inflammation/heatmap/activity', { signature_type: this.signatureType }),
+        ]);
+
+        // Populate protein dropdown
+        const select = document.getElementById('inflam-protein-select');
+        if (signatures && select) {
+            this.inflamSignatures = signatures;
+            select.innerHTML = `<option value="">Select ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'}...</option>` +
+                signatures.map(s => `<option value="${s}">${s}</option>`).join('');
+
+            if (signatures.length > 0) {
+                select.value = signatures[0];
+                this.updateInflamActivityProfile();
+            }
+        }
+
+        // Render heatmap
+        if (heatmapData && heatmapData.values) {
+            const data = {
+                z: heatmapData.values,
+                cell_types: heatmapData.rows,
+                signatures: heatmapData.columns,
             };
-            Heatmap.createActivityHeatmap('inflam-celltype-heatmap', heatmapData, {
+            Heatmap.createActivityHeatmap('inflam-celltype-heatmap', data, {
                 title: `${this.signatureType} Activity by Cell Type`,
             });
         } else {
-            document.getElementById('inflam-celltype-heatmap').innerHTML = '<p class="loading">No data available</p>';
+            document.getElementById('inflam-celltype-heatmap').innerHTML = '<p class="loading">No heatmap data available</p>';
+        }
+    },
+
+    async updateInflamActivityProfile() {
+        const protein = document.getElementById('inflam-protein-select')?.value;
+        const container = document.getElementById('inflam-activity-profile');
+        if (!container || !protein) return;
+
+        container.innerHTML = '<p class="loading">Loading...</p>';
+
+        try {
+            const data = await API.get('/inflammation/activity', { signature_type: this.signatureType });
+
+            if (data && data.length > 0) {
+                const proteinData = data.filter(d => d.signature === protein);
+
+                if (proteinData.length > 0) {
+                    proteinData.sort((a, b) => b.mean_activity - a.mean_activity);
+
+                    const cellTypes = proteinData.map(d => d.cell_type);
+                    const activities = proteinData.map(d => d.mean_activity);
+                    const colors = activities.map(v => v >= 0 ? '#ef4444' : '#2563eb');
+
+                    Plotly.newPlot('inflam-activity-profile', [{
+                        type: 'bar',
+                        x: activities,
+                        y: cellTypes,
+                        orientation: 'h',
+                        marker: { color: colors },
+                        hovertemplate: '<b>%{y}</b><br>Activity: %{x:.3f}<extra></extra>',
+                    }], {
+                        title: `${protein} Activity Across Cell Types`,
+                        xaxis: { title: 'Activity (z-score)', zeroline: true, zerolinecolor: '#888' },
+                        yaxis: { title: '', automargin: true },
+                        margin: { l: 150, r: 20, t: 40, b: 40 },
+                        font: { family: 'Inter, sans-serif' },
+                    });
+                } else {
+                    container.innerHTML = `<p class="loading">No data found for ${protein}</p>`;
+                }
+            } else {
+                container.innerHTML = '<p class="loading">No activity data available</p>';
+            }
+        } catch (e) {
+            container.innerHTML = `<p class="loading">Error: ${e.message}</p>`;
         }
     },
 
@@ -720,26 +920,116 @@ const AtlasDetailPage = {
 
     async loadScatlasCelltypes(content) {
         content.innerHTML = `
-            <div class="panel-header">
-                <h3>Cell Type Heatmap</h3>
-                <p>Activity across cell types (top 50 most variable)</p>
+            <div class="viz-grid">
+                <!-- Sub-panel 1: Activity Profile with Search -->
+                <div class="sub-panel">
+                    <div class="panel-header">
+                        <h3>Cell Type Activity Profile</h3>
+                        <p>Search and view activity of a specific ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'}</p>
+                    </div>
+                    <div class="search-controls">
+                        <input type="text" id="scatlas-protein-search" class="search-input"
+                               placeholder="Search ${this.signatureType === 'CytoSig' ? 'cytokine (e.g., IFNG, IL17A, TNF)' : 'protein'}..."
+                               onkeyup="AtlasDetailPage.filterProteinList(this.value, 'scatlas')">
+                        <select id="scatlas-protein-select" class="filter-select" onchange="AtlasDetailPage.updateScatlasActivityProfile()">
+                            <option value="">Select ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'}...</option>
+                        </select>
+                    </div>
+                    <div id="scatlas-activity-profile" class="plot-container" style="height: 450px;">
+                        <p class="loading">Select a ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'} to view its activity profile</p>
+                    </div>
+                </div>
+
+                <!-- Sub-panel 2: Activity Heatmap -->
+                <div class="sub-panel">
+                    <div class="panel-header">
+                        <h3>Activity Heatmap</h3>
+                        <p>Mean ${this.signatureType} activity z-scores (top 50 cell types)</p>
+                    </div>
+                    <div id="scatlas-celltype-heatmap" class="plot-container" style="height: 500px;"></div>
+                </div>
             </div>
-            <div id="scatlas-celltype-heatmap" class="plot-container" style="height: 700px;"></div>
         `;
 
-        const data = await API.get('/scatlas/heatmap/celltype', { signature_type: this.signatureType });
-        if (data && data.values) {
-            // Transform API response to heatmap component format
-            const heatmapData = {
-                z: data.values,
-                cell_types: data.rows,
-                signatures: data.columns,
+        // Load signatures for dropdown and heatmap data
+        const [signatures, heatmapData] = await Promise.all([
+            API.get('/cima/signatures', { signature_type: this.signatureType }), // Use CIMA signatures as reference
+            API.get('/scatlas/heatmap/celltype', { signature_type: this.signatureType }),
+        ]);
+
+        // Populate protein dropdown
+        const select = document.getElementById('scatlas-protein-select');
+        if (signatures && select) {
+            this.scatlasSignatures = signatures;
+            select.innerHTML = `<option value="">Select ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'}...</option>` +
+                signatures.map(s => `<option value="${s}">${s}</option>`).join('');
+
+            if (signatures.length > 0) {
+                select.value = signatures[0];
+                this.updateScatlasActivityProfile();
+            }
+        }
+
+        // Render heatmap
+        if (heatmapData && heatmapData.values) {
+            const data = {
+                z: heatmapData.values,
+                cell_types: heatmapData.rows,
+                signatures: heatmapData.columns,
             };
-            Heatmap.createActivityHeatmap('scatlas-celltype-heatmap', heatmapData, {
+            Heatmap.createActivityHeatmap('scatlas-celltype-heatmap', data, {
                 title: `${this.signatureType} Activity by Cell Type`,
             });
         } else {
-            document.getElementById('scatlas-celltype-heatmap').innerHTML = '<p class="loading">No data available</p>';
+            document.getElementById('scatlas-celltype-heatmap').innerHTML = '<p class="loading">No heatmap data available</p>';
+        }
+    },
+
+    async updateScatlasActivityProfile() {
+        const protein = document.getElementById('scatlas-protein-select')?.value;
+        const container = document.getElementById('scatlas-activity-profile');
+        if (!container || !protein) return;
+
+        container.innerHTML = '<p class="loading">Loading...</p>';
+
+        try {
+            // Get cell type signatures data
+            const response = await API.get('/scatlas/celltype-signatures', { signature_type: this.signatureType });
+
+            if (response && response.data && response.data.length > 0) {
+                const proteinData = response.data.filter(d => d.signature === protein);
+
+                if (proteinData.length > 0) {
+                    proteinData.sort((a, b) => b.mean_activity - a.mean_activity);
+
+                    // Take top 30 for readability
+                    const topData = proteinData.slice(0, 30);
+                    const cellTypes = topData.map(d => d.cell_type);
+                    const activities = topData.map(d => d.mean_activity);
+                    const colors = activities.map(v => v >= 0 ? '#ef4444' : '#2563eb');
+
+                    Plotly.newPlot('scatlas-activity-profile', [{
+                        type: 'bar',
+                        x: activities,
+                        y: cellTypes,
+                        orientation: 'h',
+                        marker: { color: colors },
+                        hovertemplate: '<b>%{y}</b><br>Activity: %{x:.3f}<extra></extra>',
+                    }], {
+                        title: `${protein} Activity (Top 30 Cell Types)`,
+                        xaxis: { title: 'Activity (z-score)', zeroline: true, zerolinecolor: '#888' },
+                        yaxis: { title: '', automargin: true },
+                        margin: { l: 150, r: 20, t: 40, b: 40 },
+                        font: { family: 'Inter, sans-serif' },
+                    });
+                } else {
+                    container.innerHTML = `<p class="loading">No data found for ${protein}</p>`;
+                }
+            } else {
+                container.innerHTML = '<p class="loading">No activity data available</p>';
+            }
+        } catch (e) {
+            container.innerHTML = `<p class="loading">Error: ${e.message}</p>`;
         }
     },
 

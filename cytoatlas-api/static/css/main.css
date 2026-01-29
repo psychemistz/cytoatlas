@@ -1010,6 +1010,53 @@ main {
     gap: var(--spacing-lg);
 }
 
+.sub-panel {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+}
+
+.sub-panel .panel-header {
+    margin-bottom: var(--spacing-md);
+}
+
+.sub-panel .panel-header h3 {
+    font-size: 1.1rem;
+    margin-bottom: var(--spacing-xs);
+}
+
+.sub-panel .panel-header p {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.search-controls {
+    display: flex;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+    flex-wrap: wrap;
+}
+
+.search-controls .search-input {
+    flex: 1;
+    min-width: 200px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+}
+
+.search-controls .search-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.search-controls .filter-select {
+    min-width: 180px;
+}
+
 @media (max-width: 1024px) {
     .viz-grid {
         grid-template-columns: 1fr;
