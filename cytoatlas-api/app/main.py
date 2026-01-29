@@ -14,6 +14,7 @@ from app.config import get_settings
 # Static files directory
 STATIC_DIR = Path(__file__).parent.parent / "static"
 from app.core.cache import CacheService
+from app.core.logging import MetricsMiddleware, RequestLoggingMiddleware, logger
 from app.core.database import close_db, init_db
 from app.routers import (
     atlases_router,
@@ -34,31 +35,32 @@ settings = get_settings()
 async def lifespan(app: FastAPI) -> AsyncGenerator:
     """Application lifespan manager."""
     # Startup
-    print(f"Starting {settings.app_name} v{settings.app_version}")
-    print(f"Environment: {settings.environment}")
-    print(f"Data path: {settings.viz_data_path}")
+    logger.info(f"Starting {settings.app_name} v{settings.app_version}")
+    logger.info(f"Environment: {settings.environment}")
+    logger.info(f"Data path: {settings.viz_data_path}")
 
     # Initialize database (if configured)
     if settings.use_database:
         try:
             await init_db()
-            print("Database: Connected")
+            logger.info("Database: Connected")
         except Exception as e:
-            print(f"Database: Skipped ({e})")
+            logger.warning(f"Database: Skipped ({e})")
     else:
-        print("Database: Not configured (running without persistence)")
+        logger.info("Database: Not configured (running without persistence)")
 
     # Initialize cache
     try:
         cache = CacheService()
         await cache.connect()
+        logger.info("Cache: Connected")
     except Exception as e:
-        print(f"Cache: Error ({e})")
+        logger.warning(f"Cache: Error ({e})")
 
     yield
 
     # Shutdown
-    print("Shutting down...")
+    logger.info("Shutting down...")
     try:
         cache = CacheService()
         await cache.disconnect()
@@ -97,6 +99,10 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Request logging and metrics middleware
+    app.add_middleware(RequestLoggingMiddleware)
+    app.add_middleware(MetricsMiddleware)
+
     # Global exception handler
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
@@ -126,7 +132,7 @@ def create_app() -> FastAPI:
     # Mount static files (CSS, JS, assets)
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-        print(f"Static files: Serving from {STATIC_DIR}")
+        logger.info(f"Static files: Serving from {STATIC_DIR}")
 
     # Root endpoint - serve frontend HTML
     @app.get("/")

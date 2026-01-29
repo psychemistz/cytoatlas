@@ -83,3 +83,15 @@ async def liveness_check() -> dict:
     Returns 200 if the service is alive.
     """
     return {"alive": True}
+
+
+@router.get("/metrics")
+async def get_metrics() -> dict:
+    """
+    Get API metrics summary.
+
+    Returns request counts, response times, and error rates.
+    """
+    from app.core.logging import metrics
+
+    return metrics.get_summary()
