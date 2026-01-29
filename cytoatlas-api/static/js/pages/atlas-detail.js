@@ -420,14 +420,14 @@ const AtlasDetailPage = {
                         marker: { color: colors },
                         hovertemplate: '<b>%{y}</b><br>Activity: %{x:.3f}<extra></extra>',
                     }], {
-                        title: `${protein} Activity Across Cell Types`,
+                        title: `${protein} [${this.signatureType}] Activity Across Cell Types`,
                         xaxis: { title: 'Activity (z-score)', zeroline: true, zerolinecolor: '#888' },
                         yaxis: { title: '', automargin: true },
                         margin: { l: 150, r: 20, t: 40, b: 40 },
                         font: { family: 'Inter, sans-serif' },
                     });
                 } else {
-                    container.innerHTML = `<p class="loading">No data found for ${protein}</p>`;
+                    container.innerHTML = `<p class="loading">No data found for ${protein} [${this.signatureType}]</p>`;
                 }
             } else {
                 container.innerHTML = '<p class="loading">No activity data available</p>';
@@ -668,7 +668,7 @@ const AtlasDetailPage = {
             text: hoverText,
             colorbar: { title: 'ρ', titleside: 'right' },
         }], {
-            title: `${feature === 'age' ? 'Age' : 'BMI'} Correlation by Cell Type (${nSig} significant)`,
+            title: `${feature === 'age' ? 'Age' : 'BMI'} Correlation by Cell Type [${this.signatureType}] (${nSig} significant)`,
             xaxis: { title: 'Signature', tickangle: -45, tickfont: { size: 9 } },
             yaxis: { title: 'Cell Type', tickfont: { size: 10 }, automargin: true },
             margin: { l: 120, r: 50, t: 50, b: 100 },
@@ -1143,14 +1143,14 @@ const AtlasDetailPage = {
                         marker: { color: colors },
                         hovertemplate: '<b>%{y}</b><br>Activity: %{x:.3f}<extra></extra>',
                     }], {
-                        title: `${protein} Activity Across Cell Types`,
+                        title: `${protein} [${this.signatureType}] Activity Across Cell Types`,
                         xaxis: { title: 'Activity (z-score)', zeroline: true, zerolinecolor: '#888' },
                         yaxis: { title: '', automargin: true },
                         margin: { l: 150, r: 20, t: 40, b: 40 },
                         font: { family: 'Inter, sans-serif' },
                     });
                 } else {
-                    container.innerHTML = `<p class="loading">No data found for ${protein}</p>`;
+                    container.innerHTML = `<p class="loading">No data found for ${protein} [${this.signatureType}]</p>`;
                 }
             } else {
                 container.innerHTML = '<p class="loading">No activity data available</p>';
@@ -1306,7 +1306,7 @@ const AtlasDetailPage = {
             text: hoverText,
             colorbar: { title: 'ρ', titleside: 'right' },
         }], {
-            title: `${feature === 'age' ? 'Age' : 'BMI'} Correlation by Cell Type (${nSig} significant)`,
+            title: `${feature === 'age' ? 'Age' : 'BMI'} Correlation by Cell Type [${this.signatureType}] (${nSig} significant)`,
             xaxis: { title: 'Signature', tickangle: -45, tickfont: { size: 9 } },
             yaxis: { title: 'Cell Type', tickfont: { size: 10 }, automargin: true },
             margin: { l: 120, r: 50, t: 50, b: 100 },
@@ -1804,14 +1804,14 @@ const AtlasDetailPage = {
                         marker: { color: colors },
                         hovertemplate: '<b>%{y}</b><br>Activity: %{x:.3f}<extra></extra>',
                     }], {
-                        title: `${protein} Activity (Top 30 Cell Types)`,
+                        title: `${protein} [${this.signatureType}] Activity (Top 30 Cell Types)`,
                         xaxis: { title: 'Activity (z-score)', zeroline: true, zerolinecolor: '#888' },
                         yaxis: { title: '', automargin: true },
                         margin: { l: 150, r: 20, t: 40, b: 40 },
                         font: { family: 'Inter, sans-serif' },
                     });
                 } else {
-                    container.innerHTML = `<p class="loading">No data found for ${protein}</p>`;
+                    container.innerHTML = `<p class="loading">No data found for ${protein} [${this.signatureType}]</p>`;
                 }
             } else {
                 container.innerHTML = '<p class="loading">No activity data available</p>';
@@ -2390,7 +2390,7 @@ const AtlasDetailPage = {
                     },
                     hovertemplate: '%{text}<br>Log2FC: %{x:.2f}<br>-log10(p): %{y:.2f}<extra></extra>',
                 }], {
-                    title: `Differential Analysis: ${comparison}`,
+                    title: `Differential Analysis: ${comparison} [${this.signatureType}]`,
                     xaxis: { title: 'Log2 Fold Change', zeroline: true },
                     yaxis: { title: '-log10(p-value)' },
                     shapes: [
@@ -2399,7 +2399,7 @@ const AtlasDetailPage = {
                     ],
                 });
             } else {
-                plotContainer.innerHTML = '<p class="loading">No differential data available</p>';
+                plotContainer.innerHTML = `<p class="loading">No differential data available [${this.signatureType}]</p>`;
             }
         } catch (e) {
             plotContainer.innerHTML = `<p class="loading">Error: ${e.message}</p>`;
@@ -2450,12 +2450,12 @@ const AtlasDetailPage = {
                     marker: { color: x.map(v => v > 0 ? '#ef4444' : '#2563eb'), size: 8 },
                     hovertemplate: '%{text}<br>Log2FC: %{x:.2f}<br>-log10(p): %{y:.2f}<extra></extra>',
                 }], {
-                    title: `Disease vs Healthy: ${disease || 'All'}`,
+                    title: `Disease vs Healthy: ${disease || 'All'} [${this.signatureType}]`,
                     xaxis: { title: 'Log2 Fold Change', zeroline: true },
                     yaxis: { title: '-log10(p-value)' },
                 });
             } else {
-                plotContainer.innerHTML = '<p class="loading">No differential data available</p>';
+                plotContainer.innerHTML = `<p class="loading">No differential data available [${this.signatureType}]</p>`;
             }
         } catch (e) {
             plotContainer.innerHTML = `<p class="loading">Error: ${e.message}</p>`;
@@ -2482,7 +2482,7 @@ const AtlasDetailPage = {
                 }));
 
                 Plotly.newPlot('treatment-roc', traces, {
-                    title: `Treatment Response Prediction${disease ? ` - ${disease}` : ''}`,
+                    title: `Treatment Response Prediction${disease ? ` - ${disease}` : ''} [${this.signatureType}]`,
                     xaxis: { title: 'False Positive Rate', range: [0, 1] },
                     yaxis: { title: 'True Positive Rate', range: [0, 1] },
                     shapes: [{
@@ -2491,7 +2491,7 @@ const AtlasDetailPage = {
                     }],
                 });
             } else {
-                rocContainer.innerHTML = '<p class="loading">No treatment response data available</p>';
+                rocContainer.innerHTML = `<p class="loading">No treatment response data available [${this.signatureType}]</p>`;
             }
         } catch (e) {
             rocContainer.innerHTML = `<p class="loading">Error: ${e.message}</p>`;
@@ -2519,7 +2519,7 @@ const AtlasDetailPage = {
                         orientation: 'h',
                         marker: { color: values.map(v => v > 0 ? '#ef4444' : '#2563eb') },
                     }], {
-                        title: `${signature} Activity by Organ`,
+                        title: `${signature} [${this.signatureType}] Activity by Organ`,
                         xaxis: { title: 'Mean Activity (z-score)' },
                         margin: { l: 150 },
                     });
@@ -2543,7 +2543,7 @@ const AtlasDetailPage = {
             });
             if (data && data.x && data.y) {
                 Scatter.create('biochem-scatter', data, {
-                    title: `${signature} vs ${marker}`,
+                    title: `${signature} [${this.signatureType}] vs ${marker}`,
                     xLabel: marker,
                     yLabel: `${signature} Activity`,
                     showTrendLine: true,
