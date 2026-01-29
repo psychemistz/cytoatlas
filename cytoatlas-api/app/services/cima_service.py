@@ -171,13 +171,28 @@ class CIMAService(BaseService):
         Returns:
             List of differential results
         """
+        import math
+
         data = await self.load_json("cima_differential.json")
+
+        # Helper to handle NaN/Inf values
+        def safe_float(val, default=0.0):
+            if val is None:
+                return default
+            if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
+                return default
+            return val
 
         # Transform field names to match schema
         # JSON has: protein, signature (type), comparison, group1, group2, log2fc, etc.
         # Schema expects: signature (protein name), signature_type
         transformed = []
         for r in data:
+            # Skip records with NaN log2fc (invalid data)
+            log2fc_val = r.get("log2fc")
+            if log2fc_val is not None and isinstance(log2fc_val, float) and math.isnan(log2fc_val):
+                continue
+
             # The JSON "signature" field contains the type (CytoSig/SecAct)
             data_sig_type = r.get("signature", "CytoSig")
 
@@ -188,12 +203,12 @@ class CIMAService(BaseService):
                 "comparison": r.get("comparison"),
                 "group1": r.get("group1"),
                 "group2": r.get("group2"),
-                "log2fc": r.get("log2fc", 0),
-                "median_g1": r.get("median_g1", 0),
-                "median_g2": r.get("median_g2", 0),
-                "pvalue": r.get("pvalue", r.get("p_value", 1)),
-                "qvalue": r.get("qvalue", r.get("q_value")),
-                "neg_log10_pval": r.get("neg_log10_pval"),
+                "log2fc": safe_float(r.get("log2fc"), 0),
+                "median_g1": safe_float(r.get("median_g1"), 0),
+                "median_g2": safe_float(r.get("median_g2"), 0),
+                "pvalue": safe_float(r.get("pvalue", r.get("p_value")), 1),
+                "qvalue": safe_float(r.get("qvalue", r.get("q_value")), None),
+                "neg_log10_pval": safe_float(r.get("neg_log10_pval"), 0),
             }
             transformed.append(record)
 
