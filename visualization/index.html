@@ -1522,10 +1522,19 @@
                         <label>Disease</label>
                         <select id="treatment-disease">
                             <option value="all">All Diseases</option>
-                            <option value="Rheumatoid Arthritis">Rheumatoid Arthritis</option>
-                            <option value="Inflammatory Bowel Disease">Inflammatory Bowel Disease</option>
-                            <option value="Psoriasis">Psoriasis</option>
-                            <option value="Asthma">Asthma</option>
+                            <option value="RA">Rheumatoid Arthritis (RA)</option>
+                            <option value="PS">Psoriasis (PS)</option>
+                            <option value="PSA">Psoriatic Arthritis (PSA)</option>
+                            <option value="CD">Crohn's Disease (CD)</option>
+                            <option value="UC">Ulcerative Colitis (UC)</option>
+                            <option value="SLE">Systemic Lupus (SLE)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Signature Type</label>
+                        <select id="treatment-sig-type">
+                            <option value="CytoSig">CytoSig (43 cytokines)</option>
+                            <option value="SecAct">SecAct (1,170 proteins)</option>
                         </select>
                     </div>
                     <div class="control-group">
@@ -6987,6 +6996,7 @@
 
             // Get filter values
             const selectedDisease = document.getElementById('treatment-disease')?.value || 'all';
+            const selectedSigType = document.getElementById('treatment-sig-type')?.value || 'CytoSig';
             const selectedModel = document.getElementById('prediction-model')?.value || 'all';
 
             if (!data || (!data.roc_curves?.length && !data.feature_importance?.length)) {
@@ -7005,8 +7015,14 @@
                 Plotly.purge(container1);
 
                 let rocData = data.roc_curves || [];
+                // Filter by signature type
+                rocData = rocData.filter(d => d.signature_type === selectedSigType);
+                // Handle "All Diseases" - maps to "All Diseases" in data
                 if (selectedDisease !== 'all') {
                     rocData = rocData.filter(d => d.disease === selectedDisease);
+                } else {
+                    // Show "All Diseases" entry when all is selected
+                    rocData = rocData.filter(d => d.disease === 'All Diseases');
                 }
                 if (selectedModel !== 'all') {
                     rocData = rocData.filter(d => d.model === selectedModel);
@@ -7056,8 +7072,13 @@
                 Plotly.purge(container2);
 
                 let impData = data.feature_importance || [];
+                // Filter by signature type
+                impData = impData.filter(d => d.signature_type === selectedSigType);
+                // Handle disease filter
                 if (selectedDisease !== 'all') {
                     impData = impData.filter(d => d.disease === selectedDisease);
+                } else {
+                    impData = impData.filter(d => d.disease === 'All Diseases');
                 }
 
                 if (impData.length === 0) {
@@ -7101,8 +7122,13 @@
                 Plotly.purge(container3);
 
                 let predData = data.predictions || [];
+                // Filter by signature type
+                predData = predData.filter(d => d.signature_type === selectedSigType);
+                // Handle disease filter
                 if (selectedDisease !== 'all') {
                     predData = predData.filter(d => d.disease === selectedDisease);
+                } else {
+                    predData = predData.filter(d => d.disease === 'All Diseases');
                 }
 
                 if (predData.length === 0) {
@@ -9290,6 +9316,7 @@
 
             // Inflammation Treatment Response
             document.getElementById('treatment-disease')?.addEventListener('change', updateTreatmentResponse);
+            document.getElementById('treatment-sig-type')?.addEventListener('change', updateTreatmentResponse);
             document.getElementById('prediction-model')?.addEventListener('change', updateTreatmentResponse);
 
             // Inflammation Disease Sankey
