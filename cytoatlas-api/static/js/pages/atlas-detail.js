@@ -371,25 +371,208 @@ const AtlasDetailPage = {
         content.innerHTML = `
             <div class="panel-header">
                 <h3>Age & BMI Correlations</h3>
-                <p>Spearman correlation between signature activities and age/BMI</p>
+                <p>Spearman correlations between ${this.signatureType} activities and donor age/BMI</p>
             </div>
+
+            <!-- Sub-panel 1 & 2: Age and BMI Correlations (lollipop charts) -->
             <div class="viz-grid">
-                <div id="age-corr-heatmap" class="plot-container" style="height: 500px;"></div>
-                <div id="bmi-corr-heatmap" class="plot-container" style="height: 500px;"></div>
+                <div class="sub-panel">
+                    <div class="panel-header">
+                        <h4>Age Correlations</h4>
+                        <p>Top 10 positive and negative correlations with donor age</p>
+                    </div>
+                    <div id="cima-age-lollipop" class="plot-container" style="height: 450px;"></div>
+                </div>
+                <div class="sub-panel">
+                    <div class="panel-header">
+                        <h4>BMI Correlations</h4>
+                        <p>Top 10 positive and negative correlations with BMI</p>
+                    </div>
+                    <div id="cima-bmi-lollipop" class="plot-container" style="height: 450px;"></div>
+                </div>
+            </div>
+
+            <!-- Sub-panel 3: Cell Type-Specific Correlations -->
+            <div class="sub-panel" style="margin-top: var(--spacing-lg);">
+                <div class="panel-header">
+                    <h4>Cell Type-Specific Correlations</h4>
+                    <p>Heatmap showing how activities correlate with Age/BMI <strong>within each cell type</strong></p>
+                </div>
+                <div class="search-controls">
+                    <select id="cima-ct-corr-feature" class="filter-select" onchange="AtlasDetailPage.updateCimaCellTypeCorrelation()">
+                        <option value="age">Correlation with Age</option>
+                        <option value="bmi">Correlation with BMI</option>
+                    </select>
+                    <select id="cima-ct-corr-metric" class="filter-select" onchange="AtlasDetailPage.updateCimaCellTypeCorrelation()">
+                        <option value="all">All correlations (ρ)</option>
+                        <option value="sig">Significant only (q<0.05)</option>
+                    </select>
+                </div>
+                <div id="cima-celltype-corr-heatmap" class="plot-container" style="height: 500px;"></div>
             </div>
         `;
 
+        // Load correlation data
         const [ageData, bmiData] = await Promise.all([
             API.get('/cima/correlations/age', { signature_type: this.signatureType }),
             API.get('/cima/correlations/bmi', { signature_type: this.signatureType }),
         ]);
 
+        // Store data for cell type heatmap
+        this.cimaAgeCorrelations = ageData;
+        this.cimaBmiCorrelations = bmiData;
+
+        // Render lollipop charts
         if (ageData && ageData.length > 0) {
-            this.renderCorrelationHeatmap('age-corr-heatmap', ageData, 'Age Correlation');
+            this.renderCorrelationLollipop('cima-age-lollipop', ageData, 'Age');
+        } else {
+            document.getElementById('cima-age-lollipop').innerHTML = '<p class="loading">No age correlation data</p>';
         }
+
         if (bmiData && bmiData.length > 0) {
-            this.renderCorrelationHeatmap('bmi-corr-heatmap', bmiData, 'BMI Correlation');
+            this.renderCorrelationLollipop('cima-bmi-lollipop', bmiData, 'BMI');
+        } else {
+            document.getElementById('cima-bmi-lollipop').innerHTML = '<p class="loading">No BMI correlation data</p>';
         }
+
+        // Render cell type correlation heatmap
+        this.updateCimaCellTypeCorrelation();
+    },
+
+    renderCorrelationLollipop(containerId, data, title) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        // Aggregate by signature (average across cell types)
+        const sigMap = {};
+        data.forEach(d => {
+            if (!sigMap[d.signature]) {
+                sigMap[d.signature] = { rhos: [], pvals: [] };
+            }
+            sigMap[d.signature].rhos.push(d.rho);
+            sigMap[d.signature].pvals.push(d.p_value || d.pvalue);
+        });
+
+        const aggregated = Object.entries(sigMap).map(([sig, vals]) => ({
+            signature: sig,
+            rho: vals.rhos.reduce((a, b) => a + b, 0) / vals.rhos.length,
+            p_value: Math.min(...vals.pvals),
+        }));
+
+        // Sort by rho and get top 10 + bottom 10
+        aggregated.sort((a, b) => b.rho - a.rho);
+        const top10 = aggregated.slice(0, 10);
+        const bottom10 = aggregated.slice(-10);
+        const combined = [...top10, ...bottom10];
+
+        // Reverse for display (highest at top)
+        combined.reverse();
+
+        const y = combined.map(d => d.signature);
+        const x = combined.map(d => d.rho);
+        const colors = x.map(v => v >= 0 ? '#ef4444' : '#2563eb');
+
+        Plotly.newPlot(containerId, [{
+            type: 'bar',
+            x: x,
+            y: y,
+            orientation: 'h',
+            marker: { color: colors },
+            hovertemplate: '<b>%{y}</b><br>ρ = %{x:.3f}<extra></extra>',
+        }], {
+            title: `${title} Correlation (${this.signatureType})`,
+            xaxis: {
+                title: 'Spearman ρ',
+                zeroline: true,
+                zerolinecolor: '#888',
+                range: [-0.5, 0.5],
+            },
+            yaxis: { title: '', automargin: true, tickfont: { size: 10 } },
+            margin: { l: 100, r: 20, t: 40, b: 40 },
+            font: { family: 'Inter, sans-serif' },
+        });
+    },
+
+    updateCimaCellTypeCorrelation() {
+        const container = document.getElementById('cima-celltype-corr-heatmap');
+        if (!container) return;
+
+        const feature = document.getElementById('cima-ct-corr-feature')?.value || 'age';
+        const metric = document.getElementById('cima-ct-corr-metric')?.value || 'all';
+
+        const data = feature === 'age' ? this.cimaAgeCorrelations : this.cimaBmiCorrelations;
+
+        if (!data || data.length === 0) {
+            container.innerHTML = '<p class="loading">No correlation data available</p>';
+            return;
+        }
+
+        // Get unique cell types and signatures
+        const cellTypes = [...new Set(data.map(d => d.cell_type))].sort();
+        const signatures = [...new Set(data.map(d => d.signature))].sort();
+
+        // Create lookup map
+        const lookup = {};
+        data.forEach(d => {
+            lookup[`${d.cell_type}|${d.signature}`] = d;
+        });
+
+        // Build heatmap matrix
+        const zValues = [];
+        const hoverText = [];
+        const sigThreshold = 0.05;
+
+        for (const ct of cellTypes) {
+            const row = [];
+            const hoverRow = [];
+            for (const sig of signatures) {
+                const record = lookup[`${ct}|${sig}`];
+                if (record) {
+                    const qval = record.q_value || record.qvalue;
+                    const isSignificant = qval !== undefined ? qval < sigThreshold : record.p_value < sigThreshold;
+
+                    if (metric === 'sig' && !isSignificant) {
+                        row.push(null);
+                        hoverRow.push(`${ct}<br>${sig}<br>Not significant`);
+                    } else {
+                        row.push(record.rho);
+                        const sigMark = isSignificant ? ' *' : '';
+                        hoverRow.push(`<b>${ct}</b><br>${sig}<br>ρ = ${record.rho.toFixed(3)}${sigMark}`);
+                    }
+                } else {
+                    row.push(null);
+                    hoverRow.push(`${ct}<br>${sig}<br>No data`);
+                }
+            }
+            zValues.push(row);
+            hoverText.push(hoverRow);
+        }
+
+        // Count significant
+        const nSig = data.filter(d => {
+            const qval = d.q_value || d.qvalue;
+            return qval !== undefined ? qval < sigThreshold : d.p_value < sigThreshold;
+        }).length;
+
+        Plotly.newPlot(containerId, [{
+            z: zValues,
+            x: signatures,
+            y: cellTypes,
+            type: 'heatmap',
+            colorscale: 'RdBu',
+            reversescale: true,
+            zmin: -0.5,
+            zmax: 0.5,
+            hoverinfo: 'text',
+            text: hoverText,
+            colorbar: { title: 'ρ', titleside: 'right' },
+        }], {
+            title: `${feature === 'age' ? 'Age' : 'BMI'} Correlation by Cell Type (${nSig} significant)`,
+            xaxis: { title: 'Signature', tickangle: -45, tickfont: { size: 9 } },
+            yaxis: { title: 'Cell Type', tickfont: { size: 10 }, automargin: true },
+            margin: { l: 120, r: 50, t: 50, b: 100 },
+            font: { family: 'Inter, sans-serif' },
+        });
     },
 
     async loadCimaAgeBmiStratified(content) {
@@ -694,25 +877,154 @@ const AtlasDetailPage = {
         content.innerHTML = `
             <div class="panel-header">
                 <h3>Age & BMI Correlations</h3>
-                <p>Spearman correlation between signature activities and age/BMI in disease cohorts</p>
+                <p>Spearman correlations between ${this.signatureType} activities and patient age/BMI</p>
             </div>
+
+            <!-- Sub-panel 1 & 2: Age and BMI Correlations (lollipop charts) -->
             <div class="viz-grid">
-                <div id="inflam-age-corr" class="plot-container" style="height: 500px;"></div>
-                <div id="inflam-bmi-corr" class="plot-container" style="height: 500px;"></div>
+                <div class="sub-panel">
+                    <div class="panel-header">
+                        <h4>Age Correlations</h4>
+                        <p>Top 10 positive and negative correlations with patient age</p>
+                    </div>
+                    <div id="inflam-age-lollipop" class="plot-container" style="height: 450px;"></div>
+                </div>
+                <div class="sub-panel">
+                    <div class="panel-header">
+                        <h4>BMI Correlations</h4>
+                        <p>Top 10 positive and negative correlations with BMI</p>
+                    </div>
+                    <div id="inflam-bmi-lollipop" class="plot-container" style="height: 450px;"></div>
+                </div>
+            </div>
+
+            <!-- Sub-panel 3: Cell Type-Specific Correlations -->
+            <div class="sub-panel" style="margin-top: var(--spacing-lg);">
+                <div class="panel-header">
+                    <h4>Cell Type-Specific Correlations</h4>
+                    <p>Heatmap showing how activities correlate with Age/BMI <strong>within each cell type</strong></p>
+                </div>
+                <div class="search-controls">
+                    <select id="inflam-ct-corr-feature" class="filter-select" onchange="AtlasDetailPage.updateInflamCellTypeCorrelation()">
+                        <option value="age">Correlation with Age</option>
+                        <option value="bmi">Correlation with BMI</option>
+                    </select>
+                    <select id="inflam-ct-corr-metric" class="filter-select" onchange="AtlasDetailPage.updateInflamCellTypeCorrelation()">
+                        <option value="all">All correlations (ρ)</option>
+                        <option value="sig">Significant only (q<0.05)</option>
+                    </select>
+                </div>
+                <div id="inflam-celltype-corr-heatmap" class="plot-container" style="height: 500px;"></div>
             </div>
         `;
 
+        // Load correlation data
         const [ageData, bmiData] = await Promise.all([
             API.get('/inflammation/correlations/age', { signature_type: this.signatureType }),
             API.get('/inflammation/correlations/bmi', { signature_type: this.signatureType }),
         ]);
 
+        // Store data for cell type heatmap
+        this.inflamAgeCorrelations = ageData;
+        this.inflamBmiCorrelations = bmiData;
+
+        // Render lollipop charts
         if (ageData && ageData.length > 0) {
-            this.renderCorrelationHeatmap('inflam-age-corr', ageData, 'Age Correlation');
+            this.renderCorrelationLollipop('inflam-age-lollipop', ageData, 'Age');
+        } else {
+            document.getElementById('inflam-age-lollipop').innerHTML = '<p class="loading">No age correlation data</p>';
         }
+
         if (bmiData && bmiData.length > 0) {
-            this.renderCorrelationHeatmap('inflam-bmi-corr', bmiData, 'BMI Correlation');
+            this.renderCorrelationLollipop('inflam-bmi-lollipop', bmiData, 'BMI');
+        } else {
+            document.getElementById('inflam-bmi-lollipop').innerHTML = '<p class="loading">No BMI correlation data</p>';
         }
+
+        // Render cell type correlation heatmap
+        this.updateInflamCellTypeCorrelation();
+    },
+
+    updateInflamCellTypeCorrelation() {
+        const container = document.getElementById('inflam-celltype-corr-heatmap');
+        if (!container) return;
+
+        const feature = document.getElementById('inflam-ct-corr-feature')?.value || 'age';
+        const metric = document.getElementById('inflam-ct-corr-metric')?.value || 'all';
+
+        const data = feature === 'age' ? this.inflamAgeCorrelations : this.inflamBmiCorrelations;
+
+        if (!data || data.length === 0) {
+            container.innerHTML = '<p class="loading">No correlation data available</p>';
+            return;
+        }
+
+        // Get unique cell types and signatures
+        const cellTypes = [...new Set(data.map(d => d.cell_type))].sort();
+        const signatures = [...new Set(data.map(d => d.signature))].sort();
+
+        // Create lookup map
+        const lookup = {};
+        data.forEach(d => {
+            lookup[`${d.cell_type}|${d.signature}`] = d;
+        });
+
+        // Build heatmap matrix
+        const zValues = [];
+        const hoverText = [];
+        const sigThreshold = 0.05;
+
+        for (const ct of cellTypes) {
+            const row = [];
+            const hoverRow = [];
+            for (const sig of signatures) {
+                const record = lookup[`${ct}|${sig}`];
+                if (record) {
+                    const qval = record.q_value || record.qvalue;
+                    const isSignificant = qval !== undefined ? qval < sigThreshold : record.p_value < sigThreshold;
+
+                    if (metric === 'sig' && !isSignificant) {
+                        row.push(null);
+                        hoverRow.push(`${ct}<br>${sig}<br>Not significant`);
+                    } else {
+                        row.push(record.rho);
+                        const sigMark = isSignificant ? ' *' : '';
+                        hoverRow.push(`<b>${ct}</b><br>${sig}<br>ρ = ${record.rho.toFixed(3)}${sigMark}`);
+                    }
+                } else {
+                    row.push(null);
+                    hoverRow.push(`${ct}<br>${sig}<br>No data`);
+                }
+            }
+            zValues.push(row);
+            hoverText.push(hoverRow);
+        }
+
+        // Count significant
+        const nSig = data.filter(d => {
+            const qval = d.q_value || d.qvalue;
+            return qval !== undefined ? qval < sigThreshold : d.p_value < sigThreshold;
+        }).length;
+
+        Plotly.newPlot(container, [{
+            z: zValues,
+            x: signatures,
+            y: cellTypes,
+            type: 'heatmap',
+            colorscale: 'RdBu',
+            reversescale: true,
+            zmin: -0.5,
+            zmax: 0.5,
+            hoverinfo: 'text',
+            text: hoverText,
+            colorbar: { title: 'ρ', titleside: 'right' },
+        }], {
+            title: `${feature === 'age' ? 'Age' : 'BMI'} Correlation by Cell Type (${nSig} significant)`,
+            xaxis: { title: 'Signature', tickangle: -45, tickfont: { size: 9 } },
+            yaxis: { title: 'Cell Type', tickfont: { size: 10 }, automargin: true },
+            margin: { l: 120, r: 50, t: 50, b: 100 },
+            font: { family: 'Inter, sans-serif' },
+        });
     },
 
     async loadInflamAgeBmiStratified(content) {

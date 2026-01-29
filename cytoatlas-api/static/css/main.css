@@ -1021,14 +1021,21 @@ main {
     margin-bottom: var(--spacing-md);
 }
 
-.sub-panel .panel-header h3 {
+.sub-panel .panel-header h3,
+.sub-panel .panel-header h4 {
     font-size: 1.1rem;
     margin-bottom: var(--spacing-xs);
+    color: var(--text-primary);
+}
+
+.sub-panel .panel-header h4 {
+    font-size: 1rem;
 }
 
 .sub-panel .panel-header p {
     font-size: 0.875rem;
     color: var(--text-secondary);
+    margin: 0;
 }
 
 .search-controls {
