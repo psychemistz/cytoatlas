@@ -252,13 +252,31 @@ class InflammationService(BaseService):
         Returns:
             List of correlation results
         """
-        data = await self.load_json("inflammation_correlations.json")
+        # Use cell-type specific correlations
+        data = await self.load_json("inflammation_celltype_correlations.json")
 
         if variable not in data:
             raise ValueError(f"Invalid variable: {variable}")
 
         results = data[variable]
-        results = self.filter_by_signature_type(results, signature_type)
+
+        # Transform field names: protein -> signature, signature -> signature_type
+        transformed = []
+        for r in results:
+            record = {
+                "cell_type": r.get("cell_type", "All"),
+                "signature": r.get("protein", r.get("signature")),
+                "signature_type": r.get("signature", signature_type),
+                "variable": variable,
+                "rho": r.get("rho", 0),
+                "p_value": r.get("pvalue", 1),
+                "q_value": r.get("qvalue"),
+                "n_samples": r.get("n"),
+            }
+            transformed.append(record)
+
+        # Filter by signature type
+        results = self.filter_by_signature_type(transformed, signature_type)
 
         if cell_type:
             results = self.filter_by_cell_type(results, cell_type)

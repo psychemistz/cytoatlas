@@ -48,15 +48,34 @@ class CIMAService(BaseService):
         Returns:
             List of correlation results
         """
-        data = await self.load_json("cima_correlations.json")
+        # Use cell-type specific correlations for age/bmi
+        if variable in ("age", "bmi"):
+            data = await self.load_json("cima_celltype_correlations.json")
+        else:
+            data = await self.load_json("cima_correlations.json")
 
         if variable not in data:
             raise ValueError(f"Invalid variable: {variable}")
 
         results = data[variable]
 
+        # Transform field names: protein -> signature, signature -> signature_type
+        transformed = []
+        for r in results:
+            record = {
+                "cell_type": r.get("cell_type", "All"),
+                "signature": r.get("protein", r.get("signature")),
+                "signature_type": r.get("signature", signature_type),
+                "variable": variable,
+                "rho": r.get("rho", 0),
+                "pvalue": r.get("pvalue", 1),
+                "qvalue": r.get("qvalue"),
+                "n_samples": r.get("n"),
+            }
+            transformed.append(record)
+
         # Filter by signature type
-        results = self.filter_by_signature_type(results, signature_type)
+        results = self.filter_by_signature_type(transformed, signature_type)
 
         # Filter by cell type if specified
         if cell_type:
