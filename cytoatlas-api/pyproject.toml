@@ -74,7 +74,7 @@ dev = [
 cytoatlas = "app.main:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["app"]
+packages = ["app", "agents"]
 
 [tool.ruff]
 target-version = "py310"
@@ -94,7 +94,7 @@ ignore = [
 ]
 
 [tool.ruff.isort]
-known-first-party = ["app"]
+known-first-party = ["app", "agents"]
 
 [tool.mypy]
 python_version = "3.10"

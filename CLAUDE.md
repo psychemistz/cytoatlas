@@ -328,6 +328,75 @@ No formal test framework. Validation through:
    - Correlation with pre-computed scAtlas activities r > 0.9
    - Treatment response prediction AUC > 0.7
 
+## CytoAtlas REST API
+
+The project includes a FastAPI-based REST API for programmatic access to cytokine activity data.
+
+### Running the API Server
+
+```bash
+cd cytoatlas-api
+
+# Install dependencies
+pip install -e .
+
+# Start server
+./scripts/run_server.sh
+# Or directly:
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### API Architecture
+
+- **Atlas-Agnostic Design**: Supports built-in atlases (CIMA, Inflammation, scAtlas) and user-registered datasets
+- **Unified API**: `/api/v1/atlases/{atlas_name}/...` works for any atlas
+- **5-Type Validation System**: Assesses CytoSig/SecAct inference credibility
+
+### Key Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/v1/atlases` | List all available atlases |
+| `GET /api/v1/atlases/{atlas}/summary` | Atlas statistics |
+| `GET /api/v1/atlases/{atlas}/activity` | Activity data |
+| `GET /api/v1/atlases/{atlas}/correlations/{var}` | Correlations |
+| `POST /api/v1/atlases/register` | Register new atlas |
+| `GET /api/v1/validation/summary/{atlas}` | Validation metrics |
+
+### Validation System
+
+The API provides 5 types of inference validation:
+
+1. **Sample-Level**: Pseudobulk expression vs activity correlation
+2. **Cell Type-Level**: Cell type expression vs activity
+3. **Pseudobulk vs Single-Cell**: Aggregation method comparison
+4. **Single-Cell Direct**: Expressing vs non-expressing cells
+5. **Biological Associations**: Known marker validation (IL17A/Th17, IFNG/CD8, etc.)
+
+### QA Agents
+
+```bash
+# Run endpoint checks
+python -m agents.qa_checkers.endpoint_checker --all
+
+# Generate coverage report
+python -m agents.qa_checkers.coverage_reporter
+
+# Track progress
+python -m agents.progress_tracker
+```
+
+### Configuration
+
+Environment variables in `.env`:
+```bash
+VIZ_DATA_PATH=/vf/users/parks34/projects/2secactpy/visualization/data
+RESULTS_BASE_PATH=/vf/users/parks34/projects/2secactpy/results
+H5AD_BASE_PATH=/data/Jiang_Lab/Data/Seongyong
+```
+
+See `cytoatlas-api/ARCHITECTURE.md` for detailed documentation.
+
 ## Git Workflow
 
 When committing changes:

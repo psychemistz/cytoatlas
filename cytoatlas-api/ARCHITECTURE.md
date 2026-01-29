@@ -296,14 +296,54 @@ cytoatlas-api/
 | `/api/v1/cross-atlas/comparison` | GET | Atlas comparison |
 | `/api/v1/cross-atlas/conserved-signatures` | GET | Conserved patterns |
 
-### Validation Panel
+### Validation Panel (5-Type Credibility System)
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/v1/validation/summary` | GET | Validation summary |
-| `/api/v1/validation/expression-vs-activity` | GET | Expression correlation |
-| `/api/v1/validation/gene-coverage/{signature}` | GET | Gene coverage |
-| `/api/v1/validation/cv-stability` | GET | CV stability |
+The validation system assesses CytoSig/SecAct inference quality at multiple levels:
+
+| Endpoint | Method | Validation Type | Description |
+|----------|--------|-----------------|-------------|
+| `/api/v1/validation/sample-level/{atlas}/{signature}` | GET | Type 1 | Sample pseudobulk expression vs activity |
+| `/api/v1/validation/celltype-level/{atlas}/{signature}` | GET | Type 2 | Cell type expression vs activity |
+| `/api/v1/validation/pseudobulk-vs-singlecell/{atlas}/{signature}` | GET | Type 3 | Pseudobulk vs mean SC activity |
+| `/api/v1/validation/singlecell-direct/{atlas}/{signature}` | GET | Type 4 | Expressing vs non-expressing cells |
+| `/api/v1/validation/biological-associations/{atlas}` | GET | Type 5 | Known marker validation |
+| `/api/v1/validation/gene-coverage/{atlas}/{signature}` | GET | Coverage | Signature genes detected |
+| `/api/v1/validation/cv-stability/{atlas}` | GET | Stability | Cross-validation variance |
+| `/api/v1/validation/summary/{atlas}` | GET | Summary | Composite quality grade |
+
+#### Type 1: Sample-Level Validation
+- **Purpose**: Verify that pseudobulk gene expression correlates with predicted activity across samples
+- **Method**: For each sample, compute pseudobulk expression of cytokine gene and corresponding activity
+- **Output**: Scatter plot with regression line, r², p-value
+
+#### Type 2: Cell Type-Level Validation
+- **Purpose**: Verify that cell type pseudobulk expression matches cell type activity
+- **Method**: Aggregate expression and activity by cell type, compute correlation
+- **Output**: Scatter plot with cell type labels
+
+#### Type 3: Pseudobulk vs Single-Cell Comparison
+- **Purpose**: Assess consistency between aggregation methods
+- **Method**: Compare pseudobulk expression with mean/median single-cell activity per cell type
+- **Output**: Two scatter plots (mean vs median aggregation)
+
+#### Type 4: Single-Cell Direct Validation
+- **Purpose**: Verify that expressing cells have higher activity than non-expressing
+- **Method**: Classify cells by expression threshold, compare activity distributions
+- **Output**: Box plots, Mann-Whitney p-value, fold change
+
+#### Type 5: Biological Association Validation
+- **Purpose**: Validate known cytokine-cell type relationships
+- **Method**: Check if expected cell types rank highest for their canonical cytokines
+- **Expected Associations**:
+  - IL17A → Th17 (canonical)
+  - IFNG → CD8_CTL, NK (IFN-γ producers)
+  - TNF → Mono (macrophage cytokine)
+  - IL10 → Treg (regulatory cytokine)
+  - IL4 → Th2 (canonical)
+  - IL6, IL1B, CXCL8 → Mono (inflammatory)
+  - IL21 → Tfh (canonical)
+  - IL2 → CD4_helper (T cell growth factor)
+  - TGFB1 → Treg (TGF-β pathway)
 
 ---
 
@@ -373,12 +413,13 @@ RATE_LIMIT_WINDOW=60
 - [ ] Add missing JSON data files for some endpoints
 - [ ] Handle edge cases (empty results, missing data)
 
-### Phase 5: Validation Panel 📋 TODO
-- [ ] Implement expression-vs-activity correlation
-- [ ] Implement gene coverage analysis
-- [ ] Implement CV stability metrics
-- [ ] Implement biological association validation
-- [ ] Add validation data generation scripts
+### Phase 5: Validation Panel 🔄 IN PROGRESS
+- [x] Define comprehensive validation schemas (5 types)
+- [x] Define known biological associations (12 cytokine-cell type pairs)
+- [ ] Implement validation service methods
+- [ ] Update validation router with new endpoints
+- [ ] Create validation data generation script
+- [ ] Generate validation JSON data for all atlases
 
 ### Phase 6: Export & Integration 📋 TODO
 - [ ] CSV export for all data types
