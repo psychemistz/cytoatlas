@@ -1273,13 +1273,6 @@ const AtlasDetailPage = {
     async loadInflamCelltypes(content) {
         content.innerHTML = `
             <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
-                <div class="control-group">
-                    <label>Signature Type</label>
-                    <select id="inflam-ct-sig-type" class="filter-select" onchange="AtlasDetailPage.updateInflamCelltypes()">
-                        <option value="CytoSig">CytoSig (43 cytokines)</option>
-                        <option value="SecAct">SecAct (1,170 proteins)</option>
-                    </select>
-                </div>
                 <div class="control-group" style="position: relative;">
                     <label>Search Signature</label>
                     <input type="text" id="inflam-ct-search" class="search-input"
@@ -1313,15 +1306,14 @@ const AtlasDetailPage = {
             </div>
         `;
 
-        // Load activity data for both viz
-        const activityData = await API.get('/inflammation/activity', { signature_type: 'CytoSig' });
-        this.inflamActivityData = { CytoSig: activityData };
+        // Load activity data for current signature type
+        const activityData = await API.get('/inflammation/activity', { signature_type: this.signatureType });
+        this.inflamActivityData = { [this.signatureType]: activityData };
 
         // Get unique signatures for autocomplete
         if (activityData && activityData.length > 0) {
             this.inflamCTSignatures = {
-                CytoSig: [...new Set(activityData.map(d => d.signature))].sort(),
-                SecAct: [] // Will be loaded on demand
+                [this.signatureType]: [...new Set(activityData.map(d => d.signature))].sort()
             };
         }
 
@@ -1355,7 +1347,7 @@ const AtlasDetailPage = {
         const suggestionsDiv = document.getElementById('inflam-ct-suggestions');
         if (!input || !suggestionsDiv) return;
 
-        const sigType = document.getElementById('inflam-ct-sig-type')?.value || 'CytoSig';
+        const sigType = this.signatureType;
         const signatures = this.inflamCTSignatures?.[sigType] || [];
         const query = input.value.toLowerCase();
 
@@ -1384,7 +1376,7 @@ const AtlasDetailPage = {
     },
 
     async updateInflamCelltypes() {
-        const sigType = document.getElementById('inflam-ct-sig-type')?.value || 'CytoSig';
+        const sigType = this.signatureType;
 
         // Reset search to default on signature type change
         const input = document.getElementById('inflam-ct-search');
@@ -1413,7 +1405,7 @@ const AtlasDetailPage = {
         const container = document.getElementById('inflam-activity-profile');
         if (!container) return;
 
-        const sigType = document.getElementById('inflam-ct-sig-type')?.value || 'CytoSig';
+        const sigType = this.signatureType;
         const signature = document.getElementById('inflam-ct-search')?.value || 'IFNG';
 
         const data = this.inflamActivityData?.[sigType];
@@ -1459,7 +1451,7 @@ const AtlasDetailPage = {
         const container = document.getElementById('inflam-celltype-heatmap');
         if (!container) return;
 
-        const sigType = document.getElementById('inflam-ct-sig-type')?.value || 'CytoSig';
+        const sigType = this.signatureType;
         const data = this.inflamActivityData?.[sigType];
 
         if (!data || data.length === 0) {
