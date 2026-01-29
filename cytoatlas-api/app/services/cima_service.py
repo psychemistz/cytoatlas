@@ -389,6 +389,26 @@ class CIMAService(BaseService):
 
         return results
 
+    @cached(prefix="cima", ttl=3600)
+    async def get_population_stratification_all(self) -> dict:
+        """
+        Get all population stratification data.
+
+        Returns:
+            Dict with cytokines, groups, and effect_sizes
+        """
+        return await self.load_json("cima_population_stratification.json")
+
+    @cached(prefix="cima", ttl=86400)
+    async def get_eqtl_browser_data(self) -> dict:
+        """
+        Get eQTL browser data for visualization.
+
+        Returns:
+            Dict with summary, cell_types, genes, and eqtls
+        """
+        return await self.load_json("cima_eqtl_top.json")
+
     @cached(prefix="cima", ttl=86400)
     async def get_eqtl_data(
         self,

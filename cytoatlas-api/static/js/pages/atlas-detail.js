@@ -1251,22 +1251,133 @@ const AtlasDetailPage = {
         }
     },
 
+    // Store metabolite data
+    metaboliteData: null,
+
     async loadCimaMetabolites(content) {
         content.innerHTML = `
             <div class="panel-header">
                 <h3>Metabolite Correlations</h3>
-                <p>Top correlations with plasma metabolites and lipids (${this.signatureType === 'CytoSig' ? '43' : '1,170'} signatures x 500 metabolites)</p>
+                <p>Top 500 cytokine-metabolite correlations from plasma metabolomics data</p>
             </div>
-            <div id="metabolite-heatmap" class="plot-container" style="height: 600px;"></div>
+
+            <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+                <div class="control-group">
+                    <label>Metabolite Category</label>
+                    <select id="metab-category" class="filter-select" onchange="AtlasDetailPage.updateMetabolitePlots()">
+                        <option value="all">All Categories</option>
+                        <option value="lipid">Lipids</option>
+                        <option value="amino_acid">Amino Acids</option>
+                        <option value="carbohydrate">Carbohydrates</option>
+                        <option value="nucleotide">Nucleotides</option>
+                        <option value="cofactor">Cofactors & Vitamins</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Min |Correlation|</label>
+                    <select id="metab-threshold" class="filter-select" onchange="AtlasDetailPage.updateMetabolitePlots()">
+                        <option value="0.2">0.2</option>
+                        <option value="0.3" selected>0.3</option>
+                        <option value="0.4">0.4</option>
+                        <option value="0.5">0.5</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="viz-grid">
+                <div class="sub-panel">
+                    <div class="panel-header">
+                        <h4>Top Metabolite Correlations</h4>
+                        <p>Ranked by absolute correlation strength</p>
+                    </div>
+                    <div id="metabolite-lollipop" class="plot-container" style="height: 550px;"></div>
+                </div>
+                <div class="sub-panel">
+                    <div class="panel-header">
+                        <h4>Correlation Heatmap</h4>
+                        <p>Cytokines × Metabolites</p>
+                    </div>
+                    <div id="metabolite-heatmap" class="plot-container" style="height: 550px;"></div>
+                </div>
+            </div>
         `;
 
-        const data = await API.get('/cima/correlations/metabolites', { signature_type: this.signatureType, limit: 500 });
-        if (data && data.correlations) {
-            this.renderMetaboliteHeatmap('metabolite-heatmap', data);
+        // Load metabolite data
+        this.metaboliteData = await API.get('/cima/correlations/metabolites', { signature_type: this.signatureType, limit: 500 });
+        this.updateMetabolitePlots();
+    },
+
+    updateMetabolitePlots() {
+        const data = this.metaboliteData;
+        if (!data || !data.correlations) {
+            document.getElementById('metabolite-lollipop').innerHTML = '<p class="loading">No metabolite data</p>';
+            return;
+        }
+
+        const threshold = parseFloat(document.getElementById('metab-threshold')?.value || '0.3');
+        const category = document.getElementById('metab-category')?.value || 'all';
+
+        // Filter by threshold
+        let filtered = data.correlations.filter(d => Math.abs(d.rho || d.correlation) >= threshold);
+
+        // Filter by category (simple keyword matching)
+        if (category !== 'all') {
+            const categoryKeywords = {
+                'lipid': ['lipid', 'fatty', 'cholesterol', 'phospho', 'sphingo', 'sterol', 'PS ', 'PC ', 'PE ', 'LPC', 'LPE'],
+                'amino_acid': ['amino', 'amine', 'glutam', 'glycine', 'alanine', 'serine', 'proline', 'valine', 'leucine', 'isoleucine'],
+                'carbohydrate': ['glucose', 'fructose', 'sugar', 'sacchar', 'hexose', 'pentose'],
+                'nucleotide': ['nucleotide', 'purine', 'pyrimidine', 'adenine', 'guanine', 'cytosine', 'uracil'],
+                'cofactor': ['vitamin', 'cofactor', 'NAD', 'FAD', 'coenzyme']
+            };
+            const keywords = categoryKeywords[category] || [];
+            filtered = filtered.filter(d => {
+                const metab = (d.metabolite || d.feature || '').toLowerCase();
+                return keywords.some(k => metab.includes(k.toLowerCase()));
+            });
+        }
+
+        // Sort by absolute correlation
+        filtered.sort((a, b) => Math.abs(b.rho || b.correlation) - Math.abs(a.rho || a.correlation));
+        const top50 = filtered.slice(0, 50);
+
+        // Lollipop chart
+        if (top50.length > 0) {
+            const labels = top50.map(d => `${d.signature || d.protein} × ${d.metabolite || d.feature}`);
+            const values = top50.map(d => d.rho || d.correlation);
+            const colors = values.map(v => v >= 0 ? '#ef4444' : '#2563eb');
+
+            Plotly.newPlot('metabolite-lollipop', [{
+                type: 'bar',
+                y: labels.reverse(),
+                x: values.reverse(),
+                orientation: 'h',
+                marker: { color: colors.reverse() },
+                hovertemplate: '<b>%{y}</b><br>ρ = %{x:.3f}<extra></extra>'
+            }], {
+                title: `Top ${top50.length} Correlations (|ρ| ≥ ${threshold})`,
+                xaxis: { title: 'Spearman ρ', range: [-1, 1] },
+                yaxis: { tickfont: { size: 9 } },
+                margin: { l: 200, r: 20, t: 40, b: 40 },
+                font: { family: 'Inter, sans-serif' }
+            }, { responsive: true });
         } else {
-            document.getElementById('metabolite-heatmap').innerHTML = '<p class="loading">No metabolite data available</p>';
+            document.getElementById('metabolite-lollipop').innerHTML = '<p class="loading">No correlations above threshold</p>';
+        }
+
+        // Heatmap
+        if (data.z && data.x && data.y) {
+            Heatmap.create('metabolite-heatmap', data, {
+                title: 'Metabolite Correlations',
+                colorbarTitle: 'Spearman ρ',
+                symmetric: true,
+            });
+        } else {
+            document.getElementById('metabolite-heatmap').innerHTML = '<p class="loading">Heatmap data not available</p>';
         }
     },
+
+    // Store differential data
+    differentialData: null,
 
     async loadCimaDifferential(content) {
         content.innerHTML = `
@@ -1274,29 +1385,263 @@ const AtlasDetailPage = {
                 <h3>Differential Analysis</h3>
                 <p>Activity differences by sex, smoking status, and blood type</p>
             </div>
-            <div class="differential-controls">
-                <select id="diff-comparison" class="filter-select" onchange="AtlasDetailPage.updateDifferentialPlot()">
-                    <option value="sex">Sex (Male vs Female)</option>
-                    <option value="smoking">Smoking Status</option>
-                    <option value="blood_type">Blood Type</option>
-                </select>
+
+            <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+                <div class="control-group">
+                    <label>Comparison</label>
+                    <select id="diff-comparison" class="filter-select" onchange="AtlasDetailPage.updateDifferentialPlots()">
+                        <option value="sex|Female|Male">Sex (Female vs Male)</option>
+                        <optgroup label="Smoking Status">
+                            <option value="smoking_status|current|never">Current vs Never</option>
+                            <option value="smoking_status|current|past">Current vs Past</option>
+                            <option value="smoking_status|never|past">Never vs Past</option>
+                        </optgroup>
+                        <optgroup label="Blood Type">
+                            <option value="blood_type|O|A">O vs A</option>
+                            <option value="blood_type|O|B">O vs B</option>
+                            <option value="blood_type|O|AB">O vs AB</option>
+                            <option value="blood_type|B|A">B vs A</option>
+                        </optgroup>
+                    </select>
+                </div>
             </div>
-            <div id="differential-volcano" class="plot-container" style="height: 500px;"></div>
+
+            <div class="viz-grid">
+                <div class="sub-panel">
+                    <div class="panel-header">
+                        <h4>Volcano Plot</h4>
+                        <p id="volcano-subtitle">Effect size vs significance</p>
+                    </div>
+                    <div id="differential-volcano" class="plot-container" style="height: 500px;"></div>
+                </div>
+                <div class="sub-panel">
+                    <div class="panel-header">
+                        <h4>Top Differential Signatures</h4>
+                        <p>Sorted by significance score</p>
+                    </div>
+                    <div id="differential-bar" class="plot-container" style="height: 500px;"></div>
+                </div>
+            </div>
         `;
 
-        await this.updateDifferentialPlot();
+        // Load differential data
+        this.differentialData = await API.get('/cima/differential', { signature_type: this.signatureType });
+        this.updateDifferentialPlots();
     },
+
+    updateDifferentialPlots() {
+        const data = this.differentialData;
+        if (!data || data.length === 0) {
+            document.getElementById('differential-volcano').innerHTML = '<p class="loading">No differential data</p>';
+            return;
+        }
+
+        const comparisonValue = document.getElementById('diff-comparison')?.value || 'sex|Female|Male';
+        const [variable, group1, group2] = comparisonValue.split('|');
+
+        // Filter data for this comparison
+        const filtered = data.filter(d => {
+            const comp = d.comparison || '';
+            return comp.includes(variable) || comp.toLowerCase().includes(group1.toLowerCase());
+        });
+
+        if (filtered.length === 0) {
+            document.getElementById('differential-volcano').innerHTML = '<p class="loading">No data for this comparison</p>';
+            document.getElementById('differential-bar').innerHTML = '';
+            return;
+        }
+
+        // Volcano plot
+        const log2fc = filtered.map(d => d.log2fc || d.effect_size || 0);
+        const negLogP = filtered.map(d => -Math.log10(d.pvalue || d.p_value || 1));
+        const signatures = filtered.map(d => d.signature || d.protein);
+        const significant = filtered.map(d => (d.qvalue || d.q_value || 1) < 0.05);
+
+        Plotly.newPlot('differential-volcano', [{
+            type: 'scatter',
+            mode: 'markers',
+            x: log2fc,
+            y: negLogP,
+            text: signatures,
+            marker: {
+                size: 8,
+                color: significant.map(s => s ? '#ef4444' : '#999'),
+                opacity: 0.7
+            },
+            hovertemplate: '<b>%{text}</b><br>log2FC: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
+        }], {
+            title: `${group1} vs ${group2}`,
+            xaxis: { title: 'log2 Fold Change', zeroline: true, zerolinecolor: '#ccc' },
+            yaxis: { title: '-log10(p-value)' },
+            shapes: [{
+                type: 'line', x0: -10, x1: 10, y0: -Math.log10(0.05), y1: -Math.log10(0.05),
+                line: { color: 'red', dash: 'dash', width: 1 }
+            }],
+            margin: { l: 50, r: 20, t: 40, b: 50 },
+            font: { family: 'Inter, sans-serif' }
+        }, { responsive: true });
+
+        // Bar chart - top differential
+        const scored = filtered.map(d => ({
+            ...d,
+            score: Math.abs(d.log2fc || 0) * negLogP[filtered.indexOf(d)]
+        }));
+        scored.sort((a, b) => b.score - a.score);
+        const top20 = scored.slice(0, 20);
+
+        Plotly.newPlot('differential-bar', [{
+            type: 'bar',
+            y: top20.map(d => d.signature || d.protein).reverse(),
+            x: top20.map(d => d.log2fc || d.effect_size || 0).reverse(),
+            orientation: 'h',
+            marker: {
+                color: top20.map(d => (d.log2fc || 0) >= 0 ? '#ef4444' : '#2563eb').reverse()
+            },
+            hovertemplate: '<b>%{y}</b><br>log2FC: %{x:.3f}<extra></extra>'
+        }], {
+            title: 'Top 20 by Significance',
+            xaxis: { title: 'log2 Fold Change' },
+            margin: { l: 120, r: 20, t: 40, b: 50 },
+            font: { family: 'Inter, sans-serif' }
+        }, { responsive: true });
+
+        // Update subtitle
+        const subtitle = document.getElementById('volcano-subtitle');
+        if (subtitle) subtitle.textContent = `${group1} vs ${group2}: ${filtered.length} signatures tested`;
+    },
+
+    // Store population data
+    populationData: null,
 
     async loadCimaMultiomics(content) {
         content.innerHTML = `
             <div class="panel-header">
                 <h3>Multi-omics Integration</h3>
-                <p>Correlation network between cytokine activity, biochemistry, and metabolites</p>
+                <p>Integrates cytokine activity with blood biochemistry and plasma metabolomics</p>
             </div>
-            <div id="multiomics-viz" class="plot-container" style="height: 600px;">
-                <p class="loading">Multi-omics network visualization coming soon</p>
+
+            <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+                <div class="control-group">
+                    <label>Cytokine Subset</label>
+                    <select id="multiomics-cytokines" class="filter-select" onchange="AtlasDetailPage.updateMultiomicsPlot()">
+                        <option value="all">All CytoSig (43)</option>
+                        <option value="inflammatory">Inflammatory (IL-1B, IL-6, TNF)</option>
+                        <option value="regulatory">Regulatory (IL-10, TGF-β, IL-4)</option>
+                        <option value="th17">Th17 axis (IL-17A, IL-21, IL-22)</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Min |Correlation|</label>
+                    <select id="multiomics-threshold" class="filter-select" onchange="AtlasDetailPage.updateMultiomicsPlot()">
+                        <option value="0.2">0.2</option>
+                        <option value="0.3" selected>0.3</option>
+                        <option value="0.4">0.4</option>
+                        <option value="0.5">0.5</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
+                <strong>Multi-omics Integration:</strong> Integrates cytokine activity signatures with blood biochemistry (19 markers) and plasma metabolomics (65 metabolites) from CIMA healthy donors.
+            </div>
+
+            <div class="viz-grid">
+                <div class="sub-panel" style="flex: 2;">
+                    <div class="panel-header">
+                        <h4>Cross-omic Correlations</h4>
+                    </div>
+                    <div id="multiomics-summary" class="plot-container" style="height: 500px;"></div>
+                </div>
+                <div class="sub-panel">
+                    <div class="panel-header">
+                        <h4>Top Associations</h4>
+                    </div>
+                    <div id="multiomics-top" style="padding: 1rem; max-height: 500px; overflow-y: auto;"></div>
+                </div>
             </div>
         `;
+
+        this.updateMultiomicsPlot();
+    },
+
+    async updateMultiomicsPlot() {
+        const subset = document.getElementById('multiomics-cytokines')?.value || 'all';
+        const threshold = parseFloat(document.getElementById('multiomics-threshold')?.value || '0.3');
+
+        // Load biochemistry and metabolite correlations
+        const [biochemData, metabData] = await Promise.all([
+            API.get('/cima/correlations/biochemistry', { signature_type: 'CytoSig' }),
+            API.get('/cima/correlations/metabolites', { signature_type: 'CytoSig', limit: 500 })
+        ]);
+
+        // Define cytokine subsets
+        const subsetMap = {
+            'inflammatory': ['IL1B', 'IL6', 'TNF', 'IL1A', 'IL18'],
+            'regulatory': ['IL10', 'TGFB1', 'IL4', 'IL13', 'IL35'],
+            'th17': ['IL17A', 'IL17F', 'IL21', 'IL22', 'IL23A']
+        };
+        const cytokineFilter = subset === 'all' ? null : subsetMap[subset] || null;
+
+        // Filter and combine data
+        let biochemFiltered = (biochemData || []).filter(d => Math.abs(d.rho) >= threshold);
+        let metabFiltered = ((metabData?.correlations) || []).filter(d => Math.abs(d.rho || d.correlation) >= threshold);
+
+        if (cytokineFilter) {
+            biochemFiltered = biochemFiltered.filter(d => cytokineFilter.includes(d.signature));
+            metabFiltered = metabFiltered.filter(d => cytokineFilter.includes(d.signature || d.protein));
+        }
+
+        // Create summary bar chart
+        const biochemCount = biochemFiltered.length;
+        const metabCount = metabFiltered.length;
+
+        Plotly.newPlot('multiomics-summary', [{
+            type: 'bar',
+            x: ['Biochemistry', 'Metabolites'],
+            y: [biochemCount, metabCount],
+            marker: { color: ['#3b82f6', '#10b981'] },
+            text: [biochemCount, metabCount],
+            textposition: 'auto'
+        }], {
+            title: `Correlations with |ρ| ≥ ${threshold}`,
+            yaxis: { title: 'Number of Significant Correlations' },
+            margin: { l: 60, r: 20, t: 40, b: 50 },
+            font: { family: 'Inter, sans-serif' }
+        }, { responsive: true });
+
+        // Top associations list
+        const allCorr = [
+            ...biochemFiltered.map(d => ({ type: 'Biochem', cytokine: d.signature, feature: d.variable, rho: d.rho })),
+            ...metabFiltered.map(d => ({ type: 'Metab', cytokine: d.signature || d.protein, feature: d.metabolite || d.feature, rho: d.rho || d.correlation }))
+        ];
+        allCorr.sort((a, b) => Math.abs(b.rho) - Math.abs(a.rho));
+        const top20 = allCorr.slice(0, 20);
+
+        const topContainer = document.getElementById('multiomics-top');
+        if (topContainer) {
+            topContainer.innerHTML = `
+                <table style="width: 100%; font-size: 0.85rem; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid #ddd;">
+                            <th style="text-align: left; padding: 0.5rem;">Type</th>
+                            <th style="text-align: left; padding: 0.5rem;">Cytokine</th>
+                            <th style="text-align: left; padding: 0.5rem;">Feature</th>
+                            <th style="text-align: right; padding: 0.5rem;">ρ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${top20.map(d => `
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <td style="padding: 0.4rem;"><span style="background: ${d.type === 'Biochem' ? '#dbeafe' : '#d1fae5'}; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem;">${d.type}</span></td>
+                                <td style="padding: 0.4rem;">${d.cytokine}</td>
+                                <td style="padding: 0.4rem;">${d.feature}</td>
+                                <td style="padding: 0.4rem; text-align: right; color: ${d.rho >= 0 ? '#dc2626' : '#2563eb'};">${d.rho.toFixed(3)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
     },
 
     async loadCimaPopulation(content) {
@@ -1305,31 +1650,303 @@ const AtlasDetailPage = {
                 <h3>Population Stratification</h3>
                 <p>Activity patterns across demographic groups</p>
             </div>
-            <div id="population-viz" class="plot-container" style="height: 500px;"></div>
+
+            <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+                <div class="control-group">
+                    <label>Stratification Variable</label>
+                    <select id="pop-stratify" class="filter-select" onchange="AtlasDetailPage.updatePopulationPlots()">
+                        <option value="sex">Sex (Male vs Female)</option>
+                        <option value="age">Age Group</option>
+                        <option value="bmi">BMI Category</option>
+                        <option value="blood_type">Blood Type</option>
+                        <option value="smoking">Smoking Status</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="viz-grid">
+                <div class="sub-panel">
+                    <div class="panel-header">
+                        <h4>Population Distribution</h4>
+                        <p>Sample counts across groups (N=421)</p>
+                    </div>
+                    <div id="pop-distribution" class="plot-container" style="height: 300px;"></div>
+                </div>
+                <div class="sub-panel">
+                    <div class="panel-header">
+                        <h4>Top Effect Sizes</h4>
+                        <p>Signatures with largest group differences</p>
+                    </div>
+                    <div id="pop-effect-sizes" class="plot-container" style="height: 300px;"></div>
+                </div>
+            </div>
+
+            <div class="sub-panel" style="margin-top: 1rem;">
+                <div class="panel-header">
+                    <h4>Population-Stratified Heatmap</h4>
+                    <p>Mean activity across demographic groups</p>
+                </div>
+                <div id="pop-heatmap" class="plot-container" style="height: 400px;"></div>
+            </div>
         `;
 
-        // Population stratification endpoint not yet available
-        document.getElementById('population-viz').innerHTML = '<p class="loading">Population stratification visualization coming soon</p>';
+        // Load population data
+        this.populationData = await API.get('/cima/population-stratification');
+        this.updatePopulationPlots();
     },
+
+    updatePopulationPlots() {
+        const data = this.populationData;
+        if (!data) {
+            document.getElementById('pop-distribution').innerHTML = '<p class="loading">Population data not available</p>';
+            return;
+        }
+
+        const stratify = document.getElementById('pop-stratify')?.value || 'sex';
+        const groups = data.groups?.[stratify] || {};
+        const effects = data.effect_sizes?.[stratify] || [];
+        const cytokines = data.cytokines || [];
+
+        // Distribution chart
+        const groupNames = Object.keys(groups);
+        const groupCounts = Object.values(groups);
+
+        if (groupNames.length > 0) {
+            Plotly.newPlot('pop-distribution', [{
+                type: 'bar',
+                x: groupNames,
+                y: groupCounts,
+                marker: { color: '#3b82f6' },
+                text: groupCounts,
+                textposition: 'auto'
+            }], {
+                title: `Distribution by ${stratify}`,
+                yaxis: { title: 'Sample Count' },
+                margin: { l: 50, r: 20, t: 40, b: 50 },
+                font: { family: 'Inter, sans-serif' }
+            }, { responsive: true });
+        }
+
+        // Effect sizes
+        if (effects.length > 0) {
+            const sorted = [...effects].sort((a, b) => Math.abs(b.effect_size || b.log2fc || 0) - Math.abs(a.effect_size || a.log2fc || 0));
+            const top10 = sorted.slice(0, 10);
+            const bottom10 = sorted.slice(-10).reverse();
+            const combined = [...top10, ...bottom10];
+
+            Plotly.newPlot('pop-effect-sizes', [{
+                type: 'bar',
+                y: combined.map(d => d.signature || d.cytokine).reverse(),
+                x: combined.map(d => d.effect_size || d.log2fc || 0).reverse(),
+                orientation: 'h',
+                marker: {
+                    color: combined.map(d => (d.effect_size || d.log2fc || 0) >= 0 ? '#ef4444' : '#2563eb').reverse()
+                }
+            }], {
+                title: 'Top & Bottom Effect Sizes',
+                xaxis: { title: 'Effect Size' },
+                margin: { l: 100, r: 20, t: 40, b: 50 },
+                font: { family: 'Inter, sans-serif' }
+            }, { responsive: true });
+        } else {
+            document.getElementById('pop-effect-sizes').innerHTML = '<p class="loading">Effect size data not available</p>';
+        }
+
+        // Heatmap placeholder
+        document.getElementById('pop-heatmap').innerHTML = '<p class="loading">Heatmap visualization requires additional data processing</p>';
+    },
+
+    // Store eQTL data
+    eqtlData: null,
 
     async loadCimaEqtl(content) {
         content.innerHTML = `
             <div class="panel-header">
                 <h3>eQTL Browser</h3>
-                <p>Genetic variants associated with cytokine activity (cis-eQTLs within 1Mb)</p>
+                <p>Genetic variants associated with gene expression in immune cells</p>
             </div>
-            <div class="eqtl-controls">
-                <select id="eqtl-signature" class="filter-select" onchange="AtlasDetailPage.updateEqtlPlot()">
-                    <option value="IFNG">IFNG</option>
-                </select>
-                <input type="text" id="eqtl-search" class="filter-select" placeholder="Search gene or SNP..." onchange="AtlasDetailPage.updateEqtlPlot()">
+
+            <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+                <div class="control-group">
+                    <label>Search Gene/Variant</label>
+                    <input type="text" id="eqtl-search" class="filter-select" placeholder="e.g., IFNG, IL6" style="width: 150px;"
+                           onkeyup="if(event.key==='Enter') AtlasDetailPage.updateEqtlPlots()">
+                </div>
+                <div class="control-group">
+                    <label>Cell Type</label>
+                    <select id="eqtl-celltype" class="filter-select" onchange="AtlasDetailPage.updateEqtlPlots()">
+                        <option value="all">All Cell Types</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Significance</label>
+                    <select id="eqtl-threshold" class="filter-select" onchange="AtlasDetailPage.updateEqtlPlots()">
+                        <option value="1e-3">p < 1e-3</option>
+                        <option value="1e-5">p < 1e-5</option>
+                        <option value="5e-8" selected>Genome-wide (5e-8)</option>
+                    </select>
+                </div>
             </div>
-            <div id="eqtl-table" style="margin-top: 1rem;"></div>
-            <div id="eqtl-plot" class="plot-container" style="height: 400px;"></div>
+
+            <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
+                <strong>cis-eQTL Browser:</strong> <span id="eqtl-count">Loading...</span> cis-eQTLs across immune cell types.
+                <br><small style="color: #666;">Data: CIMA Lead cis-eQTL (study-wise FDR < 0.05)</small>
+            </div>
+
+            <div class="viz-grid">
+                <div class="sub-panel" style="flex: 2;">
+                    <div class="panel-header">
+                        <h4>Manhattan Plot</h4>
+                        <p>Genomic position vs -log10(p-value)</p>
+                    </div>
+                    <div id="eqtl-manhattan" class="plot-container" style="height: 400px;"></div>
+                </div>
+                <div class="sub-panel">
+                    <div class="panel-header">
+                        <h4>Top eQTL Results</h4>
+                    </div>
+                    <div id="eqtl-table" style="max-height: 400px; overflow-y: auto;"></div>
+                </div>
+            </div>
+
+            <div class="sub-panel" style="margin-top: 1rem;">
+                <div class="panel-header">
+                    <h4>eQTLs by Cell Type</h4>
+                </div>
+                <div id="eqtl-celltype-bar" class="plot-container" style="height: 300px;"></div>
+            </div>
         `;
 
-        await this.populateEqtlDropdowns();
-        await this.updateEqtlPlot();
+        // Load eQTL data
+        this.eqtlData = await API.get('/cima/eqtl');
+        this.populateEqtlCellTypes();
+        this.updateEqtlPlots();
+    },
+
+    populateEqtlCellTypes() {
+        const data = this.eqtlData;
+        if (!data || !data.cell_types) return;
+
+        const select = document.getElementById('eqtl-celltype');
+        if (select) {
+            select.innerHTML = '<option value="all">All Cell Types</option>' +
+                data.cell_types.map(ct => `<option value="${ct}">${ct}</option>`).join('');
+        }
+
+        // Update count
+        const countEl = document.getElementById('eqtl-count');
+        if (countEl && data.summary) {
+            countEl.textContent = `${(data.summary.total_eqtls || data.eqtls?.length || 0).toLocaleString()}`;
+        }
+    },
+
+    updateEqtlPlots() {
+        const data = this.eqtlData;
+        if (!data || !data.eqtls) {
+            document.getElementById('eqtl-manhattan').innerHTML = '<p class="loading">eQTL data not available</p>';
+            return;
+        }
+
+        const searchQuery = document.getElementById('eqtl-search')?.value?.toLowerCase() || '';
+        const cellType = document.getElementById('eqtl-celltype')?.value || 'all';
+        const threshold = parseFloat(document.getElementById('eqtl-threshold')?.value || '5e-8');
+
+        // Filter eQTLs
+        let filtered = data.eqtls.filter(d => d.pvalue <= threshold);
+
+        if (cellType !== 'all') {
+            filtered = filtered.filter(d => d.celltype === cellType);
+        }
+
+        if (searchQuery) {
+            filtered = filtered.filter(d =>
+                (d.gene || '').toLowerCase().includes(searchQuery) ||
+                (d.variant || '').toLowerCase().includes(searchQuery)
+            );
+        }
+
+        // Manhattan plot - sample for performance
+        const plotData = filtered.length > 5000 ? filtered.slice(0, 5000) : filtered;
+
+        // Assign colors by chromosome
+        const chrColors = {};
+        const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b'];
+        plotData.forEach(d => {
+            const chr = d.chr || 'unknown';
+            if (!chrColors[chr]) chrColors[chr] = colors[Object.keys(chrColors).length % colors.length];
+        });
+
+        Plotly.newPlot('eqtl-manhattan', [{
+            type: 'scatter',
+            mode: 'markers',
+            x: plotData.map(d => d.pos || 0),
+            y: plotData.map(d => -Math.log10(d.pvalue || 1)),
+            text: plotData.map(d => `${d.gene} (${d.variant})`),
+            marker: {
+                size: 5,
+                color: plotData.map(d => chrColors[d.chr || 'unknown']),
+                opacity: 0.6
+            },
+            hovertemplate: '<b>%{text}</b><br>-log10(p): %{y:.2f}<extra></extra>'
+        }], {
+            title: `${filtered.length.toLocaleString()} eQTLs (p < ${threshold})`,
+            xaxis: { title: 'Genomic Position' },
+            yaxis: { title: '-log10(p-value)' },
+            shapes: [{
+                type: 'line', x0: 0, x1: Math.max(...plotData.map(d => d.pos || 0)),
+                y0: -Math.log10(5e-8), y1: -Math.log10(5e-8),
+                line: { color: 'red', dash: 'dash', width: 1 }
+            }],
+            margin: { l: 50, r: 20, t: 40, b: 50 },
+            font: { family: 'Inter, sans-serif' }
+        }, { responsive: true });
+
+        // Top results table
+        const top20 = filtered.slice(0, 20);
+        document.getElementById('eqtl-table').innerHTML = `
+            <table style="width: 100%; font-size: 0.8rem; border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 2px solid #ddd;">
+                        <th style="padding: 0.4rem; text-align: left;">Gene</th>
+                        <th style="padding: 0.4rem; text-align: left;">Variant</th>
+                        <th style="padding: 0.4rem; text-align: left;">Cell Type</th>
+                        <th style="padding: 0.4rem; text-align: right;">p-value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${top20.map(d => `
+                        <tr style="border-bottom: 1px solid #eee;">
+                            <td style="padding: 0.3rem;">${d.gene}</td>
+                            <td style="padding: 0.3rem; font-size: 0.7rem;">${d.variant}</td>
+                            <td style="padding: 0.3rem; font-size: 0.7rem;">${d.celltype}</td>
+                            <td style="padding: 0.3rem; text-align: right;">${d.pvalue?.toExponential(2)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+
+        // Cell type distribution
+        if (data.cell_types && cellType === 'all') {
+            const ctCounts = {};
+            filtered.forEach(d => {
+                ctCounts[d.celltype] = (ctCounts[d.celltype] || 0) + 1;
+            });
+            const sortedCts = Object.entries(ctCounts).sort((a, b) => b[1] - a[1]).slice(0, 20);
+
+            Plotly.newPlot('eqtl-celltype-bar', [{
+                type: 'bar',
+                y: sortedCts.map(d => d[0]).reverse(),
+                x: sortedCts.map(d => d[1]).reverse(),
+                orientation: 'h',
+                marker: { color: '#3b82f6' }
+            }], {
+                title: 'eQTLs by Cell Type (Top 20)',
+                xaxis: { title: 'Number of eQTLs' },
+                margin: { l: 150, r: 20, t: 40, b: 50 },
+                font: { family: 'Inter, sans-serif' }
+            }, { responsive: true });
+        }
     },
 
     // ==================== Inflammation Tab Loaders ====================

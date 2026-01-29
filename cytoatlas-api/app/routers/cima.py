@@ -306,6 +306,18 @@ async def get_biochem_scatter_samples(
 
 
 # Population Stratification
+@router.get("/population-stratification")
+async def get_population_stratification_all(
+    service: CIMAService = Depends(get_cima_service),
+) -> dict:
+    """
+    Get all population stratification data.
+
+    Returns cytokines, groups, and effect sizes for all stratification variables.
+    """
+    return await service.get_population_stratification_all()
+
+
 @router.get("/stratification/{signature}")
 async def get_population_stratification(
     signature: str,
@@ -314,7 +326,7 @@ async def get_population_stratification(
     service: CIMAService = Depends(get_cima_service),
 ) -> list[dict]:
     """
-    Get population stratification data.
+    Get population stratification data for a specific signature.
 
     Returns activity distribution stratified by demographic variable.
     """
@@ -322,19 +334,16 @@ async def get_population_stratification(
 
 
 # eQTL Analysis
-@router.get("/eqtl", response_model=list[dict])
+@router.get("/eqtl")
 async def get_eqtl(
-    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
-    cell_type: str | None = Query(None),
-    chromosome: str | None = Query(None),
     service: CIMAService = Depends(get_cima_service),
-) -> list[dict]:
+) -> dict:
     """
-    Get eQTL analysis results.
+    Get eQTL browser data.
 
-    Returns genetic associations with signature activities.
+    Returns summary, cell_types, genes, and top eQTLs for visualization.
     """
-    return await service.get_eqtl_data(signature_type, cell_type, chromosome)
+    return await service.get_eqtl_browser_data()
 
 
 @router.get("/eqtl/top", response_model=list[dict])

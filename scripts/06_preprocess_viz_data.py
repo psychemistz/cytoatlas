@@ -2380,6 +2380,7 @@ def create_embedded_data():
         'inflammation_correlations.json',
         'inflammation_celltype_correlations.json',  # Cell type-specific age/BMI correlations
         'inflammation_disease.json',
+        'inflammation_differential.json',  # Disease vs healthy differential
         'inflammation_longitudinal.json',
         'inflammation_cell_drivers.json',
         'inflammation_demographics.json',
