@@ -1606,6 +1606,9 @@ const AtlasDetailPage = {
                 <div class="panel-header">
                     <h3>scAtlas: Human Tissue Reference Atlas</h3>
                     <p>Human Cell Atlas data spanning normal organs and pan-cancer datasets with detailed cell type annotations.</p>
+                    <p class="citation" style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">
+                        <strong>Citation:</strong> Shi et al. (2025) Cross-tissue multicellular coordination and its rewiring in cancer. <em>Nature</em>.
+                    </p>
                 </div>
 
                 <div class="stats-grid">
@@ -1680,13 +1683,6 @@ const AtlasDetailPage = {
                     </table>
                 </div>
 
-                <div class="card" style="margin-top: 1rem;">
-                    <div class="card-title">Data Citation</div>
-                    <p style="font-size: 0.9rem; color: #666;">
-                        Human Cell Atlas Consortium. Tabula Sapiens: A multi-organ, single-cell transcriptomic atlas of humans.
-                        <a href="https://doi.org/10.1126/science.abl4896" target="_blank">DOI: 10.1126/science.abl4896</a>
-                    </p>
-                </div>
             </div>
         `;
     },
