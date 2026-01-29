@@ -223,20 +223,25 @@ def main():
     print("\n=== Generating CytoSig cell-type boxplots ===")
     cytosig_age, cytosig_bmi = generate_celltype_boxplots(cytosig_path, sample_meta, 'CytoSig')
 
-    # Add to existing CIMA data (keep sample-level, add cell-type specific)
-    # Filter out old cell-type specific data (cell_type != None)
-    cima_age_sample = [r for r in boxplot_data['cima']['age'] if r.get('cell_type') is None]
-    cima_bmi_sample = [r for r in boxplot_data['cima']['bmi'] if r.get('cell_type') is None]
+    # Generate SecAct cell-type specific boxplots
+    print("\n=== Generating SecAct cell-type boxplots ===")
+    secact_age, secact_bmi = generate_celltype_boxplots(secact_path, sample_meta, 'SecAct')
 
-    # Combine sample-level + cell-type specific
-    boxplot_data['cima']['age'] = cima_age_sample + cytosig_age
-    boxplot_data['cima']['bmi'] = cima_bmi_sample + cytosig_bmi
+    # Keep sample-level data (cell_type is None or 'All')
+    cima_age_sample = [r for r in boxplot_data['cima']['age'] if r.get('cell_type') in (None, 'All')]
+    cima_bmi_sample = [r for r in boxplot_data['cima']['bmi'] if r.get('cell_type') in (None, 'All')]
+
+    # Combine sample-level + CytoSig cell-type + SecAct cell-type
+    boxplot_data['cima']['age'] = cima_age_sample + cytosig_age + secact_age
+    boxplot_data['cima']['bmi'] = cima_bmi_sample + cytosig_bmi + secact_bmi
 
     # Add cell_types list
     cell_types = sorted(list(set(r['cell_type'] for r in cytosig_age if r.get('cell_type'))))
     boxplot_data['cima']['cell_types'] = cell_types
 
     print(f"\nCIMA age boxplots: {len(boxplot_data['cima']['age'])} total")
+    print(f"  CytoSig: {len(cytosig_age)} cell-type specific")
+    print(f"  SecAct: {len(secact_age)} cell-type specific")
     print(f"CIMA bmi boxplots: {len(boxplot_data['cima']['bmi'])} total")
     print(f"CIMA cell types: {len(cell_types)}")
 
