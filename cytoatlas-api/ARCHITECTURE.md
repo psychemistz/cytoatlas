@@ -2,7 +2,11 @@
 
 ## Overview
 
-The CytoAtlas API is a FastAPI-based REST service that provides programmatic access to pre-computed cytokine and secreted protein activity signatures across three major human immune cell atlases.
+The CytoAtlas API is a FastAPI-based REST service that provides programmatic access to pre-computed cytokine and secreted protein activity signatures. The system is designed to be **atlas-agnostic** and extensible:
+
+- **Built-in atlases**: CIMA, Inflammation Atlas, scAtlas
+- **User-registered atlases**: Support for custom datasets
+- **Dynamic API**: Unified endpoints that work with any atlas
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -32,6 +36,85 @@ The CytoAtlas API is a FastAPI-based REST service that provides programmatic acc
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Extensible Atlas System
+
+The API supports registering new atlases dynamically:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Atlas Registry                                │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  Built-in Atlases (always available):                               │
+│  ┌──────────┐  ┌──────────────┐  ┌──────────┐                      │
+│  │   CIMA   │  │ Inflammation │  │  scAtlas │                      │
+│  │ 6.5M    │  │    4.9M     │  │   6.4M   │                      │
+│  │  cells   │  │   cells      │  │  cells   │                      │
+│  └──────────┘  └──────────────┘  └──────────┘                      │
+│                                                                      │
+│  User-Registered Atlases:                                           │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐              │
+│  │  my_atlas_1  │  │  my_atlas_2  │  │     ...      │              │
+│  │   (custom)   │  │   (custom)   │  │              │              │
+│  └──────────────┘  └──────────────┘  └──────────────┘              │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Unified API Pattern
+
+Instead of atlas-specific endpoints, use the unified API:
+
+```bash
+# Old pattern (still supported for backward compatibility):
+GET /api/v1/cima/cell-types
+GET /api/v1/inflammation/diseases
+
+# New unified pattern (works for ANY atlas):
+GET /api/v1/atlases                           # List all atlases
+GET /api/v1/atlases/{atlas}/summary           # Any atlas summary
+GET /api/v1/atlases/{atlas}/cell-types        # Any atlas cell types
+GET /api/v1/atlases/{atlas}/features          # What's available
+GET /api/v1/atlases/{atlas}/activity          # Activity data
+GET /api/v1/atlases/{atlas}/correlations/age  # Correlations (if available)
+```
+
+### Registering a New Atlas
+
+```bash
+# Register a new atlas
+POST /api/v1/atlases/register
+{
+  "name": "my_immune_atlas",
+  "display_name": "My Immune Cell Atlas",
+  "description": "Custom single-cell RNA-seq dataset",
+  "h5ad_path": "/path/to/data.h5ad",
+  "data_dir": "/path/to/precomputed/json/",
+  "atlas_type": "immune",
+  "species": "human"
+}
+
+# After registration, all unified endpoints work:
+GET /api/v1/atlases/my_immune_atlas/summary
+GET /api/v1/atlases/my_immune_atlas/activity
+```
+
+### Atlas Features
+
+Each atlas declares its available features:
+
+| Feature | Description | Example Atlases |
+|---------|-------------|-----------------|
+| `cell_type_activity` | Basic activity data | All |
+| `age_correlation` | Age correlations | CIMA, Inflammation |
+| `bmi_correlation` | BMI correlations | CIMA, Inflammation |
+| `disease_activity` | Disease-specific data | Inflammation |
+| `organ_signatures` | Organ patterns | scAtlas |
+| `eqtl` | Genetic associations | CIMA |
+| `treatment_response` | Treatment prediction | Inflammation |
 
 ---
 

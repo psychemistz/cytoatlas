@@ -1,5 +1,6 @@
 """API routers."""
 
+from app.routers.atlases import router as atlases_router
 from app.routers.auth import router as auth_router
 from app.routers.cima import router as cima_router
 from app.routers.cross_atlas import router as cross_atlas_router
@@ -10,6 +11,7 @@ from app.routers.scatlas import router as scatlas_router
 from app.routers.validation import router as validation_router
 
 __all__ = [
+    "atlases_router",
     "auth_router",
     "cima_router",
     "cross_atlas_router",

@@ -3,6 +3,7 @@
 ## Session Date: 2026-01-28
 
 ### User Prompts (from previous session that ran out of context)
+keep in mind that we are not restricting 3 atlas already archived here. the service should be also applicable to new atlas dataset published or deposited datasets from user.
 
 1. **Initial Request**: Full development plan for CytoAtlas FastAPI Server (see plan file at `~/.claude/plans/snuggly-soaring-canyon.md`)
 

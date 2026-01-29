@@ -11,6 +11,7 @@ from app.config import get_settings
 from app.core.cache import CacheService
 from app.core.database import close_db, init_db
 from app.routers import (
+    atlases_router,
     auth_router,
     cima_router,
     cross_atlas_router,
@@ -109,7 +110,8 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router, prefix=api_prefix)
     app.include_router(auth_router, prefix=api_prefix)
-    app.include_router(cima_router, prefix=api_prefix)
+    app.include_router(atlases_router, prefix=api_prefix)  # Unified dynamic API
+    app.include_router(cima_router, prefix=api_prefix)      # Legacy CIMA-specific
     app.include_router(inflammation_router, prefix=api_prefix)
     app.include_router(scatlas_router, prefix=api_prefix)
     app.include_router(cross_atlas_router, prefix=api_prefix)
