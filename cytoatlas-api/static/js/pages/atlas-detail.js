@@ -238,9 +238,15 @@ const AtlasDetailPage = {
             <div id="celltype-heatmap" class="plot-container" style="height: 600px;"></div>
         `;
 
-        const data = await API.get('/cima/activity/heatmap', { signature_type: this.signatureType });
-        if (data && data.z) {
-            Heatmap.createActivityHeatmap('celltype-heatmap', data, {
+        const data = await API.get('/cima/heatmap/activity', { signature_type: this.signatureType });
+        if (data && data.values) {
+            // Transform API response to heatmap component format
+            const heatmapData = {
+                z: data.values,
+                cell_types: data.rows,
+                signatures: data.columns,
+            };
+            Heatmap.createActivityHeatmap('celltype-heatmap', heatmapData, {
                 title: `${this.signatureType} Activity by Cell Type`,
             });
         } else {
@@ -345,7 +351,7 @@ const AtlasDetailPage = {
             <div id="metabolite-heatmap" class="plot-container" style="height: 600px;"></div>
         `;
 
-        const data = await API.get('/cima/metabolites', { signature_type: this.signatureType, top_n: 50 });
+        const data = await API.get('/cima/correlations/metabolites', { signature_type: this.signatureType, limit: 500 });
         if (data && data.correlations) {
             this.renderMetaboliteHeatmap('metabolite-heatmap', data);
         } else {
@@ -393,12 +399,8 @@ const AtlasDetailPage = {
             <div id="population-viz" class="plot-container" style="height: 500px;"></div>
         `;
 
-        const data = await API.get('/cima/population-stratification', { signature_type: this.signatureType });
-        if (data) {
-            this.renderPopulationViz('population-viz', data);
-        } else {
-            document.getElementById('population-viz').innerHTML = '<p class="loading">No population data available</p>';
-        }
+        // Population stratification endpoint not yet available
+        document.getElementById('population-viz').innerHTML = '<p class="loading">Population stratification visualization coming soon</p>';
     },
 
     async loadCimaEqtl(content) {
@@ -472,9 +474,15 @@ const AtlasDetailPage = {
             <div id="inflam-celltype-heatmap" class="plot-container" style="height: 600px;"></div>
         `;
 
-        const data = await API.get('/inflammation/activity/heatmap', { signature_type: this.signatureType });
-        if (data && data.z) {
-            Heatmap.createActivityHeatmap('inflam-celltype-heatmap', data, {
+        const data = await API.get('/inflammation/heatmap/activity', { signature_type: this.signatureType });
+        if (data && data.values) {
+            // Transform API response to heatmap component format
+            const heatmapData = {
+                z: data.values,
+                cell_types: data.rows,
+                signatures: data.columns,
+            };
+            Heatmap.createActivityHeatmap('inflam-celltype-heatmap', heatmapData, {
                 title: `${this.signatureType} Activity by Cell Type`,
             });
         } else {
@@ -594,7 +602,7 @@ const AtlasDetailPage = {
             <div id="disease-sankey" class="plot-container" style="height: 600px;"></div>
         `;
 
-        const data = await API.get('/inflammation/disease-sankey');
+        const data = await API.get('/inflammation/sankey');
         if (data) {
             this.renderSankeyDiagram('disease-sankey', data);
         } else {
@@ -714,14 +722,20 @@ const AtlasDetailPage = {
         content.innerHTML = `
             <div class="panel-header">
                 <h3>Cell Type Heatmap</h3>
-                <p>Activity across cell types (top 100 most variable)</p>
+                <p>Activity across cell types (top 50 most variable)</p>
             </div>
             <div id="scatlas-celltype-heatmap" class="plot-container" style="height: 700px;"></div>
         `;
 
-        const data = await API.get('/scatlas/activity/heatmap', { signature_type: this.signatureType, top_n: 100 });
-        if (data && data.z) {
-            Heatmap.createActivityHeatmap('scatlas-celltype-heatmap', data, {
+        const data = await API.get('/scatlas/heatmap/celltype', { signature_type: this.signatureType });
+        if (data && data.values) {
+            // Transform API response to heatmap component format
+            const heatmapData = {
+                z: data.values,
+                cell_types: data.rows,
+                signatures: data.columns,
+            };
+            Heatmap.createActivityHeatmap('scatlas-celltype-heatmap', heatmapData, {
                 title: `${this.signatureType} Activity by Cell Type`,
             });
         } else {
@@ -738,12 +752,19 @@ const AtlasDetailPage = {
             <div id="cancer-comparison-plot" class="plot-container" style="height: 600px;"></div>
         `;
 
-        const data = await API.get('/scatlas/cancer-comparison', { signature_type: this.signatureType });
-        if (data && data.z) {
-            Heatmap.create('cancer-comparison-plot', data, {
-                title: 'Tumor vs Adjacent (Log2 Fold Change)',
-                colorbarTitle: 'Log2 FC',
+        const data = await API.get('/scatlas/heatmap/cancer-comparison', { signature_type: this.signatureType });
+        if (data && data.values) {
+            // Transform API response to heatmap component format
+            Heatmap.create('cancer-comparison-plot', {
+                z: data.values,
+                x: data.columns,
+                y: data.rows,
+            }, {
+                title: `Tumor vs Adjacent (${data.n_paired_donors || 0} paired donors)`,
+                colorbarTitle: 'Mean Difference',
                 symmetric: true,
+                xLabel: 'Signature',
+                yLabel: 'Cell Type',
             });
         } else {
             document.getElementById('cancer-comparison-plot').innerHTML = '<p class="loading">No cancer comparison data available</p>';
@@ -882,6 +903,46 @@ const AtlasDetailPage = {
         }
     },
 
+    renderBoxplotFromStats(containerId, data, options = {}) {
+        // Render boxplot from pre-computed statistics
+        // data is array of {signature, cell_type, stratify_by, statistics: [{bin, median, q1, q3, min, max, mean, std, n}]}
+        const container = document.getElementById(containerId);
+        if (!container || !data || data.length === 0) {
+            container.innerHTML = '<p class="loading">No data available</p>';
+            return;
+        }
+
+        // Use first entry's statistics (may have multiple cell types in data)
+        const entry = data[0];
+        const stats = entry.statistics || [];
+
+        if (stats.length === 0) {
+            container.innerHTML = '<p class="loading">No statistics data available</p>';
+            return;
+        }
+
+        // Build box plot traces from pre-computed stats
+        const traces = stats.map(stat => ({
+            type: 'box',
+            name: stat.bin || stat.group,
+            y: [stat.min, stat.q1, stat.median, stat.q3, stat.max],
+            boxpoints: false,
+            hovertemplate: `<b>${stat.bin || stat.group}</b><br>` +
+                `Median: ${stat.median?.toFixed(3)}<br>` +
+                `Q1: ${stat.q1?.toFixed(3)}<br>` +
+                `Q3: ${stat.q3?.toFixed(3)}<br>` +
+                `n=${stat.n}<extra></extra>`,
+            marker: { color: `hsl(${stats.indexOf(stat) * 40}, 70%, 50%)` },
+        }));
+
+        Plotly.newPlot(containerId, traces, {
+            title: options.title || 'Activity by Group',
+            yaxis: { title: options.yLabel || 'Value' },
+            showlegend: false,
+            font: { family: 'Inter, sans-serif' },
+        });
+    },
+
     renderPopulationViz(containerId, data) {
         const container = document.getElementById(containerId);
         if (!container) return;
@@ -997,7 +1058,7 @@ const AtlasDetailPage = {
 
     async populateBiochemDropdowns() {
         try {
-            const markers = await API.get('/cima/biochemistry-markers');
+            const markers = await API.get('/cima/biochem-variables');
             const signatures = await API.get('/cima/signatures', { signature_type: this.signatureType });
 
             const markerSelect = document.getElementById('biochem-marker');
@@ -1037,15 +1098,18 @@ const AtlasDetailPage = {
         if (!plotContainer) return;
 
         try {
-            const data = await API.get('/cima/age-bmi-stratified', {
-                variable, cell_type: cellType, signature, signature_type: this.signatureType,
-            });
+            // Endpoint format: /cima/boxplots/{age|bmi}/{signature}
+            const endpoint = variable === 'age' ? 'age' : 'bmi';
+            const params = { signature_type: this.signatureType };
+            if (cellType) params.cell_type = cellType;
 
-            if (data && data.groups && data.values) {
-                Scatter.createBoxPlot('stratified-plot', data, {
+            const data = await API.get(`/cima/boxplots/${endpoint}/${signature}`, params);
+
+            if (data && data.length > 0) {
+                // Data is a list of boxplot entries with statistics
+                this.renderBoxplotFromStats('stratified-plot', data, {
                     title: variable === 'age' ? 'Activity by Age Group' : 'Activity by BMI Category',
                     yLabel: 'Activity (z-score)',
-                    showPoints: true,
                 });
             } else {
                 plotContainer.innerHTML = '<p class="loading">No stratified data available</p>';
@@ -1062,6 +1126,10 @@ const AtlasDetailPage = {
 
         const plotContainer = document.getElementById('inflam-stratified-plot');
         if (!plotContainer) return;
+
+        // Age/BMI stratification not yet implemented for Inflammation Atlas
+        plotContainer.innerHTML = '<p class="loading">Age/BMI stratification coming soon for Inflammation Atlas</p>';
+        return;
 
         try {
             const data = await API.get('/inflammation/age-bmi-stratified', {
@@ -1152,14 +1220,14 @@ const AtlasDetailPage = {
         if (!plotContainer) return;
 
         try {
-            const data = await API.get('/inflammation/disease-differential', {
+            const data = await API.get('/inflammation/celltype-stratified', {
                 disease, signature_type: this.signatureType,
             });
 
             if (data && data.length > 0) {
                 const x = data.map(d => d.log2fc || 0);
-                const y = data.map(d => -Math.log10(d.pvalue || 1));
-                const labels = data.map(d => d.signature || d.protein);
+                const y = data.map(d => -Math.log10(d.p_value || 1));
+                const labels = data.map(d => `${d.signature} (${d.cell_type})`);
 
                 Plotly.newPlot('inflam-volcano', [{
                     x, y, text: labels,
@@ -1186,20 +1254,21 @@ const AtlasDetailPage = {
         if (!rocContainer) return;
 
         try {
-            const data = await API.get('/inflammation/treatment-prediction', { disease });
+            const params = disease ? { disease } : {};
+            const data = await API.get('/inflammation/treatment-response/roc', params);
 
-            if (data && data.roc_curves) {
-                // Plot ROC curves
-                const traces = Object.entries(data.roc_curves).map(([name, curve]) => ({
+            if (data && data.length > 0) {
+                // Plot ROC curves - data is a list of {disease, model, auc, fpr, tpr}
+                const traces = data.map(curve => ({
                     x: curve.fpr,
                     y: curve.tpr,
-                    name: `${name} (AUC=${curve.auc?.toFixed(2) || 'N/A'})`,
+                    name: `${curve.model} (AUC=${curve.auc?.toFixed(2) || 'N/A'})`,
                     mode: 'lines',
                     type: 'scatter',
                 }));
 
                 Plotly.newPlot('treatment-roc', traces, {
-                    title: 'Treatment Response Prediction',
+                    title: `Treatment Response Prediction${disease ? ` - ${disease}` : ''}`,
                     xaxis: { title: 'False Positive Rate', range: [0, 1] },
                     yaxis: { title: 'True Positive Rate', range: [0, 1] },
                     shapes: [{
@@ -1254,7 +1323,10 @@ const AtlasDetailPage = {
         if (!plotContainer || !marker) return;
 
         try {
-            const data = await API.get('/cima/biochem-scatter', { marker, signature });
+            // Endpoint format: /cima/scatter/biochem/{signature}/{variable}
+            const data = await API.get(`/cima/scatter/biochem/${signature}/${marker}`, {
+                signature_type: this.signatureType
+            });
             if (data && data.x && data.y) {
                 Scatter.create('biochem-scatter', data, {
                     title: `${signature} vs ${marker}`,
