@@ -5,6 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## github instruction
 Do not use "Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>" in github commit message
 
+## data guideline
+If require data path, please ask user. Do not use mock data for validation purpose. if require some data to implement service, sample some data from real dataset and use that dataset as development dataset. .
+
 ## Project Overview
 
 Pan-Disease Single-Cell Cytokine Activity Atlas - computes cytokine and secreted protein activity signatures across 12+ million human immune cells from three major single-cell atlases (CIMA, Inflammation Atlas, scAtlas) to identify disease-specific and conserved signaling patterns, with applications to treatment response prediction.
