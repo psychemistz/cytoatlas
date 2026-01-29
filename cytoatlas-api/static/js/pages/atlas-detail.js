@@ -322,7 +322,7 @@ const AtlasDetailPage = {
                             <tr>
                                 <td>Differential</td>
                                 <td>1,213 proteins × 10 categories</td>
-                                <td>${stats?.n_differential?.toLocaleString() || 'N/A'}</td>
+                                <td>${stats?.n_differential_tests?.toLocaleString() || '12,130'}</td>
                             </tr>
                             <tr>
                                 <td>Cell Type Correlations</td>
