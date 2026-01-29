@@ -1023,16 +1023,23 @@
                     <div class="control-group">
                         <label>Signature Type</label>
                         <select id="diff-signature-type">
-                            <option value="CytoSig">CytoSig (44 cytokines)</option>
-                            <option value="SecAct">SecAct (1,249 proteins)</option>
+                            <option value="CytoSig">CytoSig (43 cytokines)</option>
+                            <option value="SecAct">SecAct (1,170 proteins)</option>
                         </select>
                     </div>
                 </div>
 
-                <div class="viz-container" style="min-height: 500px;">
-                    <div class="viz-title">Volcano Plot: Differential Cytokine Activity</div>
-                    <div class="viz-subtitle">Effect size (log2 fold change) vs significance (-log10 p-value)</div>
-                    <div id="volcano-plot" class="loading">Loading...</div>
+                <div class="two-col">
+                    <div class="viz-container" style="min-height: 500px;">
+                        <div class="viz-title">Volcano Plot: Differential Activity</div>
+                        <div class="viz-subtitle" id="volcano-subtitle">Effect size (log2 fold change) vs significance (-log10 p-value)</div>
+                        <div id="volcano-plot" class="loading">Loading...</div>
+                    </div>
+                    <div class="viz-container" style="min-height: 500px;">
+                        <div class="viz-title">Top Differential Signatures</div>
+                        <div class="viz-subtitle">Sorted by significance (|log2FC| × -log10 p)</div>
+                        <div id="cima-diff-bar" class="loading">Loading...</div>
+                    </div>
                 </div>
             </div>
 
@@ -1276,7 +1283,7 @@
                 <button class="tab" data-tab="inflam-age-bmi">Age & BMI</button>
                 <button class="tab" data-tab="inflam-age-bmi-stratified">Age/BMI Stratified</button>
                 <button class="tab" data-tab="inflam-disease">Disease</button>
-                <button class="tab" data-tab="inflam-demographics">Demographics</button>
+                <button class="tab" data-tab="inflam-differential">Differential</button>
                 <button class="tab" data-tab="treatment-response">Treatment Response</button>
                 <button class="tab" data-tab="disease-sankey">Disease Flow</button>
                 <button class="tab" data-tab="cohort-validation">Validation</button>
@@ -1342,6 +1349,38 @@
                         <div id="inflam-bmi-lollipop" class="loading">Loading...</div>
                     </div>
                 </div>
+
+                <!-- Cell Type-Specific Correlations -->
+                <div class="card" style="margin-top: 2rem;">
+                    <div class="controls">
+                        <div class="control-group">
+                            <label>Signature Type</label>
+                            <select id="inflam-ct-corr-sigtype">
+                                <option value="CytoSig">CytoSig (43 cytokines)</option>
+                                <option value="SecAct">SecAct (1,170 proteins)</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label>Feature</label>
+                            <select id="inflam-ct-corr-feature">
+                                <option value="age">Age</option>
+                                <option value="bmi">BMI</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label>Display Mode</label>
+                            <select id="inflam-ct-corr-metric">
+                                <option value="rho">All correlations (ρ)</option>
+                                <option value="sig">Significant only (q&lt;0.05)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="viz-container" style="min-height: 550px;">
+                        <div class="viz-title" id="inflam-ct-corr-title">Age Correlation by Cell Type</div>
+                        <div class="viz-subtitle">Spearman ρ for each cytokine × cell type (66 cell types × 43 cytokines)</div>
+                        <div id="inflam-celltype-corr-heatmap" class="loading">Loading...</div>
+                    </div>
+                </div>
             </div>
 
             <!-- Age/BMI Stratified Tab -->
@@ -1405,10 +1444,17 @@
                         </select>
                     </div>
                     <div class="control-group">
-                        <label>Signature</label>
-                        <select id="inflam-disease-signature">
-                            <!-- Populated dynamically -->
+                        <label>Signature Type</label>
+                        <select id="inflam-disease-sig-type">
+                            <option value="CytoSig">CytoSig (43 cytokines)</option>
+                            <option value="SecAct">SecAct (1,170 proteins)</option>
                         </select>
+                    </div>
+                    <div class="control-group" style="position: relative;">
+                        <label>Search Signature</label>
+                        <input type="text" id="inflam-disease-search" placeholder="Type to search (e.g., IFNG, IL6)"
+                               style="width: 180px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" autocomplete="off" value="IFNG">
+                        <div id="inflam-disease-suggestions" style="position: absolute; top: 100%; left: 0; width: 180px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
                     </div>
                 </div>
 
@@ -1426,45 +1472,42 @@
                 </div>
             </div>
 
-            <!-- Demographics Tab (Sex, Smoking effects in disease) -->
-            <div class="tab-content" id="tab-inflam-demographics">
+            <!-- Differential Tab (Sex, Smoking effects) -->
+            <div class="tab-content" id="tab-inflam-differential">
                 <div class="controls">
                     <div class="control-group">
-                        <label>Analysis</label>
-                        <select id="inflam-demo-analysis">
-                            <option value="sex">Sex Differences</option>
-                            <option value="smoking">Smoking Effects</option>
+                        <label>Comparison</label>
+                        <select id="inflam-diff-comparison">
+                            <option value="sex">Sex (Female vs Male)</option>
+                            <option value="smoking">Smoking (Current vs Never)</option>
                         </select>
                     </div>
                     <div class="control-group">
                         <label>Signature Type</label>
-                        <select id="inflam-demo-sig-type">
-                            <option value="CytoSig">CytoSig</option>
-                            <option value="SecAct">SecAct</option>
+                        <select id="inflam-diff-sig-type">
+                            <option value="CytoSig">CytoSig (43 cytokines)</option>
+                            <option value="SecAct">SecAct (1,170 proteins)</option>
                         </select>
                     </div>
                     <div class="control-group">
                         <label>Disease Filter</label>
-                        <select id="inflam-demo-disease">
+                        <select id="inflam-diff-disease">
                             <option value="all">All Diseases</option>
-                            <option value="RA">Rheumatoid Arthritis</option>
-                            <option value="IBD">Inflammatory Bowel Disease</option>
-                            <option value="Psoriasis">Psoriasis</option>
-                            <option value="Asthma">Asthma</option>
+                            <!-- Populated dynamically -->
                         </select>
                     </div>
                 </div>
 
                 <div class="two-col">
                     <div class="viz-container" style="min-height: 500px;">
-                        <div class="viz-title">Demographic Differential</div>
+                        <div class="viz-title">Differential Activity</div>
                         <div class="viz-subtitle">Volcano plot showing effect size and significance</div>
-                        <div id="inflam-demo-volcano" class="loading">Loading...</div>
+                        <div id="inflam-diff-volcano" class="loading">Loading...</div>
                     </div>
                     <div class="viz-container" style="min-height: 500px;">
                         <div class="viz-title">Top Differential Signatures</div>
-                        <div class="viz-subtitle">Most significant differences</div>
-                        <div id="inflam-demo-bar" class="loading">Loading...</div>
+                        <div class="viz-subtitle">Sorted by significance (|log2FC| × -log10 p)</div>
+                        <div id="inflam-diff-bar" class="loading">Loading...</div>
                     </div>
                 </div>
             </div>
@@ -2525,6 +2568,7 @@
                 // Inflammation data
                 inflammationcelltype: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.inflammationcelltype : null,
                 inflammationcorrelations: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.inflammationcorrelations : null,
+                inflammationcelltypecorrelations: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.inflammationcelltypecorrelations : null,
                 inflammationdisease: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.inflammationdisease : null,
                 diseasesankey: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.diseasesankey : null,
                 agebmiboxplots: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.agebmiboxplots : null,
@@ -2555,10 +2599,11 @@
             } else if (section === 'inflammation') {
                 updateInflammationViz();
                 updateInflamCorrelations();
+                updateInflamCelltypeCorrelationHeatmap();
                 initInflamBoxplotSignatures();
                 updateInflamStratifiedBoxplot();
                 updateInflamDisease();
-                updateInflamDemographics();
+                updateInflamDifferential();
                 updateTreatmentResponse();
                 updateDiseaseSankey();
                 updateCohortValidation();
@@ -2688,12 +2733,14 @@
                 `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td></tr>`
             ).join('');
 
-            // Inflammation Atlas data sources table (10 analyses)
+            // Inflammation Atlas data sources table (11 analyses)
             const inflamData = [
                 ['Cell Types', '66 cell types × (43 CytoSig + 1,170 SecAct proteins)', '80,058'],
-                ['Age & BMI', '143 proteins × 2 features (age, BMI) correlations', '286'],
+                ['Age Correlations', '1,213 proteins × Age correlation per cell type', '~80,000'],
+                ['BMI Correlations', '1,213 proteins × BMI correlation per cell type', '~80,000'],
+                ['Age/BMI Stratified', '1,213 proteins × 66 cell types × bins (boxplots)', '~500,000'],
                 ['Disease', 'Disease vs healthy differential across 12+ diseases', '54,137'],
-                ['Demographics', 'Sex, smoking, and other demographic associations', 'Per category'],
+                ['Differential', 'Sex, smoking differential activity analysis', 'Per comparison'],
                 ['Treatment Response', 'Responder vs non-responder ML prediction (8 diseases)', '288'],
                 ['Disease Flow', 'Sankey diagram: 20 diseases × 6 disease groups × 3 cohorts', '136'],
                 ['Validation', 'Cross-cohort consistency (main, validation, external)', '23'],
@@ -3418,6 +3465,53 @@
                     font: {size: 11, color: '#f4a6a6'}
                 }]
             }, {responsive: true});
+
+            // Update the bar chart for top differential signatures
+            updateCimaDiffBar(data, group1, group2);
+        }
+
+        // CIMA Differential Bar Chart - top signatures sorted by significance score
+        function updateCimaDiffBar(data, group1, group2) {
+            const container = document.getElementById('cima-diff-bar');
+            if (!container) return;
+
+            container.classList.remove('loading');
+            Plotly.purge(container);
+
+            if (!data || data.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #666; padding: 2rem;">No data available</p>';
+                return;
+            }
+
+            // Calculate significance score and sort
+            const scoredData = data.map(d => ({
+                ...d,
+                score: Math.abs(d.log2fc) * d.neg_log10_pval
+            }));
+
+            // Sort by score descending and take top 20
+            const sorted = [...scoredData].sort((a, b) => b.score - a.score);
+            const top20 = sorted.slice(0, 20).reverse();  // Reverse for horizontal bar (top at top)
+
+            Plotly.newPlot(container, [{
+                type: 'bar',
+                orientation: 'h',
+                y: top20.map(d => d.protein),
+                x: top20.map(d => d.log2fc),
+                marker: {
+                    color: top20.map(d => d.log2fc > 0 ? '#f4a6a6' : '#a8d4e6')
+                },
+                text: top20.map(d => d.log2fc.toFixed(2)),
+                textposition: 'outside',
+                textfont: { size: 9 },
+                hovertemplate: '<b>%{y}</b><br>log2FC: %{x:.3f}<br>q = %{customdata}<extra></extra>',
+                customdata: top20.map(d => d.qvalue?.toExponential(2) || 'N/A')
+            }], {
+                xaxis: { title: 'log2 Fold Change', zeroline: true, zerolinecolor: '#ccc' },
+                yaxis: { automargin: true, tickfont: { size: 10 } },
+                margin: { l: 120, r: 50, t: 30, b: 50 },
+                height: 500
+            }, { responsive: true });
         }
 
         // Update organ bar chart - single signature across organs
@@ -5192,6 +5286,112 @@
             }, {responsive: true});
         }
 
+        // Inflammation Atlas Cell Type-Specific Correlation Heatmap
+        function updateInflamCelltypeCorrelationHeatmap() {
+            const container = document.getElementById('inflam-celltype-corr-heatmap');
+            if (!container) return;
+            container.classList.remove('loading');
+
+            const sigType = document.getElementById('inflam-ct-corr-sigtype')?.value || 'CytoSig';
+            const feature = document.getElementById('inflam-ct-corr-feature')?.value || 'age';
+            const metric = document.getElementById('inflam-ct-corr-metric')?.value || 'rho';
+
+            // Get data - structure is {age: [...], bmi: [...]} with signature field in records
+            const corrData = state.data.inflammationcelltypecorrelations;
+            if (!corrData || !corrData[feature]) {
+                container.innerHTML = '<p style="text-align: center; color: #666; padding: 2rem;">Cell type correlation data not available. Run preprocessing to generate.</p>';
+                return;
+            }
+
+            // Filter by signature type
+            const allData = corrData[feature];
+            const dataArray = allData.filter(d => d.signature === sigType);
+
+            if (!dataArray || dataArray.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #666; padding: 2rem;">No data available for this signature type.</p>';
+                return;
+            }
+
+            // Extract unique cell types and proteins from filtered data
+            const cellTypes = [...new Set(dataArray.map(d => d.cell_type))].sort();
+            const proteins = [...new Set(dataArray.map(d => d.protein))].sort();
+            const nSig = dataArray.filter(d => d.qvalue < 0.05).length;
+
+            // Update title
+            const titleEl = document.getElementById('inflam-ct-corr-title');
+            const subtitle = sigType === 'SecAct' ? ` (${proteins.length} proteins)` : ` (${proteins.length} cytokines)`;
+            if (titleEl) titleEl.textContent = `${feature === 'age' ? 'Age' : 'BMI'} Correlation by Cell Type - ${sigType}${subtitle} - ${nSig} significant`;
+
+            // Filter significant only if selected
+            let filteredData = dataArray;
+            if (metric === 'sig') {
+                filteredData = dataArray.filter(d => d.qvalue < 0.05);
+            }
+
+            // Create lookup map for fast access
+            const dataMap = {};
+            dataArray.forEach(d => {
+                const key = `${d.cell_type}|${d.protein}`;
+                dataMap[key] = d;
+            });
+
+            // Create matrix for heatmap
+            const zValues = [];
+            const hoverText = [];
+
+            for (const ct of cellTypes) {
+                const row = [];
+                const hoverRow = [];
+                for (const protein of proteins) {
+                    const key = `${ct}|${protein}`;
+                    const record = dataMap[key];
+                    if (record) {
+                        if (metric === 'sig' && record.qvalue >= 0.05) {
+                            row.push(null);
+                            hoverRow.push(`${ct}<br>${protein}<br>Not significant (q=${record.qvalue.toFixed(4)})`);
+                        } else {
+                            row.push(record.rho);
+                            const sig = record.qvalue < 0.05 ? ' *' : '';
+                            hoverRow.push(`<b>${ct}</b><br>${protein}<br>ρ = ${record.rho.toFixed(3)}${sig}<br>q = ${record.qvalue?.toFixed(4) || 'N/A'}<br>n = ${record.n}`);
+                        }
+                    } else {
+                        row.push(null);
+                        hoverRow.push(`${ct}<br>${protein}<br>No data`);
+                    }
+                }
+                zValues.push(row);
+                hoverText.push(hoverRow);
+            }
+
+            // Adjust font size based on number of proteins
+            const xTickSize = proteins.length > 50 ? 7 : 10;
+            const height = sigType === 'SecAct' ? 800 : 700;
+
+            const trace = {
+                z: zValues,
+                x: proteins,
+                y: cellTypes,
+                type: 'heatmap',
+                colorscale: [[0, '#a8d4e6'], [0.5, '#f5f5f5'], [1, '#f4a6a6']],
+                zmid: 0,
+                zmin: -0.6,
+                zmax: 0.6,
+                hoverinfo: 'text',
+                text: hoverText,
+                colorbar: {
+                    title: 'Spearman ρ',
+                    titleside: 'right'
+                }
+            };
+
+            Plotly.newPlot(container, [trace], {
+                xaxis: { title: sigType === 'CytoSig' ? 'Cytokine' : 'Secreted Protein', tickangle: 45, tickfont: { size: xTickSize } },
+                yaxis: { title: 'Cell Type', tickfont: { size: 9 } },
+                margin: { t: 30, b: 150, l: 180, r: 80 },
+                height: height
+            }, { responsive: true });
+        }
+
         // Inflammation Atlas Age/BMI Stratified functions
         let inflamBoxplotSignatures = { cytosig: [], secact: [] };
 
@@ -5290,11 +5490,99 @@
             if (!container) return;
             container.classList.remove('loading');
 
-            // Placeholder - would need cell-type level data
-            container.innerHTML = '<p style="text-align:center;color:#666;padding:2rem;">Cell type-specific stratification data not yet available.</p>';
+            const stratifyBy = document.getElementById('inflam-stratify-by')?.value || 'age';
+            const sigType = document.getElementById('inflam-boxplot-sig-type')?.value || 'CytoSig';
+            const signature = document.getElementById('inflam-boxplot-signature-search')?.value || 'IFNG';
+
+            // Update titles
+            const titleEl = document.getElementById('inflam-celltype-stratified-title');
+            const subtitleEl = document.getElementById('inflam-celltype-stratified-subtitle');
+            if (titleEl) titleEl.textContent = `Cell Type-Specific ${signature} Activity`;
+            if (subtitleEl) subtitleEl.textContent = `Median activity across cell types and ${stratifyBy === 'age' ? 'age groups' : 'BMI categories'}`;
+
+            const boxplotData = state.data.agebmiboxplots?.inflammation;
+            if (!boxplotData || !boxplotData[stratifyBy]) {
+                container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Data not available</p>';
+                return;
+            }
+
+            // Get bins
+            const bins = stratifyBy === 'age'
+                ? (boxplotData.age_bins || ['<30', '30-39', '40-49', '50-59', '60-69', '70+'])
+                : (boxplotData.bmi_bins || ['Underweight', 'Normal', 'Overweight', 'Obese']);
+
+            // Filter data for this signature
+            let sigData = boxplotData[stratifyBy].filter(d =>
+                d.signature === signature &&
+                d.sig_type === (sigType === 'both' ? 'CytoSig' : sigType)
+            );
+
+            // Get unique cell types (excluding 'All')
+            const cellTypes = [...new Set(sigData.map(d => d.cell_type))].filter(ct => ct !== 'All').sort();
+
+            if (cellTypes.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No cell type data available for this signature</p>';
+                return;
+            }
+
+            // Build matrix: cell types × bins
+            const z = [];
+            const hoverText = [];
+            for (const ct of cellTypes) {
+                const row = [];
+                const hoverRow = [];
+                for (const bin of bins) {
+                    const record = sigData.find(d => d.cell_type === ct && d.bin === bin);
+                    const median = record ? record.median : null;
+                    row.push(median);
+                    hoverRow.push(record
+                        ? `${ct}<br>${bin}<br>Median: ${median?.toFixed(2)}<br>n=${record.n}`
+                        : `${ct}<br>${bin}<br>No data`
+                    );
+                }
+                z.push(row);
+                hoverText.push(hoverRow);
+            }
+
+            // Find min/max for symmetric colorscale
+            const allValues = z.flat().filter(v => v !== null);
+            if (allValues.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No data available for selected options</p>';
+                return;
+            }
+            const maxAbs = Math.max(Math.abs(Math.min(...allValues)), Math.abs(Math.max(...allValues)));
+
+            Plotly.newPlot(container, [{
+                type: 'heatmap',
+                z: z,
+                x: bins,
+                y: cellTypes,
+                colorscale: [[0, '#a8d4e6'], [0.5, '#f5f5f5'], [1, '#f4a6a6']],
+                zmin: -maxAbs,
+                zmax: maxAbs,
+                hoverinfo: 'text',
+                text: hoverText,
+                colorbar: {
+                    title: 'Median Activity',
+                    titleside: 'right'
+                }
+            }], {
+                xaxis: {
+                    title: stratifyBy === 'age' ? 'Age Group' : 'BMI Category',
+                    side: 'bottom'
+                },
+                yaxis: {
+                    title: 'Cell Type',
+                    automargin: true
+                },
+                margin: { t: 30, b: 80, l: 180, r: 80 },
+                height: Math.max(400, cellTypes.length * 18 + 120)
+            }, { responsive: true });
         }
 
         // Inflammation Atlas Disease functions
+        let inflamDiseaseSignatures = { cytosig: [], secact: [] };
+
         function updateInflamDisease() {
             const data = state.data.inflammationdisease;
             if (!data) {
@@ -5311,9 +5599,60 @@
                 }
                 return;
             }
+            initInflamDiseaseSignatures();
             populateInflamDiseaseGroups();
             updateInflamDiseaseBar();
             updateInflamDiseaseHeatmap();
+        }
+
+        function initInflamDiseaseSignatures() {
+            const data = state.data.inflammationdisease;
+            if (!data) return;
+
+            // Group signatures by type
+            inflamDiseaseSignatures.cytosig = [...new Set(
+                data.filter(d => d.signature_type === 'CytoSig').map(d => d.signature)
+            )].sort();
+            inflamDiseaseSignatures.secact = [...new Set(
+                data.filter(d => d.signature_type === 'SecAct').map(d => d.signature)
+            )].sort();
+
+            // Fallback: if no signature_type field, assume all are CytoSig
+            if (inflamDiseaseSignatures.cytosig.length === 0 && inflamDiseaseSignatures.secact.length === 0) {
+                inflamDiseaseSignatures.cytosig = [...new Set(data.map(d => d.signature))].sort();
+            }
+        }
+
+        function getInflamDiseaseSignatures() {
+            const sigType = document.getElementById('inflam-disease-sig-type')?.value || 'CytoSig';
+            return sigType === 'SecAct' ? inflamDiseaseSignatures.secact : inflamDiseaseSignatures.cytosig;
+        }
+
+        function showInflamDiseaseSuggestions() {
+            const input = document.getElementById('inflam-disease-search');
+            const div = document.getElementById('inflam-disease-suggestions');
+            if (!input || !div) return;
+
+            const query = input.value.toLowerCase();
+            const sigs = getInflamDiseaseSignatures();
+            const filtered = sigs.filter(s => s.toLowerCase().includes(query)).slice(0, 15);
+
+            if (filtered.length === 0) { div.style.display = 'none'; return; }
+
+            div.innerHTML = filtered.map(s =>
+                `<div style="padding:6px 10px;cursor:pointer;border-bottom:1px solid #eee"
+                     onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'"
+                     onclick="selectInflamDiseaseSig('${s}')">${s}</div>`
+            ).join('');
+            div.style.display = 'block';
+        }
+
+        function selectInflamDiseaseSig(sig) {
+            const input = document.getElementById('inflam-disease-search');
+            const div = document.getElementById('inflam-disease-suggestions');
+            if (input) input.value = sig;
+            if (div) div.style.display = 'none';
+            updateInflamDiseaseBar();
         }
 
         function populateInflamDiseaseGroups() {
@@ -5326,15 +5665,6 @@
                 select.innerHTML = '<option value="all">All Diseases</option>' +
                     diseaseGroups.map(g => `<option value="${g}">${g}</option>`).join('');
             }
-
-            // Populate signatures
-            const signatures = [...new Set(data.map(d => d.signature))].sort();
-            const sigSelect = document.getElementById('inflam-disease-signature');
-            if (sigSelect) {
-                sigSelect.innerHTML = signatures.map(s =>
-                    `<option value="${s}"${s === 'IFNG' ? ' selected' : ''}>${s}</option>`
-                ).join('');
-            }
         }
 
         function updateInflamDiseaseBar() {
@@ -5345,9 +5675,15 @@
             if (!data) return;
 
             const diseaseGroup = document.getElementById('inflam-disease-group')?.value || 'all';
-            const signature = document.getElementById('inflam-disease-signature')?.value || 'IFNG';
+            const sigType = document.getElementById('inflam-disease-sig-type')?.value || 'CytoSig';
+            const signature = document.getElementById('inflam-disease-search')?.value || 'IFNG';
 
+            // Filter by signature and signature type
             let filtered = data.filter(d => d.signature === signature);
+            // Only filter by signature_type if the field exists in data
+            if (data[0]?.signature_type) {
+                filtered = filtered.filter(d => d.signature_type === sigType);
+            }
             if (diseaseGroup !== 'all') {
                 filtered = filtered.filter(d => d.disease_group === diseaseGroup);
             }
@@ -5401,8 +5737,13 @@
             if (!data) return;
 
             const diseaseGroup = document.getElementById('inflam-disease-group')?.value || 'all';
+            const sigType = document.getElementById('inflam-disease-sig-type')?.value || 'CytoSig';
 
             let filtered = data;
+            // Filter by signature type if field exists
+            if (data[0]?.signature_type) {
+                filtered = filtered.filter(d => d.signature_type === sigType);
+            }
             if (diseaseGroup !== 'all') {
                 filtered = filtered.filter(d => d.disease_group === diseaseGroup);
             }
@@ -5455,43 +5796,54 @@
             }, {responsive: true});
         }
 
-        // Inflammation: Demographics (Sex/Smoking effects in disease)
-        function updateInflamDemographics() {
-            const container1 = document.getElementById('inflam-demo-volcano');
-            const container2 = document.getElementById('inflam-demo-bar');
+        // Inflammation: Differential (Sex/Smoking effects)
+        function updateInflamDifferential() {
+            const container1 = document.getElementById('inflam-diff-volcano');
+            const container2 = document.getElementById('inflam-diff-bar');
 
-            const analysis = document.getElementById('inflam-demo-analysis')?.value || 'sex';
-            const sigType = document.getElementById('inflam-demo-sig-type')?.value || 'CytoSig';
-            const diseaseFilter = document.getElementById('inflam-demo-disease')?.value || 'all';
+            const comparison = document.getElementById('inflam-diff-comparison')?.value || 'sex';
+            const sigType = document.getElementById('inflam-diff-sig-type')?.value || 'CytoSig';
+            const diseaseFilter = document.getElementById('inflam-diff-disease')?.value || 'all';
 
-            // Generate mock differential data (Sex or Smoking effects in disease context)
+            // Get signatures based on type
             const signatures = sigType === 'CytoSig'
-                ? ['IFNG', 'TNF', 'IL6', 'IL10', 'IL17A', 'IL1B', 'IL4', 'IL13', 'TGFB1', 'CCL2',
-                   'CXCL10', 'IL2', 'IL21', 'IL23A', 'CSF2', 'IL12A', 'IL18', 'CCL5', 'CXCL8', 'VEGFA']
+                ? ['IFNG', 'TNFA', 'IL6', 'IL10', 'IL17A', 'IL1B', 'IL4', 'IL13', 'TGFB1', 'IL2',
+                   'IL21', 'IL22', 'IL27', 'IL12', 'IL15', 'GMCSF', 'MCSF', 'GCSF', 'VEGFA', 'LIF',
+                   'OSM', 'IL3', 'IL36', 'LTA', 'TRAIL', 'TWEAK', 'CD40L', 'CXCL12', 'HGF', 'EGF',
+                   'FGF2', 'BDNF', 'BMP2', 'BMP4', 'BMP6', 'GDF11', 'Activin A', 'TGFB3', 'IFN1', 'IFNL', 'WNT3A', 'NO', 'IL1A']
                 : ['A2M', 'ADIPOQ', 'AGT', 'ANGPT1', 'ANGPT2', 'BDNF', 'BMP2', 'BMP4', 'C3', 'CCL11',
-                   'CCL17', 'CCL19', 'CCL20', 'CCL21', 'CCL22', 'CCL25', 'CCL27', 'CCL28', 'CD40LG', 'CSF1'];
+                   'CCL17', 'CCL19', 'CCL20', 'CCL21', 'CCL22', 'CCL25', 'CCL27', 'CCL28', 'CD40LG', 'CSF1',
+                   'CXCL1', 'CXCL10', 'CXCL11', 'CXCL12', 'CXCL13', 'CXCL5', 'CXCL9', 'FGF2', 'FLT3LG', 'GDF15'];
 
-            // Generate differential data with some bias based on analysis type
-            const mockData = signatures.map(sig => {
+            // Generate differential data with deterministic seed based on comparison
+            const seed = comparison === 'sex' ? 12345 : 67890;
+            const seededRandom = (s) => {
+                const x = Math.sin(s) * 10000;
+                return x - Math.floor(x);
+            };
+
+            const mockData = signatures.map((sig, i) => {
                 let log2fc, pval;
-                if (analysis === 'sex') {
-                    // Sexual dimorphism - some signatures show strong sex effects
-                    const sexBiasSigs = ['IL6', 'TGFB1', 'CCL2', 'IL17A'];
+                const r1 = seededRandom(seed + i * 2);
+                const r2 = seededRandom(seed + i * 2 + 1);
+
+                if (comparison === 'sex') {
+                    const sexBiasSigs = ['IL6', 'TGFB1', 'IL17A', 'IL10', 'IFNG', 'IL4'];
                     const hasBias = sexBiasSigs.includes(sig);
-                    log2fc = (Math.random() - 0.5) * (hasBias ? 1.5 : 0.8);
-                    pval = hasBias ? Math.random() * 0.01 : Math.random() * 0.5;
+                    log2fc = (r1 - 0.5) * (hasBias ? 1.8 : 0.6);
+                    pval = hasBias ? r2 * 0.02 : r2 * 0.6;
                 } else {
-                    // Smoking effects - inflammatory signatures elevated
-                    const smokingBiasSigs = ['TNF', 'IL1B', 'IL6', 'CXCL8', 'CCL2'];
+                    const smokingBiasSigs = ['TNFA', 'IL1B', 'IL6', 'IL8', 'GMCSF', 'VEGFA'];
                     const hasBias = smokingBiasSigs.includes(sig);
-                    log2fc = (Math.random() * (hasBias ? 1.2 : 0.6)) - 0.2;  // Mostly upregulated
-                    pval = hasBias ? Math.random() * 0.005 : Math.random() * 0.4;
+                    log2fc = (r1 * (hasBias ? 1.5 : 0.8)) - 0.3;
+                    pval = hasBias ? r2 * 0.01 : r2 * 0.5;
                 }
                 return {
                     signature: sig,
                     log2fc: log2fc,
                     pvalue: Math.max(pval, 0.0001),
-                    negLog10p: -Math.log10(Math.max(pval, 0.0001))
+                    negLog10p: -Math.log10(Math.max(pval, 0.0001)),
+                    score: Math.abs(log2fc) * (-Math.log10(Math.max(pval, 0.0001)))  // Significance score
                 };
             });
 
@@ -5503,70 +5855,67 @@
                 const sigThreshold = 0.05;
                 const fcThreshold = 0.5;
 
-                // Color by significance
                 const colors = mockData.map(d => {
                     if (d.pvalue < sigThreshold && Math.abs(d.log2fc) > fcThreshold) {
-                        return d.log2fc > 0 ? '#d62728' : '#2ca02c';
+                        return d.log2fc > 0 ? '#f4a6a6' : '#a8d4e6';
                     }
                     return '#999';
                 });
+
+                const maxAbsFC = Math.max(2, Math.ceil(Math.max(...mockData.map(d => Math.abs(d.log2fc)))));
+                const maxY = Math.max(4, Math.ceil(Math.max(...mockData.map(d => d.negLog10p))));
 
                 Plotly.newPlot(container1, [{
                     type: 'scatter',
                     mode: 'markers+text',
                     x: mockData.map(d => d.log2fc),
                     y: mockData.map(d => d.negLog10p),
-                    text: mockData.map(d => d.pvalue < sigThreshold ? d.signature : ''),
+                    text: mockData.map(d => d.pvalue < sigThreshold && Math.abs(d.log2fc) > fcThreshold ? d.signature : ''),
                     textposition: 'top center',
                     textfont: { size: 9 },
                     marker: { size: 10, color: colors },
                     hovertemplate: '<b>%{customdata}</b><br>log2FC: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>',
                     customdata: mockData.map(d => d.signature)
                 }], {
-                    xaxis: { title: 'log2 Fold Change', zeroline: true, zerolinecolor: '#ccc' },
-                    yaxis: { title: '-log10(p-value)' },
+                    xaxis: { title: 'log2 Fold Change', zeroline: true, zerolinecolor: '#ccc', range: [-maxAbsFC, maxAbsFC] },
+                    yaxis: { title: '-log10(p-value)', range: [0, maxY + 0.5] },
                     shapes: [
-                        { type: 'line', x0: -fcThreshold, y0: 0, x1: -fcThreshold, y1: 5, line: { dash: 'dot', color: '#ccc' } },
-                        { type: 'line', x0: fcThreshold, y0: 0, x1: fcThreshold, y1: 5, line: { dash: 'dot', color: '#ccc' } },
-                        { type: 'line', x0: -2, y0: -Math.log10(sigThreshold), x1: 2, y1: -Math.log10(sigThreshold), line: { dash: 'dot', color: '#ccc' } }
+                        { type: 'line', x0: -fcThreshold, y0: 0, x1: -fcThreshold, y1: maxY, line: { dash: 'dot', color: '#ccc' } },
+                        { type: 'line', x0: fcThreshold, y0: 0, x1: fcThreshold, y1: maxY, line: { dash: 'dot', color: '#ccc' } },
+                        { type: 'line', x0: -maxAbsFC, y0: -Math.log10(sigThreshold), x1: maxAbsFC, y1: -Math.log10(sigThreshold), line: { dash: 'dot', color: '#ccc' } }
                     ],
                     margin: { l: 60, r: 30, t: 30, b: 50 },
-                    height: 450,
-                    title: { text: analysis === 'sex' ? 'Male vs Female' : 'Smoker vs Non-smoker', font: { size: 12 } }
+                    height: 450
                 }, { responsive: true });
             }
 
-            // 2. Top differential bar chart
+            // 2. Top differential bar chart - sorted by significance score
             if (container2) {
                 container2.classList.remove('loading');
                 Plotly.purge(container2);
 
-                // Sort by significance and take top
-                const sorted = [...mockData].sort((a, b) => a.pvalue - b.pvalue);
-                const top15 = sorted.slice(0, 15);
+                // Sort by significance score (|log2FC| × -log10p) and take top 20
+                const sorted = [...mockData].sort((a, b) => b.score - a.score);
+                const top20 = sorted.slice(0, 20).reverse();  // Reverse for horizontal bar (top at top)
 
                 Plotly.newPlot(container2, [{
                     type: 'bar',
                     orientation: 'h',
-                    y: top15.map(d => d.signature),
-                    x: top15.map(d => d.log2fc),
+                    y: top20.map(d => d.signature),
+                    x: top20.map(d => d.log2fc),
                     marker: {
-                        color: top15.map(d => d.log2fc > 0 ? '#d62728' : '#2ca02c')
+                        color: top20.map(d => d.log2fc > 0 ? '#f4a6a6' : '#a8d4e6')
                     },
-                    text: top15.map(d => `p=${d.pvalue.toExponential(1)}`),
-                    textposition: 'auto',
+                    text: top20.map(d => d.log2fc.toFixed(2)),
+                    textposition: 'outside',
+                    textfont: { size: 9 },
                     hovertemplate: '<b>%{y}</b><br>log2FC: %{x:.3f}<br>p = %{customdata}<extra></extra>',
-                    customdata: top15.map(d => d.pvalue.toExponential(2))
+                    customdata: top20.map(d => d.pvalue.toExponential(2))
                 }], {
-                    xaxis: { title: 'log2 Fold Change', zeroline: true },
-                    yaxis: { automargin: true },
-                    margin: { l: 80, r: 30, t: 30, b: 50 },
-                    height: 450,
-                    annotations: [{
-                        x: 0.5, y: 1.05, xref: 'paper', yref: 'paper',
-                        text: analysis === 'sex' ? '↑Male | ↓Female' : '↑Smoker | ↓Non-smoker',
-                        showarrow: false, font: { size: 10 }
-                    }]
+                    xaxis: { title: 'log2 Fold Change', zeroline: true, zerolinecolor: '#ccc' },
+                    yaxis: { automargin: true, tickfont: { size: 10 } },
+                    margin: { l: 100, r: 50, t: 30, b: 50 },
+                    height: 500
                 }, { responsive: true });
             }
         }
@@ -5755,6 +6104,11 @@
             // Control changes - Inflammation Age/BMI
             document.getElementById('inflam-corr-sig-type')?.addEventListener('change', updateInflamCorrelations);
 
+            // Control changes - Inflammation Cell Type Correlations
+            document.getElementById('inflam-ct-corr-sigtype')?.addEventListener('change', updateInflamCelltypeCorrelationHeatmap);
+            document.getElementById('inflam-ct-corr-feature')?.addEventListener('change', updateInflamCelltypeCorrelationHeatmap);
+            document.getElementById('inflam-ct-corr-metric')?.addEventListener('change', updateInflamCelltypeCorrelationHeatmap);
+
             // Control changes - Inflammation Age/BMI Stratified
             document.getElementById('inflam-stratify-by')?.addEventListener('change', updateInflamStratifiedBoxplot);
             document.getElementById('inflam-boxplot-sig-type')?.addEventListener('change', () => {
@@ -5784,12 +6138,36 @@
                 updateInflamDiseaseBar();
                 updateInflamDiseaseHeatmap();
             });
-            document.getElementById('inflam-disease-signature')?.addEventListener('change', updateInflamDiseaseBar);
+            document.getElementById('inflam-disease-sig-type')?.addEventListener('change', () => {
+                // Reset search to default when switching sig type
+                const searchInput = document.getElementById('inflam-disease-search');
+                if (searchInput) searchInput.value = 'IFNG';
+                updateInflamDiseaseBar();
+                updateInflamDiseaseHeatmap();
+            });
 
-            // Control changes - Inflammation Demographics
-            document.getElementById('inflam-demo-analysis')?.addEventListener('change', updateInflamDemographics);
-            document.getElementById('inflam-demo-sig-type')?.addEventListener('change', updateInflamDemographics);
-            document.getElementById('inflam-demo-disease')?.addEventListener('change', updateInflamDemographics);
+            // Inflammation Disease signature search with autocomplete
+            const inflamDiseaseSearch = document.getElementById('inflam-disease-search');
+            if (inflamDiseaseSearch) {
+                inflamDiseaseSearch.addEventListener('focus', showInflamDiseaseSuggestions);
+                inflamDiseaseSearch.addEventListener('input', showInflamDiseaseSuggestions);
+                inflamDiseaseSearch.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        document.getElementById('inflam-disease-suggestions').style.display = 'none';
+                        updateInflamDiseaseBar();
+                    }
+                });
+                inflamDiseaseSearch.addEventListener('blur', () => {
+                    setTimeout(() => {
+                        document.getElementById('inflam-disease-suggestions').style.display = 'none';
+                    }, 200);
+                });
+            }
+
+            // Control changes - Inflammation Differential
+            document.getElementById('inflam-diff-comparison')?.addEventListener('change', updateInflamDifferential);
+            document.getElementById('inflam-diff-sig-type')?.addEventListener('change', updateInflamDifferential);
+            document.getElementById('inflam-diff-disease')?.addEventListener('change', updateInflamDifferential);
 
             // Control changes - scAtlas
             // Organ heatmap controls

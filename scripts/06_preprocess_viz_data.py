@@ -942,63 +942,64 @@ def preprocess_inflammation_disease():
 
     disease_activity = []
 
-    # Process CytoSig only (for performance)
-    sig_type = 'CytoSig'
-    h5ad_file = INFLAM_DIR / f"main_{sig_type}_pseudobulk.h5ad"
-    if not h5ad_file.exists():
-        print(f"  Skipping - {h5ad_file} not found")
-        return None
+    # Process both CytoSig and SecAct
+    for sig_type in ['CytoSig', 'SecAct']:
+        h5ad_file = INFLAM_DIR / f"main_{sig_type}_pseudobulk.h5ad"
+        if not h5ad_file.exists():
+            print(f"  Skipping {sig_type} - {h5ad_file} not found")
+            continue
 
-    adata = ad.read_h5ad(h5ad_file)
-    print(f"  {sig_type} shape: {adata.shape}")
+        adata = ad.read_h5ad(h5ad_file)
+        print(f"  {sig_type} shape: {adata.shape}")
 
-    # Extract activity matrix
-    activity_df = pd.DataFrame(
-        adata.X,
-        index=adata.obs_names,
-        columns=adata.var_names
-    )
+        # Extract activity matrix
+        activity_df = pd.DataFrame(
+            adata.X,
+            index=adata.obs_names,
+            columns=adata.var_names
+        )
 
-    # Get sample and cell type info
-    sample_info = adata.var[['sample', 'cell_type', 'n_cells']].copy()
+        # Get sample and cell type info
+        sample_info = adata.var[['sample', 'cell_type', 'n_cells']].copy()
 
-    # Merge with disease info
-    original_index = sample_info.index.copy()
-    sample_info = sample_info.reset_index(drop=True)
-    sample_info['_original_index'] = original_index
-    sample_info = sample_info.merge(
-        sample_meta[['sampleID', 'disease', 'diseaseGroup']],
-        left_on='sample', right_on='sampleID', how='left'
-    )
-    sample_info = sample_info.set_index('_original_index')
-    sample_info.index.name = None
+        # Merge with disease info
+        original_index = sample_info.index.copy()
+        sample_info = sample_info.reset_index(drop=True)
+        sample_info['_original_index'] = original_index
+        sample_info = sample_info.merge(
+            sample_meta[['sampleID', 'disease', 'diseaseGroup']],
+            left_on='sample', right_on='sampleID', how='left'
+        )
+        sample_info = sample_info.set_index('_original_index')
+        sample_info.index.name = None
 
-    # Aggregate by disease + cell type
-    for disease in sample_info['disease'].dropna().unique():
-        disease_mask = sample_info['disease'] == disease
-        disease_group = sample_info.loc[disease_mask, 'diseaseGroup'].iloc[0] if disease_mask.any() else 'Unknown'
+        # Aggregate by disease + cell type
+        for disease in sample_info['disease'].dropna().unique():
+            disease_mask = sample_info['disease'] == disease
+            disease_group = sample_info.loc[disease_mask, 'diseaseGroup'].iloc[0] if disease_mask.any() else 'Unknown'
 
-        for ct in sample_info.loc[disease_mask, 'cell_type'].unique():
-            ct_mask = disease_mask & (sample_info['cell_type'] == ct)
-            ct_cols = sample_info[ct_mask].index
+            for ct in sample_info.loc[disease_mask, 'cell_type'].unique():
+                ct_mask = disease_mask & (sample_info['cell_type'] == ct)
+                ct_cols = sample_info[ct_mask].index
 
-            if len(ct_cols) < 3:  # Need at least 3 samples
-                continue
+                if len(ct_cols) < 3:  # Need at least 3 samples
+                    continue
 
-            mean_activity = activity_df[ct_cols].mean(axis=1)
-            n_samples = len(ct_cols)
-            total_cells = sample_info.loc[ct_cols, 'n_cells'].sum()
+                mean_activity = activity_df[ct_cols].mean(axis=1)
+                n_samples = len(ct_cols)
+                total_cells = sample_info.loc[ct_cols, 'n_cells'].sum()
 
-            for sig in mean_activity.index:
-                disease_activity.append({
-                    'disease': disease,
-                    'disease_group': disease_group,
-                    'cell_type': ct,
-                    'signature': sig,
-                    'mean_activity': round(mean_activity[sig], 4),
-                    'n_samples': n_samples,
-                    'n_cells': int(total_cells)
-                })
+                for sig in mean_activity.index:
+                    disease_activity.append({
+                        'disease': disease,
+                        'disease_group': disease_group,
+                        'cell_type': ct,
+                        'signature': sig,
+                        'signature_type': sig_type,
+                        'mean_activity': round(mean_activity[sig], 4),
+                        'n_samples': n_samples,
+                        'n_cells': int(total_cells)
+                    })
 
     with open(OUTPUT_DIR / "inflammation_disease.json", 'w') as f:
         json.dump(disease_activity, f)
@@ -1133,92 +1134,142 @@ def preprocess_age_bmi_boxplots():
     if INFLAM_META_PATH.exists():
         inflam_meta = pd.read_csv(INFLAM_META_PATH)
 
-        # Use existing binned_age or create bins
+        # Use existing binned_age (map to simpler labels) or create bins
         if 'binned_age' in inflam_meta.columns:
-            inflam_meta['age_bin'] = inflam_meta['binned_age']
+            # Map original labels to simpler ones
+            age_map = {
+                '<18': '<30', '18-30': '<30',
+                '31-40': '30-39', '41-50': '40-49',
+                '51-60': '50-59', '61-70': '60-69',
+                '71-80': '70+', '>80': '70+'
+            }
+            inflam_meta['age_bin'] = inflam_meta['binned_age'].map(age_map)
         else:
             inflam_meta['age_bin'] = pd.cut(inflam_meta['age'], bins=[0, 30, 40, 50, 60, 70, 100],
-                                             labels=['<30', '31-40', '41-50', '51-60', '61-70', '>70'])
+                                             labels=['<30', '30-39', '40-49', '50-59', '60-69', '70+'])
 
         # Create BMI bins
         inflam_meta['bmi_bin'] = pd.cut(inflam_meta['BMI'], bins=[0, 18.5, 25, 30, 100],
                                          labels=['Underweight', 'Normal', 'Overweight', 'Obese'])
 
-        # Load pseudobulk
-        inflam_h5ad = INFLAM_DIR / "main_CytoSig_pseudobulk.h5ad"
-        if inflam_h5ad.exists():
-            adata = ad.read_h5ad(inflam_h5ad)
+        age_bins = ['<30', '30-39', '40-49', '50-59', '60-69', '70+']
+        bmi_bins = ['Underweight', 'Normal', 'Overweight', 'Obese']
+
+        age_data = []
+        bmi_data = []
+        all_cell_types = set()
+        cytosig_sigs = []
+        secact_sigs = []
+
+        # Process both CytoSig and SecAct
+        for sig_type in ['CytoSig', 'SecAct']:
+            h5ad_file = INFLAM_DIR / f"main_{sig_type}_pseudobulk.h5ad"
+            if not h5ad_file.exists():
+                print(f"    Skipping {sig_type} - file not found")
+                continue
+
+            adata = ad.read_h5ad(h5ad_file)
             activity_df = pd.DataFrame(
                 adata.X,
                 index=adata.obs_names,
                 columns=adata.var_names
             )
             sample_info = adata.var[['sample', 'cell_type', 'n_cells']].copy()
+            proteins = activity_df.index.tolist()
 
-            # Aggregate to sample level
-            sample_activity = {}
-            for sample in sample_info['sample'].unique():
-                sample_cols = sample_info[sample_info['sample'] == sample].index
-                weights = sample_info.loc[sample_cols, 'n_cells'].values
-                total_weight = weights.sum()
-                if total_weight > 0:
-                    weighted_mean = (activity_df[sample_cols] * weights).sum(axis=1) / total_weight
-                    sample_activity[sample] = weighted_mean
+            if sig_type == 'CytoSig':
+                cytosig_sigs = proteins
+            else:
+                secact_sigs = proteins
 
-            sample_activity_df = pd.DataFrame(sample_activity).T
-            sample_activity_df = sample_activity_df.reset_index().rename(columns={'index': 'sample'})
-            sample_activity_df = sample_activity_df.merge(
-                inflam_meta[['sampleID', 'age_bin', 'bmi_bin']].rename(columns={'sampleID': 'sample'}),
-                on='sample', how='left'
-            )
+            # Get cell types
+            cell_types = sample_info['cell_type'].unique().tolist()
+            all_cell_types.update(cell_types)
 
-            # Get top 20 most variable signatures
-            sig_cols = [c for c in sample_activity_df.columns if c not in ['sample', 'age_bin', 'bmi_bin']]
-            sig_variance = sample_activity_df[sig_cols].var()
-            top_sigs = sig_variance.nlargest(20).index.tolist()
+            print(f"    {sig_type}: {len(proteins)} proteins, {len(cell_types)} cell types")
 
-            # Get unique bins
-            age_bins = [b for b in sample_activity_df['age_bin'].dropna().unique() if pd.notna(b)]
-            bmi_bins = ['Underweight', 'Normal', 'Overweight', 'Obese']
+            # Process per cell type (for heatmap) + 'All' (sample-level for boxplot)
+            for cell_type in ['All'] + cell_types:
+                if cell_type == 'All':
+                    # Aggregate to sample level (weighted mean)
+                    sample_activity = {}
+                    for sample in sample_info['sample'].unique():
+                        sample_cols = sample_info[sample_info['sample'] == sample].index
+                        weights = sample_info.loc[sample_cols, 'n_cells'].values
+                        total_weight = weights.sum()
+                        if total_weight > 0:
+                            weighted_mean = (activity_df[sample_cols] * weights).sum(axis=1) / total_weight
+                            sample_activity[sample] = weighted_mean
+                    ct_activity = pd.DataFrame(sample_activity).T
+                else:
+                    # Get activity for this cell type only
+                    ct_cols = sample_info[sample_info['cell_type'] == cell_type].index
+                    if len(ct_cols) < 10:
+                        continue
+                    ct_samples = sample_info.loc[ct_cols, 'sample'].values
+                    ct_activity = activity_df[ct_cols].T
+                    ct_activity.index = ct_samples
 
-            # Prepare age boxplot data
-            age_data = []
-            for sig in top_sigs:
-                for bin_val in age_bins:
-                    bin_data = sample_activity_df[sample_activity_df['age_bin'] == bin_val][sig].dropna()
-                    if len(bin_data) >= 3:
-                        age_data.append({
-                            'signature': sig,
-                            'bin': str(bin_val),
-                            'values': [round(v, 4) for v in bin_data.tolist()],
-                            'mean': round(bin_data.mean(), 4),
-                            'median': round(bin_data.median(), 4),
-                            'n': len(bin_data)
-                        })
+                # Merge with metadata
+                ct_activity = ct_activity.reset_index().rename(columns={'index': 'sample'})
+                ct_activity = ct_activity.merge(
+                    inflam_meta[['sampleID', 'age_bin', 'bmi_bin']].rename(columns={'sampleID': 'sample'}),
+                    on='sample', how='left'
+                )
 
-            # Prepare BMI boxplot data
-            bmi_data = []
-            for sig in top_sigs:
-                for bin_val in bmi_bins:
-                    bin_data = sample_activity_df[sample_activity_df['bmi_bin'] == bin_val][sig].dropna()
-                    if len(bin_data) >= 3:
-                        bmi_data.append({
-                            'signature': sig,
-                            'bin': bin_val,
-                            'values': [round(v, 4) for v in bin_data.tolist()],
-                            'mean': round(bin_data.mean(), 4),
-                            'median': round(bin_data.median(), 4),
-                            'n': len(bin_data)
-                        })
+                # Generate boxplot data for each protein
+                for protein in proteins:
+                    if protein not in ct_activity.columns:
+                        continue
 
-            boxplot_data['inflammation'] = {
-                'age': age_data,
-                'bmi': bmi_data,
-                'signatures': top_sigs,
-                'age_bins': [str(b) for b in age_bins]
-            }
-            print(f"    Inflammation age boxplots: {len(age_data)}")
-            print(f"    Inflammation BMI boxplots: {len(bmi_data)}")
+                    # Age bins
+                    for bin_val in age_bins:
+                        bin_data = ct_activity[ct_activity['age_bin'] == bin_val][protein].dropna()
+                        if len(bin_data) >= 3:
+                            record = {
+                                'signature': protein,
+                                'sig_type': sig_type,
+                                'cell_type': cell_type,
+                                'bin': bin_val,
+                                'mean': round(float(bin_data.mean()), 4),
+                                'median': round(float(bin_data.median()), 4),
+                                'n': len(bin_data)
+                            }
+                            # Only store raw values for 'All' (used in boxplots), not for cell types (used in heatmap)
+                            if cell_type == 'All':
+                                record['values'] = [round(v, 4) for v in bin_data.tolist()]
+                            age_data.append(record)
+
+                    # BMI bins
+                    for bin_val in bmi_bins:
+                        bin_data = ct_activity[ct_activity['bmi_bin'] == bin_val][protein].dropna()
+                        if len(bin_data) >= 3:
+                            record = {
+                                'signature': protein,
+                                'sig_type': sig_type,
+                                'cell_type': cell_type,
+                                'bin': bin_val,
+                                'mean': round(float(bin_data.mean()), 4),
+                                'median': round(float(bin_data.median()), 4),
+                                'n': len(bin_data)
+                            }
+                            # Only store raw values for 'All' (used in boxplots), not for cell types (used in heatmap)
+                            if cell_type == 'All':
+                                record['values'] = [round(v, 4) for v in bin_data.tolist()]
+                            bmi_data.append(record)
+
+        boxplot_data['inflammation'] = {
+            'age': age_data,
+            'bmi': bmi_data,
+            'cytosig_signatures': cytosig_sigs,
+            'secact_signatures': secact_sigs,
+            'cell_types': sorted(list(all_cell_types)),
+            'age_bins': age_bins,
+            'bmi_bins': bmi_bins
+        }
+        print(f"    Inflammation age boxplots: {len(age_data)}")
+        print(f"    Inflammation BMI boxplots: {len(bmi_data)}")
+        print(f"    Inflammation cell types: {len(all_cell_types)}")
 
     with open(OUTPUT_DIR / "age_bmi_boxplots.json", 'w') as f:
         json.dump(boxplot_data, f)
