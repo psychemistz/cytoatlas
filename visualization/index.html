@@ -1484,20 +1484,9 @@
 
             <!-- Disease Flow Tab -->
             <div class="tab-content" id="tab-disease-sankey">
-                <div class="controls">
-                    <div class="control-group">
-                        <label>View</label>
-                        <select id="sankey-view">
-                            <option value="study-disease">Study → Disease</option>
-                            <option value="disease-group">Disease → Disease Group</option>
-                            <option value="study-group">Study → Disease Group</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="viz-container" style="min-height: 600px;">
-                    <div class="viz-title">Sample Flow Diagram</div>
-                    <div class="viz-subtitle" id="sankey-subtitle">Distribution of 1,047 samples across 25 studies and 20 diseases</div>
+                <div class="viz-container" style="min-height: 650px;">
+                    <div class="viz-title">Sample Flow: Study → Disease → Disease Group</div>
+                    <div class="viz-subtitle">Distribution of 1,047 samples across 25 studies, 20 diseases, and 6 disease groups</div>
                     <div id="disease-sankey" class="loading">Loading data...</div>
                 </div>
             </div>
@@ -7166,125 +7155,29 @@
             }
         }
 
-        // Inflammation: Disease Sankey
+        // Inflammation: Disease Sankey - Study → Disease → Disease Group
         function updateDiseaseSankey() {
             const container = document.getElementById('disease-sankey');
             if (!container) return;
             container.classList.remove('loading');
 
             const sankeyData = state.data.diseasesankey;
-            const viewType = document.getElementById('sankey-view')?.value || 'study-disease';
-            const subtitleEl = document.getElementById('sankey-subtitle');
 
             if (!sankeyData || !sankeyData.nodes || !sankeyData.links) {
                 container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No sankey data available</p>';
                 return;
             }
 
-            // Build node index map
-            const nodeMap = {};
-            sankeyData.nodes.forEach((n, i) => { nodeMap[n.name] = i; });
-
-            // Filter nodes and links based on view type
-            let filteredNodes = [];
-            let filteredLinks = [];
-            let subtitle = '';
-
-            if (viewType === 'study-disease') {
-                // Show: Study → Disease
-                const cohortNodes = sankeyData.nodes.filter(n => n.type === 'cohort');
-                const diseaseNodes = sankeyData.nodes.filter(n => n.type === 'disease');
-                filteredNodes = [...cohortNodes, ...diseaseNodes];
-
-                // Create new index map
-                const newNodeMap = {};
-                filteredNodes.forEach((n, i) => { newNodeMap[n.name] = i; });
-
-                // Filter links: cohort → disease only
-                sankeyData.links.forEach(l => {
-                    const sourceNode = sankeyData.nodes[l.source];
-                    const targetNode = sankeyData.nodes[l.target];
-                    if (sourceNode.type === 'cohort' && targetNode.type === 'disease') {
-                        filteredLinks.push({
-                            source: newNodeMap[sourceNode.name],
-                            target: newNodeMap[targetNode.name],
-                            value: l.value
-                        });
-                    }
-                });
-                subtitle = `${cohortNodes.length} studies → ${diseaseNodes.length} diseases (1,047 samples)`;
-
-            } else if (viewType === 'disease-group') {
-                // Show: Disease → Disease Group
-                const diseaseNodes = sankeyData.nodes.filter(n => n.type === 'disease');
-                const groupNodes = sankeyData.nodes.filter(n => n.type === 'disease_group');
-                filteredNodes = [...diseaseNodes, ...groupNodes];
-
-                const newNodeMap = {};
-                filteredNodes.forEach((n, i) => { newNodeMap[n.name] = i; });
-
-                sankeyData.links.forEach(l => {
-                    const sourceNode = sankeyData.nodes[l.source];
-                    const targetNode = sankeyData.nodes[l.target];
-                    if (sourceNode.type === 'disease' && targetNode.type === 'disease_group') {
-                        filteredLinks.push({
-                            source: newNodeMap[sourceNode.name],
-                            target: newNodeMap[targetNode.name],
-                            value: l.value
-                        });
-                    }
-                });
-                subtitle = `${diseaseNodes.length} diseases → ${groupNodes.length} disease groups`;
-
-            } else if (viewType === 'study-group') {
-                // Show: Study → Disease Group (aggregate)
-                const cohortNodes = sankeyData.nodes.filter(n => n.type === 'cohort');
-                const groupNodes = sankeyData.nodes.filter(n => n.type === 'disease_group');
-                filteredNodes = [...cohortNodes, ...groupNodes];
-
-                const newNodeMap = {};
-                filteredNodes.forEach((n, i) => { newNodeMap[n.name] = i; });
-
-                // Build cohort → group links by aggregating through diseases
-                const cohortGroupCounts = {};
-                sankeyData.links.forEach(l => {
-                    const sourceNode = sankeyData.nodes[l.source];
-                    const targetNode = sankeyData.nodes[l.target];
-                    if (sourceNode.type === 'cohort' && targetNode.type === 'disease') {
-                        // Find disease → group link
-                        sankeyData.links.forEach(l2 => {
-                            const s2 = sankeyData.nodes[l2.source];
-                            const t2 = sankeyData.nodes[l2.target];
-                            if (s2.name === targetNode.name && t2.type === 'disease_group') {
-                                const key = `${sourceNode.name}|${t2.name}`;
-                                cohortGroupCounts[key] = (cohortGroupCounts[key] || 0) + l.value;
-                            }
-                        });
-                    }
-                });
-
-                Object.entries(cohortGroupCounts).forEach(([key, value]) => {
-                    const [cohort, group] = key.split('|');
-                    if (newNodeMap[cohort] !== undefined && newNodeMap[group] !== undefined) {
-                        filteredLinks.push({
-                            source: newNodeMap[cohort],
-                            target: newNodeMap[group],
-                            value: value
-                        });
-                    }
-                });
-                subtitle = `${cohortNodes.length} studies → ${groupNodes.length} disease groups`;
-            }
+            // Use all nodes and links to show: Study → Disease → Disease Group
+            const nodeLabels = sankeyData.nodes.map(n => n.name);
 
             // Assign colors based on node type
-            const nodeColors = filteredNodes.map(n => {
-                if (n.type === 'cohort') return '#1f77b4';
-                if (n.type === 'disease') return '#ff7f0e';
-                if (n.type === 'disease_group') return '#2ca02c';
+            const nodeColors = sankeyData.nodes.map(n => {
+                if (n.type === 'cohort') return '#1f77b4';      // Blue for studies
+                if (n.type === 'disease') return '#ff7f0e';     // Orange for diseases
+                if (n.type === 'disease_group') return '#2ca02c'; // Green for disease groups
                 return '#7f7f7f';
             });
-
-            if (subtitleEl) subtitleEl.textContent = subtitle;
 
             Plotly.purge(container);
             Plotly.newPlot(container, [{
@@ -7294,17 +7187,19 @@
                     pad: 15,
                     thickness: 20,
                     line: { color: 'black', width: 0.5 },
-                    label: filteredNodes.map(n => n.name),
-                    color: nodeColors
+                    label: nodeLabels,
+                    color: nodeColors,
+                    hovertemplate: '<b>%{label}</b><br>Samples: %{value}<extra></extra>'
                 },
                 link: {
-                    source: filteredLinks.map(l => l.source),
-                    target: filteredLinks.map(l => l.target),
-                    value: filteredLinks.map(l => l.value)
+                    source: sankeyData.links.map(l => l.source),
+                    target: sankeyData.links.map(l => l.target),
+                    value: sankeyData.links.map(l => l.value),
+                    hovertemplate: '%{source.label} → %{target.label}<br>Samples: %{value}<extra></extra>'
                 }
             }], {
-                margin: { t: 30, b: 30, l: 30, r: 30 },
-                height: 550
+                margin: { t: 30, b: 30, l: 50, r: 50 },
+                height: 600
             }, { responsive: true });
         }
 
@@ -9400,9 +9295,6 @@
             document.getElementById('treatment-disease')?.addEventListener('change', updateTreatmentResponse);
             document.getElementById('treatment-sig-type')?.addEventListener('change', updateTreatmentResponse);
             document.getElementById('prediction-model')?.addEventListener('change', updateTreatmentResponse);
-
-            // Inflammation Disease Sankey
-            document.getElementById('sankey-view')?.addEventListener('change', updateDiseaseSankey);
 
             // Inflammation Cohort Validation
             document.getElementById('validation-sig-type')?.addEventListener('change', updateCohortValidation);
