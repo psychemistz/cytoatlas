@@ -61,13 +61,24 @@ class CIMAService(BaseService):
 
         # Transform field names: protein -> signature
         # Note: Original data may have "protein" as the signature name and "signature" as the type
+        # For biochemistry, the JSON has:
+        #   - protein: the cytokine/protein name (what we call "signature")
+        #   - feature: the blood marker (ALT, AST, etc.) - what we call "variable"
+        #   - signature: the signature type (CytoSig/SecAct)
         transformed = []
         for r in results:
+            # For biochemistry, use "feature" as the variable (blood marker)
+            # For age/bmi, use the variable parameter
+            var_value = r.get("feature", variable) if variable == "biochemistry" else variable
+
+            # Get the signature type from the data (stored in "signature" field for biochemistry)
+            data_sig_type = r.get("signature", signature_type)
+
             record = {
                 "cell_type": r.get("cell_type", "All"),
                 "signature": r.get("protein", r.get("signature")),
-                "signature_type": signature_type,  # Use the parameter value
-                "variable": variable,
+                "signature_type": data_sig_type,
+                "variable": var_value,
                 "rho": r.get("rho", 0),
                 "pvalue": r.get("pvalue", r.get("p_value", 1)),  # Accept both field names
                 "qvalue": r.get("qvalue", r.get("q_value")),
@@ -76,7 +87,7 @@ class CIMAService(BaseService):
             transformed.append(record)
 
         # Filter by signature type
-        results = self.filter_by_signature_type(transformed, signature_type)
+        results = [r for r in transformed if r.get("signature_type") == signature_type]
 
         # Filter by cell type if specified
         if cell_type:
