@@ -103,8 +103,12 @@ const API = {
         return this.get(`/cima/correlations/${variable}`, params);
     },
 
-    async getCimaAgeBmiStratified(params = {}) {
-        return this.get('/cima/age-bmi-stratified', params);
+    async getCimaAgeBoxplots(signature, params = {}) {
+        return this.get(`/cima/boxplots/age/${signature}`, params);
+    },
+
+    async getCimaBmiBoxplots(signature, params = {}) {
+        return this.get(`/cima/boxplots/bmi/${signature}`, params);
     },
 
     async getCimaDifferential(params = {}) {
@@ -112,7 +116,7 @@ const API = {
     },
 
     async getCimaMetabolites(params = {}) {
-        return this.get('/cima/metabolites', params);
+        return this.get('/cima/correlations/metabolites', params);
     },
 
     // ==================== Inflammation ====================
@@ -125,16 +129,20 @@ const API = {
         return this.get('/inflammation/activity', params);
     },
 
-    async getInflammationDifferential(params = {}) {
-        return this.get('/inflammation/disease-differential', params);
+    async getInflammationDiseaseActivity(params = {}) {
+        return this.get('/inflammation/disease-activity', params);
     },
 
-    async getInflammationAgeBmiStratified(params = {}) {
-        return this.get('/inflammation/age-bmi-stratified', params);
+    async getInflammationAgeBoxplots(signature, params = {}) {
+        return this.get(`/inflammation/boxplots/age/${signature}`, params);
     },
 
-    async getInflammationPrediction(params = {}) {
-        return this.get('/inflammation/treatment-prediction', params);
+    async getInflammationBmiBoxplots(signature, params = {}) {
+        return this.get(`/inflammation/boxplots/bmi/${signature}`, params);
+    },
+
+    async getInflammationTreatmentResponse(params = {}) {
+        return this.get('/inflammation/treatment-response', params);
     },
 
     // ==================== scAtlas ====================

@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.core.cache import cached
 from app.schemas.inflammation import (
+    InflammationAgeBMIBoxplot,
     InflammationCellTypeActivity,
     InflammationCellTypeStratified,
     InflammationCohortValidation,
@@ -260,17 +261,18 @@ class InflammationService(BaseService):
 
         results = data[variable]
 
-        # Transform field names: protein -> signature, signature -> signature_type
+        # Transform field names: protein -> signature
+        # Note: Original data may have "protein" as the signature name
         transformed = []
         for r in results:
             record = {
                 "cell_type": r.get("cell_type", "All"),
                 "signature": r.get("protein", r.get("signature")),
-                "signature_type": r.get("signature", signature_type),
+                "signature_type": signature_type,  # Use the parameter value
                 "variable": variable,
                 "rho": r.get("rho", 0),
-                "p_value": r.get("pvalue", 1),
-                "q_value": r.get("qvalue"),
+                "p_value": r.get("pvalue", r.get("p_value", 1)),  # Accept both field names
+                "q_value": r.get("qvalue", r.get("q_value")),
                 "n_samples": r.get("n"),
             }
             transformed.append(record)
@@ -487,3 +489,48 @@ class InflammationService(BaseService):
         """Get list of available cell types."""
         data = await self.get_cell_type_activity()
         return sorted(list(set(c.cell_type for c in data)))
+
+    @cached(prefix="inflammation", ttl=3600)
+    async def get_age_bmi_boxplots(
+        self,
+        signature: str,
+        signature_type: str = "CytoSig",
+        stratify_by: str = "age",
+        cell_type: str | None = None,
+    ) -> list[InflammationAgeBMIBoxplot]:
+        """
+        Get pre-computed age/BMI boxplot data.
+
+        Args:
+            signature: Signature name
+            signature_type: 'CytoSig' or 'SecAct'
+            stratify_by: 'age' or 'bmi'
+            cell_type: Optional cell type filter
+
+        Returns:
+            Boxplot statistics per bin
+        """
+        data = await self.load_json("age_bmi_boxplots.json")
+
+        # Data structure: {"cima": {...}, "inflammation": {"age": [...], "bmi": [...]}}
+        inflam_data = data.get("inflammation", {})
+        results = inflam_data.get(stratify_by, [])
+
+        if not results:
+            return []
+
+        # Filter by signature type (data uses "sig_type")
+        results = [r for r in results if r.get("sig_type") == signature_type]
+
+        # Filter by signature
+        results = [r for r in results if r.get("signature") == signature]
+
+        # Filter by cell type
+        if cell_type:
+            # Return cell-type specific data
+            results = [r for r in results if r.get("cell_type") == cell_type]
+        else:
+            # Return sample-level data only (cell_type is None or 'All')
+            results = [r for r in results if r.get("cell_type") in (None, "All")]
+
+        return [InflammationAgeBMIBoxplot(**r) for r in results]

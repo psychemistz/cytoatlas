@@ -45,6 +45,53 @@ async def get_atlas_comparison(
     return await service.get_comparison_data(signature_type, cell_type)
 
 
+@router.get("/consistency")
+async def get_consistency(
+    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
+    service: CrossAtlasService = Depends(get_cross_atlas_service),
+) -> dict:
+    """
+    Get cross-atlas consistency data for heatmap visualization.
+
+    Returns matrix showing signature consistency across atlases.
+    Format: {z: [[values]], x: [signatures], y: [atlases]}
+    """
+    data = await service.get_comparison_data(signature_type)
+
+    atlases = data.atlases
+    signatures = data.signatures[:50]  # Limit for visualization
+
+    # Build atlas-signature activity lookup from comparisons
+    atlas_sig_values: dict = {}
+    for c in data.comparisons:
+        if c.cima_activity is not None:
+            atlas_sig_values.setdefault((c.signature, "CIMA"), []).append(c.cima_activity)
+        if c.inflammation_activity is not None:
+            atlas_sig_values.setdefault((c.signature, "Inflammation"), []).append(
+                c.inflammation_activity
+            )
+        if c.scatlas_activity is not None:
+            atlas_sig_values.setdefault((c.signature, "scAtlas"), []).append(
+                c.scatlas_activity
+            )
+
+    # Build consistency matrix (atlases x signatures)
+    z_values = []
+    for atlas in atlases:
+        row = []
+        for sig in signatures:
+            values = atlas_sig_values.get((sig, atlas), [0.0])
+            row.append(sum(values) / len(values) if values else 0.0)
+        z_values.append(row)
+
+    return {
+        "z": z_values,
+        "x": signatures,
+        "y": atlases,
+        "signature_type": signature_type,
+    }
+
+
 # Correlations Between Atlases
 @router.get("/correlations", response_model=list[CrossAtlasCorrelation])
 async def get_atlas_correlations(

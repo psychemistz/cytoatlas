@@ -1,6 +1,6 @@
 """Inflammation Atlas-specific schemas."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class InflammationCellTypeActivity(BaseModel):
@@ -204,3 +204,21 @@ class InflammationSummaryStats(BaseModel):
     diseases: list[str]
     disease_groups: list[str]
     cohorts: list[str]
+
+
+class InflammationAgeBMIBoxplot(BaseModel):
+    """Pre-computed age/BMI boxplot data - one record per bin."""
+
+    signature: str
+    signature_type: str = Field(alias="sig_type")
+    bin: str  # Age bin ("<30", "30-39", etc.) or BMI category
+    min: float
+    q1: float
+    median: float
+    q3: float
+    max: float
+    mean: float
+    n: int
+    cell_type: str | None = None
+
+    model_config = ConfigDict(populate_by_name=True)

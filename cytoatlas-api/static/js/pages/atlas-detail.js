@@ -17,6 +17,7 @@ const AtlasDetailPage = {
             displayName: 'CIMA',
             description: 'Chinese Immune Multi-omics Atlas - 6.5M cells from 421 healthy adults with matched biochemistry and metabolomics',
             tabs: [
+                { id: 'overview', label: 'Overview', icon: '&#127968;' },
                 { id: 'celltypes', label: 'Cell Types', icon: '&#128300;' },
                 { id: 'age-bmi', label: 'Age & BMI', icon: '&#128200;' },
                 { id: 'age-bmi-stratified', label: 'Age/BMI Stratified', icon: '&#128202;' },
@@ -33,6 +34,7 @@ const AtlasDetailPage = {
             displayName: 'Inflammation Atlas',
             description: 'Pan-disease immune profiling - 4.9M cells across 12+ inflammatory diseases with treatment response data',
             tabs: [
+                { id: 'overview', label: 'Overview', icon: '&#127968;' },
                 { id: 'celltypes', label: 'Cell Types', icon: '&#128300;' },
                 { id: 'age-bmi', label: 'Age & BMI', icon: '&#128200;' },
                 { id: 'age-bmi-stratified', label: 'Age/BMI Stratified', icon: '&#128202;' },
@@ -50,6 +52,7 @@ const AtlasDetailPage = {
             displayName: 'scAtlas',
             description: 'Human tissue reference atlas - 6.4M cells across 35 organs with pan-cancer immune profiling',
             tabs: [
+                { id: 'overview', label: 'Overview', icon: '&#127968;' },
                 { id: 'celltypes', label: 'Cell Types', icon: '&#128300;' },
                 { id: 'organ-map', label: 'Organ Map', icon: '&#128149;' },
                 { id: 'cancer-comparison', label: 'Tumor vs Adjacent', icon: '&#128201;' },
@@ -194,6 +197,9 @@ const AtlasDetailPage = {
 
     async loadCimaTab(tabId, content) {
         switch (tabId) {
+            case 'overview':
+                await this.loadCimaOverview(content);
+                break;
             case 'celltypes':
                 await this.loadCimaCelltypes(content);
                 break;
@@ -227,6 +233,96 @@ const AtlasDetailPage = {
             default:
                 content.innerHTML = '<p>Panel not implemented</p>';
         }
+    },
+
+    async loadCimaOverview(content) {
+        // Load summary stats
+        const stats = await API.get('/cima/summary');
+
+        content.innerHTML = `
+            <div class="overview-section">
+                <div class="panel-header">
+                    <h3>CIMA: Chinese Immune Multi-omics Atlas</h3>
+                    <p>Comprehensive immune monitoring atlas of healthy donors with matched blood biochemistry and plasma metabolomics data.</p>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number">${stats?.n_samples || 421}</div>
+                        <div class="stat-label">Healthy Donors</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">6.5M</div>
+                        <div class="stat-label">Total Cells</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${stats?.n_cell_types || 27}</div>
+                        <div class="stat-label">Cell Types</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">500</div>
+                        <div class="stat-label">Metabolites Profiled</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">19</div>
+                        <div class="stat-label">Blood Biomarkers</div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 1.5rem;">
+                    <div class="card-title">Analysis Data Sources</div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Analysis</th>
+                                <th>Description</th>
+                                <th>Records</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Cell Type Activity</td>
+                                <td>Mean ${this.signatureType} activity per cell type</td>
+                                <td>${this.signatureType === 'CytoSig' ? '27 × 43' : '27 × 1,170'}</td>
+                            </tr>
+                            <tr>
+                                <td>Age Correlations</td>
+                                <td>Spearman correlation with donor age</td>
+                                <td>${stats?.n_age_correlations || 'N/A'}</td>
+                            </tr>
+                            <tr>
+                                <td>BMI Correlations</td>
+                                <td>Spearman correlation with body mass index</td>
+                                <td>${stats?.n_bmi_correlations || 'N/A'}</td>
+                            </tr>
+                            <tr>
+                                <td>Biochemistry Correlations</td>
+                                <td>Correlation with 19 blood markers</td>
+                                <td>${stats?.n_biochem_correlations || 'N/A'}</td>
+                            </tr>
+                            <tr>
+                                <td>Metabolite Correlations</td>
+                                <td>Correlation with plasma metabolomics</td>
+                                <td>${stats?.n_metabolite_correlations || 'N/A'}</td>
+                            </tr>
+                            <tr>
+                                <td>Differential Analysis</td>
+                                <td>Sex, smoking, blood type comparisons</td>
+                                <td>${stats?.n_differential_tests || 'N/A'}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card" style="margin-top: 1rem;">
+                    <div class="card-title">Data Citation</div>
+                    <p style="font-size: 0.9rem; color: #666;">
+                        Zhang et al. (2023). A human cell atlas of fetal gene expression. <i>Science</i>.
+                        <a href="https://doi.org/10.1126/science.aba7721" target="_blank">DOI: 10.1126/science.aba7721</a>
+                    </p>
+                </div>
+            </div>
+        `;
     },
 
     async loadCimaCelltypes(content) {
@@ -562,7 +658,7 @@ const AtlasDetailPage = {
             return qval !== undefined ? qval < sigThreshold : d.p_value < sigThreshold;
         }).length;
 
-        Plotly.newPlot(containerId, [{
+        Plotly.newPlot(container, [{
             z: zValues,
             x: signatures,
             y: cellTypes,
@@ -587,26 +683,111 @@ const AtlasDetailPage = {
         content.innerHTML = `
             <div class="panel-header">
                 <h3>Age/BMI Stratified Activity</h3>
-                <p>Activity distribution across age groups and BMI categories per cell type</p>
+                <p>Activity distribution across age groups and BMI categories, with cell type stratification</p>
             </div>
             <div class="stratified-controls">
                 <select id="stratified-variable" class="filter-select" onchange="AtlasDetailPage.updateStratifiedPlot()">
                     <option value="age">Age Groups</option>
                     <option value="bmi">BMI Categories</option>
                 </select>
-                <select id="stratified-celltype" class="filter-select" onchange="AtlasDetailPage.updateStratifiedPlot()">
-                    <option value="">All Cell Types</option>
+                <select id="cima-strat-celltype" class="filter-select" onchange="AtlasDetailPage.updateStratifiedPlot()">
+                    <option value="All">All Cell Types (Sample-level)</option>
                 </select>
-                <select id="stratified-signature" class="filter-select" onchange="AtlasDetailPage.updateStratifiedPlot()">
-                    <option value="IFNG">IFNG</option>
-                </select>
+                <div class="search-controls" style="position: relative;">
+                    <input type="text" id="stratified-signature-search" placeholder="Search signature (e.g., IFNG, IL6...)"
+                           style="width: 200px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" autocomplete="off" value="IFNG">
+                    <div id="stratified-signature-suggestions" class="suggestions-dropdown"></div>
+                </div>
+            </div>
+            <div class="card" style="margin-bottom: 1rem; padding: 0.75rem; font-size: 0.9rem;">
+                <strong>Age Bins:</strong> &lt;30, 30-39, 40-49, 50-59, 60-69, 70+ years<br>
+                <strong>BMI Categories:</strong> Underweight (&lt;18.5), Normal (18.5-25), Overweight (25-30), Obese (30+)<br>
+                <em>Note: Select a cell type to see correlation analysis within that cell type.</em>
             </div>
             <div id="stratified-plot" class="plot-container" style="height: 500px;"></div>
         `;
 
-        // Load cell types and signatures for dropdowns
-        await this.populateStratifiedDropdowns();
+        // Load signatures for autocomplete and cell types for dropdown
+        await Promise.all([
+            this.loadStratifiedSignatures(),
+            this.loadCimaStratifiedCellTypes(),
+        ]);
+
+        // Set up search autocomplete
+        this.setupStratifiedSignatureSearch();
+
+        // Initial plot
         await this.updateStratifiedPlot();
+    },
+
+    async loadCimaStratifiedCellTypes() {
+        try {
+            const cellTypes = await API.get('/cima/cell-types');
+            const select = document.getElementById('cima-strat-celltype');
+            if (select && cellTypes && cellTypes.length > 0) {
+                select.innerHTML = '<option value="All">All Cell Types (Sample-level)</option>' +
+                    cellTypes.map(ct => `<option value="${ct}">${ct}</option>`).join('');
+            }
+        } catch (e) {
+            console.warn('Failed to load CIMA cell types:', e);
+        }
+    },
+
+    async loadStratifiedSignatures() {
+        try {
+            const signatures = await API.get('/cima/signatures', { signature_type: this.signatureType });
+            this.stratifiedSignatures = signatures || [];
+        } catch (e) {
+            console.warn('Failed to load stratified signatures:', e);
+            this.stratifiedSignatures = [];
+        }
+    },
+
+    setupStratifiedSignatureSearch() {
+        const searchInput = document.getElementById('stratified-signature-search');
+        const suggestionsDiv = document.getElementById('stratified-signature-suggestions');
+        if (!searchInput || !suggestionsDiv) return;
+
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            if (!query) {
+                suggestionsDiv.style.display = 'none';
+                return;
+            }
+
+            const matches = (this.stratifiedSignatures || [])
+                .filter(s => s.toLowerCase().includes(query))
+                .slice(0, 10);
+
+            if (matches.length > 0) {
+                suggestionsDiv.innerHTML = matches.map(s =>
+                    `<div class="suggestion-item" onclick="AtlasDetailPage.selectStratifiedSignature('${s}')">${s}</div>`
+                ).join('');
+                suggestionsDiv.style.display = 'block';
+            } else {
+                suggestionsDiv.style.display = 'none';
+            }
+        });
+
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                suggestionsDiv.style.display = 'none';
+                this.updateStratifiedPlot();
+            }
+        });
+
+        searchInput.addEventListener('blur', () => {
+            setTimeout(() => { suggestionsDiv.style.display = 'none'; }, 200);
+        });
+    },
+
+    selectStratifiedSignature(signature) {
+        const searchInput = document.getElementById('stratified-signature-search');
+        if (searchInput) {
+            searchInput.value = signature;
+        }
+        document.getElementById('stratified-signature-suggestions').style.display = 'none';
+        this.updateStratifiedPlot();
     },
 
     async loadCimaBiochemistry(content) {
@@ -731,6 +912,9 @@ const AtlasDetailPage = {
 
     async loadInflammationTab(tabId, content) {
         switch (tabId) {
+            case 'overview':
+                await this.loadInflamOverview(content);
+                break;
             case 'celltypes':
                 await this.loadInflamCelltypes(content);
                 break;
@@ -767,6 +951,100 @@ const AtlasDetailPage = {
             default:
                 content.innerHTML = '<p>Panel not implemented</p>';
         }
+    },
+
+    async loadInflamOverview(content) {
+        // Load summary stats
+        const stats = await API.get('/inflammation/summary');
+
+        content.innerHTML = `
+            <div class="overview-section">
+                <div class="panel-header">
+                    <h3>Inflammation Atlas</h3>
+                    <p>Multi-disease cohort spanning RA, IBD, MS, SLE, and other inflammatory conditions with treatment response data.</p>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number">${stats?.n_samples || 817}</div>
+                        <div class="stat-label">Patient Samples</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">4.9M</div>
+                        <div class="stat-label">Total Cells</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${stats?.n_cell_types || 35}</div>
+                        <div class="stat-label">Cell Types</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${stats?.n_diseases || 12}+</div>
+                        <div class="stat-label">Diseases Studied</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">3</div>
+                        <div class="stat-label">Cohorts (Main/Validation/External)</div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 1.5rem;">
+                    <div class="card-title">Diseases Covered</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
+                        ${(stats?.diseases || ['RA', 'IBD', 'MS', 'SLE', 'COVID-19', 'UC', 'CD', 'PsA', 'SSc', 'Sjögren', 'ANCA Vasculitis', 'JIA']).map(d =>
+                            `<span style="background: var(--bg-secondary); padding: 0.25rem 0.75rem; border-radius: 1rem; font-size: 0.875rem;">${d}</span>`
+                        ).join('')}
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 1rem;">
+                    <div class="card-title">Analysis Data Sources</div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Analysis</th>
+                                <th>Description</th>
+                                <th>Records</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Cell Type Activity</td>
+                                <td>Mean ${this.signatureType} activity per cell type and disease</td>
+                                <td>${this.signatureType === 'CytoSig' ? '35 × 43' : '35 × 1,170'}</td>
+                            </tr>
+                            <tr>
+                                <td>Disease Differential</td>
+                                <td>Disease vs healthy comparison per cell type</td>
+                                <td>${stats?.n_diseases || 12} diseases</td>
+                            </tr>
+                            <tr>
+                                <td>Treatment Response</td>
+                                <td>Responder vs non-responder prediction</td>
+                                <td>4 diseases with treatment data</td>
+                            </tr>
+                            <tr>
+                                <td>Age/BMI Correlations</td>
+                                <td>Spearman correlation with clinical parameters</td>
+                                <td>Cell type-stratified</td>
+                            </tr>
+                            <tr>
+                                <td>Cross-Cohort Validation</td>
+                                <td>Main → Validation → External consistency</td>
+                                <td>3 cohorts</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card" style="margin-top: 1rem;">
+                    <div class="card-title">Data Citation</div>
+                    <p style="font-size: 0.9rem; color: #666;">
+                        Inflammation Atlas Consortium. Multi-disease single-cell immune profiling.
+                        <a href="#" target="_blank">Manuscript in preparation</a>
+                    </p>
+                </div>
+            </div>
+        `;
     },
 
     async loadInflamCelltypes(content) {
@@ -1039,7 +1317,7 @@ const AtlasDetailPage = {
         content.innerHTML = `
             <div class="panel-header">
                 <h3>Age/BMI Stratified Activity</h3>
-                <p>Activity distribution across age groups and BMI categories per cell type</p>
+                <p>Activity distribution across age groups and BMI categories, with cell type stratification</p>
             </div>
             <div class="stratified-controls">
                 <select id="inflam-strat-variable" class="filter-select" onchange="AtlasDetailPage.updateInflamStratifiedPlot()">
@@ -1047,16 +1325,103 @@ const AtlasDetailPage = {
                     <option value="bmi">BMI Categories</option>
                 </select>
                 <select id="inflam-strat-celltype" class="filter-select" onchange="AtlasDetailPage.updateInflamStratifiedPlot()">
-                    <option value="">All Cell Types</option>
+                    <option value="All">All Cell Types (Aggregated)</option>
                 </select>
-                <select id="inflam-strat-signature" class="filter-select" onchange="AtlasDetailPage.updateInflamStratifiedPlot()">
-                    <option value="IFNG">IFNG</option>
-                </select>
+                <div class="search-controls" style="position: relative;">
+                    <input type="text" id="inflam-strat-signature-search" placeholder="Search signature (e.g., IFNG, IL6...)"
+                           style="width: 200px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" autocomplete="off" value="IFNG">
+                    <div id="inflam-strat-signature-suggestions" class="suggestions-dropdown"></div>
+                </div>
+            </div>
+            <div class="card" style="margin-bottom: 1rem; padding: 0.75rem; font-size: 0.9rem;">
+                <strong>Age Bins:</strong> &lt;30, 30-39, 40-49, 50-59, 60-69, 70+ years<br>
+                <strong>BMI Categories:</strong> Underweight (&lt;18.5), Normal (18.5-25), Overweight (25-30), Obese (30+)
             </div>
             <div id="inflam-stratified-plot" class="plot-container" style="height: 500px;"></div>
         `;
 
+        // Load signatures for autocomplete and cell types for dropdown
+        await Promise.all([
+            this.loadInflamStratifiedSignatures(),
+            this.loadInflamStratifiedCellTypes(),
+        ]);
+
+        // Set up search autocomplete
+        this.setupInflamStratifiedSignatureSearch();
+
+        // Initial plot
         await this.updateInflamStratifiedPlot();
+    },
+
+    async loadInflamStratifiedCellTypes() {
+        try {
+            const cellTypes = await API.get('/inflammation/cell-types');
+            const select = document.getElementById('inflam-strat-celltype');
+            if (select && cellTypes && cellTypes.length > 0) {
+                // Keep "All" as first option, then add specific cell types
+                select.innerHTML = '<option value="All">All Cell Types (Aggregated)</option>' +
+                    cellTypes.map(ct => `<option value="${ct}">${ct}</option>`).join('');
+            }
+        } catch (e) {
+            console.warn('Failed to load inflammation cell types:', e);
+        }
+    },
+
+    async loadInflamStratifiedSignatures() {
+        try {
+            const signatures = await API.get('/inflammation/signatures', { signature_type: this.signatureType });
+            this.inflamStratifiedSignatures = signatures || [];
+        } catch (e) {
+            console.warn('Failed to load inflammation stratified signatures:', e);
+            this.inflamStratifiedSignatures = [];
+        }
+    },
+
+    setupInflamStratifiedSignatureSearch() {
+        const searchInput = document.getElementById('inflam-strat-signature-search');
+        const suggestionsDiv = document.getElementById('inflam-strat-signature-suggestions');
+        if (!searchInput || !suggestionsDiv) return;
+
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            if (!query) {
+                suggestionsDiv.style.display = 'none';
+                return;
+            }
+
+            const matches = (this.inflamStratifiedSignatures || [])
+                .filter(s => s.toLowerCase().includes(query))
+                .slice(0, 10);
+
+            if (matches.length > 0) {
+                suggestionsDiv.innerHTML = matches.map(s =>
+                    `<div class="suggestion-item" onclick="AtlasDetailPage.selectInflamStratifiedSignature('${s}')">${s}</div>`
+                ).join('');
+                suggestionsDiv.style.display = 'block';
+            } else {
+                suggestionsDiv.style.display = 'none';
+            }
+        });
+
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                suggestionsDiv.style.display = 'none';
+                this.updateInflamStratifiedPlot();
+            }
+        });
+
+        searchInput.addEventListener('blur', () => {
+            setTimeout(() => { suggestionsDiv.style.display = 'none'; }, 200);
+        });
+    },
+
+    selectInflamStratifiedSignature(signature) {
+        const searchInput = document.getElementById('inflam-strat-signature-search');
+        if (searchInput) {
+            searchInput.value = signature;
+        }
+        document.getElementById('inflam-strat-signature-suggestions').style.display = 'none';
+        this.updateInflamStratifiedPlot();
     },
 
     async loadInflamDisease(content) {
@@ -1187,6 +1552,9 @@ const AtlasDetailPage = {
 
     async loadScatlasTab(tabId, content) {
         switch (tabId) {
+            case 'overview':
+                await this.loadScatlasOverview(content);
+                break;
             case 'celltypes':
                 await this.loadScatlasCelltypes(content);
                 break;
@@ -1217,6 +1585,100 @@ const AtlasDetailPage = {
             default:
                 content.innerHTML = '<p>Panel not implemented</p>';
         }
+    },
+
+    async loadScatlasOverview(content) {
+        // Load summary stats
+        const stats = await API.get('/scatlas/summary');
+
+        content.innerHTML = `
+            <div class="overview-section">
+                <div class="panel-header">
+                    <h3>scAtlas: Human Tissue Reference Atlas</h3>
+                    <p>Human Cell Atlas data spanning normal organs and pan-cancer datasets with detailed cell type annotations.</p>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number">${stats?.n_normal_donors || 145} / ${stats?.n_cancer_donors || 325}</div>
+                        <div class="stat-label">Donors (Normal / Cancer)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${stats?.n_normal_cells ? (stats.n_normal_cells / 1e6).toFixed(1) + 'M' : '2.8M'} / ${stats?.n_cancer_cells ? (stats.n_cancer_cells / 1e6).toFixed(1) + 'M' : '3.6M'}</div>
+                        <div class="stat-label">Total Cells (Normal / Cancer)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${stats?.n_organs || 35}</div>
+                        <div class="stat-label">Organs Profiled</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${stats?.n_normal_celltypes || 192} / ${stats?.n_cancer_celltypes || 214}</div>
+                        <div class="stat-label">Cell Types (Normal / Cancer)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${stats?.n_cancer_types || 25}</div>
+                        <div class="stat-label">Cancer Types</div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 1.5rem;">
+                    <div class="card-title">Organs Covered</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; max-height: 150px; overflow-y: auto;">
+                        ${(stats?.organs || ['Lung', 'Liver', 'Heart', 'Kidney', 'Brain', 'Pancreas', 'Colon', 'Skin', 'Spleen', 'Bone Marrow', 'Thymus', 'Lymph Node', 'Blood', 'Breast', 'Prostate', 'Ovary', 'Stomach', 'Small Intestine', 'Bladder', 'Esophagus']).map(o =>
+                            `<span style="background: var(--bg-secondary); padding: 0.25rem 0.75rem; border-radius: 1rem; font-size: 0.875rem;">${o}</span>`
+                        ).join('')}
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 1rem;">
+                    <div class="card-title">Analysis Data Sources</div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Analysis</th>
+                                <th>Description</th>
+                                <th>Records</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Normal Organ Signatures</td>
+                                <td>Mean ${this.signatureType} activity per organ and cell type</td>
+                                <td>${stats?.n_organs || 35} organs</td>
+                            </tr>
+                            <tr>
+                                <td>Cancer Cell Types</td>
+                                <td>Activity in tumor-infiltrating immune cells</td>
+                                <td>${stats?.n_cancer_celltypes || 214} cell types</td>
+                            </tr>
+                            <tr>
+                                <td>Tumor vs Adjacent</td>
+                                <td>Paired tumor-normal tissue comparison</td>
+                                <td>${stats?.n_cancer_types || 25} cancer types</td>
+                            </tr>
+                            <tr>
+                                <td>Immune Infiltration</td>
+                                <td>Cytokine activity by immune subset in tumors</td>
+                                <td>Per cancer type</td>
+                            </tr>
+                            <tr>
+                                <td>T Cell Exhaustion</td>
+                                <td>Exhaustion signature across tumor types</td>
+                                <td>Exhaustion markers</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card" style="margin-top: 1rem;">
+                    <div class="card-title">Data Citation</div>
+                    <p style="font-size: 0.9rem; color: #666;">
+                        Human Cell Atlas Consortium. Tabula Sapiens: A multi-organ, single-cell transcriptomic atlas of humans.
+                        <a href="https://doi.org/10.1126/science.abl4896" target="_blank">DOI: 10.1126/science.abl4896</a>
+                    </p>
+                </div>
+            </div>
+        `;
     },
 
     async loadScatlasOrganMap(content) {
@@ -1515,41 +1977,72 @@ const AtlasDetailPage = {
 
     renderBoxplotFromStats(containerId, data, options = {}) {
         // Render boxplot from pre-computed statistics
-        // data is array of {signature, cell_type, stratify_by, statistics: [{bin, median, q1, q3, min, max, mean, std, n}]}
+        // New format: data is array of {signature, signature_type, bin, min, q1, median, q3, max, mean, n}
         const container = document.getElementById(containerId);
         if (!container || !data || data.length === 0) {
-            container.innerHTML = '<p class="loading">No data available</p>';
+            if (container) container.innerHTML = '<p class="loading">No data available</p>';
             return;
         }
 
-        // Use first entry's statistics (may have multiple cell types in data)
-        const entry = data[0];
-        const stats = entry.statistics || [];
+        // Data is now flat - each record is one bin's statistics
+        // Sort bins in proper order
+        const binOrder = {
+            // Age bins
+            '<30': 0, '30-39': 1, '40-49': 2, '50-59': 3, '60-69': 4, '70+': 5,
+            // BMI bins
+            'Underweight': 0, 'Normal': 1, 'Overweight': 2, 'Obese': 3, 'Obese I': 3, 'Obese II+': 4,
+        };
+        const sortedData = [...data].sort((a, b) => (binOrder[a.bin] ?? 99) - (binOrder[b.bin] ?? 99));
 
-        if (stats.length === 0) {
-            container.innerHTML = '<p class="loading">No statistics data available</p>';
-            return;
-        }
+        // Build single box plot trace with all bins
+        // Using arrays for x, lowerfence, q1, median, q3, upperfence
+        const xLabels = sortedData.map(stat => stat.bin);
+        const lowerfences = sortedData.map(stat => stat.min);
+        const q1s = sortedData.map(stat => stat.q1);
+        const medians = sortedData.map(stat => stat.median);
+        const q3s = sortedData.map(stat => stat.q3);
+        const upperfences = sortedData.map(stat => stat.max);
+        const means = sortedData.map(stat => stat.mean);
+        const ns = sortedData.map(stat => stat.n);
 
-        // Build box plot traces from pre-computed stats
-        const traces = stats.map(stat => ({
+        // Create custom hover text
+        const hoverText = sortedData.map(stat =>
+            `<b>${stat.bin}</b><br>` +
+            `Median: ${stat.median?.toFixed(3)}<br>` +
+            `Q1: ${stat.q1?.toFixed(3)}<br>` +
+            `Q3: ${stat.q3?.toFixed(3)}<br>` +
+            `Mean: ${stat.mean?.toFixed(3)}<br>` +
+            `n=${stat.n}`
+        );
+
+        const trace = {
             type: 'box',
-            name: stat.bin || stat.group,
-            y: [stat.min, stat.q1, stat.median, stat.q3, stat.max],
+            x: xLabels,
+            lowerfence: lowerfences,
+            q1: q1s,
+            median: medians,
+            q3: q3s,
+            upperfence: upperfences,
+            mean: means,
             boxpoints: false,
-            hovertemplate: `<b>${stat.bin || stat.group}</b><br>` +
-                `Median: ${stat.median?.toFixed(3)}<br>` +
-                `Q1: ${stat.q1?.toFixed(3)}<br>` +
-                `Q3: ${stat.q3?.toFixed(3)}<br>` +
-                `n=${stat.n}<extra></extra>`,
-            marker: { color: `hsl(${stats.indexOf(stat) * 40}, 70%, 50%)` },
-        }));
+            hoverinfo: 'text',
+            hovertext: hoverText,
+            marker: { color: '#3b82f6' },
+            fillcolor: 'rgba(59, 130, 246, 0.5)',
+        };
 
-        Plotly.newPlot(containerId, traces, {
+        Plotly.newPlot(containerId, [trace], {
             title: options.title || 'Activity by Group',
+            xaxis: {
+                title: options.xLabel || 'Group',
+                type: 'category',
+                categoryorder: 'array',
+                categoryarray: xLabels,
+            },
             yaxis: { title: options.yLabel || 'Value' },
             showlegend: false,
             font: { family: 'Inter, sans-serif' },
+            margin: { t: 50, b: 60 },
         });
     },
 
@@ -1701,28 +2194,37 @@ const AtlasDetailPage = {
     // Update functions for interactive controls
     async updateStratifiedPlot() {
         const variable = document.getElementById('stratified-variable')?.value || 'age';
-        const cellType = document.getElementById('stratified-celltype')?.value;
-        const signature = document.getElementById('stratified-signature')?.value || 'IFNG';
+        const signature = document.getElementById('stratified-signature-search')?.value || 'IFNG';
+        const cellType = document.getElementById('cima-strat-celltype')?.value || 'All';
 
         const plotContainer = document.getElementById('stratified-plot');
         if (!plotContainer) return;
 
+        if (!signature) {
+            plotContainer.innerHTML = '<p class="loading">Enter a signature name to view distribution</p>';
+            return;
+        }
+
         try {
-            // Endpoint format: /cima/boxplots/{age|bmi}/{signature}
+            plotContainer.innerHTML = '<p class="loading">Loading...</p>';
+
+            // Show boxplots (sample-level or cell-type specific)
             const endpoint = variable === 'age' ? 'age' : 'bmi';
             const params = { signature_type: this.signatureType };
-            if (cellType) params.cell_type = cellType;
+            if (cellType && cellType !== 'All') {
+                params.cell_type = cellType;
+            }
 
             const data = await API.get(`/cima/boxplots/${endpoint}/${signature}`, params);
 
             if (data && data.length > 0) {
-                // Data is a list of boxplot entries with statistics
+                const titleCellType = cellType === 'All' ? '' : ` (${cellType})`;
                 this.renderBoxplotFromStats('stratified-plot', data, {
-                    title: variable === 'age' ? 'Activity by Age Group' : 'Activity by BMI Category',
+                    title: `${signature} Activity by ${variable === 'age' ? 'Age Group' : 'BMI Category'}${titleCellType}`,
                     yLabel: 'Activity (z-score)',
                 });
             } else {
-                plotContainer.innerHTML = '<p class="loading">No stratified data available</p>';
+                plotContainer.innerHTML = `<p class="loading">No data available for "${signature}"${cellType !== 'All' ? ` in ${cellType}` : ''}</p>`;
             }
         } catch (e) {
             plotContainer.innerHTML = `<p class="loading">Error: ${e.message}</p>`;
@@ -1731,29 +2233,38 @@ const AtlasDetailPage = {
 
     async updateInflamStratifiedPlot() {
         const variable = document.getElementById('inflam-strat-variable')?.value || 'age';
-        const cellType = document.getElementById('inflam-strat-celltype')?.value;
-        const signature = document.getElementById('inflam-strat-signature')?.value || 'IFNG';
+        const signature = document.getElementById('inflam-strat-signature-search')?.value || 'IFNG';
+        const cellType = document.getElementById('inflam-strat-celltype')?.value || 'All';
 
         const plotContainer = document.getElementById('inflam-stratified-plot');
         if (!plotContainer) return;
 
-        // Age/BMI stratification not yet implemented for Inflammation Atlas
-        plotContainer.innerHTML = '<p class="loading">Age/BMI stratification coming soon for Inflammation Atlas</p>';
-        return;
+        if (!signature) {
+            plotContainer.innerHTML = '<p class="loading">Enter a signature name to view distribution</p>';
+            return;
+        }
 
         try {
-            const data = await API.get('/inflammation/age-bmi-stratified', {
-                variable, cell_type: cellType, signature, signature_type: this.signatureType,
-            });
+            plotContainer.innerHTML = '<p class="loading">Loading...</p>';
 
-            if (data && data.groups && data.values) {
-                Scatter.createBoxPlot('inflam-stratified-plot', data, {
-                    title: variable === 'age' ? 'Activity by Age Group' : 'Activity by BMI Category',
+            // Endpoint format: /inflammation/boxplots/{age|bmi}/{signature}
+            const endpoint = variable === 'age' ? 'age' : 'bmi';
+            const params = { signature_type: this.signatureType };
+            if (cellType && cellType !== 'All') {
+                params.cell_type = cellType;
+            }
+
+            const data = await API.get(`/inflammation/boxplots/${endpoint}/${signature}`, params);
+
+            if (data && data.length > 0) {
+                // Data is a list of boxplot entries with statistics per bin
+                const titleCellType = cellType === 'All' ? '' : ` (${cellType})`;
+                this.renderBoxplotFromStats('inflam-stratified-plot', data, {
+                    title: `${signature} Activity by ${variable === 'age' ? 'Age Group' : 'BMI Category'}${titleCellType}`,
                     yLabel: 'Activity (z-score)',
-                    showPoints: true,
                 });
             } else {
-                plotContainer.innerHTML = '<p class="loading">No stratified data available</p>';
+                plotContainer.innerHTML = `<p class="loading">No data available for "${signature}"${cellType !== 'All' ? ` in ${cellType}` : ''}</p>`;
             }
         } catch (e) {
             plotContainer.innerHTML = `<p class="loading">Error: ${e.message}</p>`;

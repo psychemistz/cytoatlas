@@ -1,6 +1,6 @@
 """CIMA-specific schemas."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CIMACellTypeActivity(BaseModel):
@@ -129,13 +129,21 @@ class CIMAPopulationStratification(BaseModel):
 
 
 class CIMAAgeBMIBoxplot(BaseModel):
-    """Pre-computed age/BMI boxplot data."""
+    """Pre-computed age/BMI boxplot data - one record per bin."""
 
     signature: str
-    signature_type: str
-    cell_type: str
-    stratify_by: str
-    statistics: list[dict]  # Pre-computed stats per bin
+    signature_type: str = Field(alias="sig_type")
+    bin: str  # Age bin ("<30", "30-39", etc.) or BMI category
+    min: float
+    q1: float
+    median: float
+    q3: float
+    max: float
+    mean: float
+    n: int
+    cell_type: str | None = None  # Optional, sample-level data may not have it
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class CIMACellTypeCorrelation(BaseModel):

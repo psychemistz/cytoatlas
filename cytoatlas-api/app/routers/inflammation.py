@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 
 from app.schemas.inflammation import (
+    InflammationAgeBMIBoxplot,
     InflammationCellTypeActivity,
     InflammationCellTypeStratified,
     InflammationCohortValidation,
@@ -51,6 +52,16 @@ async def get_cell_types(
 ) -> list[str]:
     """Get list of available cell types."""
     return await service.get_available_cell_types()
+
+
+@router.get("/signatures")
+async def get_signatures(
+    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
+    service: InflammationService = Depends(get_inflammation_service),
+) -> list[str]:
+    """Get list of available signatures."""
+    data = await service.get_cell_type_activity(signature_type)
+    return sorted(list(set(d.signature for d in data)))
 
 
 # Cell Type Activity
@@ -118,6 +129,37 @@ async def get_celltype_stratified(
     Returns disease differential computed within each cell type.
     """
     return await service.get_celltype_stratified(disease, signature_type)
+
+
+# Age/BMI Stratified Boxplots
+@router.get("/boxplots/age/{signature}", response_model=list[InflammationAgeBMIBoxplot])
+async def get_age_boxplots(
+    signature: str,
+    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
+    cell_type: str | None = Query(None),
+    service: InflammationService = Depends(get_inflammation_service),
+) -> list[InflammationAgeBMIBoxplot]:
+    """
+    Get age-stratified boxplot data for a signature.
+
+    Returns activity distribution across age bins (decades).
+    """
+    return await service.get_age_bmi_boxplots(signature, signature_type, "age", cell_type)
+
+
+@router.get("/boxplots/bmi/{signature}", response_model=list[InflammationAgeBMIBoxplot])
+async def get_bmi_boxplots(
+    signature: str,
+    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
+    cell_type: str | None = Query(None),
+    service: InflammationService = Depends(get_inflammation_service),
+) -> list[InflammationAgeBMIBoxplot]:
+    """
+    Get BMI-stratified boxplot data for a signature.
+
+    Returns activity distribution across WHO BMI categories.
+    """
+    return await service.get_age_bmi_boxplots(signature, signature_type, "bmi", cell_type)
 
 
 @router.get("/driving-populations", response_model=list[InflammationDrivingPopulation])

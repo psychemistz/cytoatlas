@@ -59,17 +59,18 @@ class CIMAService(BaseService):
 
         results = data[variable]
 
-        # Transform field names: protein -> signature, signature -> signature_type
+        # Transform field names: protein -> signature
+        # Note: Original data may have "protein" as the signature name and "signature" as the type
         transformed = []
         for r in results:
             record = {
                 "cell_type": r.get("cell_type", "All"),
                 "signature": r.get("protein", r.get("signature")),
-                "signature_type": r.get("signature", signature_type),
+                "signature_type": signature_type,  # Use the parameter value
                 "variable": variable,
                 "rho": r.get("rho", 0),
-                "pvalue": r.get("pvalue", 1),
-                "qvalue": r.get("qvalue"),
+                "pvalue": r.get("pvalue", r.get("p_value", 1)),  # Accept both field names
+                "qvalue": r.get("qvalue", r.get("q_value")),
                 "n_samples": r.get("n"),
             }
             transformed.append(record)
@@ -194,22 +195,31 @@ class CIMAService(BaseService):
             cell_type: Optional cell type filter
 
         Returns:
-            Boxplot statistics per group
+            Boxplot statistics per bin
         """
         data = await self.load_json("age_bmi_boxplots.json")
 
-        # Filter by signature type
-        results = self.filter_by_signature_type(data, signature_type, key="signature_type")
+        # Data structure: {"cima": {"age": [...], "bmi": [...]}, "inflammation": {...}}
+        # Extract the right section
+        cima_data = data.get("cima", {})
+        results = cima_data.get(stratify_by, [])
 
-        # Filter by stratification variable
-        results = [r for r in results if r.get("stratify_by") == stratify_by]
+        if not results:
+            return []
+
+        # Filter by signature type (data uses "sig_type")
+        results = [r for r in results if r.get("sig_type") == signature_type]
 
         # Filter by signature
         results = [r for r in results if r.get("signature") == signature]
 
         # Filter by cell type
         if cell_type:
-            results = self.filter_by_cell_type(results, cell_type)
+            # Return cell-type specific data
+            results = [r for r in results if r.get("cell_type") == cell_type]
+        else:
+            # Return sample-level data only (cell_type is None or 'All')
+            results = [r for r in results if r.get("cell_type") in (None, "All")]
 
         return [CIMAAgeBMIBoxplot(**r) for r in results]
 
