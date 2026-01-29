@@ -1,6 +1,6 @@
 /**
  * Atlas Detail Page Handler
- * Shows atlas analysis panels with tabs
+ * Shows atlas analysis panels with tabs - migrated from visualization/index.html
  */
 
 const AtlasDetailPage = {
@@ -10,36 +10,55 @@ const AtlasDetailPage = {
 
     /**
      * Atlas configurations with available analysis tabs
+     * Matches the panels from visualization/index.html
      */
     atlasConfigs: {
         cima: {
             displayName: 'CIMA',
-            description: 'Chinese Immune Multi-omics Atlas - 6.5M cells from 421 healthy adults',
+            description: 'Chinese Immune Multi-omics Atlas - 6.5M cells from 421 healthy adults with matched biochemistry and metabolomics',
             tabs: [
-                { id: 'activity', label: 'Activity Heatmap', icon: '&#128202;' },
-                { id: 'age-bmi', label: 'Age/BMI Stratified', icon: '&#128200;' },
-                { id: 'biochem', label: 'Biochemistry', icon: '&#129514;' },
+                { id: 'celltypes', label: 'Cell Types', icon: '&#128300;' },
+                { id: 'age-bmi', label: 'Age & BMI', icon: '&#128200;' },
+                { id: 'age-bmi-stratified', label: 'Age/BMI Stratified', icon: '&#128202;' },
+                { id: 'biochemistry', label: 'Biochemistry', icon: '&#129514;' },
+                { id: 'biochem-scatter', label: 'Biochem Scatter', icon: '&#128201;' },
                 { id: 'metabolites', label: 'Metabolites', icon: '&#9879;' },
                 { id: 'differential', label: 'Differential', icon: '&#128209;' },
+                { id: 'multiomics', label: 'Multi-omics', icon: '&#128300;' },
+                { id: 'population', label: 'Population', icon: '&#128101;' },
+                { id: 'eqtl', label: 'eQTL Browser', icon: '&#129516;' },
             ],
         },
         inflammation: {
             displayName: 'Inflammation Atlas',
-            description: 'Pan-disease immune profiling - 4.9M cells across 12+ diseases',
+            description: 'Pan-disease immune profiling - 4.9M cells across 12+ inflammatory diseases with treatment response data',
             tabs: [
-                { id: 'activity', label: 'Activity Heatmap', icon: '&#128202;' },
-                { id: 'disease', label: 'Disease Differential', icon: '&#128209;' },
-                { id: 'age-bmi', label: 'Age/BMI Stratified', icon: '&#128200;' },
-                { id: 'treatment', label: 'Treatment Prediction', icon: '&#128137;' },
+                { id: 'celltypes', label: 'Cell Types', icon: '&#128300;' },
+                { id: 'age-bmi', label: 'Age & BMI', icon: '&#128200;' },
+                { id: 'age-bmi-stratified', label: 'Age/BMI Stratified', icon: '&#128202;' },
+                { id: 'disease', label: 'Disease', icon: '&#129658;' },
+                { id: 'differential', label: 'Differential', icon: '&#128209;' },
+                { id: 'treatment', label: 'Treatment Response', icon: '&#128137;' },
+                { id: 'sankey', label: 'Disease Flow', icon: '&#128260;' },
+                { id: 'validation', label: 'Cohort Validation', icon: '&#9989;' },
+                { id: 'longitudinal', label: 'Longitudinal', icon: '&#128197;' },
+                { id: 'severity', label: 'Severity', icon: '&#128200;' },
+                { id: 'drivers', label: 'Cell Drivers', icon: '&#128302;' },
             ],
         },
         scatlas: {
             displayName: 'scAtlas',
-            description: 'Human tissue reference atlas - 6.4M cells across 30 organs',
+            description: 'Human tissue reference atlas - 6.4M cells across 35 organs with pan-cancer immune profiling',
             tabs: [
-                { id: 'activity', label: 'Activity Heatmap', icon: '&#128202;' },
-                { id: 'organs', label: 'Organ Signatures', icon: '&#128149;' },
-                { id: 'celltypes', label: 'Cell Type Signatures', icon: '&#128300;' },
+                { id: 'organ-map', label: 'Organ Map', icon: '&#128149;' },
+                { id: 'celltype-heatmap', label: 'Cell Type Heatmap', icon: '&#128202;' },
+                { id: 'cancer-comparison', label: 'Tumor vs Adjacent', icon: '&#128201;' },
+                { id: 'cancer-types', label: 'Cancer Types', icon: '&#129656;' },
+                { id: 'immune-infiltration', label: 'Immune Infiltration', icon: '&#128300;' },
+                { id: 'exhaustion', label: 'T Cell Exhaustion', icon: '&#128546;' },
+                { id: 'caf', label: 'CAF Types', icon: '&#128302;' },
+                { id: 'organ-cancer-matrix', label: 'Organ-Cancer', icon: '&#128202;' },
+                { id: 'adjacent-tissue', label: 'Adjacent Tissue', icon: '&#129516;' },
             ],
         },
     },
@@ -49,7 +68,7 @@ const AtlasDetailPage = {
      */
     async init(params) {
         this.currentAtlas = params.name;
-        this.currentTab = 'activity';
+        this.currentTab = null;
 
         // Render template
         this.render();
@@ -77,8 +96,11 @@ const AtlasDetailPage = {
         const config = this.atlasConfigs[this.currentAtlas] || {
             displayName: this.currentAtlas,
             description: '',
-            tabs: [{ id: 'activity', label: 'Activity Heatmap', icon: '&#128202;' }],
+            tabs: [{ id: 'celltypes', label: 'Cell Types', icon: '&#128300;' }],
         };
+
+        // Set default tab
+        this.currentTab = config.tabs[0].id;
 
         // Render header
         this.renderHeader(config);
@@ -87,7 +109,7 @@ const AtlasDetailPage = {
         this.renderTabs(config.tabs);
 
         // Load default tab content
-        await this.loadTabContent('activity');
+        await this.loadTabContent(this.currentTab);
     },
 
     /**
@@ -152,36 +174,15 @@ const AtlasDetailPage = {
         content.innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
 
         try {
-            switch (tabId) {
-                case 'activity':
-                    await this.loadActivityHeatmap(content);
-                    break;
-                case 'age-bmi':
-                    await this.loadAgeBmiStratified(content);
-                    break;
-                case 'biochem':
-                    await this.loadBiochemistry(content);
-                    break;
-                case 'metabolites':
-                    await this.loadMetabolites(content);
-                    break;
-                case 'differential':
-                    await this.loadDifferential(content);
-                    break;
-                case 'disease':
-                    await this.loadDiseaseDifferential(content);
-                    break;
-                case 'treatment':
-                    await this.loadTreatmentPrediction(content);
-                    break;
-                case 'organs':
-                    await this.loadOrganSignatures(content);
-                    break;
-                case 'celltypes':
-                    await this.loadCellTypeSignatures(content);
-                    break;
-                default:
-                    content.innerHTML = '<p>Content not available</p>';
+            // Route to appropriate loader based on atlas and tab
+            if (this.currentAtlas === 'cima') {
+                await this.loadCimaTab(tabId, content);
+            } else if (this.currentAtlas === 'inflammation') {
+                await this.loadInflammationTab(tabId, content);
+            } else if (this.currentAtlas === 'scatlas') {
+                await this.loadScatlasTab(tabId, content);
+            } else {
+                content.innerHTML = '<p>Content not available for this atlas</p>';
             }
         } catch (error) {
             console.error('Failed to load tab content:', error);
@@ -189,112 +190,856 @@ const AtlasDetailPage = {
         }
     },
 
-    /**
-     * Load activity heatmap
-     */
-    async loadActivityHeatmap(container) {
-        container.innerHTML = `
-            <div class="panel-header">
-                <h3>Cytokine Activity Heatmap</h3>
-                <p>Mean activity z-scores across cell types</p>
-            </div>
-            <div id="activity-heatmap" class="plot-container"></div>
-        `;
+    // ==================== CIMA Tab Loaders ====================
 
-        const data = await API.getAtlasActivity(this.currentAtlas, {
-            signature_type: this.signatureType,
-        });
-
-        if (data && data.z) {
-            Heatmap.createActivityHeatmap('activity-heatmap', data, {
-                title: `${this.signatureType} Activity`,
-            });
-        } else {
-            document.getElementById('activity-heatmap').innerHTML = '<p class="loading">No activity data available</p>';
+    async loadCimaTab(tabId, content) {
+        switch (tabId) {
+            case 'celltypes':
+                await this.loadCimaCelltypes(content);
+                break;
+            case 'age-bmi':
+                await this.loadCimaAgeBmi(content);
+                break;
+            case 'age-bmi-stratified':
+                await this.loadCimaAgeBmiStratified(content);
+                break;
+            case 'biochemistry':
+                await this.loadCimaBiochemistry(content);
+                break;
+            case 'biochem-scatter':
+                await this.loadCimaBiochemScatter(content);
+                break;
+            case 'metabolites':
+                await this.loadCimaMetabolites(content);
+                break;
+            case 'differential':
+                await this.loadCimaDifferential(content);
+                break;
+            case 'multiomics':
+                await this.loadCimaMultiomics(content);
+                break;
+            case 'population':
+                await this.loadCimaPopulation(content);
+                break;
+            case 'eqtl':
+                await this.loadCimaEqtl(content);
+                break;
+            default:
+                content.innerHTML = '<p>Panel not implemented</p>';
         }
     },
 
-    /**
-     * Load age/BMI stratified analysis
-     */
-    async loadAgeBmiStratified(container) {
-        container.innerHTML = `
+    async loadCimaCelltypes(content) {
+        content.innerHTML = `
             <div class="panel-header">
-                <h3>Age & BMI Stratified Activity</h3>
-                <p>Activity patterns across age groups and BMI categories</p>
+                <h3>Cell Type Activity Heatmap</h3>
+                <p>Mean ${this.signatureType} activity z-scores across cell types</p>
+            </div>
+            <div id="celltype-heatmap" class="plot-container" style="height: 600px;"></div>
+        `;
+
+        const data = await API.get('/cima/activity/heatmap', { signature_type: this.signatureType });
+        if (data && data.z) {
+            Heatmap.createActivityHeatmap('celltype-heatmap', data, {
+                title: `${this.signatureType} Activity by Cell Type`,
+            });
+        } else {
+            document.getElementById('celltype-heatmap').innerHTML = '<p class="loading">No data available</p>';
+        }
+    },
+
+    async loadCimaAgeBmi(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Age & BMI Correlations</h3>
+                <p>Spearman correlation between signature activities and age/BMI</p>
+            </div>
+            <div class="viz-grid">
+                <div id="age-corr-heatmap" class="plot-container" style="height: 500px;"></div>
+                <div id="bmi-corr-heatmap" class="plot-container" style="height: 500px;"></div>
+            </div>
+        `;
+
+        const [ageData, bmiData] = await Promise.all([
+            API.get('/cima/correlations/age', { signature_type: this.signatureType }),
+            API.get('/cima/correlations/bmi', { signature_type: this.signatureType }),
+        ]);
+
+        if (ageData && ageData.length > 0) {
+            this.renderCorrelationHeatmap('age-corr-heatmap', ageData, 'Age Correlation');
+        }
+        if (bmiData && bmiData.length > 0) {
+            this.renderCorrelationHeatmap('bmi-corr-heatmap', bmiData, 'BMI Correlation');
+        }
+    },
+
+    async loadCimaAgeBmiStratified(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Age/BMI Stratified Activity</h3>
+                <p>Activity distribution across age groups and BMI categories per cell type</p>
             </div>
             <div class="stratified-controls">
                 <select id="stratified-variable" class="filter-select" onchange="AtlasDetailPage.updateStratifiedPlot()">
                     <option value="age">Age Groups</option>
                     <option value="bmi">BMI Categories</option>
                 </select>
-                <select id="stratified-celltype" class="filter-select">
+                <select id="stratified-celltype" class="filter-select" onchange="AtlasDetailPage.updateStratifiedPlot()">
                     <option value="">All Cell Types</option>
                 </select>
-                <select id="stratified-signature" class="filter-select">
-                    <option value="">Select Signature</option>
+                <select id="stratified-signature" class="filter-select" onchange="AtlasDetailPage.updateStratifiedPlot()">
+                    <option value="IFNG">IFNG</option>
                 </select>
             </div>
-            <div id="stratified-plot" class="plot-container"></div>
+            <div id="stratified-plot" class="plot-container" style="height: 500px;"></div>
         `;
 
         // Load cell types and signatures for dropdowns
-        try {
-            const cellTypes = await API.getAtlasCellTypes(this.currentAtlas);
-            const signatures = await API.getAtlasSignatures(this.currentAtlas, this.signatureType);
+        await this.populateStratifiedDropdowns();
+        await this.updateStratifiedPlot();
+    },
 
-            const cellTypeSelect = document.getElementById('stratified-celltype');
+    async loadCimaBiochemistry(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Biochemistry Correlations</h3>
+                <p>Correlation between cytokine activity and blood biochemistry markers</p>
+            </div>
+            <div id="biochem-heatmap" class="plot-container" style="height: 600px;"></div>
+        `;
+
+        const data = await API.get('/cima/correlations/biochemistry', { signature_type: this.signatureType });
+        if (data && data.length > 0) {
+            this.renderBiochemHeatmap('biochem-heatmap', data);
+        } else {
+            document.getElementById('biochem-heatmap').innerHTML = '<p class="loading">No biochemistry data available</p>';
+        }
+    },
+
+    async loadCimaBiochemScatter(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Biochemistry Scatter Plots</h3>
+                <p>Individual correlation plots for top associations</p>
+            </div>
+            <div class="scatter-controls">
+                <select id="biochem-marker" class="filter-select" onchange="AtlasDetailPage.updateBiochemScatter()">
+                    <option value="">Select Marker</option>
+                </select>
+                <select id="biochem-signature" class="filter-select" onchange="AtlasDetailPage.updateBiochemScatter()">
+                    <option value="IFNG">IFNG</option>
+                </select>
+            </div>
+            <div id="biochem-scatter" class="plot-container" style="height: 500px;"></div>
+        `;
+
+        await this.populateBiochemDropdowns();
+    },
+
+    async loadCimaMetabolites(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Metabolite Correlations</h3>
+                <p>Top correlations with plasma metabolites and lipids (${this.signatureType === 'CytoSig' ? '43' : '1,170'} signatures x 500 metabolites)</p>
+            </div>
+            <div id="metabolite-heatmap" class="plot-container" style="height: 600px;"></div>
+        `;
+
+        const data = await API.get('/cima/metabolites', { signature_type: this.signatureType, top_n: 50 });
+        if (data && data.correlations) {
+            this.renderMetaboliteHeatmap('metabolite-heatmap', data);
+        } else {
+            document.getElementById('metabolite-heatmap').innerHTML = '<p class="loading">No metabolite data available</p>';
+        }
+    },
+
+    async loadCimaDifferential(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Differential Analysis</h3>
+                <p>Activity differences by sex, smoking status, and blood type</p>
+            </div>
+            <div class="differential-controls">
+                <select id="diff-comparison" class="filter-select" onchange="AtlasDetailPage.updateDifferentialPlot()">
+                    <option value="sex">Sex (Male vs Female)</option>
+                    <option value="smoking">Smoking Status</option>
+                    <option value="blood_type">Blood Type</option>
+                </select>
+            </div>
+            <div id="differential-volcano" class="plot-container" style="height: 500px;"></div>
+        `;
+
+        await this.updateDifferentialPlot();
+    },
+
+    async loadCimaMultiomics(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Multi-omics Integration</h3>
+                <p>Correlation network between cytokine activity, biochemistry, and metabolites</p>
+            </div>
+            <div id="multiomics-viz" class="plot-container" style="height: 600px;">
+                <p class="loading">Multi-omics network visualization coming soon</p>
+            </div>
+        `;
+    },
+
+    async loadCimaPopulation(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Population Stratification</h3>
+                <p>Activity patterns across demographic groups</p>
+            </div>
+            <div id="population-viz" class="plot-container" style="height: 500px;"></div>
+        `;
+
+        const data = await API.get('/cima/population-stratification', { signature_type: this.signatureType });
+        if (data) {
+            this.renderPopulationViz('population-viz', data);
+        } else {
+            document.getElementById('population-viz').innerHTML = '<p class="loading">No population data available</p>';
+        }
+    },
+
+    async loadCimaEqtl(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>eQTL Browser</h3>
+                <p>Genetic variants associated with cytokine activity (cis-eQTLs within 1Mb)</p>
+            </div>
+            <div class="eqtl-controls">
+                <select id="eqtl-signature" class="filter-select" onchange="AtlasDetailPage.updateEqtlPlot()">
+                    <option value="IFNG">IFNG</option>
+                </select>
+                <input type="text" id="eqtl-search" class="filter-select" placeholder="Search gene or SNP..." onchange="AtlasDetailPage.updateEqtlPlot()">
+            </div>
+            <div id="eqtl-table" style="margin-top: 1rem;"></div>
+            <div id="eqtl-plot" class="plot-container" style="height: 400px;"></div>
+        `;
+
+        await this.populateEqtlDropdowns();
+        await this.updateEqtlPlot();
+    },
+
+    // ==================== Inflammation Tab Loaders ====================
+
+    async loadInflammationTab(tabId, content) {
+        switch (tabId) {
+            case 'celltypes':
+                await this.loadInflamCelltypes(content);
+                break;
+            case 'age-bmi':
+                await this.loadInflamAgeBmi(content);
+                break;
+            case 'age-bmi-stratified':
+                await this.loadInflamAgeBmiStratified(content);
+                break;
+            case 'disease':
+                await this.loadInflamDisease(content);
+                break;
+            case 'differential':
+                await this.loadInflamDifferential(content);
+                break;
+            case 'treatment':
+                await this.loadInflamTreatment(content);
+                break;
+            case 'sankey':
+                await this.loadInflamSankey(content);
+                break;
+            case 'validation':
+                await this.loadInflamValidation(content);
+                break;
+            case 'longitudinal':
+                await this.loadInflamLongitudinal(content);
+                break;
+            case 'severity':
+                await this.loadInflamSeverity(content);
+                break;
+            case 'drivers':
+                await this.loadInflamDrivers(content);
+                break;
+            default:
+                content.innerHTML = '<p>Panel not implemented</p>';
+        }
+    },
+
+    async loadInflamCelltypes(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Cell Type Activity Heatmap</h3>
+                <p>Mean ${this.signatureType} activity z-scores across cell types in inflammatory diseases</p>
+            </div>
+            <div id="inflam-celltype-heatmap" class="plot-container" style="height: 600px;"></div>
+        `;
+
+        const data = await API.get('/inflammation/activity/heatmap', { signature_type: this.signatureType });
+        if (data && data.z) {
+            Heatmap.createActivityHeatmap('inflam-celltype-heatmap', data, {
+                title: `${this.signatureType} Activity by Cell Type`,
+            });
+        } else {
+            document.getElementById('inflam-celltype-heatmap').innerHTML = '<p class="loading">No data available</p>';
+        }
+    },
+
+    async loadInflamAgeBmi(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Age & BMI Correlations</h3>
+                <p>Spearman correlation between signature activities and age/BMI in disease cohorts</p>
+            </div>
+            <div class="viz-grid">
+                <div id="inflam-age-corr" class="plot-container" style="height: 500px;"></div>
+                <div id="inflam-bmi-corr" class="plot-container" style="height: 500px;"></div>
+            </div>
+        `;
+
+        const [ageData, bmiData] = await Promise.all([
+            API.get('/inflammation/correlations/age', { signature_type: this.signatureType }),
+            API.get('/inflammation/correlations/bmi', { signature_type: this.signatureType }),
+        ]);
+
+        if (ageData && ageData.length > 0) {
+            this.renderCorrelationHeatmap('inflam-age-corr', ageData, 'Age Correlation');
+        }
+        if (bmiData && bmiData.length > 0) {
+            this.renderCorrelationHeatmap('inflam-bmi-corr', bmiData, 'BMI Correlation');
+        }
+    },
+
+    async loadInflamAgeBmiStratified(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Age/BMI Stratified Activity</h3>
+                <p>Activity distribution across age groups and BMI categories per cell type</p>
+            </div>
+            <div class="stratified-controls">
+                <select id="inflam-strat-variable" class="filter-select" onchange="AtlasDetailPage.updateInflamStratifiedPlot()">
+                    <option value="age">Age Groups</option>
+                    <option value="bmi">BMI Categories</option>
+                </select>
+                <select id="inflam-strat-celltype" class="filter-select" onchange="AtlasDetailPage.updateInflamStratifiedPlot()">
+                    <option value="">All Cell Types</option>
+                </select>
+                <select id="inflam-strat-signature" class="filter-select" onchange="AtlasDetailPage.updateInflamStratifiedPlot()">
+                    <option value="IFNG">IFNG</option>
+                </select>
+            </div>
+            <div id="inflam-stratified-plot" class="plot-container" style="height: 500px;"></div>
+        `;
+
+        await this.updateInflamStratifiedPlot();
+    },
+
+    async loadInflamDisease(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Disease-Specific Activity</h3>
+                <p>Cytokine activity patterns across inflammatory diseases</p>
+            </div>
+            <div class="disease-controls">
+                <select id="disease-select" class="filter-select" onchange="AtlasDetailPage.updateDiseaseHeatmap()">
+                    <option value="">All Diseases</option>
+                </select>
+            </div>
+            <div id="disease-heatmap" class="plot-container" style="height: 600px;"></div>
+        `;
+
+        await this.populateDiseaseDropdown();
+        await this.updateDiseaseHeatmap();
+    },
+
+    async loadInflamDifferential(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Disease Differential Analysis</h3>
+                <p>Volcano plot showing disease vs healthy activity changes</p>
+            </div>
+            <div class="differential-controls">
+                <select id="inflam-diff-disease" class="filter-select" onchange="AtlasDetailPage.updateInflamDifferential()">
+                    <option value="">Select Disease</option>
+                </select>
+            </div>
+            <div id="inflam-volcano" class="plot-container" style="height: 500px;"></div>
+        `;
+
+        await this.populateDiseaseDropdown('inflam-diff-disease');
+        await this.updateInflamDifferential();
+    },
+
+    async loadInflamTreatment(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Treatment Response Prediction</h3>
+                <p>ROC curves from cross-validated response prediction models</p>
+            </div>
+            <div class="treatment-controls">
+                <select id="treatment-disease" class="filter-select" onchange="AtlasDetailPage.updateTreatmentResponse()">
+                    <option value="">All Diseases</option>
+                </select>
+            </div>
+            <div id="treatment-roc" class="plot-container" style="height: 500px;"></div>
+            <div id="treatment-features" class="plot-container" style="height: 400px;"></div>
+        `;
+
+        await this.updateTreatmentResponse();
+    },
+
+    async loadInflamSankey(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Disease Flow Diagram</h3>
+                <p>Sample distribution across disease categories and treatment outcomes</p>
+            </div>
+            <div id="disease-sankey" class="plot-container" style="height: 600px;"></div>
+        `;
+
+        const data = await API.get('/inflammation/disease-sankey');
+        if (data) {
+            this.renderSankeyDiagram('disease-sankey', data);
+        } else {
+            document.getElementById('disease-sankey').innerHTML = '<p class="loading">No Sankey data available</p>';
+        }
+    },
+
+    async loadInflamValidation(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Cross-Cohort Validation</h3>
+                <p>Consistency of findings across main, validation, and external cohorts</p>
+            </div>
+            <div id="cohort-validation" class="plot-container" style="height: 500px;"></div>
+        `;
+
+        const data = await API.get('/inflammation/cohort-validation', { signature_type: this.signatureType });
+        if (data) {
+            this.renderCohortValidation('cohort-validation', data);
+        } else {
+            document.getElementById('cohort-validation').innerHTML = '<p class="loading">No validation data available</p>';
+        }
+    },
+
+    async loadInflamLongitudinal(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Longitudinal Analysis</h3>
+                <p>Activity changes over time for patients with multiple timepoints</p>
+            </div>
+            <div id="longitudinal-plot" class="plot-container" style="height: 500px;">
+                <p class="loading">Longitudinal analysis coming soon</p>
+            </div>
+        `;
+    },
+
+    async loadInflamSeverity(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Disease Severity Correlation</h3>
+                <p>Correlation between cytokine activity and disease severity scores</p>
+            </div>
+            <div id="severity-plot" class="plot-container" style="height: 500px;">
+                <p class="loading">Severity correlation coming soon</p>
+            </div>
+        `;
+    },
+
+    async loadInflamDrivers(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Cell Type Drivers</h3>
+                <p>Identification of cell populations driving disease-specific signatures</p>
+            </div>
+            <div id="drivers-plot" class="plot-container" style="height: 500px;">
+                <p class="loading">Cell drivers analysis coming soon</p>
+            </div>
+        `;
+    },
+
+    // ==================== scAtlas Tab Loaders ====================
+
+    async loadScatlasTab(tabId, content) {
+        switch (tabId) {
+            case 'organ-map':
+                await this.loadScatlasOrganMap(content);
+                break;
+            case 'celltype-heatmap':
+                await this.loadScatlasCelltypes(content);
+                break;
+            case 'cancer-comparison':
+                await this.loadScatlasCancerComparison(content);
+                break;
+            case 'cancer-types':
+                await this.loadScatlasCancerTypes(content);
+                break;
+            case 'immune-infiltration':
+                await this.loadScatlasImmuneInfiltration(content);
+                break;
+            case 'exhaustion':
+                await this.loadScatlasExhaustion(content);
+                break;
+            case 'caf':
+                await this.loadScatlasCaf(content);
+                break;
+            case 'organ-cancer-matrix':
+                await this.loadScatlasOrganCancerMatrix(content);
+                break;
+            case 'adjacent-tissue':
+                await this.loadScatlasAdjacentTissue(content);
+                break;
+            default:
+                content.innerHTML = '<p>Panel not implemented</p>';
+        }
+    },
+
+    async loadScatlasOrganMap(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Organ-Specific Activity</h3>
+                <p>Mean cytokine activity across 35 human organs</p>
+            </div>
+            <div class="organ-controls">
+                <select id="organ-signature" class="filter-select" onchange="AtlasDetailPage.updateOrganMap()">
+                    <option value="IFNG">IFNG</option>
+                </select>
+            </div>
+            <div id="organ-bar" class="plot-container" style="height: 500px;"></div>
+            <div id="organ-heatmap" class="plot-container" style="height: 600px;"></div>
+        `;
+
+        await this.populateSignatureDropdown('organ-signature');
+        await this.updateOrganMap();
+    },
+
+    async loadScatlasCelltypes(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Cell Type Heatmap</h3>
+                <p>Activity across cell types (top 100 most variable)</p>
+            </div>
+            <div id="scatlas-celltype-heatmap" class="plot-container" style="height: 700px;"></div>
+        `;
+
+        const data = await API.get('/scatlas/activity/heatmap', { signature_type: this.signatureType, top_n: 100 });
+        if (data && data.z) {
+            Heatmap.createActivityHeatmap('scatlas-celltype-heatmap', data, {
+                title: `${this.signatureType} Activity by Cell Type`,
+            });
+        } else {
+            document.getElementById('scatlas-celltype-heatmap').innerHTML = '<p class="loading">No data available</p>';
+        }
+    },
+
+    async loadScatlasCancerComparison(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Tumor vs Adjacent Normal</h3>
+                <p>Activity changes in tumor microenvironment compared to adjacent normal tissue</p>
+            </div>
+            <div id="cancer-comparison-plot" class="plot-container" style="height: 600px;"></div>
+        `;
+
+        const data = await API.get('/scatlas/cancer-comparison', { signature_type: this.signatureType });
+        if (data && data.z) {
+            Heatmap.create('cancer-comparison-plot', data, {
+                title: 'Tumor vs Adjacent (Log2 Fold Change)',
+                colorbarTitle: 'Log2 FC',
+                symmetric: true,
+            });
+        } else {
+            document.getElementById('cancer-comparison-plot').innerHTML = '<p class="loading">No cancer comparison data available</p>';
+        }
+    },
+
+    async loadScatlasCancerTypes(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Cancer Type Signatures</h3>
+                <p>Activity patterns across different cancer types</p>
+            </div>
+            <div id="cancer-types-heatmap" class="plot-container" style="height: 600px;">
+                <p class="loading">Cancer types heatmap coming soon</p>
+            </div>
+        `;
+    },
+
+    async loadScatlasImmuneInfiltration(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Immune Infiltration</h3>
+                <p>Immune cell composition in tumor microenvironment</p>
+            </div>
+            <div id="immune-infiltration-plot" class="plot-container" style="height: 500px;">
+                <p class="loading">Immune infiltration analysis coming soon</p>
+            </div>
+        `;
+    },
+
+    async loadScatlasExhaustion(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>T Cell Exhaustion</h3>
+                <p>Exhaustion signatures in tumor-infiltrating T cells</p>
+            </div>
+            <div id="exhaustion-plot" class="plot-container" style="height: 500px;">
+                <p class="loading">T cell exhaustion analysis coming soon</p>
+            </div>
+        `;
+    },
+
+    async loadScatlasCaf(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Cancer-Associated Fibroblast Types</h3>
+                <p>CAF classification and cytokine signatures</p>
+            </div>
+            <div id="caf-plot" class="plot-container" style="height: 500px;">
+                <p class="loading">CAF classification coming soon</p>
+            </div>
+        `;
+    },
+
+    async loadScatlasOrganCancerMatrix(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Organ-Cancer Matrix</h3>
+                <p>Cross-tabulation of cytokine patterns by organ and cancer type</p>
+            </div>
+            <div id="organ-cancer-matrix" class="plot-container" style="height: 600px;">
+                <p class="loading">Organ-cancer matrix coming soon</p>
+            </div>
+        `;
+    },
+
+    async loadScatlasAdjacentTissue(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>Adjacent Tissue Analysis</h3>
+                <p>Comparison of tumor-adjacent tissue with matched normal</p>
+            </div>
+            <div id="adjacent-tissue-plot" class="plot-container" style="height: 500px;">
+                <p class="loading">Adjacent tissue analysis coming soon</p>
+            </div>
+        `;
+    },
+
+    // ==================== Helper Functions ====================
+
+    renderCorrelationHeatmap(containerId, data, title) {
+        // Group data by cell type and signature
+        const cellTypes = [...new Set(data.map(d => d.cell_type))];
+        const signatures = [...new Set(data.map(d => d.signature || d.protein))];
+
+        const z = cellTypes.map(ct =>
+            signatures.map(sig => {
+                const item = data.find(d => d.cell_type === ct && (d.signature === sig || d.protein === sig));
+                return item ? item.correlation : 0;
+            })
+        );
+
+        Heatmap.create(containerId, {
+            z, x: signatures, y: cellTypes,
+            colorscale: 'RdBu', reversescale: true,
+        }, {
+            title,
+            xLabel: 'Signature',
+            yLabel: 'Cell Type',
+            colorbarTitle: 'Correlation (r)',
+            symmetric: true,
+        });
+    },
+
+    renderBiochemHeatmap(containerId, data) {
+        // Group by signature and biochem marker
+        const signatures = [...new Set(data.map(d => d.signature || d.protein))];
+        const markers = [...new Set(data.map(d => d.variable || d.marker))];
+
+        const z = signatures.map(sig =>
+            markers.map(m => {
+                const item = data.find(d => (d.signature === sig || d.protein === sig) && (d.variable === m || d.marker === m));
+                return item ? item.correlation : 0;
+            })
+        );
+
+        Heatmap.create(containerId, {
+            z, x: markers, y: signatures,
+            colorscale: 'RdBu', reversescale: true,
+        }, {
+            title: 'Biochemistry Correlations',
+            xLabel: 'Biochemistry Marker',
+            yLabel: 'Signature',
+            colorbarTitle: 'Correlation (r)',
+            symmetric: true,
+        });
+    },
+
+    renderMetaboliteHeatmap(containerId, data) {
+        if (data.z) {
+            Heatmap.create(containerId, data, {
+                title: 'Top Metabolite Correlations',
+                colorbarTitle: 'Correlation (r)',
+                symmetric: true,
+            });
+        }
+    },
+
+    renderPopulationViz(containerId, data) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        if (data.groups && data.values) {
+            Scatter.createBoxPlot(containerId, data, {
+                title: 'Population Stratification',
+                yLabel: 'Activity (z-score)',
+            });
+        } else {
+            container.innerHTML = '<p class="loading">No population data</p>';
+        }
+    },
+
+    renderSankeyDiagram(containerId, data) {
+        const container = document.getElementById(containerId);
+        if (!container || !data.nodes || !data.links) {
+            container.innerHTML = '<p class="loading">No Sankey data</p>';
+            return;
+        }
+
+        const trace = {
+            type: 'sankey',
+            orientation: 'h',
+            node: {
+                pad: 15,
+                thickness: 20,
+                line: { color: 'black', width: 0.5 },
+                label: data.nodes.map(n => n.name || n),
+                color: data.nodes.map((n, i) => `hsl(${(i * 30) % 360}, 70%, 50%)`),
+            },
+            link: {
+                source: data.links.map(l => l.source),
+                target: data.links.map(l => l.target),
+                value: data.links.map(l => l.value),
+            },
+        };
+
+        Plotly.newPlot(containerId, [trace], {
+            title: 'Disease Flow',
+            font: { family: 'Inter, sans-serif' },
+        });
+    },
+
+    renderCohortValidation(containerId, data) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        if (data.cohorts && data.correlations) {
+            Plotly.newPlot(containerId, [{
+                x: data.cohorts,
+                y: data.correlations,
+                type: 'bar',
+                marker: { color: '#2563eb' },
+            }], {
+                title: 'Cross-Cohort Correlation',
+                xaxis: { title: 'Cohort Pair' },
+                yaxis: { title: 'Correlation (r)', range: [0, 1] },
+            });
+        } else {
+            container.innerHTML = '<p class="loading">No validation data</p>';
+        }
+    },
+
+    async populateStratifiedDropdowns() {
+        try {
+            const [cellTypes, signatures] = await Promise.all([
+                API.get('/cima/cell-types'),
+                API.get('/cima/signatures', { signature_type: this.signatureType }),
+            ]);
+
+            const ctSelect = document.getElementById('stratified-celltype');
             const sigSelect = document.getElementById('stratified-signature');
 
-            if (cellTypes && cellTypeSelect) {
+            if (cellTypes && ctSelect) {
                 cellTypes.forEach(ct => {
-                    cellTypeSelect.innerHTML += `<option value="${ct}">${ct}</option>`;
+                    ctSelect.innerHTML += `<option value="${ct}">${ct}</option>`;
                 });
             }
 
             if (signatures && sigSelect) {
-                signatures.forEach(sig => {
-                    sigSelect.innerHTML += `<option value="${sig}">${sig}</option>`;
-                });
+                sigSelect.innerHTML = signatures.map(s => `<option value="${s}">${s}</option>`).join('');
             }
         } catch (e) {
-            console.warn('Failed to load filter options:', e);
+            console.warn('Failed to populate stratified dropdowns:', e);
         }
-
-        // Load initial data
-        await this.updateStratifiedPlot();
     },
 
-    /**
-     * Update stratified plot based on selections
-     */
+    async populateSignatureDropdown(selectId) {
+        try {
+            const signatures = await API.get(`/${this.currentAtlas}/signatures`, { signature_type: this.signatureType });
+            const select = document.getElementById(selectId);
+            if (signatures && select) {
+                select.innerHTML = signatures.map(s => `<option value="${s}">${s}</option>`).join('');
+            }
+        } catch (e) {
+            console.warn('Failed to populate signature dropdown:', e);
+        }
+    },
+
+    async populateDiseaseDropdown(selectId = 'disease-select') {
+        try {
+            const diseases = await API.get('/inflammation/diseases');
+            const select = document.getElementById(selectId);
+            if (diseases && select) {
+                select.innerHTML = '<option value="">All Diseases</option>' +
+                    diseases.map(d => `<option value="${d}">${d}</option>`).join('');
+            }
+        } catch (e) {
+            console.warn('Failed to populate disease dropdown:', e);
+        }
+    },
+
+    async populateBiochemDropdowns() {
+        try {
+            const markers = await API.get('/cima/biochemistry-markers');
+            const signatures = await API.get('/cima/signatures', { signature_type: this.signatureType });
+
+            const markerSelect = document.getElementById('biochem-marker');
+            const sigSelect = document.getElementById('biochem-signature');
+
+            if (markers && markerSelect) {
+                markerSelect.innerHTML = '<option value="">Select Marker</option>' +
+                    markers.map(m => `<option value="${m}">${m}</option>`).join('');
+            }
+            if (signatures && sigSelect) {
+                sigSelect.innerHTML = signatures.map(s => `<option value="${s}">${s}</option>`).join('');
+            }
+        } catch (e) {
+            console.warn('Failed to populate biochem dropdowns:', e);
+        }
+    },
+
+    async populateEqtlDropdowns() {
+        try {
+            const signatures = await API.get('/cima/signatures', { signature_type: 'CytoSig' });
+            const select = document.getElementById('eqtl-signature');
+            if (signatures && select) {
+                select.innerHTML = signatures.map(s => `<option value="${s}">${s}</option>`).join('');
+            }
+        } catch (e) {
+            console.warn('Failed to populate eQTL dropdowns:', e);
+        }
+    },
+
+    // Update functions for interactive controls
     async updateStratifiedPlot() {
         const variable = document.getElementById('stratified-variable')?.value || 'age';
         const cellType = document.getElementById('stratified-celltype')?.value;
-        const signature = document.getElementById('stratified-signature')?.value;
+        const signature = document.getElementById('stratified-signature')?.value || 'IFNG';
 
         const plotContainer = document.getElementById('stratified-plot');
         if (!plotContainer) return;
 
-        plotContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
-
         try {
-            let data;
-            if (this.currentAtlas === 'cima') {
-                data = await API.getCimaAgeBmiStratified({
-                    variable,
-                    cell_type: cellType,
-                    signature,
-                    signature_type: this.signatureType,
-                });
-            } else if (this.currentAtlas === 'inflammation') {
-                data = await API.getInflammationAgeBmiStratified({
-                    variable,
-                    cell_type: cellType,
-                    signature,
-                    signature_type: this.signatureType,
-                });
-            }
+            const data = await API.get('/cima/age-bmi-stratified', {
+                variable, cell_type: cellType, signature, signature_type: this.signatureType,
+            });
 
             if (data && data.groups && data.values) {
                 Scatter.createBoxPlot('stratified-plot', data, {
@@ -305,248 +1050,257 @@ const AtlasDetailPage = {
             } else {
                 plotContainer.innerHTML = '<p class="loading">No stratified data available</p>';
             }
-        } catch (error) {
-            plotContainer.innerHTML = `<p class="loading">Error loading data: ${error.message}</p>`;
+        } catch (e) {
+            plotContainer.innerHTML = `<p class="loading">Error: ${e.message}</p>`;
         }
     },
 
-    /**
-     * Load biochemistry correlations (CIMA)
-     */
-    async loadBiochemistry(container) {
-        container.innerHTML = `
-            <div class="panel-header">
-                <h3>Biochemistry Correlations</h3>
-                <p>Correlation between cytokine activity and blood biochemistry markers</p>
-            </div>
-            <div id="biochem-heatmap" class="plot-container"></div>
-        `;
+    async updateInflamStratifiedPlot() {
+        const variable = document.getElementById('inflam-strat-variable')?.value || 'age';
+        const cellType = document.getElementById('inflam-strat-celltype')?.value;
+        const signature = document.getElementById('inflam-strat-signature')?.value || 'IFNG';
+
+        const plotContainer = document.getElementById('inflam-stratified-plot');
+        if (!plotContainer) return;
 
         try {
-            const data = await API.getCimaCorrelations('biochemistry', {
-                signature_type: this.signatureType,
+            const data = await API.get('/inflammation/age-bmi-stratified', {
+                variable, cell_type: cellType, signature, signature_type: this.signatureType,
             });
 
-            if (data && data.z) {
-                Heatmap.createCorrelationHeatmap('biochem-heatmap', data, {
-                    title: 'Biochemistry Correlations',
-                    xLabel: 'Biochemistry Marker',
-                    yLabel: 'Signature',
+            if (data && data.groups && data.values) {
+                Scatter.createBoxPlot('inflam-stratified-plot', data, {
+                    title: variable === 'age' ? 'Activity by Age Group' : 'Activity by BMI Category',
+                    yLabel: 'Activity (z-score)',
+                    showPoints: true,
                 });
             } else {
-                document.getElementById('biochem-heatmap').innerHTML = '<p class="loading">No biochemistry data available</p>';
+                plotContainer.innerHTML = '<p class="loading">No stratified data available</p>';
             }
-        } catch (error) {
-            document.getElementById('biochem-heatmap').innerHTML = '<p class="loading">Failed to load biochemistry data</p>';
+        } catch (e) {
+            plotContainer.innerHTML = `<p class="loading">Error: ${e.message}</p>`;
         }
-    },
-
-    /**
-     * Load metabolite correlations (CIMA)
-     */
-    async loadMetabolites(container) {
-        container.innerHTML = `
-            <div class="panel-header">
-                <h3>Metabolite Correlations</h3>
-                <p>Top correlations with plasma metabolites and lipids</p>
-            </div>
-            <div id="metabolite-heatmap" class="plot-container"></div>
-        `;
-
-        try {
-            const data = await API.getCimaMetabolites({
-                signature_type: this.signatureType,
-                top_n: 50,
-            });
-
-            if (data && data.z) {
-                Heatmap.createCorrelationHeatmap('metabolite-heatmap', data, {
-                    title: 'Metabolite Correlations',
-                });
-            } else {
-                document.getElementById('metabolite-heatmap').innerHTML = '<p class="loading">No metabolite data available</p>';
-            }
-        } catch (error) {
-            document.getElementById('metabolite-heatmap').innerHTML = '<p class="loading">Failed to load metabolite data</p>';
-        }
-    },
-
-    /**
-     * Load differential analysis (CIMA)
-     */
-    async loadDifferential(container) {
-        container.innerHTML = `
-            <div class="panel-header">
-                <h3>Differential Analysis</h3>
-                <p>Activity differences by sex, smoking status, and blood type</p>
-            </div>
-            <div class="differential-controls">
-                <select id="diff-variable" class="filter-select" onchange="AtlasDetailPage.updateDifferentialPlot()">
-                    <option value="sex">Sex</option>
-                    <option value="smoking">Smoking Status</option>
-                    <option value="blood_type">Blood Type</option>
-                </select>
-            </div>
-            <div id="differential-heatmap" class="plot-container"></div>
-        `;
-
-        await this.updateDifferentialPlot();
     },
 
     async updateDifferentialPlot() {
-        const variable = document.getElementById('diff-variable')?.value || 'sex';
+        const comparison = document.getElementById('diff-comparison')?.value || 'sex';
+        const plotContainer = document.getElementById('differential-volcano');
+        if (!plotContainer) return;
 
         try {
-            const data = await API.getCimaDifferential({
-                variable,
-                signature_type: this.signatureType,
+            const data = await API.get('/cima/differential', {
+                comparison, signature_type: this.signatureType,
             });
 
-            if (data && data.z) {
-                Heatmap.create('differential-heatmap', data, {
-                    title: `Differential by ${variable}`,
-                    colorbarTitle: 'Effect Size',
-                    symmetric: true,
-                });
-            } else {
-                document.getElementById('differential-heatmap').innerHTML = '<p class="loading">No differential data available</p>';
-            }
-        } catch (error) {
-            document.getElementById('differential-heatmap').innerHTML = '<p class="loading">Failed to load differential data</p>';
-        }
-    },
+            if (data && data.length > 0) {
+                // Volcano plot
+                const x = data.map(d => d.log2fc || d.effect_size || 0);
+                const y = data.map(d => -Math.log10(d.pvalue || d.p_value || 1));
+                const labels = data.map(d => d.signature || d.protein);
 
-    /**
-     * Load disease differential (Inflammation)
-     */
-    async loadDiseaseDifferential(container) {
-        container.innerHTML = `
-            <div class="panel-header">
-                <h3>Disease Differential</h3>
-                <p>Activity differences in disease vs healthy</p>
-            </div>
-            <div id="disease-heatmap" class="plot-container"></div>
-        `;
-
-        try {
-            const data = await API.getInflammationDifferential({
-                signature_type: this.signatureType,
-            });
-
-            if (data && data.z) {
-                Heatmap.create('disease-heatmap', data, {
-                    title: 'Disease vs Healthy',
-                    colorbarTitle: 'Log2 Fold Change',
-                    symmetric: true,
-                });
-            } else {
-                document.getElementById('disease-heatmap').innerHTML = '<p class="loading">No disease differential data available</p>';
-            }
-        } catch (error) {
-            document.getElementById('disease-heatmap').innerHTML = '<p class="loading">Failed to load disease data</p>';
-        }
-    },
-
-    /**
-     * Load treatment prediction (Inflammation)
-     */
-    async loadTreatmentPrediction(container) {
-        container.innerHTML = `
-            <div class="panel-header">
-                <h3>Treatment Response Prediction</h3>
-                <p>Predictive performance for treatment response</p>
-            </div>
-            <div id="treatment-plot" class="plot-container"></div>
-        `;
-
-        try {
-            const data = await API.getInflammationPrediction({
-                signature_type: this.signatureType,
-            });
-
-            if (data) {
-                // Render as bar chart of AUC values
-                const diseases = Object.keys(data);
-                const aucs = diseases.map(d => data[d]?.auc || 0);
-
-                Plotly.newPlot('treatment-plot', [{
-                    x: diseases,
-                    y: aucs,
-                    type: 'bar',
-                    marker: { color: '#2563eb' },
+                Plotly.newPlot('differential-volcano', [{
+                    x, y, text: labels,
+                    mode: 'markers',
+                    type: 'scatter',
+                    marker: {
+                        color: x.map(v => v > 0 ? '#ef4444' : '#2563eb'),
+                        size: 8,
+                    },
+                    hovertemplate: '%{text}<br>Log2FC: %{x:.2f}<br>-log10(p): %{y:.2f}<extra></extra>',
                 }], {
-                    title: 'Treatment Response Prediction (AUC)',
-                    xaxis: { title: 'Disease' },
-                    yaxis: { title: 'AUC', range: [0, 1] },
-                    margin: { l: 60, r: 30, t: 50, b: 100 },
+                    title: `Differential Analysis: ${comparison}`,
+                    xaxis: { title: 'Log2 Fold Change', zeroline: true },
+                    yaxis: { title: '-log10(p-value)' },
+                    shapes: [
+                        { type: 'line', x0: 0, x1: 0, y0: 0, y1: Math.max(...y), line: { dash: 'dash', color: 'gray' } },
+                        { type: 'line', x0: Math.min(...x), x1: Math.max(...x), y0: -Math.log10(0.05), y1: -Math.log10(0.05), line: { dash: 'dash', color: 'red' } },
+                    ],
                 });
             } else {
-                document.getElementById('treatment-plot').innerHTML = '<p class="loading">No treatment prediction data available</p>';
+                plotContainer.innerHTML = '<p class="loading">No differential data available</p>';
             }
-        } catch (error) {
-            document.getElementById('treatment-plot').innerHTML = '<p class="loading">Failed to load treatment data</p>';
+        } catch (e) {
+            plotContainer.innerHTML = `<p class="loading">Error: ${e.message}</p>`;
         }
     },
 
-    /**
-     * Load organ signatures (scAtlas)
-     */
-    async loadOrganSignatures(container) {
-        container.innerHTML = `
-            <div class="panel-header">
-                <h3>Organ-Specific Signatures</h3>
-                <p>Top cytokine signatures by organ</p>
-            </div>
-            <div id="organ-heatmap" class="plot-container"></div>
-        `;
+    async updateDiseaseHeatmap() {
+        const disease = document.getElementById('disease-select')?.value;
+        const plotContainer = document.getElementById('disease-heatmap');
+        if (!plotContainer) return;
 
         try {
-            const data = await API.getScatlasActivity({
-                signature_type: this.signatureType,
-                group_by: 'organ',
+            const data = await API.get('/inflammation/disease-activity', {
+                disease, signature_type: this.signatureType,
             });
 
             if (data && data.z) {
-                Heatmap.createActivityHeatmap('organ-heatmap', data, {
-                    title: 'Organ Signatures',
-                    yLabel: 'Organ',
+                Heatmap.createActivityHeatmap('disease-heatmap', data, {
+                    title: disease || 'All Diseases',
                 });
             } else {
-                document.getElementById('organ-heatmap').innerHTML = '<p class="loading">No organ data available</p>';
+                plotContainer.innerHTML = '<p class="loading">No disease data available</p>';
             }
-        } catch (error) {
-            document.getElementById('organ-heatmap').innerHTML = '<p class="loading">Failed to load organ data</p>';
+        } catch (e) {
+            plotContainer.innerHTML = `<p class="loading">Error: ${e.message}</p>`;
         }
     },
 
-    /**
-     * Load cell type signatures (scAtlas)
-     */
-    async loadCellTypeSignatures(container) {
-        container.innerHTML = `
-            <div class="panel-header">
-                <h3>Cell Type Signatures</h3>
-                <p>Activity patterns across cell types</p>
-            </div>
-            <div id="celltype-heatmap" class="plot-container"></div>
-        `;
+    async updateInflamDifferential() {
+        const disease = document.getElementById('inflam-diff-disease')?.value;
+        const plotContainer = document.getElementById('inflam-volcano');
+        if (!plotContainer) return;
 
         try {
-            const data = await API.getScatlasActivity({
-                signature_type: this.signatureType,
-                group_by: 'cell_type',
-                top_n: 50,
+            const data = await API.get('/inflammation/disease-differential', {
+                disease, signature_type: this.signatureType,
             });
 
-            if (data && data.z) {
-                Heatmap.createActivityHeatmap('celltype-heatmap', data, {
-                    title: 'Cell Type Signatures',
+            if (data && data.length > 0) {
+                const x = data.map(d => d.log2fc || 0);
+                const y = data.map(d => -Math.log10(d.pvalue || 1));
+                const labels = data.map(d => d.signature || d.protein);
+
+                Plotly.newPlot('inflam-volcano', [{
+                    x, y, text: labels,
+                    mode: 'markers',
+                    type: 'scatter',
+                    marker: { color: x.map(v => v > 0 ? '#ef4444' : '#2563eb'), size: 8 },
+                    hovertemplate: '%{text}<br>Log2FC: %{x:.2f}<br>-log10(p): %{y:.2f}<extra></extra>',
+                }], {
+                    title: `Disease vs Healthy: ${disease || 'All'}`,
+                    xaxis: { title: 'Log2 Fold Change', zeroline: true },
+                    yaxis: { title: '-log10(p-value)' },
                 });
             } else {
-                document.getElementById('celltype-heatmap').innerHTML = '<p class="loading">No cell type data available</p>';
+                plotContainer.innerHTML = '<p class="loading">No differential data available</p>';
             }
-        } catch (error) {
-            document.getElementById('celltype-heatmap').innerHTML = '<p class="loading">Failed to load cell type data</p>';
+        } catch (e) {
+            plotContainer.innerHTML = `<p class="loading">Error: ${e.message}</p>`;
+        }
+    },
+
+    async updateTreatmentResponse() {
+        const disease = document.getElementById('treatment-disease')?.value;
+        const rocContainer = document.getElementById('treatment-roc');
+        if (!rocContainer) return;
+
+        try {
+            const data = await API.get('/inflammation/treatment-prediction', { disease });
+
+            if (data && data.roc_curves) {
+                // Plot ROC curves
+                const traces = Object.entries(data.roc_curves).map(([name, curve]) => ({
+                    x: curve.fpr,
+                    y: curve.tpr,
+                    name: `${name} (AUC=${curve.auc?.toFixed(2) || 'N/A'})`,
+                    mode: 'lines',
+                    type: 'scatter',
+                }));
+
+                Plotly.newPlot('treatment-roc', traces, {
+                    title: 'Treatment Response Prediction',
+                    xaxis: { title: 'False Positive Rate', range: [0, 1] },
+                    yaxis: { title: 'True Positive Rate', range: [0, 1] },
+                    shapes: [{
+                        type: 'line', x0: 0, x1: 1, y0: 0, y1: 1,
+                        line: { dash: 'dash', color: 'gray' },
+                    }],
+                });
+            } else {
+                rocContainer.innerHTML = '<p class="loading">No treatment response data available</p>';
+            }
+        } catch (e) {
+            rocContainer.innerHTML = `<p class="loading">Error: ${e.message}</p>`;
+        }
+    },
+
+    async updateOrganMap() {
+        const signature = document.getElementById('organ-signature')?.value || 'IFNG';
+
+        try {
+            const data = await API.get('/scatlas/organ-signatures', { signature_type: this.signatureType });
+
+            if (data && data.length > 0) {
+                // Filter for selected signature
+                const sigData = data.filter(d => d.signature === signature || d.protein === signature);
+
+                if (sigData.length > 0) {
+                    const organs = sigData.map(d => d.organ);
+                    const values = sigData.map(d => d.mean_activity || d.value);
+
+                    Plotly.newPlot('organ-bar', [{
+                        x: values,
+                        y: organs,
+                        type: 'bar',
+                        orientation: 'h',
+                        marker: { color: values.map(v => v > 0 ? '#ef4444' : '#2563eb') },
+                    }], {
+                        title: `${signature} Activity by Organ`,
+                        xaxis: { title: 'Mean Activity (z-score)' },
+                        margin: { l: 150 },
+                    });
+                }
+            }
+        } catch (e) {
+            document.getElementById('organ-bar').innerHTML = `<p class="loading">Error: ${e.message}</p>`;
+        }
+    },
+
+    async updateBiochemScatter() {
+        const marker = document.getElementById('biochem-marker')?.value;
+        const signature = document.getElementById('biochem-signature')?.value || 'IFNG';
+        const plotContainer = document.getElementById('biochem-scatter');
+        if (!plotContainer || !marker) return;
+
+        try {
+            const data = await API.get('/cima/biochem-scatter', { marker, signature });
+            if (data && data.x && data.y) {
+                Scatter.create('biochem-scatter', data, {
+                    title: `${signature} vs ${marker}`,
+                    xLabel: marker,
+                    yLabel: `${signature} Activity`,
+                    showTrendLine: true,
+                });
+            }
+        } catch (e) {
+            plotContainer.innerHTML = `<p class="loading">Error: ${e.message}</p>`;
+        }
+    },
+
+    async updateEqtlPlot() {
+        const signature = document.getElementById('eqtl-signature')?.value || 'IFNG';
+        const search = document.getElementById('eqtl-search')?.value || '';
+        const tableContainer = document.getElementById('eqtl-table');
+
+        try {
+            const data = await API.get('/cima/eqtl', { signature, search, limit: 20 });
+
+            if (data && data.length > 0) {
+                // Render as table
+                tableContainer.innerHTML = `
+                    <table class="validation-table">
+                        <thead>
+                            <tr><th>SNP</th><th>Gene</th><th>Beta</th><th>P-value</th><th>Distance</th></tr>
+                        </thead>
+                        <tbody>
+                            ${data.map(d => `
+                                <tr>
+                                    <td>${d.snp || d.variant}</td>
+                                    <td>${d.gene}</td>
+                                    <td>${d.beta?.toFixed(3) || 'N/A'}</td>
+                                    <td>${d.pvalue?.toExponential(2) || 'N/A'}</td>
+                                    <td>${d.distance?.toLocaleString() || 'N/A'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } else {
+                tableContainer.innerHTML = '<p class="loading">No eQTL data available</p>';
+            }
+        } catch (e) {
+            tableContainer.innerHTML = `<p class="loading">Error: ${e.message}</p>`;
         }
     },
 

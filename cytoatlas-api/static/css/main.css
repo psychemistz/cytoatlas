@@ -991,11 +991,29 @@ main {
 }
 
 .stratified-controls,
-.differential-controls {
+.differential-controls,
+.scatter-controls,
+.disease-controls,
+.organ-controls,
+.eqtl-controls,
+.treatment-controls {
     display: flex;
     gap: var(--spacing-md);
     margin-bottom: var(--spacing-lg);
     flex-wrap: wrap;
+}
+
+/* Visualization Grid */
+.viz-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--spacing-lg);
+}
+
+@media (max-width: 1024px) {
+    .viz-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* ==================== Responsive ==================== */
