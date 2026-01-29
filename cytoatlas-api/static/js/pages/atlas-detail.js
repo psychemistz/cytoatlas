@@ -1524,6 +1524,8 @@ const AtlasDetailPage = {
                             <option value="blood_type|O|B">O vs B</option>
                             <option value="blood_type|O|AB">O vs AB</option>
                             <option value="blood_type|B|A">B vs A</option>
+                            <option value="blood_type|B|AB">B vs AB</option>
+                            <option value="blood_type|A|AB">A vs AB</option>
                         </optgroup>
                     </select>
                 </div>
@@ -1556,81 +1558,134 @@ const AtlasDetailPage = {
         const data = this.differentialData;
         if (!data || data.length === 0) {
             document.getElementById('differential-volcano').innerHTML = '<p class="loading">No differential data</p>';
+            document.getElementById('differential-bar').innerHTML = '<p class="loading">No differential data</p>';
             return;
         }
 
         const comparisonValue = document.getElementById('diff-comparison')?.value || 'sex|Female|Male';
-        const [variable, group1, group2] = comparisonValue.split('|');
+        const [comparison, group1, group2] = comparisonValue.split('|');
 
-        // Filter data for this comparison
-        const filtered = data.filter(d => {
-            const comp = d.comparison || '';
-            return comp.includes(variable) || comp.toLowerCase().includes(group1.toLowerCase());
-        });
+        // Filter data by exact match of comparison, group1, group2
+        let filtered = data.filter(d =>
+            d.comparison === comparison &&
+            d.group1 === group1 &&
+            d.group2 === group2 &&
+            !isNaN(d.log2fc) &&
+            d.neg_log10_pval !== null && d.neg_log10_pval !== undefined
+        );
+
+        // For SecAct (many proteins), limit to top 200 by significance score
+        if (this.signatureType === 'SecAct' && filtered.length > 200) {
+            filtered = [...filtered].sort((a, b) => {
+                const scoreA = (a.neg_log10_pval || 0) * Math.abs(a.log2fc || 0);
+                const scoreB = (b.neg_log10_pval || 0) * Math.abs(b.log2fc || 0);
+                return scoreB - scoreA;
+            }).slice(0, 200);
+        }
 
         if (filtered.length === 0) {
-            document.getElementById('differential-volcano').innerHTML = '<p class="loading">No data for this comparison</p>';
+            document.getElementById('differential-volcano').innerHTML = `<p class="loading">No data for ${group1} vs ${group2}</p>`;
             document.getElementById('differential-bar').innerHTML = '';
             return;
         }
 
-        // Volcano plot
-        const log2fc = filtered.map(d => d.log2fc || d.effect_size || 0);
-        const negLogP = filtered.map(d => -Math.log10(d.pvalue || d.p_value || 1));
-        const signatures = filtered.map(d => d.signature || d.protein);
-        const significant = filtered.map(d => (d.qvalue || d.q_value || 1) < 0.05);
+        // Update subtitle
+        const subtitle = document.getElementById('volcano-subtitle');
+        if (subtitle) subtitle.textContent = `Positive log2FC = higher in ${group1}, Negative = higher in ${group2}`;
 
+        // Color by significance: significant (q<0.05 AND |log2FC|>0.5) = colored, otherwise gray
+        const colors = filtered.map(d => {
+            const qval = d.q_value ?? 1;
+            if (qval < 0.05 && Math.abs(d.log2fc) > 0.5) {
+                return d.log2fc > 0 ? '#f4a6a6' : '#a8d4e6';
+            }
+            return '#cccccc';
+        });
+
+        // Text labels for significant points only
+        const textLabels = filtered.map(d => {
+            const qval = d.q_value ?? 1;
+            if (qval < 0.05 && Math.abs(d.log2fc) > 0.5) {
+                return d.signature;
+            }
+            return '';
+        });
+
+        // Dynamic x-axis range
+        const maxAbsFC = Math.max(3, Math.ceil(Math.max(...filtered.map(d => Math.abs(d.log2fc || 0)))));
+        const maxNegLogP = Math.max(10, ...filtered.map(d => d.neg_log10_pval || 0));
+
+        // Volcano plot
         Plotly.newPlot('differential-volcano', [{
             type: 'scatter',
-            mode: 'markers',
-            x: log2fc,
-            y: negLogP,
-            text: signatures,
+            mode: 'markers+text',
+            x: filtered.map(d => d.log2fc),
+            y: filtered.map(d => d.neg_log10_pval),
+            text: textLabels,
+            customdata: filtered.map(d => d.signature),
             marker: {
-                size: 8,
-                color: significant.map(s => s ? '#ef4444' : '#999'),
+                size: 10,
+                color: colors,
                 opacity: 0.7
             },
-            hovertemplate: '<b>%{text}</b><br>log2FC: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
+            textposition: 'top center',
+            textfont: { size: 9 },
+            hovertemplate: '<b>%{customdata}</b><br>log2FC: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
         }], {
-            title: `${group1} vs ${group2}`,
-            xaxis: { title: 'log2 Fold Change', zeroline: true, zerolinecolor: '#ccc' },
+            xaxis: {
+                title: `log2 Fold Change (${group1} / ${group2})`,
+                zeroline: true,
+                zerolinecolor: '#ccc',
+                range: [-maxAbsFC, maxAbsFC]
+            },
             yaxis: { title: '-log10(p-value)' },
-            shapes: [{
-                type: 'line', x0: -10, x1: 10, y0: -Math.log10(0.05), y1: -Math.log10(0.05),
-                line: { color: 'red', dash: 'dash', width: 1 }
-            }],
-            margin: { l: 50, r: 20, t: 40, b: 50 },
+            shapes: [
+                // Horizontal line at p=0.05
+                { type: 'line', x0: -maxAbsFC, x1: maxAbsFC, y0: -Math.log10(0.05), y1: -Math.log10(0.05),
+                  line: { color: '#999', dash: 'dash', width: 1 } },
+                // Vertical lines at FC thresholds
+                { type: 'line', x0: -0.5, x1: -0.5, y0: 0, y1: maxNegLogP * 1.1,
+                  line: { color: '#999', dash: 'dash', width: 1 } },
+                { type: 'line', x0: 0.5, x1: 0.5, y0: 0, y1: maxNegLogP * 1.1,
+                  line: { color: '#999', dash: 'dash', width: 1 } }
+            ],
+            annotations: [
+                { x: -maxAbsFC * 0.8, y: -0.08, xref: 'x', yref: 'paper',
+                  text: `← Higher in ${group2}`, showarrow: false, font: { size: 11, color: '#a8d4e6' } },
+                { x: maxAbsFC * 0.8, y: -0.08, xref: 'x', yref: 'paper',
+                  text: `Higher in ${group1} →`, showarrow: false, font: { size: 11, color: '#f4a6a6' } }
+            ],
+            margin: { l: 60, r: 30, t: 30, b: 60 },
             font: { family: 'Inter, sans-serif' }
         }, { responsive: true });
 
-        // Bar chart - top differential
+        // Bar chart - top differential by significance score
         const scored = filtered.map(d => ({
             ...d,
-            score: Math.abs(d.log2fc || 0) * negLogP[filtered.indexOf(d)]
+            score: Math.abs(d.log2fc || 0) * (d.neg_log10_pval || 0)
         }));
         scored.sort((a, b) => b.score - a.score);
-        const top20 = scored.slice(0, 20);
+        const top20 = scored.slice(0, 20).reverse();  // Reverse for horizontal bar (top at top)
 
         Plotly.newPlot('differential-bar', [{
             type: 'bar',
-            y: top20.map(d => d.signature || d.protein).reverse(),
-            x: top20.map(d => d.log2fc || d.effect_size || 0).reverse(),
             orientation: 'h',
+            y: top20.map(d => d.signature),
+            x: top20.map(d => d.log2fc),
             marker: {
-                color: top20.map(d => (d.log2fc || 0) >= 0 ? '#ef4444' : '#2563eb').reverse()
+                color: top20.map(d => d.log2fc > 0 ? '#f4a6a6' : '#a8d4e6')
             },
-            hovertemplate: '<b>%{y}</b><br>log2FC: %{x:.3f}<extra></extra>'
+            text: top20.map(d => d.log2fc.toFixed(2)),
+            textposition: 'outside',
+            textfont: { size: 9 },
+            hovertemplate: '<b>%{y}</b><br>log2FC: %{x:.3f}<br>q = %{customdata}<extra></extra>',
+            customdata: top20.map(d => d.q_value?.toExponential(2) || 'N/A')
         }], {
-            title: 'Top 20 by Significance',
-            xaxis: { title: 'log2 Fold Change' },
-            margin: { l: 120, r: 20, t: 40, b: 50 },
+            xaxis: { title: 'log2 Fold Change', zeroline: true, zerolinecolor: '#ccc' },
+            yaxis: { automargin: true, tickfont: { size: 10 } },
+            margin: { l: 120, r: 50, t: 30, b: 50 },
             font: { family: 'Inter, sans-serif' }
         }, { responsive: true });
-
-        // Update subtitle
-        const subtitle = document.getElementById('volcano-subtitle');
-        if (subtitle) subtitle.textContent = `${group1} vs ${group2}: ${filtered.length} signatures tested`;
     },
 
     // Store population data
