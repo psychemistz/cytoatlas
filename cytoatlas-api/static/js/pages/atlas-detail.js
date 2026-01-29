@@ -1277,23 +1277,33 @@ const AtlasDetailPage = {
 
     async loadInflamCelltypes(content) {
         content.innerHTML = `
+            <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+                <div class="control-group">
+                    <label>Signature Type</label>
+                    <select id="inflam-ct-sig-type" class="filter-select" onchange="AtlasDetailPage.updateInflamCelltypes()">
+                        <option value="CytoSig">CytoSig (43 cytokines)</option>
+                        <option value="SecAct">SecAct (1,170 proteins)</option>
+                    </select>
+                </div>
+                <div class="control-group" style="position: relative;">
+                    <label>Search Signature</label>
+                    <input type="text" id="inflam-ct-search" class="search-input"
+                           placeholder="Type to search (e.g., IFNG, IL6)"
+                           value="IFNG"
+                           style="width: 180px;">
+                    <div id="inflam-ct-suggestions" style="position: absolute; top: 100%; left: 0; width: 180px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                </div>
+            </div>
+
             <div class="viz-grid">
                 <!-- Sub-panel 1: Activity Profile with Search -->
                 <div class="sub-panel">
                     <div class="panel-header">
                         <h3>Cell Type Activity Profile</h3>
-                        <p>Search and view activity of a specific ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'}</p>
-                    </div>
-                    <div class="search-controls">
-                        <input type="text" id="inflam-protein-search" class="search-input"
-                               placeholder="Search ${this.signatureType === 'CytoSig' ? 'cytokine (e.g., IFNG, IL17A, TNF)' : 'protein'}..."
-                               onkeyup="AtlasDetailPage.filterProteinList(this.value, 'inflammation')">
-                        <select id="inflam-protein-select" class="filter-select" onchange="AtlasDetailPage.updateInflamActivityProfile()">
-                            <option value="">Select ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'}...</option>
-                        </select>
+                        <p>Mean cytokine activity across immune cell populations</p>
                     </div>
                     <div id="inflam-activity-profile" class="plot-container" style="height: 450px;">
-                        <p class="loading">Select a ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'} to view its activity profile</p>
+                        <p class="loading">Loading...</p>
                     </div>
                 </div>
 
@@ -1301,90 +1311,232 @@ const AtlasDetailPage = {
                 <div class="sub-panel">
                     <div class="panel-header">
                         <h3>Activity Heatmap</h3>
-                        <p>Mean ${this.signatureType} activity z-scores across all cell types</p>
+                        <p>Top variable cell types × signatures</p>
                     </div>
                     <div id="inflam-celltype-heatmap" class="plot-container" style="height: 500px;"></div>
                 </div>
             </div>
         `;
 
-        // Load signatures for dropdown and heatmap data
-        const [signatures, heatmapData] = await Promise.all([
-            API.get('/cima/signatures', { signature_type: this.signatureType }), // Use CIMA signatures as reference
-            API.get('/inflammation/heatmap/activity', { signature_type: this.signatureType }),
-        ]);
+        // Load activity data for both viz
+        const activityData = await API.get('/inflammation/activity', { signature_type: 'CytoSig' });
+        this.inflamActivityData = { CytoSig: activityData };
 
-        // Populate protein dropdown
-        const select = document.getElementById('inflam-protein-select');
-        if (signatures && select) {
-            this.inflamSignatures = signatures;
-            select.innerHTML = `<option value="">Select ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'}...</option>` +
-                signatures.map(s => `<option value="${s}">${s}</option>`).join('');
+        // Get unique signatures for autocomplete
+        if (activityData && activityData.length > 0) {
+            this.inflamCTSignatures = {
+                CytoSig: [...new Set(activityData.map(d => d.signature))].sort(),
+                SecAct: [] // Will be loaded on demand
+            };
+        }
 
-            if (signatures.length > 0) {
-                select.value = signatures[0];
+        // Set up autocomplete
+        this.setupInflamCTAutocomplete();
+
+        // Initial render
+        this.updateInflamCelltypes();
+    },
+
+    setupInflamCTAutocomplete() {
+        const input = document.getElementById('inflam-ct-search');
+        const suggestionsDiv = document.getElementById('inflam-ct-suggestions');
+        if (!input || !suggestionsDiv) return;
+
+        input.addEventListener('focus', () => this.showInflamCTSuggestions());
+        input.addEventListener('input', () => this.showInflamCTSuggestions());
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                suggestionsDiv.style.display = 'none';
                 this.updateInflamActivityProfile();
+            }
+        });
+        input.addEventListener('blur', () => {
+            setTimeout(() => { suggestionsDiv.style.display = 'none'; }, 200);
+        });
+    },
+
+    showInflamCTSuggestions() {
+        const input = document.getElementById('inflam-ct-search');
+        const suggestionsDiv = document.getElementById('inflam-ct-suggestions');
+        if (!input || !suggestionsDiv) return;
+
+        const sigType = document.getElementById('inflam-ct-sig-type')?.value || 'CytoSig';
+        const signatures = this.inflamCTSignatures?.[sigType] || [];
+        const query = input.value.toLowerCase();
+
+        const filtered = signatures.filter(s => s.toLowerCase().includes(query)).slice(0, 15);
+
+        if (filtered.length === 0) {
+            suggestionsDiv.style.display = 'none';
+            return;
+        }
+
+        suggestionsDiv.innerHTML = filtered.map(s =>
+            `<div style="padding: 6px 10px; cursor: pointer; border-bottom: 1px solid #eee;"
+                 onmouseover="this.style.background='#f0f0f0'"
+                 onmouseout="this.style.background='white'"
+                 onclick="AtlasDetailPage.selectInflamCTSignature('${s}')">${s}</div>`
+        ).join('');
+        suggestionsDiv.style.display = 'block';
+    },
+
+    selectInflamCTSignature(sig) {
+        const input = document.getElementById('inflam-ct-search');
+        const suggestionsDiv = document.getElementById('inflam-ct-suggestions');
+        if (input) input.value = sig;
+        if (suggestionsDiv) suggestionsDiv.style.display = 'none';
+        this.updateInflamActivityProfile();
+    },
+
+    async updateInflamCelltypes() {
+        const sigType = document.getElementById('inflam-ct-sig-type')?.value || 'CytoSig';
+
+        // Reset search to default on signature type change
+        const input = document.getElementById('inflam-ct-search');
+        if (input) input.value = 'IFNG';
+
+        // Load data for this signature type if not cached
+        if (!this.inflamActivityData[sigType]) {
+            const container = document.getElementById('inflam-activity-profile');
+            if (container) container.innerHTML = '<p class="loading">Loading...</p>';
+
+            const data = await API.get('/inflammation/activity', { signature_type: sigType });
+            this.inflamActivityData[sigType] = data;
+
+            // Update signatures for autocomplete
+            if (data && data.length > 0) {
+                this.inflamCTSignatures[sigType] = [...new Set(data.map(d => d.signature))].sort();
             }
         }
 
-        // Render heatmap
-        if (heatmapData && heatmapData.values) {
-            const data = {
-                z: heatmapData.values,
-                cell_types: heatmapData.rows,
-                signatures: heatmapData.columns,
-            };
-            Heatmap.createActivityHeatmap('inflam-celltype-heatmap', data, {
-                title: `${this.signatureType} Activity by Cell Type`,
-            });
-        } else {
-            document.getElementById('inflam-celltype-heatmap').innerHTML = '<p class="loading">No heatmap data available</p>';
-        }
+        // Update both visualizations
+        this.updateInflamActivityProfile();
+        this.updateInflamCelltypeHeatmap();
     },
 
     async updateInflamActivityProfile() {
-        const protein = document.getElementById('inflam-protein-select')?.value;
         const container = document.getElementById('inflam-activity-profile');
-        if (!container || !protein) return;
+        if (!container) return;
 
-        container.innerHTML = '<p class="loading">Loading...</p>';
+        const sigType = document.getElementById('inflam-ct-sig-type')?.value || 'CytoSig';
+        const signature = document.getElementById('inflam-ct-search')?.value || 'IFNG';
 
-        try {
-            const data = await API.get('/inflammation/activity', { signature_type: this.signatureType });
-
-            if (data && data.length > 0) {
-                const proteinData = data.filter(d => d.signature === protein);
-
-                if (proteinData.length > 0) {
-                    proteinData.sort((a, b) => b.mean_activity - a.mean_activity);
-
-                    const cellTypes = proteinData.map(d => d.cell_type);
-                    const activities = proteinData.map(d => d.mean_activity);
-                    const colors = activities.map(v => v >= 0 ? '#ef4444' : '#2563eb');
-
-                    Plotly.newPlot('inflam-activity-profile', [{
-                        type: 'bar',
-                        x: activities,
-                        y: cellTypes,
-                        orientation: 'h',
-                        marker: { color: colors },
-                        hovertemplate: '<b>%{y}</b><br>Activity: %{x:.3f}<extra></extra>',
-                    }], {
-                        title: `${protein} [${this.signatureType}] Activity Across Cell Types`,
-                        xaxis: { title: 'Activity (z-score)', zeroline: true, zerolinecolor: '#888' },
-                        yaxis: { title: '', automargin: true },
-                        margin: { l: 150, r: 20, t: 40, b: 40 },
-                        font: { family: 'Inter, sans-serif' },
-                    });
-                } else {
-                    container.innerHTML = `<p class="loading">No data found for ${protein} [${this.signatureType}]</p>`;
-                }
-            } else {
-                container.innerHTML = '<p class="loading">No activity data available</p>';
-            }
-        } catch (e) {
-            container.innerHTML = `<p class="loading">Error: ${e.message}</p>`;
+        const data = this.inflamActivityData?.[sigType];
+        if (!data || data.length === 0) {
+            container.innerHTML = '<p class="loading">No activity data available</p>';
+            return;
         }
+
+        // Filter to selected signature
+        const filtered = data.filter(d => d.signature === signature);
+        filtered.sort((a, b) => b.mean_activity - a.mean_activity);
+
+        // Take top 30 cell types
+        const top30 = filtered.slice(0, 30);
+
+        if (top30.length === 0) {
+            container.innerHTML = `<p class="loading">No data available for '${signature}' [${sigType}]</p>`;
+            return;
+        }
+
+        Plotly.newPlot(container, [{
+            y: top30.map(d => d.cell_type),
+            x: top30.map(d => d.mean_activity),
+            type: 'bar',
+            orientation: 'h',
+            marker: {
+                color: top30.map(d => d.mean_activity),
+                colorscale: [[0, '#a8d4e6'], [0.5, '#f5f5f5'], [1, '#f4a6a6']],
+                cmid: 0
+            },
+            hovertemplate: '<b>%{y}</b><br>Activity: %{x:.2f}<br>Samples: %{customdata}<extra></extra>',
+            customdata: top30.map(d => d.n_samples || 'N/A')
+        }], {
+            title: `${signature} [${sigType}] Activity`,
+            margin: { l: 180, r: 30, t: 40, b: 50 },
+            xaxis: { title: 'Mean Activity (z-score)' },
+            height: 450,
+            font: { family: 'Inter, sans-serif' }
+        }, { responsive: true });
+    },
+
+    async updateInflamCelltypeHeatmap() {
+        const container = document.getElementById('inflam-celltype-heatmap');
+        if (!container) return;
+
+        const sigType = document.getElementById('inflam-ct-sig-type')?.value || 'CytoSig';
+        const data = this.inflamActivityData?.[sigType];
+
+        if (!data || data.length === 0) {
+            container.innerHTML = '<p class="loading">No heatmap data available</p>';
+            return;
+        }
+
+        // Build lookup index
+        const dataIndex = {};
+        data.forEach(d => {
+            const key = `${d.cell_type}|${d.signature}`;
+            dataIndex[key] = d.mean_activity;
+        });
+
+        const cellTypes = [...new Set(data.map(d => d.cell_type))];
+        const allSignatures = [...new Set(data.map(d => d.signature))];
+
+        // Find most variable signatures
+        const sigVariance = {};
+        allSignatures.forEach(sig => {
+            const vals = cellTypes.map(ct => dataIndex[`${ct}|${sig}`] || 0);
+            if (vals.length === 0) return;
+            const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+            const variance = vals.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / vals.length;
+            sigVariance[sig] = variance;
+        });
+
+        // Limit to top 50 for SecAct, all for CytoSig
+        const maxSigs = sigType === 'CytoSig' ? allSignatures.length : 50;
+        const topSignatures = Object.entries(sigVariance)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, maxSigs)
+            .map(d => d[0])
+            .sort();
+
+        // Find most variable cell types
+        const ctVariance = {};
+        cellTypes.forEach(ct => {
+            const vals = topSignatures.map(sig => dataIndex[`${ct}|${sig}`] || 0);
+            if (vals.length === 0) return;
+            const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+            const variance = vals.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / vals.length;
+            ctVariance[ct] = variance;
+        });
+
+        // Top 25 cell types
+        const topCts = Object.entries(ctVariance)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 25)
+            .map(d => d[0]);
+
+        // Build z-matrix
+        const z = topCts.map(ct =>
+            topSignatures.map(sig => dataIndex[`${ct}|${sig}`] || 0)
+        );
+
+        Plotly.newPlot(container, [{
+            z: z,
+            x: topSignatures,
+            y: topCts,
+            type: 'heatmap',
+            colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
+            zmid: 0,
+            hovertemplate: '<b>%{y}</b><br>%{x}: %{z:.2f}<extra></extra>'
+        }], {
+            title: `${sigType} Activity: Top ${topCts.length} Cell Types × ${topSignatures.length} Signatures`,
+            margin: { l: 180, r: 30, t: 40, b: 100 },
+            xaxis: { tickangle: -45, tickfont: { size: 10 } },
+            yaxis: { tickfont: { size: 10 } },
+            height: 500,
+            font: { family: 'Inter, sans-serif' }
+        }, { responsive: true });
     },
 
     async loadInflamAgeBmi(content) {
