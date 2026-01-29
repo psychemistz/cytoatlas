@@ -911,9 +911,9 @@ const AtlasDetailPage = {
             SecAct: secactData || [],
         };
 
-        // Build protein lists for autocomplete
-        this.biochemAllProteins.CytoSig = [...new Set(this.biochemData.CytoSig.map(d => d.signature))].sort();
-        this.biochemAllProteins.SecAct = [...new Set(this.biochemData.SecAct.map(d => d.signature))].sort();
+        // Build protein lists for autocomplete (data uses 'protein' field)
+        this.biochemAllProteins.CytoSig = [...new Set(this.biochemData.CytoSig.map(d => d.protein))].sort();
+        this.biochemAllProteins.SecAct = [...new Set(this.biochemData.SecAct.map(d => d.protein))].sort();
     },
 
     showBiochemSuggestions(query) {
@@ -968,11 +968,12 @@ const AtlasDetailPage = {
         }
 
         // Get all unique proteins and their max correlations
+        // Data format: {protein, feature, rho, ...}
         const proteinMaxCorr = {};
         data.forEach(d => {
             const absRho = Math.abs(d.rho);
-            if (!proteinMaxCorr[d.signature] || absRho > proteinMaxCorr[d.signature]) {
-                proteinMaxCorr[d.signature] = absRho;
+            if (!proteinMaxCorr[d.protein] || absRho > proteinMaxCorr[d.protein]) {
+                proteinMaxCorr[d.protein] = absRho;
             }
         });
 
@@ -998,7 +999,7 @@ const AtlasDetailPage = {
         }
 
         // Filter data to selected proteins
-        const filteredData = data.filter(d => proteins.includes(d.signature));
+        const filteredData = data.filter(d => proteins.includes(d.protein));
 
         this.renderBiochemHeatmap('biochem-heatmap', filteredData, proteins);
     },
@@ -2194,13 +2195,19 @@ const AtlasDetailPage = {
     },
 
     renderBiochemHeatmap(containerId, data, orderedProteins = null) {
-        // Group by signature and biochem marker
-        const signatures = orderedProteins || [...new Set(data.map(d => d.signature || d.protein))];
-        const markers = [...new Set(data.map(d => d.variable || d.marker))];
+        // Group by protein and biochem marker (feature)
+        // Data format: {protein, feature, rho, pvalue, n, qvalue, signature}
+        const proteins = orderedProteins || [...new Set(data.map(d => d.protein))];
+        const markers = [...new Set(data.map(d => d.feature || d.variable || d.marker))].filter(m => m);
 
-        const z = signatures.map(sig =>
+        if (markers.length === 0 || proteins.length === 0) {
+            document.getElementById(containerId).innerHTML = '<p class="loading">No data available</p>';
+            return;
+        }
+
+        const z = proteins.map(protein =>
             markers.map(m => {
-                const item = data.find(d => (d.signature === sig || d.protein === sig) && (d.variable === m || d.marker === m));
+                const item = data.find(d => d.protein === protein && (d.feature === m || d.variable === m || d.marker === m));
                 return item ? (item.rho ?? item.correlation ?? 0) : 0;
             })
         );
@@ -2208,12 +2215,12 @@ const AtlasDetailPage = {
         const sigType = document.getElementById('biochem-signature-type')?.value || 'CytoSig';
 
         Heatmap.create(containerId, {
-            z, x: markers, y: signatures,
+            z, x: markers, y: proteins,
             colorscale: 'RdBu', reversescale: true,
         }, {
             title: `Biochemistry Correlations [${sigType}]`,
-            xLabel: 'Biochemistry Marker',
-            yLabel: 'Signature',
+            xLabel: 'Blood Marker',
+            yLabel: 'Protein/Cytokine',
             colorbarTitle: 'Spearman ρ',
             symmetric: true,
         });
