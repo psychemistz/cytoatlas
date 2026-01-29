@@ -244,6 +244,34 @@ async def get_bmi_boxplots(
     return await service.get_age_bmi_boxplots(signature, signature_type, "bmi", cell_type)
 
 
+@router.get("/boxplots/age/{signature}/heatmap")
+async def get_age_heatmap(
+    signature: str,
+    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
+    service: CIMAService = Depends(get_cima_service),
+) -> dict:
+    """
+    Get age-stratified heatmap data for a signature.
+
+    Returns cell types × age bins matrix of median activity.
+    """
+    return await service.get_stratified_heatmap(signature, signature_type, "age")
+
+
+@router.get("/boxplots/bmi/{signature}/heatmap")
+async def get_bmi_heatmap(
+    signature: str,
+    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
+    service: CIMAService = Depends(get_cima_service),
+) -> dict:
+    """
+    Get BMI-stratified heatmap data for a signature.
+
+    Returns cell types × BMI categories matrix of median activity.
+    """
+    return await service.get_stratified_heatmap(signature, signature_type, "bmi")
+
+
 # Scatter Plots
 @router.get("/scatter/biochem/{signature}/{variable}")
 async def get_biochem_scatter(

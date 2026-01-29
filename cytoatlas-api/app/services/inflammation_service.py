@@ -534,3 +534,65 @@ class InflammationService(BaseService):
             results = [r for r in results if r.get("cell_type") in (None, "All")]
 
         return [InflammationAgeBMIBoxplot(**r) for r in results]
+
+    @cached(prefix="inflammation", ttl=3600)
+    async def get_stratified_heatmap(
+        self,
+        signature: str,
+        signature_type: str = "CytoSig",
+        stratify_by: str = "age",
+    ) -> dict:
+        """
+        Get cell type × bin heatmap data for a signature.
+
+        Args:
+            signature: Signature name
+            signature_type: 'CytoSig' or 'SecAct'
+            stratify_by: 'age' or 'bmi'
+
+        Returns:
+            Dict with cell_types, bins, and medians matrix
+        """
+        data = await self.load_json("age_bmi_boxplots.json")
+
+        inflam_data = data.get("inflammation", {})
+        results = inflam_data.get(stratify_by, [])
+
+        if not results:
+            return {"cell_types": [], "bins": [], "medians": []}
+
+        # Filter by signature type and signature
+        results = [r for r in results if r.get("sig_type") == signature_type]
+        results = [r for r in results if r.get("signature") == signature]
+
+        # Only get cell-type specific data (not sample-level)
+        results = [r for r in results if r.get("cell_type") not in (None, "All")]
+
+        if not results:
+            return {"cell_types": [], "bins": [], "medians": []}
+
+        # Get unique cell types and bins
+        cell_types = sorted(list(set(r.get("cell_type") for r in results)))
+
+        if stratify_by == "age":
+            bins = ["<30", "30-39", "40-49", "50-59", "60-69", "70+"]
+        else:
+            bins = ["Underweight", "Normal", "Overweight", "Obese"]
+
+        # Build median matrix: cell_types × bins
+        medians = []
+        for ct in cell_types:
+            row = []
+            for bin_name in bins:
+                matching = [r for r in results if r.get("cell_type") == ct and r.get("bin") == bin_name]
+                if matching:
+                    row.append(matching[0].get("median", 0))
+                else:
+                    row.append(None)
+            medians.append(row)
+
+        return {
+            "cell_types": cell_types,
+            "bins": bins,
+            "medians": medians,
+        }
