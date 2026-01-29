@@ -19,7 +19,7 @@ const AtlasDetailPage = {
                 { id: 'activity', label: 'Activity Heatmap', icon: '&#128202;' },
                 { id: 'age-bmi', label: 'Age/BMI Stratified', icon: '&#128200;' },
                 { id: 'biochem', label: 'Biochemistry', icon: '&#129514;' },
-                { id: 'metabolites', label: 'Metabolites', icon: '&#129516;' },
+                { id: 'metabolites', label: 'Metabolites', icon: '&#9879;' },
                 { id: 'differential', label: 'Differential', icon: '&#128209;' },
             ],
         },
@@ -30,7 +30,7 @@ const AtlasDetailPage = {
                 { id: 'activity', label: 'Activity Heatmap', icon: '&#128202;' },
                 { id: 'disease', label: 'Disease Differential', icon: '&#128209;' },
                 { id: 'age-bmi', label: 'Age/BMI Stratified', icon: '&#128200;' },
-                { id: 'treatment', label: 'Treatment Prediction', icon: '&#129516;' },
+                { id: 'treatment', label: 'Treatment Prediction', icon: '&#128137;' },
             ],
         },
         scatlas: {
