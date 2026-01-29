@@ -825,21 +825,182 @@ const AtlasDetailPage = {
         this.updateStratifiedPlot();
     },
 
+    // Store biochemistry proteins for autocomplete
+    biochemAllProteins: { CytoSig: [], SecAct: [] },
+    biochemData: null,
+
     async loadCimaBiochemistry(content) {
         content.innerHTML = `
             <div class="panel-header">
                 <h3>Biochemistry Correlations</h3>
-                <p>Correlation between cytokine activity and blood biochemistry markers</p>
+                <p>Spearman correlations between cytokine activities and blood biochemistry parameters</p>
             </div>
-            <div id="biochem-heatmap" class="plot-container" style="height: 600px;"></div>
+
+            <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+                <div class="control-group">
+                    <label>Signature Type</label>
+                    <select id="biochem-signature-type" class="filter-select" onchange="AtlasDetailPage.updateBiochemHeatmap()">
+                        <option value="CytoSig" ${this.signatureType === 'CytoSig' ? 'selected' : ''}>CytoSig (43 cytokines)</option>
+                        <option value="SecAct" ${this.signatureType === 'SecAct' ? 'selected' : ''}>SecAct (1,170 proteins)</option>
+                    </select>
+                </div>
+                <div class="control-group" style="position: relative;">
+                    <label>Search Protein</label>
+                    <input type="text" id="biochem-protein-search" class="filter-select"
+                           placeholder="Type to filter (e.g., IFNG, IL6...)"
+                           style="width: 180px;" autocomplete="off"
+                           oninput="AtlasDetailPage.showBiochemSuggestions(this.value)"
+                           onkeyup="if(event.key==='Enter') AtlasDetailPage.updateBiochemHeatmap()">
+                    <div id="biochem-suggestions" style="position: absolute; top: 100%; left: 0; width: 180px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                </div>
+                <div class="control-group">
+                    <label>Top N Proteins</label>
+                    <select id="biochem-top-n" class="filter-select" onchange="AtlasDetailPage.updateBiochemHeatmap()">
+                        <option value="20">Top 20</option>
+                        <option value="50" selected>Top 50</option>
+                        <option value="100">Top 100</option>
+                        <option value="all">All</option>
+                    </select>
+                </div>
+            </div>
+
+            <details class="card" style="margin-bottom: 1rem; padding: 1rem;">
+                <summary style="cursor: pointer; font-weight: 600; color: var(--primary-color);">Blood Marker Abbreviations (click to expand)</summary>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.5rem; margin-top: 1rem; font-size: 0.9rem;">
+                    <div><strong>ALB</strong> - Albumin (liver function, nutrition)</div>
+                    <div><strong>GLOB</strong> - Globulin (immune proteins)</div>
+                    <div><strong>A/G</strong> - Albumin/Globulin ratio</div>
+                    <div><strong>TP</strong> - Total Protein</div>
+                    <div><strong>ALT</strong> - Alanine Aminotransferase (liver enzyme)</div>
+                    <div><strong>AST</strong> - Aspartate Aminotransferase (liver/heart enzyme)</div>
+                    <div><strong>AST/ALT</strong> - AST to ALT ratio (liver damage pattern)</div>
+                    <div><strong>GGT</strong> - Gamma-Glutamyl Transferase (liver/bile duct)</div>
+                    <div><strong>Tbil</strong> - Total Bilirubin (liver function)</div>
+                    <div><strong>DBIL</strong> - Direct Bilirubin (conjugated)</div>
+                    <div><strong>IBIL</strong> - Indirect Bilirubin (unconjugated)</div>
+                    <div><strong>CHOL</strong> - Total Cholesterol</div>
+                    <div><strong>HDL-C</strong> - HDL Cholesterol ("good" cholesterol)</div>
+                    <div><strong>LDL-C</strong> - LDL Cholesterol ("bad" cholesterol)</div>
+                    <div><strong>TG</strong> - Triglycerides (blood fat)</div>
+                    <div><strong>GLU</strong> - Glucose (blood sugar)</div>
+                    <div><strong>Cr</strong> - Creatinine (kidney function)</div>
+                    <div><strong>UR</strong> - Urea/BUN (kidney function)</div>
+                    <div><strong>UA</strong> - Uric Acid (gout, kidney)</div>
+                </div>
+            </details>
+
+            <div id="biochem-heatmap" class="plot-container" style="height: 600px;">
+                <p class="loading">Loading biochemistry data...</p>
+            </div>
         `;
 
-        const data = await API.get('/cima/correlations/biochemistry', { signature_type: this.signatureType });
-        if (data && data.length > 0) {
-            this.renderBiochemHeatmap('biochem-heatmap', data);
-        } else {
-            document.getElementById('biochem-heatmap').innerHTML = '<p class="loading">No biochemistry data available</p>';
+        // Load all biochemistry data
+        await this.loadBiochemData();
+        this.updateBiochemHeatmap();
+    },
+
+    async loadBiochemData() {
+        // Load both CytoSig and SecAct data
+        const [cytosigData, secactData] = await Promise.all([
+            API.get('/cima/correlations/biochemistry', { signature_type: 'CytoSig' }),
+            API.get('/cima/correlations/biochemistry', { signature_type: 'SecAct' }),
+        ]);
+
+        this.biochemData = {
+            CytoSig: cytosigData || [],
+            SecAct: secactData || [],
+        };
+
+        // Build protein lists for autocomplete
+        this.biochemAllProteins.CytoSig = [...new Set(this.biochemData.CytoSig.map(d => d.signature))].sort();
+        this.biochemAllProteins.SecAct = [...new Set(this.biochemData.SecAct.map(d => d.signature))].sort();
+    },
+
+    showBiochemSuggestions(query) {
+        const suggestionsDiv = document.getElementById('biochem-suggestions');
+        if (!suggestionsDiv) return;
+
+        const sigType = document.getElementById('biochem-signature-type')?.value || 'CytoSig';
+        const proteins = this.biochemAllProteins[sigType] || [];
+
+        if (!query || query.length < 1) {
+            suggestionsDiv.style.display = 'none';
+            return;
         }
+
+        const matches = proteins.filter(p => p.toLowerCase().includes(query.toLowerCase())).slice(0, 10);
+
+        if (matches.length === 0) {
+            suggestionsDiv.style.display = 'none';
+            return;
+        }
+
+        suggestionsDiv.innerHTML = matches.map(p =>
+            `<div style="padding: 8px; cursor: pointer; border-bottom: 1px solid #eee;"
+                  onmouseover="this.style.background='#f0f0f0'"
+                  onmouseout="this.style.background='white'"
+                  onclick="AtlasDetailPage.selectBiochemProtein('${p}')">${p}</div>`
+        ).join('');
+        suggestionsDiv.style.display = 'block';
+    },
+
+    selectBiochemProtein(protein) {
+        const searchInput = document.getElementById('biochem-protein-search');
+        const suggestionsDiv = document.getElementById('biochem-suggestions');
+        if (searchInput) searchInput.value = protein;
+        if (suggestionsDiv) suggestionsDiv.style.display = 'none';
+        this.updateBiochemHeatmap();
+    },
+
+    updateBiochemHeatmap() {
+        const container = document.getElementById('biochem-heatmap');
+        if (!container || !this.biochemData) return;
+
+        const sigType = document.getElementById('biochem-signature-type')?.value || 'CytoSig';
+        const searchQuery = document.getElementById('biochem-protein-search')?.value?.trim() || '';
+        const topN = document.getElementById('biochem-top-n')?.value || '50';
+
+        let data = this.biochemData[sigType] || [];
+
+        if (data.length === 0) {
+            container.innerHTML = '<p class="loading">No biochemistry data available</p>';
+            return;
+        }
+
+        // Get all unique proteins and their max correlations
+        const proteinMaxCorr = {};
+        data.forEach(d => {
+            const absRho = Math.abs(d.rho);
+            if (!proteinMaxCorr[d.signature] || absRho > proteinMaxCorr[d.signature]) {
+                proteinMaxCorr[d.signature] = absRho;
+            }
+        });
+
+        // Filter by search query if provided
+        let proteins;
+        if (searchQuery) {
+            proteins = Object.keys(proteinMaxCorr)
+                .filter(p => p.toLowerCase().includes(searchQuery.toLowerCase()))
+                .sort((a, b) => proteinMaxCorr[b] - proteinMaxCorr[a]);
+        } else {
+            // Sort by max correlation and take top N
+            proteins = Object.keys(proteinMaxCorr)
+                .sort((a, b) => proteinMaxCorr[b] - proteinMaxCorr[a]);
+
+            if (topN !== 'all') {
+                proteins = proteins.slice(0, parseInt(topN));
+            }
+        }
+
+        if (proteins.length === 0) {
+            container.innerHTML = `<p class="loading">No proteins match "${searchQuery}"</p>`;
+            return;
+        }
+
+        // Filter data to selected proteins
+        const filteredData = data.filter(d => proteins.includes(d.signature));
+
+        this.renderBiochemHeatmap('biochem-heatmap', filteredData, proteins);
     },
 
     async loadCimaBiochemScatter(content) {
@@ -2032,26 +2193,28 @@ const AtlasDetailPage = {
         });
     },
 
-    renderBiochemHeatmap(containerId, data) {
+    renderBiochemHeatmap(containerId, data, orderedProteins = null) {
         // Group by signature and biochem marker
-        const signatures = [...new Set(data.map(d => d.signature || d.protein))];
+        const signatures = orderedProteins || [...new Set(data.map(d => d.signature || d.protein))];
         const markers = [...new Set(data.map(d => d.variable || d.marker))];
 
         const z = signatures.map(sig =>
             markers.map(m => {
                 const item = data.find(d => (d.signature === sig || d.protein === sig) && (d.variable === m || d.marker === m));
-                return item ? item.correlation : 0;
+                return item ? (item.rho ?? item.correlation ?? 0) : 0;
             })
         );
+
+        const sigType = document.getElementById('biochem-signature-type')?.value || 'CytoSig';
 
         Heatmap.create(containerId, {
             z, x: markers, y: signatures,
             colorscale: 'RdBu', reversescale: true,
         }, {
-            title: 'Biochemistry Correlations',
+            title: `Biochemistry Correlations [${sigType}]`,
             xLabel: 'Biochemistry Marker',
             yLabel: 'Signature',
-            colorbarTitle: 'Correlation (r)',
+            colorbarTitle: 'Spearman ρ',
             symmetric: true,
         });
     },
