@@ -50,8 +50,8 @@ const AtlasDetailPage = {
             displayName: 'scAtlas',
             description: 'Human tissue reference atlas - 6.4M cells across 35 organs with pan-cancer immune profiling',
             tabs: [
+                { id: 'celltypes', label: 'Cell Types', icon: '&#128300;' },
                 { id: 'organ-map', label: 'Organ Map', icon: '&#128149;' },
-                { id: 'celltype-heatmap', label: 'Cell Type Heatmap', icon: '&#128202;' },
                 { id: 'cancer-comparison', label: 'Tumor vs Adjacent', icon: '&#128201;' },
                 { id: 'cancer-types', label: 'Cancer Types', icon: '&#129656;' },
                 { id: 'immune-infiltration', label: 'Immune Infiltration', icon: '&#128300;' },
@@ -1179,11 +1179,11 @@ const AtlasDetailPage = {
 
     async loadScatlasTab(tabId, content) {
         switch (tabId) {
+            case 'celltypes':
+                await this.loadScatlasCelltypes(content);
+                break;
             case 'organ-map':
                 await this.loadScatlasOrganMap(content);
-                break;
-            case 'celltype-heatmap':
-                await this.loadScatlasCelltypes(content);
                 break;
             case 'cancer-comparison':
                 await this.loadScatlasCancerComparison(content);
