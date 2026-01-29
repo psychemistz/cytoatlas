@@ -2229,11 +2229,11 @@ const AtlasDetailPage = {
                 if (data && data.length > 0) {
                     const titleCellType = cellType === 'All' ? '' : ` (${cellType})`;
                     this.renderBoxplotFromStats('stratified-plot', data, {
-                        title: `${signature} Activity by ${variable === 'age' ? 'Age Group' : 'BMI Category'}${titleCellType}`,
+                        title: `${signature} [${this.signatureType}] Activity by ${variable === 'age' ? 'Age Group' : 'BMI Category'}${titleCellType}`,
                         yLabel: 'Activity (z-score)',
                     });
                 } else {
-                    plotContainer.innerHTML = `<p class="loading">No data available for "${signature}"${cellType !== 'All' ? ` in ${cellType}` : ''}</p>`;
+                    plotContainer.innerHTML = `<p class="loading">No data available for "${signature}" [${this.signatureType}]${cellType !== 'All' ? ` in ${cellType}` : ''}</p>`;
                 }
             } catch (e) {
                 plotContainer.innerHTML = `<p class="loading">Error: ${e.message}</p>`;
@@ -2251,12 +2251,12 @@ const AtlasDetailPage = {
 
                 if (data && data.cell_types && data.bins && data.medians && data.cell_types.length > 0) {
                     this.renderCellTypeHeatmap('stratified-heatmap', data, {
-                        title: `${signature} Activity: Cell Types × ${variable === 'age' ? 'Age Groups' : 'BMI Categories'}`,
+                        title: `${signature} [${this.signatureType}] Activity: Cell Types × ${variable === 'age' ? 'Age Groups' : 'BMI Categories'}`,
                         xLabel: variable === 'age' ? 'Age Group' : 'BMI Category',
                         yLabel: 'Cell Type',
                     });
                 } else {
-                    heatmapContainer.innerHTML = `<p class="loading">No cell-type specific data available for "${signature}"</p>`;
+                    heatmapContainer.innerHTML = `<p class="loading">No cell-type specific data available for "${signature}" [${this.signatureType}]</p>`;
                 }
             } catch (e) {
                 heatmapContainer.innerHTML = `<p class="loading">Error loading heatmap: ${e.message}</p>`;
@@ -2329,11 +2329,11 @@ const AtlasDetailPage = {
                 if (data && data.length > 0) {
                     const titleCellType = cellType === 'All' ? '' : ` (${cellType})`;
                     this.renderBoxplotFromStats('inflam-stratified-plot', data, {
-                        title: `${signature} Activity by ${variable === 'age' ? 'Age Group' : 'BMI Category'}${titleCellType}`,
+                        title: `${signature} [${this.signatureType}] Activity by ${variable === 'age' ? 'Age Group' : 'BMI Category'}${titleCellType}`,
                         yLabel: 'Activity (z-score)',
                     });
                 } else {
-                    plotContainer.innerHTML = `<p class="loading">No data available for "${signature}"${cellType !== 'All' ? ` in ${cellType}` : ''}</p>`;
+                    plotContainer.innerHTML = `<p class="loading">No data available for "${signature}" [${this.signatureType}]${cellType !== 'All' ? ` in ${cellType}` : ''}</p>`;
                 }
             } catch (e) {
                 plotContainer.innerHTML = `<p class="loading">Error: ${e.message}</p>`;
@@ -2351,12 +2351,12 @@ const AtlasDetailPage = {
 
                 if (data && data.cell_types && data.bins && data.medians && data.cell_types.length > 0) {
                     this.renderCellTypeHeatmap('inflam-stratified-heatmap', data, {
-                        title: `${signature} Activity: Cell Types × ${variable === 'age' ? 'Age Groups' : 'BMI Categories'}`,
+                        title: `${signature} [${this.signatureType}] Activity: Cell Types × ${variable === 'age' ? 'Age Groups' : 'BMI Categories'}`,
                         xLabel: variable === 'age' ? 'Age Group' : 'BMI Category',
                         yLabel: 'Cell Type',
                     });
                 } else {
-                    heatmapContainer.innerHTML = `<p class="loading">No cell-type specific data available for "${signature}"</p>`;
+                    heatmapContainer.innerHTML = `<p class="loading">No cell-type specific data available for "${signature}" [${this.signatureType}]</p>`;
                 }
             } catch (e) {
                 heatmapContainer.innerHTML = `<p class="loading">Error loading heatmap: ${e.message}</p>`;
