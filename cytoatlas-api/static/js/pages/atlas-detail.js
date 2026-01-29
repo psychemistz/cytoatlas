@@ -686,10 +686,6 @@ const AtlasDetailPage = {
                 <p>Activity distribution across age groups and BMI categories, with cell type stratification</p>
             </div>
             <div class="stratified-controls">
-                <select id="cima-strat-sigtype" class="filter-select" onchange="AtlasDetailPage.updateStratifiedPlot()">
-                    <option value="CytoSig">CytoSig (44 cytokines)</option>
-                    <option value="SecAct">SecAct (1249 proteins)</option>
-                </select>
                 <select id="stratified-variable" class="filter-select" onchange="AtlasDetailPage.updateStratifiedPlot()">
                     <option value="age">Age Groups</option>
                     <option value="bmi">BMI Categories</option>
@@ -1324,10 +1320,6 @@ const AtlasDetailPage = {
                 <p>Activity distribution across age groups and BMI categories, with cell type stratification</p>
             </div>
             <div class="stratified-controls">
-                <select id="inflam-strat-sigtype" class="filter-select" onchange="AtlasDetailPage.updateInflamStratifiedPlot()">
-                    <option value="CytoSig">CytoSig (44 cytokines)</option>
-                    <option value="SecAct">SecAct (1249 proteins)</option>
-                </select>
                 <select id="inflam-strat-variable" class="filter-select" onchange="AtlasDetailPage.updateInflamStratifiedPlot()">
                     <option value="age">Age Groups</option>
                     <option value="bmi">BMI Categories</option>
@@ -2201,7 +2193,6 @@ const AtlasDetailPage = {
 
     // Update functions for interactive controls
     async updateStratifiedPlot() {
-        const signatureType = document.getElementById('cima-strat-sigtype')?.value || 'CytoSig';
         const variable = document.getElementById('stratified-variable')?.value || 'age';
         const signature = document.getElementById('stratified-signature-search')?.value || 'IFNG';
         const cellType = document.getElementById('cima-strat-celltype')?.value || 'All';
@@ -2219,7 +2210,7 @@ const AtlasDetailPage = {
 
             // Show boxplots (sample-level or cell-type specific)
             const endpoint = variable === 'age' ? 'age' : 'bmi';
-            const params = { signature_type: signatureType };
+            const params = { signature_type: this.signatureType };
             if (cellType && cellType !== 'All') {
                 params.cell_type = cellType;
             }
@@ -2228,9 +2219,8 @@ const AtlasDetailPage = {
 
             if (data && data.length > 0) {
                 const titleCellType = cellType === 'All' ? '' : ` (${cellType})`;
-                const titleSigType = signatureType === 'CytoSig' ? '' : ` [${signatureType}]`;
                 this.renderBoxplotFromStats('stratified-plot', data, {
-                    title: `${signature} Activity by ${variable === 'age' ? 'Age Group' : 'BMI Category'}${titleCellType}${titleSigType}`,
+                    title: `${signature} Activity by ${variable === 'age' ? 'Age Group' : 'BMI Category'}${titleCellType}`,
                     yLabel: 'Activity (z-score)',
                 });
             } else {
@@ -2242,7 +2232,6 @@ const AtlasDetailPage = {
     },
 
     async updateInflamStratifiedPlot() {
-        const signatureType = document.getElementById('inflam-strat-sigtype')?.value || 'CytoSig';
         const variable = document.getElementById('inflam-strat-variable')?.value || 'age';
         const signature = document.getElementById('inflam-strat-signature-search')?.value || 'IFNG';
         const cellType = document.getElementById('inflam-strat-celltype')?.value || 'All';
@@ -2260,7 +2249,7 @@ const AtlasDetailPage = {
 
             // Endpoint format: /inflammation/boxplots/{age|bmi}/{signature}
             const endpoint = variable === 'age' ? 'age' : 'bmi';
-            const params = { signature_type: signatureType };
+            const params = { signature_type: this.signatureType };
             if (cellType && cellType !== 'All') {
                 params.cell_type = cellType;
             }
@@ -2270,9 +2259,8 @@ const AtlasDetailPage = {
             if (data && data.length > 0) {
                 // Data is a list of boxplot entries with statistics per bin
                 const titleCellType = cellType === 'All' ? '' : ` (${cellType})`;
-                const titleSigType = signatureType === 'CytoSig' ? '' : ` [${signatureType}]`;
                 this.renderBoxplotFromStats('inflam-stratified-plot', data, {
-                    title: `${signature} Activity by ${variable === 'age' ? 'Age Group' : 'BMI Category'}${titleCellType}${titleSigType}`,
+                    title: `${signature} Activity by ${variable === 'age' ? 'Age Group' : 'BMI Category'}${titleCellType}`,
                     yLabel: 'Activity (z-score)',
                 });
             } else {
