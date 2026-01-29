@@ -5960,7 +5960,7 @@
                 Plotly.purge(container1);
 
                 const sigThreshold = 0.05;
-                const fcThreshold = 0.5;
+                const fcThreshold = diseaseFilter === 'all' ? 0.3 : 1.0;  // Adjust threshold based on metric
 
                 const colors = mockData.map(d => {
                     if (d.pvalue < sigThreshold && Math.abs(d.log2fc) > fcThreshold) {
@@ -5972,6 +5972,10 @@
                 const maxAbsFC = Math.max(2, Math.ceil(Math.max(...mockData.map(d => Math.abs(d.log2fc)))));
                 const maxY = Math.max(4, Math.ceil(Math.max(...mockData.map(d => d.negLog10p))));
 
+                // Dynamic axis label based on disease filter
+                const xAxisLabel = diseaseFilter === 'all' ? 'Std Dev (Cross-Disease Variability)' : 'Z-Score (Deviation from Mean)';
+                const hoverLabel = diseaseFilter === 'all' ? 'Std Dev' : 'Z-Score';
+
                 Plotly.newPlot(container1, [{
                     type: 'scatter',
                     mode: 'markers+text',
@@ -5981,12 +5985,15 @@
                     textposition: 'top center',
                     textfont: { size: 9 },
                     marker: { size: 10, color: colors },
-                    hovertemplate: '<b>%{customdata}</b><br>log2FC: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>',
+                    hovertemplate: `<b>%{customdata}</b><br>${hoverLabel}: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>`,
                     customdata: mockData.map(d => d.signature)
                 }], {
-                    xaxis: { title: 'log2 Fold Change', zeroline: true, zerolinecolor: '#ccc', range: [-maxAbsFC, maxAbsFC] },
+                    xaxis: { title: xAxisLabel, zeroline: true, zerolinecolor: '#ccc', range: diseaseFilter === 'all' ? [0, maxAbsFC] : [-maxAbsFC, maxAbsFC] },
                     yaxis: { title: '-log10(p-value)', range: [0, maxY + 0.5] },
-                    shapes: [
+                    shapes: diseaseFilter === 'all' ? [
+                        { type: 'line', x0: fcThreshold, y0: 0, x1: fcThreshold, y1: maxY, line: { dash: 'dot', color: '#ccc' } },
+                        { type: 'line', x0: 0, y0: -Math.log10(sigThreshold), x1: maxAbsFC, y1: -Math.log10(sigThreshold), line: { dash: 'dot', color: '#ccc' } }
+                    ] : [
                         { type: 'line', x0: -fcThreshold, y0: 0, x1: -fcThreshold, y1: maxY, line: { dash: 'dot', color: '#ccc' } },
                         { type: 'line', x0: fcThreshold, y0: 0, x1: fcThreshold, y1: maxY, line: { dash: 'dot', color: '#ccc' } },
                         { type: 'line', x0: -maxAbsFC, y0: -Math.log10(sigThreshold), x1: maxAbsFC, y1: -Math.log10(sigThreshold), line: { dash: 'dot', color: '#ccc' } }
@@ -6001,9 +6008,13 @@
                 container2.classList.remove('loading');
                 Plotly.purge(container2);
 
-                // Sort by significance score (|log2FC| × -log10p) and take top 20
+                // Sort by significance score and take top 20
                 const sorted = [...mockData].sort((a, b) => b.score - a.score);
                 const top20 = sorted.slice(0, 20).reverse();  // Reverse for horizontal bar (top at top)
+
+                // Dynamic labels
+                const xAxisLabel = diseaseFilter === 'all' ? 'Std Dev (Variability)' : 'Z-Score';
+                const hoverLabel = diseaseFilter === 'all' ? 'Std Dev' : 'Z-Score';
 
                 Plotly.newPlot(container2, [{
                     type: 'bar',
@@ -6011,15 +6022,17 @@
                     y: top20.map(d => d.signature),
                     x: top20.map(d => d.log2fc),
                     marker: {
-                        color: top20.map(d => d.log2fc > 0 ? '#f4a6a6' : '#a8d4e6')
+                        color: diseaseFilter === 'all'
+                            ? '#7570b3'  // Purple for variability
+                            : top20.map(d => d.log2fc > 0 ? '#f4a6a6' : '#a8d4e6')  // Red/blue for direction
                     },
                     text: top20.map(d => d.log2fc.toFixed(2)),
                     textposition: 'outside',
                     textfont: { size: 9 },
-                    hovertemplate: '<b>%{y}</b><br>log2FC: %{x:.3f}<br>p = %{customdata}<extra></extra>',
+                    hovertemplate: `<b>%{y}</b><br>${hoverLabel}: %{x:.3f}<br>p = %{customdata}<extra></extra>`,
                     customdata: top20.map(d => d.pvalue.toExponential(2))
                 }], {
-                    xaxis: { title: 'log2 Fold Change', zeroline: true, zerolinecolor: '#ccc' },
+                    xaxis: { title: xAxisLabel, zeroline: true, zerolinecolor: '#ccc' },
                     yaxis: { automargin: true, tickfont: { size: 10 } },
                     margin: { l: 100, r: 50, t: 30, b: 50 },
                     height: 500
