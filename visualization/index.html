@@ -5529,8 +5529,8 @@
                 d.sig_type === (sigType === 'both' ? 'CytoSig' : sigType)
             );
 
-            // Get unique cell types (excluding 'All')
-            const cellTypes = [...new Set(sigData.map(d => d.cell_type))].filter(ct => ct !== 'All').sort();
+            // Get unique cell types (excluding 'All' and undefined/null for sample-level records)
+            const cellTypes = [...new Set(sigData.map(d => d.cell_type))].filter(ct => ct && ct !== 'All').sort();
 
             if (cellTypes.length === 0) {
                 container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No cell type data available for this signature</p>';
@@ -6267,9 +6267,9 @@
             if (boxplotData && boxplotData[stratifyBy]) {
                 // Handle "both" - show CytoSig and SecAct side by side
                 if (sigType === 'both') {
-                    // Filter without cell_type requirement for CIMA
-                    const cytosigData = boxplotData[stratifyBy].filter(d => d.signature === signature && d.sig_type === 'CytoSig');
-                    const secactData = boxplotData[stratifyBy].filter(d => d.signature === signature && d.sig_type === 'SecAct');
+                    // Filter for sample-level data (no cell_type field) for consistent comparison
+                    const cytosigData = boxplotData[stratifyBy].filter(d => d.signature === signature && d.sig_type === 'CytoSig' && !d.cell_type);
+                    const secactData = boxplotData[stratifyBy].filter(d => d.signature === signature && d.sig_type === 'SecAct' && !d.cell_type);
 
                     if (cytosigData.length > 0 || secactData.length > 0) {
                         const bins = stratifyBy === 'age'
@@ -6332,9 +6332,12 @@
                 // Single signature type - filter by sig_type and optionally cell_type
                 let sigData = boxplotData[stratifyBy].filter(d => d.signature === signature);
 
-                // Filter by cell_type only if it exists in data
-                const hasCtField = sigData.length > 0 && sigData[0].cell_type !== undefined;
-                if (hasCtField) {
+                // Filter by cell_type: 'All' means sample-level (no cell_type field), otherwise match specific cell type
+                if (effectiveCellType === 'All') {
+                    // Sample-level data: records without cell_type field
+                    sigData = sigData.filter(d => !d.cell_type);
+                } else {
+                    // Cell type-specific data
                     sigData = sigData.filter(d => d.cell_type === effectiveCellType);
                 }
 
@@ -6414,9 +6417,9 @@
                 return;
             }
 
-            // Get bins
+            // Get bins (must match actual data labels)
             const bins = stratifyBy === 'age'
-                ? ['<30', '30-40', '40-50', '50-60', '>60']
+                ? ['<30', '30-39', '40-49', '50-59', '60-69', '70+']
                 : ['Underweight', 'Normal', 'Overweight', 'Obese'];
 
             // Filter data for this signature (CytoSig only has cell type data)
@@ -6431,8 +6434,8 @@
                 return;
             }
 
-            // Get unique cell types (excluding 'All')
-            const cellTypes = [...new Set(sigData.map(d => d.cell_type))].filter(ct => ct !== 'All').sort();
+            // Get unique cell types (excluding 'All' and undefined/null for sample-level records)
+            const cellTypes = [...new Set(sigData.map(d => d.cell_type))].filter(ct => ct && ct !== 'All').sort();
 
             if (cellTypes.length === 0) {
                 container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No cell type data available for this signature</p>';
@@ -6500,7 +6503,9 @@
                 boxplotAllSignatures.secact = boxplotData.secact_signatures || [];
                 boxplotAllSignatures.shared = boxplotData.shared_signatures || [];
                 boxplotAllSignatures.all = boxplotData.all_signatures || [...boxplotAllSignatures.cytosig, ...boxplotAllSignatures.secact];
-                boxplotAllSignatures.cellTypes = boxplotData.cell_types || ['All'];
+                // Always include 'All' (sample-level) as first option
+                const cellTypesFromData = boxplotData.cell_types || [];
+                boxplotAllSignatures.cellTypes = ['All', ...cellTypesFromData.filter(ct => ct !== 'All')];
             } else {
                 // Fallback
                 boxplotAllSignatures.cytosig = ['IFNG', 'TNFA', 'IL6', 'IL17A', 'IL10', 'IL1B', 'IL4', 'IL13'];
