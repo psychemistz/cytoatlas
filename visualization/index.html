@@ -1835,7 +1835,7 @@
                         <label>Signature Type</label>
                         <select id="ct-sig-type">
                             <option value="CytoSig">CytoSig (43 cytokines)</option>
-                            <option value="SecAct">SecAct (1,170 proteins)</option>
+                            <option value="SecAct">SecAct (1,170 proteins, top 50 in heatmap)</option>
                         </select>
                     </div>
                     <div class="control-group">
@@ -3810,18 +3810,21 @@
             const sigs = getScatlasCelltypeSignatures();
             if (sigs.length === 0) return;
 
+            // Limit dropdown to 100 options for performance (user can search for others)
+            const dropdownSigs = sigs.slice(0, 100);
+
             const currentValue = dropdown.value;
-            dropdown.innerHTML = sigs.map(s =>
+            dropdown.innerHTML = dropdownSigs.map(s =>
                 `<option value="${s}">${s}</option>`
             ).join('');
 
             // Restore selection or default
-            if (sigs.includes(currentValue)) {
+            if (dropdownSigs.includes(currentValue)) {
                 dropdown.value = currentValue;
-            } else if (sigs.includes('IFNG')) {
+            } else if (dropdownSigs.includes('IFNG')) {
                 dropdown.value = 'IFNG';
             } else {
-                dropdown.value = sigs[0] || '';
+                dropdown.value = dropdownSigs[0] || '';
             }
 
             // Sync search input
@@ -3920,10 +3923,10 @@
                 data = data.filter(d => d.organ === organFilter);
             }
 
-            // Get signatures for this type
-            const signatures = sigType === 'CytoSig'
+            // Get signatures for this type - limit SecAct to 50 for heatmap performance
+            let signatures = sigType === 'CytoSig'
                 ? (ctData.cytosig_signatures || [...new Set(data.map(d => d.signature))].sort())
-                : (ctData.secact_signatures || [...new Set(data.map(d => d.signature))].sort());
+                : (ctData.secact_signatures || [...new Set(data.map(d => d.signature))].sort()).slice(0, 50);
 
             // Get unique cell types from filtered data - limit to 50 for performance
             let cellTypes = [...new Set(data.map(d => d.cell_type))].slice(0, 50);
@@ -3932,7 +3935,8 @@
             const subtitle = document.getElementById('celltype-heatmap-subtitle');
             if (subtitle) {
                 const organText = organFilter ? ` in ${organFilter}` : '';
-                subtitle.textContent = `${sigType} activity scores across cell types${organText} (showing ${cellTypes.length} cell types)`;
+                const sigCount = sigType === 'SecAct' ? ' (top 50 signatures)' : '';
+                subtitle.textContent = `${sigType} activity${sigCount} across cell types${organText} (${cellTypes.length} cell types)`;
             }
 
             container.classList.remove('loading');
@@ -3943,14 +3947,21 @@
                 return;
             }
 
-            // Create matrix - aggregate by cell type if multiple organs
+            // Build lookup map for O(1) access instead of O(n) filtering
+            const dataMap = {};
+            data.forEach(d => {
+                const key = `${d.cell_type}|${d.signature}`;
+                if (!dataMap[key]) dataMap[key] = [];
+                dataMap[key].push(d.mean_activity);
+            });
+
+            // Create matrix using lookup map
             const zData = cellTypes.map(ct => {
                 return signatures.map(sig => {
-                    const matches = data.filter(d => d.cell_type === ct && d.signature === sig);
-                    if (matches.length === 0) return 0;
-                    // Average across organs if not filtered
-                    const sum = matches.reduce((acc, d) => acc + d.mean_activity, 0);
-                    return sum / matches.length;
+                    const key = `${ct}|${sig}`;
+                    const values = dataMap[key];
+                    if (!values || values.length === 0) return 0;
+                    return values.reduce((a, b) => a + b, 0) / values.length;
                 });
             });
 
