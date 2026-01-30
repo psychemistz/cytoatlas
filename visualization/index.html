@@ -6470,9 +6470,8 @@
             // Update cell type availability based on signature type
             updateBoxplotCellTypeAvailability();
 
-            // Use selected cell type for both CytoSig and SecAct (data has cell types for both)
-            // Only force 'All' for "both" mode to ensure consistent comparison
-            const effectiveCellType = (sigType === 'both') ? 'All' : cellType;
+            // Use selected cell type for CytoSig, SecAct, and "both" modes
+            const effectiveCellType = cellType;
 
             // Update title
             const titleEl = document.getElementById('boxplot-title');
@@ -6488,9 +6487,12 @@
             if (boxplotData && boxplotData[stratifyBy]) {
                 // Handle "both" - show CytoSig and SecAct side by side
                 if (sigType === 'both') {
-                    // Filter for sample-level data (no cell_type field) for consistent comparison
-                    const cytosigData = boxplotData[stratifyBy].filter(d => d.signature === signature && d.sig_type === 'CytoSig' && !d.cell_type);
-                    const secactData = boxplotData[stratifyBy].filter(d => d.signature === signature && d.sig_type === 'SecAct' && !d.cell_type);
+                    // Filter by cell type: 'All' = sample-level (no cell_type), otherwise match specific cell type
+                    const cellTypeFilter = effectiveCellType === 'All'
+                        ? (d => !d.cell_type)
+                        : (d => d.cell_type === effectiveCellType);
+                    const cytosigData = boxplotData[stratifyBy].filter(d => d.signature === signature && d.sig_type === 'CytoSig' && cellTypeFilter(d));
+                    const secactData = boxplotData[stratifyBy].filter(d => d.signature === signature && d.sig_type === 'SecAct' && cellTypeFilter(d));
 
                     if (cytosigData.length > 0 || secactData.length > 0) {
                         const bins = stratifyBy === 'age'
@@ -6529,7 +6531,7 @@
                         });
 
                         Plotly.newPlot(container, traces, {
-                            yaxis: { title: `${signature} Activity Score`, zeroline: true },
+                            yaxis: { title: `${signature} Activity Score${cellTypeLabel}`, zeroline: true },
                             xaxis: { title: stratifyBy === 'age' ? 'Age Group' : 'BMI Category' },
                             boxmode: 'group',
                             showlegend: true,
@@ -6749,20 +6751,12 @@
         }
 
         function updateBoxplotCellTypeAvailability() {
-            const sigType = document.getElementById('boxplot-sig-type')?.value || 'CytoSig';
             const cellTypeSelect = document.getElementById('boxplot-celltype');
             if (!cellTypeSelect) return;
 
-            // Cell type-specific data available for both CytoSig and SecAct in CIMA
-            // Only disable for "both" mode to ensure consistent comparison
-            if (sigType === 'both') {
-                cellTypeSelect.value = 'All';
-                cellTypeSelect.disabled = true;
-                cellTypeSelect.title = 'Cell type selection disabled when comparing CytoSig vs SecAct';
-            } else {
-                cellTypeSelect.disabled = false;
-                cellTypeSelect.title = '';
-            }
+            // Cell type-specific data available for CytoSig, SecAct, and "both" modes
+            cellTypeSelect.disabled = false;
+            cellTypeSelect.title = '';
         }
 
         function getBoxplotSignatures() {
