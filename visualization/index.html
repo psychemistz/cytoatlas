@@ -7230,6 +7230,10 @@
                 let impData = data.feature_importance || [];
                 // Filter by signature type
                 impData = impData.filter(d => d.signature_type === selectedSigType);
+                // Filter by model
+                if (selectedModel !== 'all') {
+                    impData = impData.filter(d => d.model === selectedModel);
+                }
                 // Handle disease filter
                 if (selectedDisease !== 'all') {
                     impData = impData.filter(d => d.disease === selectedDisease);
@@ -7240,34 +7244,64 @@
                 if (impData.length === 0) {
                     container2.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No feature importance data for selected filters</p>';
                 } else {
-                    // Aggregate importance across diseases if 'all'
+                    const isLR = selectedModel === 'Logistic Regression';
+
+                    // Aggregate importance across records
                     const featureMap = {};
                     impData.forEach(d => {
-                        if (!featureMap[d.feature]) featureMap[d.feature] = [];
-                        featureMap[d.feature].push(d.importance);
+                        if (!featureMap[d.feature]) {
+                            featureMap[d.feature] = { importance: [], coefficient: [] };
+                        }
+                        featureMap[d.feature].importance.push(d.importance);
+                        if (d.coefficient !== undefined) {
+                            featureMap[d.feature].coefficient.push(d.coefficient);
+                        }
                     });
 
                     const aggregated = Object.entries(featureMap)
-                        .map(([feature, values]) => ({
+                        .map(([feature, vals]) => ({
                             feature,
-                            importance: values.reduce((a, b) => a + b, 0) / values.length
+                            importance: vals.importance.reduce((a, b) => a + b, 0) / vals.importance.length,
+                            coefficient: vals.coefficient.length > 0
+                                ? vals.coefficient.reduce((a, b) => a + b, 0) / vals.coefficient.length
+                                : null
                         }))
                         .sort((a, b) => b.importance - a.importance)
                         .slice(0, 15);
+
+                    // For LR, color by coefficient direction (green = positive, red = negative)
+                    const colors = isLR
+                        ? aggregated.map(d => d.coefficient !== null
+                            ? (d.coefficient >= 0 ? '#2ca02c' : '#d62728')
+                            : '#1f77b4')
+                        : aggregated.map(() => '#2ca02c');
+
+                    const hoverText = isLR
+                        ? aggregated.map(d => d.coefficient !== null
+                            ? `${d.feature}<br>Importance: ${d.importance.toFixed(3)}<br>Coef: ${d.coefficient.toFixed(3)} (${d.coefficient >= 0 ? '+' : '-'})`
+                            : `${d.feature}<br>Importance: ${d.importance.toFixed(3)}`)
+                        : aggregated.map(d => `${d.feature}<br>Importance: ${d.importance.toFixed(3)}`);
 
                     Plotly.newPlot(container2, [{
                         type: 'bar',
                         orientation: 'h',
                         y: aggregated.map(d => d.feature),
                         x: aggregated.map(d => d.importance),
-                        marker: { color: '#2ca02c' },
+                        marker: { color: colors },
                         text: aggregated.map(d => d.importance.toFixed(3)),
-                        textposition: 'auto'
+                        textposition: 'auto',
+                        hovertext: hoverText,
+                        hoverinfo: 'text'
                     }], {
-                        xaxis: { title: 'Importance Score' },
+                        xaxis: { title: isLR ? 'Normalized |Coefficient|' : 'Importance Score' },
                         yaxis: { automargin: true },
                         margin: { l: 80, r: 30, t: 30, b: 50 },
-                        height: 400
+                        height: 400,
+                        annotations: isLR ? [{
+                            x: 0.95, y: 1.05, xref: 'paper', yref: 'paper',
+                            text: '<span style="color:#2ca02c">■</span> Positive  <span style="color:#d62728">■</span> Negative',
+                            showarrow: false, font: { size: 11 }
+                        }] : []
                     }, { responsive: true });
                 }
             }

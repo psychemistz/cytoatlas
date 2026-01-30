@@ -1460,7 +1460,7 @@ def preprocess_treatment_response():
 
     # Check for treatment prediction files from the pipeline
     treatment_file = INFLAM_DIR / "treatment_prediction_summary.csv"
-    response_file = INFLAM_DIR / "treatment_response.csv"
+    details_file = INFLAM_DIR / "treatment_prediction_details.json"
 
     if treatment_file.exists():
         df = pd.read_csv(treatment_file)
@@ -1473,59 +1473,139 @@ def preprocess_treatment_response():
             treatment_data['roc_curves'].append({
                 'disease': row.get('disease', 'Unknown'),
                 'model': row.get('model', 'Unknown'),
+                'signature_type': row.get('signature_type', 'CytoSig'),
                 'auc': auc,
                 'n_samples': int(row.get('n_samples', 0)),
                 'fpr': [round(x, 4) for x in fpr],
                 'tpr': [round(x, 4) for x in tpr]
             })
-    else:
-        print("  Treatment file not found - using mock data")
-        # Generate mock ROC data for demonstration
-        diseases = ['Rheumatoid Arthritis', 'Inflammatory Bowel Disease', 'Psoriasis', 'Asthma']
-        models = ['Logistic Regression', 'Random Forest']
+
+    # Load feature importance from details file
+    if details_file.exists():
+        with open(details_file, 'r') as f:
+            details = json.load(f)
+        print(f"  Found treatment prediction details")
+
+        for sig_type in ['CytoSig', 'SecAct']:
+            sig_data = details.get(sig_type, [])
+            for entry in sig_data:
+                disease = entry.get('disease', 'Unknown')
+
+                # Random Forest feature importance
+                rf_features = entry.get('rf_top_features', [])
+                for feat in rf_features:
+                    treatment_data['feature_importance'].append({
+                        'disease': disease,
+                        'signature_type': sig_type,
+                        'feature': feat['feature'],
+                        'importance': round(feat['importance'], 4),
+                        'model': 'Random Forest'
+                    })
+
+                # Logistic Regression - use normalized absolute coefficients
+                lr_features = entry.get('lr_top_features', [])
+                if lr_features:
+                    # Calculate absolute coefficients and normalize
+                    abs_coefs = [abs(feat['coefficient']) for feat in lr_features]
+                    max_coef = max(abs_coefs) if abs_coefs else 1.0
+                    for feat in lr_features:
+                        # Normalize by max absolute coefficient
+                        normalized_importance = abs(feat['coefficient']) / max_coef if max_coef > 0 else 0
+                        treatment_data['feature_importance'].append({
+                            'disease': disease,
+                            'signature_type': sig_type,
+                            'feature': feat['feature'],
+                            'importance': round(normalized_importance, 4),
+                            'coefficient': round(feat['coefficient'], 4),  # Keep original coefficient for reference
+                            'model': 'Logistic Regression'
+                        })
+
+                # Prediction probabilities for violin plots
+                lr_probs = entry.get('lr_probs', [])
+                true_labels = entry.get('true_labels', [])
+                if lr_probs and true_labels and len(lr_probs) == len(true_labels):
+                    for prob, label in zip(lr_probs, true_labels):
+                        treatment_data['predictions'].append({
+                            'disease': disease,
+                            'signature_type': sig_type,
+                            'response': 'Responder' if label == 1 else 'Non-responder',
+                            'probability': round(prob, 3),
+                            'model': 'Logistic Regression'
+                        })
+
+        print(f"  Loaded {len(treatment_data['feature_importance'])} feature importance entries")
+        print(f"  Loaded {len(treatment_data['predictions'])} prediction entries")
+
+    # If no data was loaded, use mock data
+    if not treatment_data['roc_curves'] and not treatment_data['feature_importance']:
+        print("  No treatment data found - using mock data")
         import random
         random.seed(42)
 
-        for disease in diseases:
-            for model in models:
-                auc = round(random.uniform(0.65, 0.92), 3)
-                fpr, tpr = generate_roc_curve_points(auc)
-                treatment_data['roc_curves'].append({
-                    'disease': disease,
-                    'model': model,
-                    'auc': auc,
-                    'n_samples': random.randint(50, 200),
-                    'fpr': [round(x, 4) for x in fpr],
-                    'tpr': [round(x, 4) for x in tpr]
-                })
+        diseases = ['Rheumatoid Arthritis', 'Inflammatory Bowel Disease', 'Psoriasis', 'Asthma']
+        models = ['Logistic Regression', 'Random Forest']
+        sig_types = ['CytoSig', 'SecAct']
 
-        # Generate mock feature importance
+        for disease in diseases:
+            for sig_type in sig_types:
+                for model in models:
+                    auc = round(random.uniform(0.65, 0.92), 3)
+                    fpr, tpr = generate_roc_curve_points(auc)
+                    treatment_data['roc_curves'].append({
+                        'disease': disease,
+                        'model': model,
+                        'signature_type': sig_type,
+                        'auc': auc,
+                        'n_samples': random.randint(50, 200),
+                        'fpr': [round(x, 4) for x in fpr],
+                        'tpr': [round(x, 4) for x in tpr]
+                    })
+
+        # Generate mock feature importance for both models
         cytokines = ['IL6', 'TNF', 'IL17A', 'IL10', 'IFNG', 'IL1B', 'IL23A', 'IL4', 'IL13', 'TGFB1']
         for disease in diseases:
-            for i, cyt in enumerate(cytokines):
-                treatment_data['feature_importance'].append({
-                    'disease': disease,
-                    'feature': cyt,
-                    'importance': round(random.uniform(0.01, 0.3) if i < 5 else random.uniform(0.001, 0.1), 4),
-                    'model': 'Random Forest'
-                })
+            for sig_type in sig_types:
+                for i, cyt in enumerate(cytokines):
+                    # Random Forest
+                    treatment_data['feature_importance'].append({
+                        'disease': disease,
+                        'signature_type': sig_type,
+                        'feature': cyt,
+                        'importance': round(random.uniform(0.01, 0.3) if i < 5 else random.uniform(0.001, 0.1), 4),
+                        'model': 'Random Forest'
+                    })
+                    # Logistic Regression (normalized weights)
+                    coef = random.uniform(-1, 1)
+                    treatment_data['feature_importance'].append({
+                        'disease': disease,
+                        'signature_type': sig_type,
+                        'feature': cyt,
+                        'importance': round(abs(coef), 4),
+                        'coefficient': round(coef, 4),
+                        'model': 'Logistic Regression'
+                    })
 
         # Generate mock prediction distributions
         for disease in diseases:
-            # Responders
-            for _ in range(30):
-                treatment_data['predictions'].append({
-                    'disease': disease,
-                    'response': 'Responder',
-                    'probability': round(random.uniform(0.55, 0.95), 3)
-                })
-            # Non-responders
-            for _ in range(30):
-                treatment_data['predictions'].append({
-                    'disease': disease,
-                    'response': 'Non-responder',
-                    'probability': round(random.uniform(0.15, 0.55), 3)
-                })
+            for sig_type in sig_types:
+                # Responders
+                for _ in range(30):
+                    treatment_data['predictions'].append({
+                        'disease': disease,
+                        'signature_type': sig_type,
+                        'response': 'Responder',
+                        'probability': round(random.uniform(0.55, 0.95), 3),
+                        'model': 'Logistic Regression'
+                    })
+                # Non-responders
+                for _ in range(30):
+                    treatment_data['predictions'].append({
+                        'disease': disease,
+                        'signature_type': sig_type,
+                        'response': 'Non-responder',
+                        'probability': round(random.uniform(0.15, 0.55), 3),
+                        'model': 'Logistic Regression'
+                    })
 
     with open(OUTPUT_DIR / "treatment_response.json", 'w') as f:
         json.dump(treatment_data, f)
