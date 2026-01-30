@@ -1668,42 +1668,45 @@
                     <div class="control-group">
                         <label>Disease</label>
                         <select id="severity-disease">
-                            <option value="RA">Rheumatoid Arthritis (DAS28)</option>
-                            <option value="IBD">IBD (Mayo Score)</option>
-                            <option value="Psoriasis">Psoriasis (PASI)</option>
-                            <option value="SLE">SLE (SLEDAI)</option>
+                            <!-- Populated dynamically from data -->
                         </select>
                     </div>
                     <div class="control-group">
                         <label>Signature Type</label>
                         <select id="severity-sig-type">
-                            <option value="CytoSig">CytoSig</option>
-                            <option value="SecAct">SecAct</option>
+                            <option value="CytoSig">CytoSig (43 cytokines)</option>
+                            <option value="SecAct">SecAct (1,170 proteins)</option>
                         </select>
+                    </div>
+                    <div class="control-group" style="position: relative;">
+                        <label>Search Signature</label>
+                        <input type="text" id="severity-search" placeholder="Type to search (e.g., IFNG)"
+                               style="width: 150px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" autocomplete="off" value="IFNG">
+                        <div id="severity-suggestions" style="position: absolute; top: 100%; left: 0; width: 150px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
                     </div>
                 </div>
 
                 <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
-                    <strong>Disease Severity Markers:</strong> Identify cytokine signatures that correlate with clinical disease activity scores.
-                    <br><em style="color: #666;">Clinical scores: DAS28 (RA), Mayo (IBD), PASI (Psoriasis), SLEDAI (SLE).</em>
+                    <strong>Disease Severity Analysis:</strong> Compare cytokine activity across severity stages within each disease.
+                    <br><em style="color: #666;">Data from 11 diseases with clinical severity staging: COVID (7 stages), COPD (GOLD), SLE (Flare), Asthma (GINA), etc.</em>
                 </div>
 
                 <div class="two-col">
-                    <div class="viz-container">
-                        <div class="viz-title">Severity Correlations</div>
-                        <div class="viz-subtitle">Spearman correlation with disease activity score</div>
-                        <div id="severity-lollipop" class="loading">Loading...</div>
+                    <div class="viz-container" style="min-height: 450px;">
+                        <div class="viz-title">Activity by Severity Stage</div>
+                        <div class="viz-subtitle" id="severity-heatmap-subtitle">Mean activity across severity categories</div>
+                        <div id="severity-heatmap" class="loading">Loading...</div>
                     </div>
-                    <div class="viz-container">
-                        <div class="viz-title">Severity Scatter</div>
-                        <div class="viz-subtitle">Top correlated cytokine vs clinical score</div>
-                        <div id="severity-scatter" class="loading">Loading...</div>
+                    <div class="viz-container" style="min-height: 450px;">
+                        <div class="viz-title">Severity Progression</div>
+                        <div class="viz-subtitle" id="severity-line-subtitle">Activity trend across severity stages</div>
+                        <div id="severity-line" class="loading">Loading...</div>
                     </div>
                 </div>
 
-                <div class="viz-container">
-                    <div class="viz-title">Activity by Severity Category</div>
-                    <div class="viz-subtitle">Cytokine activity distribution across severity tertiles</div>
+                <div class="viz-container" style="min-height: 400px;">
+                    <div class="viz-title">Activity Distribution by Severity</div>
+                    <div class="viz-subtitle" id="severity-boxplot-subtitle">Distribution across severity categories</div>
                     <div id="severity-boxplot" class="loading">Loading...</div>
                 </div>
             </div>
@@ -2573,6 +2576,7 @@
                 inflammationdifferential: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.inflammationdifferential : null,
                 inflammationlongitudinal: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.inflammationlongitudinal : null,
                 inflammationcelldrivers: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.inflammationcelldrivers : null,
+                inflammationseverity: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.inflammationseverity : null,
                 diseasesankey: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.diseasesankey : null,
                 agebmiboxplots: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.agebmiboxplots : null,
                 treatmentresponse: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.treatmentresponse : null,
@@ -2614,6 +2618,7 @@
                 updateCohortValidation();
                 // New Inflammation panels
                 updateLongitudinal();
+                initSeverityPanel();
                 updateSeverityCorrelation();
                 updateCellDrivers();
             } else if (section === 'scatlas') {
@@ -7498,112 +7503,250 @@
             }
         }
 
-        // Inflammation: Severity Correlation
-        function updateSeverityCorrelation() {
-            const lollipopContainer = document.getElementById('severity-lollipop');
-            const scatterContainer = document.getElementById('severity-scatter');
-            const boxplotContainer = document.getElementById('severity-boxplot');
+        // Inflammation: Severity Analysis
+        let severitySignatures = { cytosig: [], secact: [] };
 
-            if (!lollipopContainer) return;
+        function initSeverityPanel() {
+            const data = state.data.inflammationseverity;
+            if (!data || data.length === 0) return;
 
-            const disease = document.getElementById('severity-disease')?.value || 'RA';
-            const sigType = document.getElementById('severity-sig-type')?.value || 'CytoSig';
-
-            // Disease-specific severity score names
-            const scoreNames = {
-                'RA': 'DAS28',
-                'IBD': 'Mayo Score',
-                'Psoriasis': 'PASI',
-                'SLE': 'SLEDAI'
-            };
-
-            const cytokines = sigType === 'CytoSig' ?
-                ['IFNG', 'TNF', 'IL6', 'IL1B', 'IL10', 'IL17A', 'IL4', 'TGFB1', 'CCL2', 'CXCL10', 'IL2', 'IL21', 'IL23A', 'IL12A'] :
-                ['CCL2', 'CCL5', 'CXCL1', 'CXCL8', 'CXCL10', 'VEGFA', 'MMP9', 'TIMP1', 'MMP2', 'SERPINE1'];
-
-            // Generate mock severity correlations
-            const correlations = cytokines.map(c => ({
-                cytokine: c,
-                rho: (Math.random() - 0.3) * 1.2,  // Slight positive bias
-                pvalue: Math.random() * 0.15
-            })).sort((a, b) => b.rho - a.rho);
-
-            // 1. Lollipop chart
-            lollipopContainer.classList.remove('loading');
-            Plotly.purge(lollipopContainer);
-
-            Plotly.newPlot(lollipopContainer, [{
-                type: 'bar',
-                orientation: 'h',
-                y: correlations.map(d => d.cytokine),
-                x: correlations.map(d => d.rho),
-                marker: {
-                    color: correlations.map(d => d.pvalue < 0.05 ? (d.rho > 0 ? '#d62728' : '#2ca02c') : '#ccc')
-                },
-                text: correlations.map(d => d.pvalue < 0.05 ? '*' : ''),
-                textposition: 'outside',
-                hovertemplate: '<b>%{y}</b><br>ρ = %{x:.3f}<br>p = %{customdata:.4f}<extra></extra>',
-                customdata: correlations.map(d => d.pvalue)
-            }], {
-                xaxis: { title: `Correlation with ${scoreNames[disease]}`, zeroline: true },
-                yaxis: { automargin: true },
-                margin: { l: 80, r: 50, t: 30, b: 50 },
-                height: 400,
-                annotations: [{
-                    x: 0.95, y: 1.02, xref: 'paper', yref: 'paper',
-                    text: '* p < 0.05', showarrow: false, font: { size: 10 }
-                }]
-            }, { responsive: true });
-
-            // 2. Scatter plot of top correlating cytokine
-            if (scatterContainer) {
-                scatterContainer.classList.remove('loading');
-                Plotly.purge(scatterContainer);
-
-                const topCytokine = correlations[0].cytokine;
-                const n = 50;
-                const severityScores = Array.from({length: n}, () => Math.random() * 6 + 1);
-                const cytokineActivity = severityScores.map(s => s * correlations[0].rho * 0.3 + (Math.random() - 0.5) * 0.8);
-
-                Plotly.newPlot(scatterContainer, [{
-                    type: 'scatter',
-                    mode: 'markers',
-                    x: severityScores,
-                    y: cytokineActivity,
-                    marker: { size: 8, color: '#1f77b4', opacity: 0.7 },
-                    hovertemplate: `${scoreNames[disease]}: %{x:.1f}<br>${topCytokine}: %{y:.2f}<extra></extra>`
-                }], {
-                    xaxis: { title: scoreNames[disease] },
-                    yaxis: { title: `${topCytokine} Activity` },
-                    margin: { l: 60, r: 30, t: 30, b: 50 },
-                    height: 350
-                }, { responsive: true });
+            // Populate disease dropdown
+            const diseases = [...new Set(data.map(d => d.disease))].sort();
+            const select = document.getElementById('severity-disease');
+            if (select) {
+                // Disease display names with severity info
+                const diseaseLabels = {
+                    'COVID': 'COVID-19 (7 severity stages)',
+                    'COPD': 'COPD (GOLD 3-4)',
+                    'SLE': 'SLE (Managed/Flare)',
+                    'asthma': 'Asthma (GINA 1-4)',
+                    'sepsis': 'Sepsis (4 types)',
+                    'MS': 'Multiple Sclerosis (FLAIR)',
+                    'HBV': 'Hepatitis B (4 stages)',
+                    'cirrhosis': 'Cirrhosis (NASH/Alcoholic)',
+                    'CRC': 'Colorectal Cancer (MSS/MSI-H)',
+                    'HNSCC': 'Head & Neck Cancer (T1-T4)',
+                    'NPC': 'Nasopharyngeal Cancer (Stage II-IVa)'
+                };
+                select.innerHTML = diseases.map(d =>
+                    `<option value="${d}">${diseaseLabels[d] || d}</option>`
+                ).join('');
             }
 
-            // 3. Boxplot by severity tertiles
+            // Build signature lists
+            severitySignatures.cytosig = [...new Set(
+                data.filter(d => d.signature_type === 'CytoSig').map(d => d.signature)
+            )].sort();
+            severitySignatures.secact = [...new Set(
+                data.filter(d => d.signature_type === 'SecAct').map(d => d.signature)
+            )].sort();
+        }
+
+        function getSeveritySignatures() {
+            const sigType = document.getElementById('severity-sig-type')?.value || 'CytoSig';
+            return sigType === 'SecAct' ? severitySignatures.secact : severitySignatures.cytosig;
+        }
+
+        function showSeveritySuggestions() {
+            const input = document.getElementById('severity-search');
+            const div = document.getElementById('severity-suggestions');
+            if (!input || !div) return;
+
+            const query = input.value.toLowerCase();
+            const sigs = getSeveritySignatures();
+            const filtered = sigs.filter(s => s.toLowerCase().includes(query)).slice(0, 15);
+
+            if (filtered.length === 0) { div.style.display = 'none'; return; }
+
+            div.innerHTML = filtered.map(s =>
+                `<div style="padding:6px 10px;cursor:pointer;border-bottom:1px solid #eee"
+                     onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'"
+                     onclick="selectSeveritySig('${s}')">${s}</div>`
+            ).join('');
+            div.style.display = 'block';
+        }
+
+        function selectSeveritySig(sig) {
+            const input = document.getElementById('severity-search');
+            const div = document.getElementById('severity-suggestions');
+            if (input) input.value = sig;
+            if (div) div.style.display = 'none';
+            updateSeverityCorrelation();
+        }
+
+        function updateSeverityCorrelation() {
+            const heatmapContainer = document.getElementById('severity-heatmap');
+            const lineContainer = document.getElementById('severity-line');
+            const boxplotContainer = document.getElementById('severity-boxplot');
+
+            const data = state.data.inflammationseverity;
+            if (!data || data.length === 0) {
+                [heatmapContainer, lineContainer, boxplotContainer].forEach(c => {
+                    if (c) {
+                        c.classList.remove('loading');
+                        c.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Severity data not available. Run preprocessing to generate.</p>';
+                    }
+                });
+                return;
+            }
+
+            const disease = document.getElementById('severity-disease')?.value || 'COVID';
+            const sigType = document.getElementById('severity-sig-type')?.value || 'CytoSig';
+            const selectedSig = document.getElementById('severity-search')?.value || 'IFNG';
+
+            // Filter data for this disease and signature type
+            let filtered = data.filter(d => d.disease === disease && d.signature_type === sigType);
+
+            if (filtered.length === 0) {
+                [heatmapContainer, lineContainer, boxplotContainer].forEach(c => {
+                    if (c) {
+                        c.classList.remove('loading');
+                        c.innerHTML = `<p style="text-align:center; color:#666; padding:2rem;">No ${sigType} data for ${disease}</p>`;
+                    }
+                });
+                return;
+            }
+
+            // Get severity stages in order
+            const severityOrder = [...new Set(filtered.map(d => JSON.stringify({s: d.severity, o: d.severity_order})))]
+                .map(s => JSON.parse(s))
+                .sort((a, b) => a.o - b.o)
+                .map(x => x.s);
+
+            // Get top signatures by variance across severity stages
+            const sigVariance = {};
+            const signatures = [...new Set(filtered.map(d => d.signature))];
+            signatures.forEach(sig => {
+                const vals = severityOrder.map(sev => {
+                    const rec = filtered.find(d => d.signature === sig && d.severity === sev);
+                    return rec ? rec.mean_activity : 0;
+                });
+                const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+                sigVariance[sig] = vals.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / vals.length;
+            });
+            const topSigs = Object.entries(sigVariance)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 20)
+                .map(x => x[0]);
+
+            // 1. Heatmap: Signatures × Severity stages
+            if (heatmapContainer) {
+                heatmapContainer.classList.remove('loading');
+                Plotly.purge(heatmapContainer);
+
+                const zData = topSigs.map(sig =>
+                    severityOrder.map(sev => {
+                        const rec = filtered.find(d => d.signature === sig && d.severity === sev);
+                        return rec ? rec.mean_activity : null;
+                    })
+                );
+
+                Plotly.newPlot(heatmapContainer, [{
+                    z: zData,
+                    x: severityOrder,
+                    y: topSigs,
+                    type: 'heatmap',
+                    colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
+                    zmid: 0,
+                    colorbar: { title: 'Activity', len: 0.8 },
+                    hovertemplate: '<b>%{y}</b><br>%{x}<br>Activity: %{z:.3f}<extra></extra>'
+                }], {
+                    margin: { l: 100, r: 60, t: 30, b: 100 },
+                    xaxis: { title: 'Severity Stage', tickangle: 45 },
+                    yaxis: { automargin: true },
+                    height: 420
+                }, { responsive: true });
+
+                document.getElementById('severity-heatmap-subtitle').textContent =
+                    `Top 20 ${sigType} signatures by variance across ${disease} severity stages`;
+            }
+
+            // 2. Line chart: Selected signature across severity
+            if (lineContainer) {
+                lineContainer.classList.remove('loading');
+                Plotly.purge(lineContainer);
+
+                // Get data for selected signature
+                const sigData = severityOrder.map(sev => {
+                    const rec = filtered.find(d => d.signature === selectedSig && d.severity === sev);
+                    return {
+                        severity: sev,
+                        mean: rec ? rec.mean_activity : null,
+                        std: rec ? rec.std_activity : 0,
+                        n: rec ? rec.n_samples : 0
+                    };
+                }).filter(d => d.mean !== null);
+
+                if (sigData.length === 0) {
+                    lineContainer.innerHTML = `<p style="text-align:center; color:#666; padding:2rem;">No data for ${selectedSig} in ${disease}</p>`;
+                } else {
+                    Plotly.newPlot(lineContainer, [{
+                        x: sigData.map(d => d.severity),
+                        y: sigData.map(d => d.mean),
+                        error_y: {
+                            type: 'data',
+                            array: sigData.map(d => d.std / Math.sqrt(d.n)),
+                            visible: true,
+                            color: 'rgba(31, 119, 180, 0.5)'
+                        },
+                        type: 'scatter',
+                        mode: 'lines+markers',
+                        marker: { size: 10, color: '#1f77b4' },
+                        line: { width: 2, color: '#1f77b4' },
+                        hovertemplate: '<b>%{x}</b><br>Activity: %{y:.3f}<br>n=%{customdata}<extra></extra>',
+                        customdata: sigData.map(d => d.n)
+                    }], {
+                        margin: { l: 60, r: 30, t: 30, b: 100 },
+                        xaxis: { title: 'Severity Stage', tickangle: 45 },
+                        yaxis: { title: `${selectedSig} Activity`, zeroline: true },
+                        height: 420
+                    }, { responsive: true });
+                }
+
+                document.getElementById('severity-line-subtitle').textContent =
+                    `${selectedSig} activity across ${disease} severity stages (mean ± SE)`;
+            }
+
+            // 3. Box plot: Distribution comparison
             if (boxplotContainer) {
                 boxplotContainer.classList.remove('loading');
                 Plotly.purge(boxplotContainer);
 
-                const topCytokines = correlations.slice(0, 5).map(d => d.cytokine);
-                const tertiles = ['Low', 'Medium', 'High'];
+                // Show top 5 most variable signatures as grouped boxes
+                const top5 = topSigs.slice(0, 5);
+                const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'];
 
-                const traces = topCytokines.map(c => ({
-                    type: 'box',
-                    name: c,
-                    x: tertiles.flatMap(t => Array(15).fill(t)),
-                    y: tertiles.flatMap(() => Array.from({length: 15}, () => (Math.random() - 0.5) * 2)),
-                    boxmean: true
+                const traces = top5.map((sig, i) => ({
+                    type: 'bar',
+                    name: sig,
+                    x: severityOrder,
+                    y: severityOrder.map(sev => {
+                        const rec = filtered.find(d => d.signature === sig && d.severity === sev);
+                        return rec ? rec.mean_activity : 0;
+                    }),
+                    error_y: {
+                        type: 'data',
+                        array: severityOrder.map(sev => {
+                            const rec = filtered.find(d => d.signature === sig && d.severity === sev);
+                            return rec ? rec.std_activity : 0;
+                        }),
+                        visible: true
+                    },
+                    marker: { color: colors[i] },
+                    hovertemplate: '<b>%{x}</b><br>' + sig + ': %{y:.3f}<extra></extra>'
                 }));
 
                 Plotly.newPlot(boxplotContainer, traces, {
-                    boxmode: 'group',
-                    xaxis: { title: `${scoreNames[disease]} Tertile` },
-                    yaxis: { title: 'Cytokine Activity' },
-                    margin: { l: 60, r: 30, t: 30, b: 50 },
-                    legend: { orientation: 'h', y: -0.15 },
-                    height: 350
+                    barmode: 'group',
+                    margin: { l: 60, r: 30, t: 30, b: 100 },
+                    xaxis: { title: 'Severity Stage', tickangle: 45 },
+                    yaxis: { title: 'Activity (mean ± SD)', zeroline: true },
+                    legend: { orientation: 'h', y: -0.25 },
+                    height: 380
                 }, { responsive: true });
+
+                document.getElementById('severity-boxplot-subtitle').textContent =
+                    `Top 5 most variable ${sigType} signatures in ${disease}`;
             }
         }
 
@@ -9413,7 +9556,37 @@
 
             // Inflammation Severity
             document.getElementById('severity-disease')?.addEventListener('change', updateSeverityCorrelation);
-            document.getElementById('severity-sig-type')?.addEventListener('change', updateSeverityCorrelation);
+            document.getElementById('severity-sig-type')?.addEventListener('change', () => {
+                // Reset to appropriate default signature
+                const sigType = document.getElementById('severity-sig-type')?.value || 'CytoSig';
+                const input = document.getElementById('severity-search');
+                if (input) {
+                    const sigs = getSeveritySignatures();
+                    if (sigType === 'SecAct' && sigs.length > 0) {
+                        const defaultSig = ['IFNG', 'CCL3', 'S100A8', 'GRN'].find(s => sigs.includes(s)) || sigs[0];
+                        input.value = defaultSig;
+                    } else {
+                        input.value = 'IFNG';
+                    }
+                }
+                updateSeverityCorrelation();
+            });
+            const severitySearch = document.getElementById('severity-search');
+            if (severitySearch) {
+                severitySearch.addEventListener('focus', showSeveritySuggestions);
+                severitySearch.addEventListener('input', showSeveritySuggestions);
+                severitySearch.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        document.getElementById('severity-suggestions').style.display = 'none';
+                        updateSeverityCorrelation();
+                    }
+                });
+                severitySearch.addEventListener('blur', () => {
+                    setTimeout(() => {
+                        document.getElementById('severity-suggestions').style.display = 'none';
+                    }, 200);
+                });
+            }
 
             // Inflammation Cell Drivers
             document.getElementById('drivers-sig-type')?.addEventListener('change', () => {
