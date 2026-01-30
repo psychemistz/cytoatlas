@@ -1414,6 +1414,7 @@
                         <select id="inflam-boxplot-sig-type">
                             <option value="CytoSig">CytoSig (43 cytokines)</option>
                             <option value="SecAct">SecAct (1,170 proteins)</option>
+                            <option value="both">Both (22 shared)</option>
                         </select>
                     </div>
                     <div class="control-group" style="position: relative;">
@@ -5489,7 +5490,13 @@
 
         function getInflamBoxplotSignatures() {
             const sigType = document.getElementById('inflam-boxplot-sig-type')?.value || 'CytoSig';
-            return sigType === 'SecAct' ? inflamBoxplotSignatures.secact : inflamBoxplotSignatures.cytosig;
+            if (sigType === 'SecAct') return inflamBoxplotSignatures.secact;
+            if (sigType === 'both') {
+                // Return signatures present in both CytoSig and SecAct
+                const cytosigSet = new Set(inflamBoxplotSignatures.cytosig);
+                return inflamBoxplotSignatures.secact.filter(s => cytosigSet.has(s));
+            }
+            return inflamBoxplotSignatures.cytosig;
         }
 
         function showInflamBoxplotSuggestions() {
@@ -5533,7 +5540,9 @@
             const subtitleEl = document.getElementById('inflam-boxplot-subtitle');
             const cellTypeLabel = cellType === 'All' ? '' : ` in ${cellType}`;
             if (titleEl) titleEl.textContent = `${stratifyBy === 'age' ? 'Age' : 'BMI'}-Stratified ${signature} Activity${cellTypeLabel}`;
-            if (subtitleEl) subtitleEl.textContent = `${sigType} activity distribution across ${stratifyBy === 'age' ? 'age decades' : 'BMI categories'}`;
+            if (subtitleEl) subtitleEl.textContent = sigType === 'both'
+                ? `CytoSig vs SecAct activity across ${stratifyBy === 'age' ? 'age decades' : 'BMI categories'}${cellTypeLabel}`
+                : `${sigType} activity distribution across ${stratifyBy === 'age' ? 'age decades' : 'BMI categories'}${cellTypeLabel}`;
 
             const boxplotData = state.data.agebmiboxplots?.inflammation;
             if (!boxplotData || !boxplotData[stratifyBy]) {
@@ -5541,7 +5550,77 @@
                 return;
             }
 
-            // New format: flat array with signature, sig_type, cell_type, bin fields
+            const bins = stratifyBy === 'age'
+                ? ['<30', '30-39', '40-49', '50-59', '60-69', '70+']
+                : ['Underweight', 'Normal', 'Overweight', 'Obese'];
+
+            // Handle "both" mode - show CytoSig and SecAct side by side
+            if (sigType === 'both') {
+                const cytosigData = boxplotData[stratifyBy].filter(d =>
+                    d.signature === signature && d.sig_type === 'CytoSig' && d.cell_type === cellType
+                );
+                const secactData = boxplotData[stratifyBy].filter(d =>
+                    d.signature === signature && d.sig_type === 'SecAct' && d.cell_type === cellType
+                );
+
+                if (cytosigData.length === 0 && secactData.length === 0) {
+                    container.innerHTML = '<p style="text-align:center;color:#666;padding:2rem;">No data available for this selection</p>';
+                    return;
+                }
+
+                const traces = [];
+                bins.forEach((bin, i) => {
+                    const cytoD = cytosigData.find(d => d.bin === bin);
+                    const secD = secactData.find(d => d.bin === bin);
+
+                    if (cytoD) {
+                        traces.push({
+                            y: cytoD.values || generateBoxplotValues(cytoD),
+                            type: 'box',
+                            name: `${bin}`,
+                            legendgroup: 'CytoSig',
+                            boxpoints: cytoD.values ? 'outliers' : false,
+                            marker: { color: '#1f77b4' },
+                            offsetgroup: 'CytoSig',
+                            hovertemplate: `CytoSig ${bin}<br>median: ${cytoD.median?.toFixed(2) || 'N/A'}<br>n: ${cytoD.n || 'N/A'}<extra></extra>`
+                        });
+                    }
+                    if (secD) {
+                        traces.push({
+                            y: secD.values || generateBoxplotValues(secD),
+                            type: 'box',
+                            name: `${bin}`,
+                            legendgroup: 'SecAct',
+                            boxpoints: secD.values ? 'outliers' : false,
+                            marker: { color: '#ff7f0e' },
+                            offsetgroup: 'SecAct',
+                            hovertemplate: `SecAct ${bin}<br>median: ${secD.median?.toFixed(2) || 'N/A'}<br>n: ${secD.n || 'N/A'}<extra></extra>`
+                        });
+                    }
+                });
+
+                Plotly.newPlot(container, traces, {
+                    yaxis: { title: `${signature} Activity Score${cellTypeLabel}`, zeroline: true },
+                    xaxis: { title: stratifyBy === 'age' ? 'Age Group' : 'BMI Category' },
+                    boxmode: 'group',
+                    showlegend: true,
+                    legend: { title: { text: 'Signature Type' } },
+                    margin: { t: 30, b: 60, l: 60, r: 30 },
+                    height: 450,
+                    annotations: [{
+                        x: 0.25, y: 1.08, xref: 'paper', yref: 'paper',
+                        text: '<b style="color:#1f77b4">■</b> CytoSig',
+                        showarrow: false, font: { size: 12 }
+                    }, {
+                        x: 0.45, y: 1.08, xref: 'paper', yref: 'paper',
+                        text: '<b style="color:#ff7f0e">■</b> SecAct',
+                        showarrow: false, font: { size: 12 }
+                    }]
+                }, { responsive: true });
+                return;
+            }
+
+            // Single signature type mode
             let sigData = boxplotData[stratifyBy].filter(d =>
                 d.signature === signature &&
                 d.sig_type === sigType &&
@@ -5552,10 +5631,6 @@
                 container.innerHTML = '<p style="text-align:center;color:#666;padding:2rem;">No data available for this selection</p>';
                 return;
             }
-
-            const bins = stratifyBy === 'age'
-                ? ['<30', '30-39', '40-49', '50-59', '60-69', '70+']
-                : ['Underweight', 'Normal', 'Overweight', 'Obese'];
 
             // Sort by bin order
             sigData.sort((a, b) => bins.indexOf(a.bin) - bins.indexOf(b.bin));
