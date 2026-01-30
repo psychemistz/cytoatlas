@@ -7421,80 +7421,154 @@
                 return;
             }
 
-            // 1. Scatter plot: Main vs Validation correlations
+            // Get filter selections
+            const sigType = document.getElementById('validation-sig-type')?.value || 'CytoSig';
+            const cohortComparison = document.getElementById('validation-cohorts')?.value || 'main-validation';
+
+            // Filter correlations by signature type
+            let correlations = data.correlations || [];
+            if (sigType !== 'both') {
+                correlations = correlations.filter(d => d.signature_type === sigType);
+            }
+
+            // Determine which correlation values to use based on cohort comparison
+            let xKey, yKey, xLabel, yLabel;
+            if (cohortComparison === 'main-validation') {
+                // Show histogram of Main vs Validation correlations
+                xKey = 'main_validation_r';
+                xLabel = 'Main vs Validation (r)';
+            } else if (cohortComparison === 'main-external') {
+                xKey = 'main_external_r';
+                xLabel = 'Main vs External (r)';
+            } else {
+                // validation-external
+                xKey = 'validation_external_r';
+                xLabel = 'Validation vs External (r)';
+            }
+
+            // 1. Histogram of correlation values for selected comparison
             if (container1) {
                 container1.classList.remove('loading');
                 Plotly.purge(container1);
 
-                const correlations = data.correlations || [];
                 if (correlations.length === 0) {
-                    container1.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No correlation data available</p>';
+                    container1.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No correlation data available for selected signature type</p>';
                 } else {
-                    Plotly.newPlot(container1, [{
-                        type: 'scatter',
-                        mode: 'markers+text',
-                        x: correlations.map(d => d.main_validation_r),
-                        y: correlations.map(d => d.main_external_r),
-                        text: correlations.map(d => d.signature),
-                        textposition: 'top center',
-                        textfont: { size: 8 },
-                        marker: {
-                            size: 10,
-                            color: correlations.map(d => Math.min(d.main_validation_r, d.main_external_r)),
-                            colorscale: 'Viridis',
-                            colorbar: { title: 'Min r' }
-                        },
-                        hovertemplate: '<b>%{text}</b><br>Main vs Validation: %{x:.3f}<br>Main vs External: %{y:.3f}<extra></extra>'
-                    }, {
-                        type: 'scatter',
-                        mode: 'lines',
-                        x: [0, 1],
-                        y: [0, 1],
-                        line: { dash: 'dash', color: '#ccc' },
-                        showlegend: false,
-                        hoverinfo: 'skip'
-                    }], {
-                        xaxis: { title: 'Main vs Validation (r)', range: [0, 1] },
-                        yaxis: { title: 'Main vs External (r)', range: [0, 1] },
-                        margin: { l: 60, r: 30, t: 30, b: 60 },
-                        height: 450,
-                        shapes: [{
-                            type: 'line',
-                            x0: 0, y0: 0, x1: 1, y1: 1,
-                            line: { dash: 'dash', color: '#ccc' }
-                        }]
-                    }, { responsive: true });
+                    // Get correlation values for the selected comparison
+                    const rValues = correlations
+                        .map(d => d[xKey])
+                        .filter(v => v !== null && v !== undefined && !isNaN(v));
+
+                    if (rValues.length === 0) {
+                        container1.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No data available for selected cohort comparison</p>';
+                    } else {
+                        // Calculate statistics
+                        const meanR = rValues.reduce((a, b) => a + b, 0) / rValues.length;
+                        const sortedR = [...rValues].sort((a, b) => a - b);
+                        const medianR = sortedR[Math.floor(sortedR.length / 2)];
+
+                        // Create histogram with individual points overlay
+                        const histTrace = {
+                            type: 'histogram',
+                            x: rValues,
+                            name: 'Distribution',
+                            marker: {
+                                color: '#1f77b4',
+                                opacity: 0.7
+                            },
+                            xbins: { start: 0, end: 1, size: 0.05 },
+                            hovertemplate: 'r: %{x:.2f}<br>Count: %{y}<extra></extra>'
+                        };
+
+                        // Add vertical lines for mean and median
+                        const shapes = [
+                            {
+                                type: 'line',
+                                x0: meanR, x1: meanR, y0: 0, y1: 1, yref: 'paper',
+                                line: { color: '#d62728', width: 2, dash: 'dash' }
+                            },
+                            {
+                                type: 'line',
+                                x0: medianR, x1: medianR, y0: 0, y1: 1, yref: 'paper',
+                                line: { color: '#2ca02c', width: 2, dash: 'dot' }
+                            }
+                        ];
+
+                        // Add annotations
+                        const annotations = [
+                            {
+                                x: meanR, y: 1, yref: 'paper', xanchor: 'left',
+                                text: ` Mean: ${meanR.toFixed(3)}`, showarrow: false,
+                                font: { color: '#d62728', size: 11 }
+                            },
+                            {
+                                x: medianR, y: 0.9, yref: 'paper', xanchor: 'left',
+                                text: ` Median: ${medianR.toFixed(3)}`, showarrow: false,
+                                font: { color: '#2ca02c', size: 11 }
+                            }
+                        ];
+
+                        Plotly.newPlot(container1, [histTrace], {
+                            xaxis: { title: xLabel, range: [0, 1] },
+                            yaxis: { title: 'Number of Signatures' },
+                            margin: { l: 60, r: 30, t: 40, b: 60 },
+                            height: 450,
+                            shapes: shapes,
+                            annotations: annotations,
+                            title: {
+                                text: `${sigType} Signature Reproducibility (n=${rValues.length})`,
+                                font: { size: 14 }
+                            }
+                        }, { responsive: true });
+                    }
                 }
             }
 
-            // 2. Consistency bar chart
+            // 2. Consistency comparison bar chart - show all three comparisons for selected sig type
             if (container2) {
                 container2.classList.remove('loading');
                 Plotly.purge(container2);
 
-                const consistency = data.consistency || [];
+                let consistency = data.consistency || [];
+                // Filter by signature type
+                if (sigType !== 'both') {
+                    consistency = consistency.filter(d => d.signature_type === sigType);
+                }
+
                 if (consistency.length === 0) {
                     container2.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No consistency data available</p>';
                 } else {
+                    // Sort by cohort_pair for consistent ordering
+                    const order = ['Main vs Validation', 'Main vs External', 'Validation vs External'];
+                    consistency = consistency.sort((a, b) => order.indexOf(a.cohort_pair) - order.indexOf(b.cohort_pair));
+
+                    // Highlight the selected comparison
+                    const selectedLabel = cohortComparison === 'main-validation' ? 'Main vs Validation' :
+                                         cohortComparison === 'main-external' ? 'Main vs External' :
+                                         'Validation vs External';
+
+                    const colors = consistency.map(d =>
+                        d.cohort_pair === selectedLabel ? '#1f77b4' : '#aec7e8'
+                    );
+
                     Plotly.newPlot(container2, [{
                         type: 'bar',
                         x: consistency.map(d => d.cohort_pair),
                         y: consistency.map(d => d.mean_r),
-                        text: consistency.map(d => `r=${d.mean_r.toFixed(2)}`),
+                        text: consistency.map(d => `r=${d.mean_r.toFixed(3)}`),
                         textposition: 'auto',
-                        marker: {
-                            color: consistency.map(d => d.mean_r),
-                            colorscale: [[0, '#d62728'], [0.5, '#ffdd57'], [1, '#2ca02c']],
-                            cmin: 0,
-                            cmax: 1
-                        },
-                        hovertemplate: '<b>%{x}</b><br>Mean r: %{y:.3f}<br>n = %{customdata}<extra></extra>',
+                        marker: { color: colors },
+                        hovertemplate: '<b>%{x}</b><br>Mean r: %{y:.3f}<br>n = %{customdata} signatures<extra></extra>',
                         customdata: consistency.map(d => d.n_signatures)
                     }], {
                         xaxis: { title: 'Cohort Comparison' },
                         yaxis: { title: 'Mean Correlation', range: [0, 1] },
-                        margin: { l: 50, r: 30, t: 30, b: 100 },
-                        height: 450
+                        margin: { l: 50, r: 30, t: 40, b: 100 },
+                        height: 450,
+                        title: {
+                            text: `${sigType} Cross-Cohort Consistency`,
+                            font: { size: 14 }
+                        }
                     }, { responsive: true });
                 }
             }

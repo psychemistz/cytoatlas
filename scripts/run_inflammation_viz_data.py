@@ -197,6 +197,9 @@ def generate_cross_cohort_simple():
     """
     Generate cross-cohort validation using per-signature correlations.
     For each signature, compute how its cell-type activity pattern replicates between cohorts.
+
+    Uses a proper 3-way split: Main (60%), Validation (20%), External (20%)
+    stratified by studyID to create independent cohorts.
     """
     log("\n" + "=" * 60)
     log("CROSS-COHORT VALIDATION")
@@ -235,24 +238,29 @@ def generate_cross_cohort_simple():
         var_info = var_info.set_index('_original_idx')
         var_info.index.name = None
 
-        # Split data: 70% main, 30% validation (stratified by study)
+        # Create 3-way split by studyID for proper cross-validation
         np.random.seed(42)
         all_studies = var_info['studyID'].dropna().unique()
-        n_val = max(len(all_studies) // 3, 1)
-        val_studies = np.random.choice(all_studies, n_val, replace=False)
-        main_mask = ~var_info['studyID'].isin(val_studies)
+        np.random.shuffle(all_studies)
+
+        n_studies = len(all_studies)
+        n_main = int(n_studies * 0.6)
+        n_val = int(n_studies * 0.2)
+
+        main_studies = all_studies[:n_main]
+        val_studies = all_studies[n_main:n_main + n_val]
+        ext_studies = all_studies[n_main + n_val:]
+
+        main_mask = var_info['studyID'].isin(main_studies)
         val_mask = var_info['studyID'].isin(val_studies)
+        ext_mask = var_info['studyID'].isin(ext_studies)
 
-        # Ensure we have external validation
-        ext_mask = var_info['studyID'].str.contains('ext|EXT|GSE', na=False, case=False)
-        if ext_mask.sum() > 100:
-            val_mask = ext_mask
-            main_mask = ~ext_mask
-
-        log(f"  Main pseudobulks: {main_mask.sum()}, Validation: {val_mask.sum()}")
+        log(f"  Studies: Main={len(main_studies)}, Val={len(val_studies)}, Ext={len(ext_studies)}")
+        log(f"  Pseudobulks: Main={main_mask.sum()}, Val={val_mask.sum()}, Ext={ext_mask.sum()}")
 
         main_cols = var_info[main_mask].index.tolist()
         val_cols = var_info[val_mask].index.tolist()
+        ext_cols = var_info[ext_mask].index.tolist()
 
         # Compute per-signature cell-type mean activity for each cohort
         cell_types = var_info['cell_type'].unique()
@@ -262,69 +270,108 @@ def generate_cross_cohort_simple():
             ct_means = {}
             for ct in cell_types:
                 ct_cols = [c for c in cols if var_df.loc[c, 'cell_type'] == ct]
-                if len(ct_cols) >= 5:
+                if len(ct_cols) >= 3:  # Minimum 3 samples per cell type
                     ct_means[ct] = act_df[ct_cols].mean(axis=1)
             return pd.DataFrame(ct_means)  # signatures x cell_types
 
         main_ct_means = compute_celltype_means(main_cols, var_info, activity_df, cell_types)
         val_ct_means = compute_celltype_means(val_cols, var_info, activity_df, cell_types)
+        ext_ct_means = compute_celltype_means(ext_cols, var_info, activity_df, cell_types)
 
-        # Find common cell types
-        common_cts = list(set(main_ct_means.columns) & set(val_ct_means.columns))
-        log(f"  Common cell types: {len(common_cts)}")
+        # Find common cell types across all three cohorts
+        common_cts_mv = list(set(main_ct_means.columns) & set(val_ct_means.columns))
+        common_cts_me = list(set(main_ct_means.columns) & set(ext_ct_means.columns))
+        common_cts_ve = list(set(val_ct_means.columns) & set(ext_ct_means.columns))
+        common_cts_all = list(set(common_cts_mv) & set(common_cts_me) & set(common_cts_ve))
 
-        if len(common_cts) < 5:
+        log(f"  Common cell types: MV={len(common_cts_mv)}, ME={len(common_cts_me)}, VE={len(common_cts_ve)}, All={len(common_cts_all)}")
+
+        if len(common_cts_all) < 3:
+            log(f"  Warning: Not enough common cell types, skipping {sig_type}")
             continue
 
-        # Compute per-signature correlation across cell types
+        # Compute per-signature correlation across cell types for all three pairs
         main_val_rs = []
+        main_ext_rs = []
+        val_ext_rs = []
+
         for sig in activity_df.index:
-            if sig not in main_ct_means.index or sig not in val_ct_means.index:
+            if sig not in main_ct_means.index:
                 continue
 
-            main_vals = main_ct_means.loc[sig, common_cts].values
-            val_vals = val_ct_means.loc[sig, common_cts].values
+            # Main vs Validation
+            r_mv, p_mv = 0, 1
+            if sig in val_ct_means.index and len(common_cts_mv) >= 3:
+                main_vals_mv = main_ct_means.loc[sig, common_cts_mv].values
+                val_vals_mv = val_ct_means.loc[sig, common_cts_mv].values
+                mask = ~(np.isnan(main_vals_mv) | np.isnan(val_vals_mv))
+                if mask.sum() >= 3:
+                    try:
+                        r_mv, p_mv = stats.spearmanr(main_vals_mv[mask], val_vals_mv[mask])
+                        if np.isnan(r_mv): r_mv = 0
+                    except:
+                        pass
 
-            # Remove NaNs
-            mask = ~(np.isnan(main_vals) | np.isnan(val_vals))
-            if mask.sum() < 5:
-                continue
+            # Main vs External
+            r_me = 0
+            if sig in ext_ct_means.index and len(common_cts_me) >= 3:
+                main_vals_me = main_ct_means.loc[sig, common_cts_me].values
+                ext_vals_me = ext_ct_means.loc[sig, common_cts_me].values
+                mask = ~(np.isnan(main_vals_me) | np.isnan(ext_vals_me))
+                if mask.sum() >= 3:
+                    try:
+                        r_me, _ = stats.spearmanr(main_vals_me[mask], ext_vals_me[mask])
+                        if np.isnan(r_me): r_me = 0
+                    except:
+                        pass
 
-            try:
-                r_mv, p_mv = stats.spearmanr(main_vals[mask], val_vals[mask])
-            except:
-                r_mv, p_mv = 0, 1
-
-            # Simulate external validation (use subset of validation)
-            np.random.seed(hash(sig) % 2**32)
-            r_me = r_mv * np.random.uniform(0.85, 1.0) + np.random.normal(0, 0.05)
-            r_me = max(min(r_me, 0.99), 0)  # Clamp to valid range
+            # Validation vs External
+            r_ve = 0
+            if sig in val_ct_means.index and sig in ext_ct_means.index and len(common_cts_ve) >= 3:
+                val_vals_ve = val_ct_means.loc[sig, common_cts_ve].values
+                ext_vals_ve = ext_ct_means.loc[sig, common_cts_ve].values
+                mask = ~(np.isnan(val_vals_ve) | np.isnan(ext_vals_ve))
+                if mask.sum() >= 3:
+                    try:
+                        r_ve, _ = stats.spearmanr(val_vals_ve[mask], ext_vals_ve[mask])
+                        if np.isnan(r_ve): r_ve = 0
+                    except:
+                        pass
 
             validation_data['correlations'].append({
                 'signature': sig,
                 'signature_type': sig_type,
-                'main_validation_r': round(max(r_mv, 0) if not np.isnan(r_mv) else 0, 3),
-                'main_external_r': round(r_me, 3),
+                'main_validation_r': round(max(r_mv, 0), 3),
+                'main_external_r': round(max(r_me, 0), 3),
+                'validation_external_r': round(max(r_ve, 0), 3),
                 'pvalue': round(p_mv if not np.isnan(p_mv) else 1, 6)
             })
-            main_val_rs.append(r_mv if not np.isnan(r_mv) else 0)
+            main_val_rs.append(max(r_mv, 0))
+            main_ext_rs.append(max(r_me, 0))
+            val_ext_rs.append(max(r_ve, 0))
 
         log(f"  Computed correlations for {len(main_val_rs)} signatures")
-        log(f"  Mean correlation: {np.mean(main_val_rs):.3f}")
+        log(f"  Mean correlations: MV={np.mean(main_val_rs):.3f}, ME={np.mean(main_ext_rs):.3f}, VE={np.mean(val_ext_rs):.3f}")
 
-        # Overall consistency
+        # Overall consistency for all three pairs
         if main_val_rs:
             validation_data['consistency'].append({
-                'cohort_pair': f'Main vs Validation',
+                'cohort_pair': 'Main vs Validation',
                 'signature_type': sig_type,
                 'mean_r': round(float(np.mean(main_val_rs)), 3),
                 'n_signatures': len(main_val_rs)
             })
             validation_data['consistency'].append({
-                'cohort_pair': f'Main vs External',
+                'cohort_pair': 'Main vs External',
                 'signature_type': sig_type,
-                'mean_r': round(float(np.mean(main_val_rs)) * 0.92, 3),  # Slightly lower for external
-                'n_signatures': len(main_val_rs)
+                'mean_r': round(float(np.mean(main_ext_rs)), 3),
+                'n_signatures': len(main_ext_rs)
+            })
+            validation_data['consistency'].append({
+                'cohort_pair': 'Validation vs External',
+                'signature_type': sig_type,
+                'mean_r': round(float(np.mean(val_ext_rs)), 3),
+                'n_signatures': len(val_ext_rs)
             })
 
     return validation_data
