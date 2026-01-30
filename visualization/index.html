@@ -1493,6 +1493,13 @@
 
             <!-- Differential Tab (Disease vs Healthy) -->
             <div class="tab-content" id="tab-inflam-differential">
+                <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
+                    <strong>Disease vs Healthy Comparison:</strong> Wilcoxon rank-sum test comparing cytokine activity between disease and healthy samples.
+                    <br><em style="color: #666;">
+                    <strong>Study-matched:</strong> CD, COPD, COVID, HBV, HIV, HNSCC, MS, PS, PSA, RA, SLE, UC, asthma, flu, sepsis - compared to healthy from same study.
+                    <br><strong style="color: #d62728;">Pooled healthy ⚠️:</strong> BRCA, CRC, NPC, cirrhosis - no matched controls in study; compared to all healthy samples (interpret with caution).
+                    </em>
+                </div>
                 <div class="controls">
                     <div class="control-group">
                         <label>Disease</label>
@@ -5946,15 +5953,28 @@
                 }).slice(0, 200);
             }
 
-            // Update titles
+            // Update titles with comparison type info
             const diseaseLabel = diseaseFilter === 'all' ? 'All Diseases' : diseaseFilter;
             const volcanoTitle = document.getElementById('inflam-diff-volcano-title');
             const volcanoSubtitle = document.getElementById('inflam-diff-volcano-subtitle');
             const barTitle = document.getElementById('inflam-diff-bar-title');
             const barSubtitle = document.getElementById('inflam-diff-bar-subtitle');
 
+            // Get comparison type for this disease
+            let comparisonNote = '';
+            if (diseaseFilter !== 'all' && filteredData.length > 0) {
+                const compType = filteredData[0].comparison;
+                const healthyNote = filteredData[0].healthy_note;
+                const nHealthy = filteredData[0].n_g2;
+                if (compType === 'study_matched') {
+                    comparisonNote = ` (study-matched healthy, n=${nHealthy})`;
+                } else {
+                    comparisonNote = ` ⚠️ (pooled healthy - no matched controls, n=${nHealthy})`;
+                }
+            }
+
             if (volcanoTitle) volcanoTitle.textContent = `Volcano Plot: ${diseaseLabel} vs Healthy`;
-            if (volcanoSubtitle) volcanoSubtitle.textContent = `Positive = higher in ${diseaseLabel}, Negative = higher in Healthy`;
+            if (volcanoSubtitle) volcanoSubtitle.innerHTML = `Positive = higher in ${diseaseLabel}, Negative = higher in Healthy<br><span style="font-size: 0.85em; color: ${comparisonNote.includes('⚠️') ? '#d62728' : '#666'};">${comparisonNote}</span>`;
             if (barTitle) barTitle.textContent = `Top Differential Signatures`;
             if (barSubtitle) barSubtitle.textContent = `Sorted by significance (|effect| × -log10 p)`;
 
