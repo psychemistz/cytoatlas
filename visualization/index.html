@@ -6328,7 +6328,18 @@
             document.getElementById('inflam-disease-sig-type')?.addEventListener('change', () => {
                 // Reset search to default when switching sig type
                 const searchInput = document.getElementById('inflam-disease-search');
-                if (searchInput) searchInput.value = 'IFNG';
+                const sigType = document.getElementById('inflam-disease-sig-type')?.value || 'CytoSig';
+                if (searchInput) {
+                    // Use appropriate default for each signature type
+                    const sigs = getInflamDiseaseSignatures();
+                    if (sigType === 'SecAct' && sigs.length > 0) {
+                        // Find a common SecAct signature as default, or use first available
+                        const defaultSecAct = ['CCL3', 'S100A8', 'GRN', 'CTSB'].find(s => sigs.includes(s)) || sigs[0];
+                        searchInput.value = defaultSecAct;
+                    } else {
+                        searchInput.value = 'IFNG';
+                    }
+                }
                 updateInflamDiseaseBar();
                 updateInflamDiseaseHeatmap();
             });
