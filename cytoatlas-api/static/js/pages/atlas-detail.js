@@ -5036,28 +5036,39 @@ const AtlasDetailPage = {
             </div>
 
             <!-- Activity Boxplot (Top) -->
-            <div class="viz-container" style="min-height: 400px;">
+            <div class="viz-container" style="max-height: 420px; overflow: hidden;">
                 <div class="viz-title" id="tissue-boxplot-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Activity Distribution by Tissue</div>
                 <div class="viz-subtitle" id="tissue-boxplot-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Cell-type agnostic mean activity per tissue</div>
-                <div id="tissue-boxplot" class="plot-container" style="height: 380px;">Loading...</div>
+                <div id="tissue-boxplot" class="plot-container" style="height: 380px; max-height: 380px; overflow: hidden;">Loading...</div>
             </div>
 
             <!-- Heatmap (Bottom) -->
-            <div class="viz-container" style="margin-top: 1.5rem; overflow: hidden;">
+            <div class="viz-container" style="margin-top: 1.5rem; max-height: 520px; overflow: hidden;">
                 <div class="viz-title" id="tissue-heatmap-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Signature × Tissue Heatmap</div>
                 <div class="viz-subtitle" id="tissue-heatmap-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Activity patterns across tissues</div>
-                <div id="tissue-heatmap" class="plot-container" style="height: 500px; max-height: 500px; overflow: hidden;">Loading...</div>
+                <div id="tissue-heatmap" class="plot-container" style="height: 480px; max-height: 480px; overflow: hidden;">Loading...</div>
             </div>
         `;
 
-        // Load both normal organ and cancer data
-        this.scatlasOrganData = await API.get('/scatlas/organ-signatures', { signature_type: this.signatureType });
-        this.cancerTypesData = await API.get('/scatlas/cancer-types-signatures', { signature_type: this.signatureType });
+        // Load both normal organ and cancer data (with error handling)
+        try {
+            this.scatlasOrganData = await API.get('/scatlas/organ-signatures', { signature_type: this.signatureType });
+        } catch (e) {
+            console.warn('Failed to load organ signatures:', e);
+            this.scatlasOrganData = null;
+        }
+
+        try {
+            this.cancerTypesData = await API.get('/scatlas/cancer-types-signatures', { signature_type: this.signatureType });
+        } catch (e) {
+            console.warn('Failed to load cancer types signatures:', e);
+            this.cancerTypesData = null;
+        }
 
         // Get signatures from available data
         if (this.scatlasOrganData && this.scatlasOrganData.length > 0) {
             this.tissueSignatures = [...new Set(this.scatlasOrganData.map(d => d.signature))].sort();
-        } else if (this.cancerTypesData) {
+        } else if (this.cancerTypesData?.cytosig_signatures || this.cancerTypesData?.secact_signatures) {
             const sigs = this.signatureType === 'CytoSig'
                 ? this.cancerTypesData.cytosig_signatures
                 : this.cancerTypesData.secact_signatures;
@@ -5727,44 +5738,62 @@ const AtlasDetailPage = {
 
             <div class="two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                 <!-- Volcano plot -->
-                <div class="viz-container" style="min-height: 400px;">
+                <div class="viz-container" style="max-height: 420px; overflow: hidden;">
                     <div class="viz-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Differential Volcano Plot</div>
                     <div class="viz-subtitle" id="diff-volcano-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Tumor vs Adjacent: log2FC vs significance</div>
-                    <div id="diff-volcano" class="plot-container" style="height: 380px;">Loading...</div>
+                    <div id="diff-volcano" class="plot-container" style="height: 360px; max-height: 360px; overflow: hidden;">Loading...</div>
                 </div>
                 <!-- Top differential signatures -->
-                <div class="viz-container" style="min-height: 400px;">
+                <div class="viz-container" style="max-height: 420px; overflow: hidden;">
                     <div class="viz-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Top Differential Signatures</div>
                     <div class="viz-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Ranked by absolute log2 fold change</div>
-                    <div id="diff-top-bar" class="plot-container" style="height: 380px;">Loading...</div>
+                    <div id="diff-top-bar" class="plot-container" style="height: 360px; max-height: 360px; overflow: hidden;">Loading...</div>
                 </div>
             </div>
 
             <!-- Boxplot at bottom for 3 conditions -->
-            <div class="viz-container" style="min-height: 350px; margin-top: 1rem;">
+            <div class="viz-container" style="margin-top: 1rem; max-height: 360px; overflow: hidden;">
                 <div class="viz-title" id="diff-boxplot-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Activity Comparison: Tumor vs Adjacent vs Normal</div>
                 <div class="viz-subtitle" id="diff-boxplot-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Cell-type agnostic mean activity for selected signature</div>
-                <div id="diff-boxplot" class="plot-container" style="height: 320px;">Loading...</div>
+                <div id="diff-boxplot" class="plot-container" style="height: 300px; max-height: 300px; overflow: hidden;">Loading...</div>
             </div>
         `;
 
-        // Load comparison data
-        this.diffAnalysisData = await API.get('/scatlas/heatmap/cancer-comparison', { signature_type: this.signatureType });
+        // Load comparison data with error handling
+        try {
+            this.diffAnalysisData = await API.get('/scatlas/heatmap/cancer-comparison', { signature_type: this.signatureType });
+        } catch (e) {
+            console.warn('Failed to load cancer comparison data:', e);
+            this.diffAnalysisData = null;
+        }
 
         // Also need organ data for normal comparison
         if (!this.scatlasOrganData) {
-            this.scatlasOrganData = await API.get('/scatlas/organ-signatures', { signature_type: this.signatureType });
+            try {
+                this.scatlasOrganData = await API.get('/scatlas/organ-signatures', { signature_type: this.signatureType });
+            } catch (e) {
+                console.warn('Failed to load organ signatures:', e);
+                this.scatlasOrganData = null;
+            }
         }
         if (!this.cancerTypesData) {
-            this.cancerTypesData = await API.get('/scatlas/cancer-types-signatures', { signature_type: this.signatureType });
+            try {
+                this.cancerTypesData = await API.get('/scatlas/cancer-types-signatures', { signature_type: this.signatureType });
+            } catch (e) {
+                console.warn('Failed to load cancer types signatures:', e);
+                this.cancerTypesData = null;
+            }
         }
 
-        // Get signatures
-        const signatures = this.scatlasOrganData
-            ? [...new Set(this.scatlasOrganData.map(d => d.signature))].sort()
-            : (this.signatureType === 'CytoSig'
-                ? this.cancerTypesData?.cytosig_signatures
-                : this.cancerTypesData?.secact_signatures) || [];
+        // Get signatures from available data
+        let signatures = [];
+        if (this.scatlasOrganData && this.scatlasOrganData.length > 0) {
+            signatures = [...new Set(this.scatlasOrganData.map(d => d.signature))].sort();
+        } else if (this.cancerTypesData?.cytosig_signatures || this.cancerTypesData?.secact_signatures) {
+            signatures = (this.signatureType === 'CytoSig'
+                ? this.cancerTypesData.cytosig_signatures
+                : this.cancerTypesData.secact_signatures) || [];
+        }
         this.diffSignatures = signatures;
 
         // Populate dropdown
