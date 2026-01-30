@@ -873,11 +873,18 @@
                             <option value="both">Both (22 shared)</option>
                         </select>
                     </div>
+                    <div class="control-group">
+                        <label>Select Protein</label>
+                        <select id="boxplot-signature-dropdown" style="width: 150px;">
+                            <option value="IFNG">IFNG</option>
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
                     <div class="control-group" style="position: relative;">
-                        <label>Search Protein</label>
-                        <input type="text" id="boxplot-signature-search" placeholder="Type to search (e.g., IFNG, IL6, TNF...)"
-                               style="width: 200px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" autocomplete="off">
-                        <div id="boxplot-signature-suggestions" style="position: absolute; top: 100%; left: 0; width: 200px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                        <label>Or Search</label>
+                        <input type="text" id="boxplot-signature-search" placeholder="Type to search..."
+                               style="width: 150px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" autocomplete="off">
+                        <div id="boxplot-signature-suggestions" style="position: absolute; top: 100%; left: 0; width: 150px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
                     </div>
                 </div>
 
@@ -910,11 +917,18 @@
                             <option value="SecAct">SecAct (1,249 proteins)</option>
                         </select>
                     </div>
+                    <div class="control-group">
+                        <label>Select Protein</label>
+                        <select id="biochem-protein-dropdown" style="width: 150px;">
+                            <option value="">-- All --</option>
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
                     <div class="control-group" style="position: relative;">
-                        <label>Search Protein</label>
-                        <input type="text" id="biochem-protein-search" placeholder="Type to filter (e.g., IFNG, IL6...)"
-                               style="width: 180px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" autocomplete="off">
-                        <div id="biochem-protein-suggestions" style="position: absolute; top: 100%; left: 0; width: 180px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                        <label>Or Search</label>
+                        <input type="text" id="biochem-protein-search" placeholder="Type to filter..."
+                               style="width: 150px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" autocomplete="off">
+                        <div id="biochem-protein-suggestions" style="position: absolute; top: 100%; left: 0; width: 150px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
                     </div>
                     <div class="control-group">
                         <label>Top N Proteins</label>
@@ -1062,11 +1076,18 @@
                             <option value="SecAct">SecAct (1,170 proteins)</option>
                         </select>
                     </div>
+                    <div class="control-group">
+                        <label>Select Protein</label>
+                        <select id="cima-ct-protein-dropdown" style="width: 150px;">
+                            <option value="IFNG">IFNG</option>
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
                     <div class="control-group" style="position: relative;">
-                        <label>Protein Search</label>
-                        <input type="text" id="cima-ct-protein-search" placeholder="Search protein..."
-                               style="width: 150px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" autocomplete="off" value="IFNG">
-                        <div id="cima-ct-protein-suggestions" style="position: absolute; top: 100%; left: 0; width: 150px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                        <label>Or Search</label>
+                        <input type="text" id="cima-ct-protein-search" placeholder="Search..."
+                               style="width: 120px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" autocomplete="off" value="IFNG">
+                        <div id="cima-ct-protein-suggestions" style="position: absolute; top: 100%; left: 0; width: 120px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
                     </div>
                 </div>
 
@@ -1109,11 +1130,18 @@
                             <option value="SecAct">SecAct (1,170 proteins)</option>
                         </select>
                     </div>
-                    <div class="control-group" style="position: relative;">
+                    <div class="control-group">
                         <label>Y-Axis (Protein)</label>
-                        <input type="text" id="biochem-scatter-protein-search" placeholder="Search protein..."
-                               style="width: 150px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" autocomplete="off" value="IFNG">
-                        <div id="biochem-scatter-suggestions" style="position: absolute; top: 100%; left: 0; width: 150px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                        <select id="biochem-scatter-protein-dropdown" style="width: 150px;">
+                            <option value="IFNG">IFNG</option>
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                    <div class="control-group" style="position: relative;">
+                        <label>Or Search</label>
+                        <input type="text" id="biochem-scatter-protein-search" placeholder="Search..."
+                               style="width: 120px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" autocomplete="off" value="IFNG">
+                        <div id="biochem-scatter-suggestions" style="position: absolute; top: 100%; left: 0; width: 120px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
                     </div>
                     <div class="control-group">
                         <label>Color By</label>
@@ -1310,10 +1338,17 @@
                             <option value="SecAct">SecAct (1,170 proteins)</option>
                         </select>
                     </div>
+                    <div class="control-group">
+                        <label>Select Signature</label>
+                        <select id="inflam-signature-dropdown" style="width: 150px;">
+                            <option value="IFNG">IFNG</option>
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
                     <div class="control-group" style="position: relative;">
-                        <label>Search Signature</label>
-                        <input type="text" id="inflam-signature-search" placeholder="Type to search (e.g., IFNG, IL6)" value="IFNG" style="width: 180px;">
-                        <div id="inflam-signature-suggestions" style="position: absolute; top: 100%; left: 0; width: 180px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                        <label>Or Search</label>
+                        <input type="text" id="inflam-signature-search" placeholder="Search..." value="IFNG" style="width: 120px;">
+                        <div id="inflam-signature-suggestions" style="position: absolute; top: 100%; left: 0; width: 120px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
                     </div>
                 </div>
 
@@ -1414,11 +1449,18 @@
                             <option value="both">Both (22 shared)</option>
                         </select>
                     </div>
+                    <div class="control-group">
+                        <label>Select Protein</label>
+                        <select id="inflam-boxplot-dropdown" style="width: 150px;">
+                            <option value="IFNG">IFNG</option>
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
                     <div class="control-group" style="position: relative;">
-                        <label>Search Protein</label>
-                        <input type="text" id="inflam-boxplot-search" placeholder="Type to search (e.g., IFNG, IL6)"
-                               style="width: 180px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" autocomplete="off" value="IFNG">
-                        <div id="inflam-boxplot-suggestions" style="position: absolute; top: 100%; left: 0; width: 180px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                        <label>Or Search</label>
+                        <input type="text" id="inflam-boxplot-search" placeholder="Search..."
+                               style="width: 120px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" autocomplete="off" value="IFNG">
+                        <div id="inflam-boxplot-suggestions" style="position: absolute; top: 100%; left: 0; width: 120px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
                     </div>
                 </div>
 
@@ -1458,11 +1500,18 @@
                             <option value="SecAct">SecAct (1,170 proteins)</option>
                         </select>
                     </div>
+                    <div class="control-group">
+                        <label>Select Signature</label>
+                        <select id="inflam-disease-dropdown" style="width: 150px;">
+                            <option value="IFNG">IFNG</option>
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
                     <div class="control-group" style="position: relative;">
-                        <label>Search Signature</label>
-                        <input type="text" id="inflam-disease-search" placeholder="Type to search (e.g., IFNG, IL6)"
-                               style="width: 180px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" autocomplete="off" value="IFNG">
-                        <div id="inflam-disease-suggestions" style="position: absolute; top: 100%; left: 0; width: 180px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                        <label>Or Search</label>
+                        <input type="text" id="inflam-disease-search" placeholder="Search..."
+                               style="width: 120px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" autocomplete="off" value="IFNG">
+                        <div id="inflam-disease-suggestions" style="position: absolute; top: 100%; left: 0; width: 120px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
                     </div>
                 </div>
 
@@ -1631,11 +1680,18 @@
                             <option value="SecAct">SecAct (1,170 proteins)</option>
                         </select>
                     </div>
+                    <div class="control-group">
+                        <label>Select Signature</label>
+                        <select id="severity-dropdown" style="width: 150px;">
+                            <option value="IFNG">IFNG</option>
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
                     <div class="control-group" style="position: relative;">
-                        <label>Search Signature</label>
-                        <input type="text" id="severity-search" placeholder="Type to search (e.g., IFNG)"
-                               style="width: 150px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" autocomplete="off" value="IFNG">
-                        <div id="severity-suggestions" style="position: absolute; top: 100%; left: 0; width: 150px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                        <label>Or Search</label>
+                        <input type="text" id="severity-search" placeholder="Search..."
+                               style="width: 120px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" autocomplete="off" value="IFNG">
+                        <div id="severity-suggestions" style="position: absolute; top: 100%; left: 0; width: 120px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
                     </div>
                 </div>
 
@@ -1681,10 +1737,16 @@
                         </select>
                     </div>
                     <div class="control-group">
-                        <label>Signature</label>
+                        <label>Select Protein</label>
                         <select id="drivers-cytokine">
                             <!-- Populated dynamically -->
                         </select>
+                    </div>
+                    <div class="control-group" style="position: relative;">
+                        <label>Or Search</label>
+                        <input type="text" id="drivers-search" placeholder="Search..."
+                               style="width: 120px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" autocomplete="off">
+                        <div id="drivers-suggestions" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto; z-index: 100; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
                     </div>
                 </div>
 
@@ -2544,24 +2606,31 @@
                 updateCorrelationPlots();
                 updateCelltypeCorrelationHeatmap();
                 initBiochemProteins();
+                populateProteinDropdown('biochem-protein-dropdown', 'biochem-signature-type');
                 updateBiochemHeatmap();
                 updateVolcanoPlot();
                 updateCimaCelltypeViz();
+                populateProteinDropdown('cima-ct-protein-dropdown', 'cima-ct-sig-type');
                 updateStratifiedBoxplot(); updateCelltypeStratifiedHeatmap();
+                populateProteinDropdown('boxplot-signature-dropdown', 'boxplot-sig-type');
                 updateMetabolitesViz();
                 // New CIMA panels
                 updateBiochemScatter();
+                populateProteinDropdown('biochem-scatter-protein-dropdown', 'biochem-scatter-sig-type');
                 updateMultiomicsViz();
                 updatePopulationStratification();
                 updateEqtlBrowser();
             } else if (section === 'inflammation') {
                 updateInflammationViz();
+                populateProteinDropdown('inflam-signature-dropdown', 'inflam-sig-type');
                 updateInflamCorrelations();
                 updateInflamCelltypeCorrelationHeatmap();
                 initInflamBoxplotSignatures();
+                populateProteinDropdown('inflam-boxplot-dropdown', 'inflam-boxplot-sig-type');
                 updateInflamStratifiedBoxplot();
                 updateInflamCelltypeStratifiedHeatmap();
                 updateInflamDisease();
+                populateProteinDropdown('inflam-disease-dropdown', 'inflam-disease-sig-type');
                 initInflamDifferentialDiseases();
                 updateInflamDifferential();
                 updateTreatmentResponse();
@@ -2569,6 +2638,7 @@
                 updateCohortValidation();
                 // New Inflammation panels
                 initSeverityPanel();
+                populateProteinDropdown('severity-dropdown', 'severity-sig-type');
                 updateSeverityCorrelation();
                 updateCellDrivers();
             } else if (section === 'scatlas') {
@@ -2781,6 +2851,7 @@
 
             // Populate signature dropdown
             const signatureSelect = document.getElementById('drivers-cytokine');
+            const searchInput = document.getElementById('drivers-search');
             if (signatureSelect) {
                 const currentSig = signatureSelect.value;
                 signatureSelect.innerHTML = signatures.map(s =>
@@ -2793,6 +2864,10 @@
                     signatureSelect.value = 'IFNG';
                 } else if (signatures.length > 0) {
                     signatureSelect.value = signatures[0];
+                }
+                // Sync search input with dropdown
+                if (searchInput) {
+                    searchInput.value = signatureSelect.value;
                 }
             }
 
@@ -6232,6 +6307,7 @@
             document.getElementById('corr-signature-type')?.addEventListener('change', updateCorrelationPlots);
             document.getElementById('biochem-signature-type')?.addEventListener('change', () => {
                 initBiochemProteins();
+                populateProteinDropdown('biochem-protein-dropdown', 'biochem-signature-type');
                 document.getElementById('biochem-protein-search').value = '';
                 updateBiochemHeatmap();
             });
@@ -6256,6 +6332,12 @@
                 });
             }
 
+            // Dropdown for biochem protein selection
+            document.getElementById('biochem-protein-dropdown')?.addEventListener('change', (e) => {
+                document.getElementById('biochem-protein-search').value = e.target.value;
+                updateBiochemHeatmap();
+            });
+
             document.getElementById('diff-comparison')?.addEventListener('change', updateVolcanoPlot);
             document.getElementById('diff-signature-type')?.addEventListener('change', updateVolcanoPlot);
 
@@ -6269,6 +6351,7 @@
                 // Reset search to default when switching sig type
                 const searchInput = document.getElementById('cima-ct-protein-search');
                 if (searchInput) searchInput.value = 'IFNG';
+                populateProteinDropdown('cima-ct-protein-dropdown', 'cima-ct-sig-type');
                 updateCimaCelltypeBar();
                 updateCimaCelltypeHeatmap();
             });
@@ -6292,11 +6375,18 @@
                 });
             }
 
+            // Dropdown for CIMA Cell Types protein selection
+            document.getElementById('cima-ct-protein-dropdown')?.addEventListener('change', (e) => {
+                document.getElementById('cima-ct-protein-search').value = e.target.value;
+                updateCimaCelltypeBar();
+            });
+
             // Control changes - Inflammation Cell Types
             document.getElementById('inflam-sig-type')?.addEventListener('change', () => {
                 // Reset search to default when switching sig type
                 const searchInput = document.getElementById('inflam-signature-search');
                 if (searchInput) searchInput.value = 'IFNG';
+                populateProteinDropdown('inflam-signature-dropdown', 'inflam-sig-type');
                 updateInflammationBar();
                 updateInflammationHeatmap();
             });
@@ -6318,6 +6408,13 @@
                     }, 200);
                 });
             }
+
+            // Dropdown for Inflammation Cell Types protein selection
+            document.getElementById('inflam-signature-dropdown')?.addEventListener('change', (e) => {
+                document.getElementById('inflam-signature-search').value = e.target.value;
+                updateInflammationBar();
+                updateInflammationHeatmap();
+            });
 
             // Control changes - Inflammation Age/BMI
             document.getElementById('inflam-corr-sig-type')?.addEventListener('change', updateInflamCorrelations);
@@ -6349,6 +6446,7 @@
                         input.value = 'IFNG';
                     }
                 }
+                populateProteinDropdown('inflam-boxplot-dropdown', 'inflam-boxplot-sig-type');
                 updateInflamStratifiedBoxplot();
                 updateInflamCelltypeStratifiedHeatmap();
             });
@@ -6370,6 +6468,13 @@
                 });
             }
 
+            // Dropdown for Inflammation Age/BMI Stratified protein selection
+            document.getElementById('inflam-boxplot-dropdown')?.addEventListener('change', (e) => {
+                document.getElementById('inflam-boxplot-search').value = e.target.value;
+                updateInflamStratifiedBoxplot();
+                updateInflamCelltypeStratifiedHeatmap();
+            });
+
             // Control changes - Inflammation Disease
             document.getElementById('inflam-disease-group')?.addEventListener('change', () => {
                 updateInflamDiseaseBar();
@@ -6390,6 +6495,7 @@
                         searchInput.value = 'IFNG';
                     }
                 }
+                populateProteinDropdown('inflam-disease-dropdown', 'inflam-disease-sig-type');
                 updateInflamDiseaseBar();
                 updateInflamDiseaseHeatmap();
             });
@@ -6411,6 +6517,13 @@
                     }, 200);
                 });
             }
+
+            // Dropdown for Inflammation Disease protein selection
+            document.getElementById('inflam-disease-dropdown')?.addEventListener('change', (e) => {
+                document.getElementById('inflam-disease-search').value = e.target.value;
+                updateInflamDiseaseBar();
+                updateInflamDiseaseHeatmap();
+            });
 
             // Control changes - Inflammation Differential
             document.getElementById('inflam-diff-sig-type')?.addEventListener('change', updateInflamDifferential);
@@ -6780,6 +6893,62 @@
             if (sigType === 'SecAct') return boxplotAllSignatures.secact;
             // For "both", return shared signatures (present in both CytoSig and SecAct)
             return boxplotAllSignatures.shared;
+        }
+
+        // Generic helper to populate protein dropdown from signature type
+        function populateProteinDropdown(dropdownId, sigTypeId) {
+            const dropdown = document.getElementById(dropdownId);
+            const sigTypeSelect = document.getElementById(sigTypeId);
+            if (!dropdown) return;
+
+            const sigType = sigTypeSelect?.value || 'CytoSig';
+            let signatures = [];
+
+            // Determine which signatures to use based on the panel
+            if (dropdownId.includes('boxplot')) {
+                signatures = getBoxplotSignatures();
+            } else if (dropdownId.includes('biochem-scatter')) {
+                signatures = sigType === 'CytoSig' ? biochemScatterSigs.cytosig : biochemScatterSigs.secact;
+            } else if (dropdownId.includes('biochem')) {
+                signatures = sigType === 'CytoSig' ? biochemAllProteins.cytosig : biochemAllProteins.secact;
+            } else if (dropdownId.includes('cima-ct')) {
+                signatures = sigType === 'CytoSig' ? cimaCelltypeSigs.cytosig : cimaCelltypeSigs.secact;
+            } else if (dropdownId.includes('inflam-boxplot')) {
+                const inflamBoxplot = state.data.agebmiboxplots?.inflammation;
+                if (sigType === 'both') {
+                    signatures = inflamBoxplot?.shared_signatures || boxplotAllSignatures.shared;
+                } else if (sigType === 'SecAct') {
+                    signatures = inflamBoxplot?.secact_signatures || [];
+                } else {
+                    signatures = inflamBoxplot?.cytosig_signatures || [];
+                }
+            } else if (dropdownId.includes('inflam-disease')) {
+                signatures = sigType === 'SecAct' ? inflamDiseaseSignatures.secact : inflamDiseaseSignatures.cytosig;
+            } else if (dropdownId.includes('inflam-signature') || dropdownId.includes('severity')) {
+                signatures = sigType === 'SecAct' ? (inflammationSignatures.secact || []) : (inflammationSignatures.cytosig || []);
+            }
+
+            // Fallback
+            if (!signatures || signatures.length === 0) {
+                signatures = ['IFNG', 'TNF', 'IL6', 'IL17A', 'IL10', 'IL1B'];
+            }
+
+            // Get current value to preserve selection if still valid
+            const currentValue = dropdown.value;
+
+            // Populate dropdown
+            dropdown.innerHTML = signatures.slice(0, 200).map(sig =>
+                `<option value="${sig}">${sig}</option>`
+            ).join('');
+
+            // Restore selection if still valid, otherwise default to IFNG or first
+            if (signatures.includes(currentValue)) {
+                dropdown.value = currentValue;
+            } else if (signatures.includes('IFNG')) {
+                dropdown.value = 'IFNG';
+            } else {
+                dropdown.value = signatures[0] || '';
+            }
         }
 
         function showBoxplotSuggestions(query) {
@@ -7765,6 +7934,44 @@
             }
         }
 
+        // Inflammation: Cell Type Drivers - Search functions
+        function getCellDriversSignatures() {
+            const data = state.data.inflammationcelldrivers;
+            if (!data || !data.effects) return [];
+            const sigType = document.getElementById('drivers-sig-type')?.value || 'CytoSig';
+            const filtered = data.effects.filter(d => d.signature_type === sigType);
+            return [...new Set(filtered.map(d => d.signature))].sort();
+        }
+
+        function showDriversSuggestions() {
+            const input = document.getElementById('drivers-search');
+            const div = document.getElementById('drivers-suggestions');
+            if (!input || !div) return;
+
+            const query = input.value.toLowerCase();
+            const sigs = getCellDriversSignatures();
+            const filtered = sigs.filter(s => s.toLowerCase().includes(query)).slice(0, 15);
+
+            if (filtered.length === 0) { div.style.display = 'none'; return; }
+
+            div.innerHTML = filtered.map(s =>
+                `<div style="padding:6px 10px;cursor:pointer;border-bottom:1px solid #eee"
+                     onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'"
+                     onclick="selectDriversSig('${s}')">${s}</div>`
+            ).join('');
+            div.style.display = 'block';
+        }
+
+        function selectDriversSig(sig) {
+            const input = document.getElementById('drivers-search');
+            const dropdown = document.getElementById('drivers-cytokine');
+            const div = document.getElementById('drivers-suggestions');
+            if (input) input.value = sig;
+            if (dropdown) dropdown.value = sig;
+            if (div) div.style.display = 'none';
+            updateCellDrivers();
+        }
+
         // Inflammation: Cell Type Drivers
         function updateCellDrivers() {
             const barContainer = document.getElementById('drivers-bar');
@@ -7787,7 +7994,9 @@
             }
 
             const disease = document.getElementById('drivers-disease')?.value || 'RA';
-            const signature = document.getElementById('drivers-cytokine')?.value || 'IFNG';
+            // Use search input if available, otherwise fall back to dropdown
+            const searchInput = document.getElementById('drivers-search')?.value?.trim();
+            const signature = searchInput || document.getElementById('drivers-cytokine')?.value || 'IFNG';
             const sigType = document.getElementById('drivers-sig-type')?.value || 'CytoSig';
 
             // Filter effects by disease, signature, and signature type
@@ -9477,7 +9686,14 @@
             document.getElementById('boxplot-celltype')?.addEventListener('change', updateStratifiedBoxplot);
             document.getElementById('boxplot-sig-type')?.addEventListener('change', () => {
                 initBoxplotSignatures();
+                populateProteinDropdown('boxplot-signature-dropdown', 'boxplot-sig-type');
                 updateBoxplotCellTypeAvailability();
+                updateStratifiedBoxplot(); updateCelltypeStratifiedHeatmap();
+            });
+
+            // Dropdown for protein selection
+            document.getElementById('boxplot-signature-dropdown')?.addEventListener('change', (e) => {
+                document.getElementById('boxplot-signature-search').value = e.target.value;
                 updateStratifiedBoxplot(); updateCelltypeStratifiedHeatmap();
             });
 
@@ -9512,9 +9728,16 @@
                 if (searchInput) {
                     searchInput.value = sigs.includes('IFNG') ? 'IFNG' : (sigs[0] || '');
                 }
+                populateProteinDropdown('biochem-scatter-protein-dropdown', 'biochem-scatter-sig-type');
                 updateBiochemScatter();
             });
             document.getElementById('biochem-color-by')?.addEventListener('change', updateBiochemScatter);
+
+            // Dropdown for biochem scatter protein selection
+            document.getElementById('biochem-scatter-protein-dropdown')?.addEventListener('change', (e) => {
+                document.getElementById('biochem-scatter-protein-search').value = e.target.value;
+                updateBiochemScatter();
+            });
 
             // Biochem scatter protein search autocomplete
             const biochemScatterSearchInput = document.getElementById('biochem-scatter-protein-search');
@@ -9579,6 +9802,7 @@
                         input.value = 'IFNG';
                     }
                 }
+                populateProteinDropdown('severity-dropdown', 'severity-sig-type');
                 updateSeverityCorrelation();
             });
             const severitySearch = document.getElementById('severity-search');
@@ -9598,13 +9822,45 @@
                 });
             }
 
+            // Dropdown for Severity protein selection
+            document.getElementById('severity-dropdown')?.addEventListener('change', (e) => {
+                document.getElementById('severity-search').value = e.target.value;
+                updateSeverityCorrelation();
+            });
+
             // Inflammation Cell Drivers
             document.getElementById('drivers-sig-type')?.addEventListener('change', () => {
                 populateCellDriversDropdowns();
                 updateCellDrivers();
             });
             document.getElementById('drivers-disease')?.addEventListener('change', updateCellDrivers);
-            document.getElementById('drivers-cytokine')?.addEventListener('change', updateCellDrivers);
+            document.getElementById('drivers-cytokine')?.addEventListener('change', (e) => {
+                // Sync dropdown with search input
+                const searchInput = document.getElementById('drivers-search');
+                if (searchInput) searchInput.value = e.target.value;
+                updateCellDrivers();
+            });
+
+            // Cell Drivers search autocomplete
+            const driversSearch = document.getElementById('drivers-search');
+            if (driversSearch) {
+                driversSearch.addEventListener('focus', showDriversSuggestions);
+                driversSearch.addEventListener('input', showDriversSuggestions);
+                driversSearch.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        document.getElementById('drivers-suggestions').style.display = 'none';
+                        // Sync search with dropdown
+                        const dropdown = document.getElementById('drivers-cytokine');
+                        if (dropdown) dropdown.value = e.target.value;
+                        updateCellDrivers();
+                    }
+                });
+                driversSearch.addEventListener('blur', () => {
+                    setTimeout(() => {
+                        document.getElementById('drivers-suggestions').style.display = 'none';
+                    }, 200);
+                });
+            }
 
             // scAtlas Cancer Types
             document.getElementById('cancer-type-select')?.addEventListener('change', updateCancerTypes);
