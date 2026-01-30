@@ -2009,7 +2009,10 @@ def preprocess_cima_biochem_scatter():
 
 
 def preprocess_cima_population_stratification():
-    """Preprocess CIMA population stratification data for all demographic variables."""
+    """Preprocess CIMA population stratification data for all demographic variables.
+
+    Supports both CytoSig (43 cytokines) and SecAct (1170 proteins) signature types.
+    """
     print("Processing CIMA population stratification data...")
 
     try:
@@ -2045,54 +2048,19 @@ def preprocess_cima_population_stratification():
             lambda x: smoking_map.get(x, 'Unknown') if pd.notna(x) else 'Unknown'
         )
 
-    # Load activity data
-    h5ad_file = CIMA_DIR / "CIMA_CytoSig_pseudobulk.h5ad"
-    if not h5ad_file.exists():
-        print("  Skipping - activity data not found")
-        return None
-
-    adata = ad.read_h5ad(h5ad_file)
-    activity_df = pd.DataFrame(adata.X, index=adata.obs_names, columns=adata.var_names)
-    sample_info = adata.var[['sample', 'cell_type', 'n_cells']].copy()
-
-    # Aggregate to sample level
-    sample_activity = {}
-    for sample in sample_info['sample'].unique():
-        sample_cols = sample_info[sample_info['sample'] == sample].index
-        weights = sample_info.loc[sample_cols, 'n_cells'].values
-        total_weight = weights.sum()
-        if total_weight > 0:
-            weighted_mean = (activity_df[sample_cols] * weights).sum(axis=1) / total_weight
-            sample_activity[sample] = weighted_mean
-
-    sample_activity_df = pd.DataFrame(sample_activity).T
-
-    # Merge with metadata
-    merged = sample_meta.merge(
-        sample_activity_df.reset_index().rename(columns={'index': 'sample'}),
-        on='sample', how='inner'
-    )
-
-    cytokines = activity_df.index.tolist()  # All cytokines
-
-    strat_data = {
-        'cytokines': cytokines,
-        'groups': {},
-        'effect_sizes': {}
-    }
-
     # Helper function for effect size calculation
-    def calc_effect_sizes(group1_data, group2_data, cytokines, n1_label, n2_label):
+    def calc_effect_sizes(group1_data, group2_data, signatures, n1_label, n2_label):
         effects = []
-        for cyt in cytokines:
-            if cyt in group1_data.columns and cyt in group2_data.columns:
-                g1 = group1_data[cyt].dropna()
-                g2 = group2_data[cyt].dropna()
+        for sig in signatures:
+            if sig in group1_data.columns and sig in group2_data.columns:
+                g1 = group1_data[sig].dropna()
+                g2 = group2_data[sig].dropna()
                 if len(g1) > 5 and len(g2) > 5:
                     stat, pval = stats.ranksums(g1, g2)
                     effect = g1.mean() - g2.mean()
                     effects.append({
-                        'cytokine': cyt,
+                        'cytokine': sig,  # Keep 'cytokine' key for backward compatibility
+                        'signature': sig,
                         'effect': round(effect, 4),
                         'pvalue': round(pval, 6),
                         n1_label: len(g1),
@@ -2100,37 +2068,64 @@ def preprocess_cima_population_stratification():
                     })
         return effects
 
-    # 1. Sex stratification (Male vs Female)
-    if 'sex' in merged.columns:
-        male = merged[merged['sex'] == 'Male']
-        female = merged[merged['sex'] == 'Female']
-        strat_data['effect_sizes']['sex'] = calc_effect_sizes(male, female, cytokines, 'n_male', 'n_female')
+    def compute_group_means(merged, signatures, strat_configs):
+        """Compute group means for heatmap visualization."""
+        groups_data = {}
+        for group_col, group_name, expected_groups in strat_configs:
+            if group_col not in merged.columns:
+                continue
+            group_means = {}
+            for group_val in expected_groups:
+                group_data = merged[merged[group_col] == group_val]
+                if len(group_data) > 0:
+                    means = {}
+                    for sig in signatures:
+                        if sig in group_data.columns:
+                            val = group_data[sig].mean()
+                            if pd.notna(val):
+                                means[sig] = round(val, 4)
+                    group_means[str(group_val)] = means
+            if group_means:
+                groups_data[group_name] = group_means
+        return groups_data
 
-    # 2. Age stratification (Older vs Young)
-    if 'age_group' in merged.columns:
-        young = merged[merged['age_group'] == 'Young (<40)']
-        older = merged[merged['age_group'] == 'Older (>60)']
-        strat_data['effect_sizes']['age'] = calc_effect_sizes(older, young, cytokines, 'n_older', 'n_young')
+    def compute_effect_sizes(merged, signatures):
+        """Compute effect sizes for all stratification variables."""
+        effect_sizes = {}
 
-    # 3. BMI stratification (Obese vs Normal)
-    if 'bmi_group' in merged.columns:
-        normal = merged[merged['bmi_group'] == 'Normal']
-        obese = merged[merged['bmi_group'] == 'Obese']
-        strat_data['effect_sizes']['bmi'] = calc_effect_sizes(obese, normal, cytokines, 'n_obese', 'n_normal')
+        # 1. Sex stratification (Male vs Female)
+        if 'sex' in merged.columns:
+            male = merged[merged['sex'] == 'Male']
+            female = merged[merged['sex'] == 'Female']
+            effect_sizes['sex'] = calc_effect_sizes(male, female, signatures, 'n_male', 'n_female')
 
-    # 4. Blood type stratification (O vs A - most common comparison)
-    if 'blood_type' in merged.columns:
-        type_o = merged[merged['blood_type'] == 'O']
-        type_a = merged[merged['blood_type'] == 'A']
-        strat_data['effect_sizes']['blood_type'] = calc_effect_sizes(type_o, type_a, cytokines, 'n_type_o', 'n_type_a')
+        # 2. Age stratification (Older vs Young)
+        if 'age_group' in merged.columns:
+            young = merged[merged['age_group'] == 'Young (<40)']
+            older = merged[merged['age_group'] == 'Older (>60)']
+            effect_sizes['age'] = calc_effect_sizes(older, young, signatures, 'n_older', 'n_young')
 
-    # 5. Smoking stratification (Current vs Never)
-    if 'smoking_status' in merged.columns:
-        never = merged[merged['smoking_status'] == 'Never']
-        current = merged[merged['smoking_status'] == 'Current']
-        strat_data['effect_sizes']['smoking'] = calc_effect_sizes(current, never, cytokines, 'n_current', 'n_never')
+        # 3. BMI stratification (Obese vs Normal)
+        if 'bmi_group' in merged.columns:
+            normal = merged[merged['bmi_group'] == 'Normal']
+            obese = merged[merged['bmi_group'] == 'Obese']
+            effect_sizes['bmi'] = calc_effect_sizes(obese, normal, signatures, 'n_obese', 'n_normal')
 
-    # Group means for heatmap
+        # 4. Blood type stratification (O vs A - most common comparison)
+        if 'blood_type' in merged.columns:
+            type_o = merged[merged['blood_type'] == 'O']
+            type_a = merged[merged['blood_type'] == 'A']
+            effect_sizes['blood_type'] = calc_effect_sizes(type_o, type_a, signatures, 'n_type_o', 'n_type_a')
+
+        # 5. Smoking stratification (Current vs Never)
+        if 'smoking_status' in merged.columns:
+            never = merged[merged['smoking_status'] == 'Never']
+            current = merged[merged['smoking_status'] == 'Current']
+            effect_sizes['smoking'] = calc_effect_sizes(current, never, signatures, 'n_current', 'n_never')
+
+        return effect_sizes
+
+    # Stratification configs for group means
     strat_configs = [
         ('sex', 'sex', ['Male', 'Female']),
         ('age_group', 'age', ['Young (<40)', 'Middle (40-60)', 'Older (>60)']),
@@ -2139,32 +2134,78 @@ def preprocess_cima_population_stratification():
         ('smoking_status', 'smoking', ['Never', 'Former', 'Current']),
     ]
 
-    for group_col, group_name, expected_groups in strat_configs:
-        if group_col not in merged.columns:
+    # Initialize combined data structure
+    combined_strat_data = {}
+
+    # Process both CytoSig and SecAct
+    for sig_type, h5ad_filename in [('CytoSig', 'CIMA_CytoSig_pseudobulk.h5ad'),
+                                     ('SecAct', 'CIMA_SecAct_pseudobulk.h5ad')]:
+        h5ad_file = CIMA_DIR / h5ad_filename
+        if not h5ad_file.exists():
+            print(f"  Skipping {sig_type} - activity data not found: {h5ad_file}")
             continue
-        group_means = {}
-        for group_val in expected_groups:
-            group_data = merged[merged[group_col] == group_val]
-            if len(group_data) > 0:
-                means = {}
-                for cyt in cytokines:
-                    if cyt in group_data.columns:
-                        val = group_data[cyt].mean()
-                        if pd.notna(val):
-                            means[cyt] = round(val, 4)
-                group_means[str(group_val)] = means
-        if group_means:
-            strat_data['groups'][group_name] = group_means
 
+        print(f"  Processing {sig_type}...")
+        adata = ad.read_h5ad(h5ad_file)
+        activity_df = pd.DataFrame(adata.X, index=adata.obs_names, columns=adata.var_names)
+        sample_info = adata.var[['sample', 'cell_type', 'n_cells']].copy()
+
+        # Aggregate to sample level
+        sample_activity = {}
+        for sample in sample_info['sample'].unique():
+            sample_cols = sample_info[sample_info['sample'] == sample].index
+            weights = sample_info.loc[sample_cols, 'n_cells'].values
+            total_weight = weights.sum()
+            if total_weight > 0:
+                weighted_mean = (activity_df[sample_cols] * weights).sum(axis=1) / total_weight
+                sample_activity[sample] = weighted_mean
+
+        sample_activity_df = pd.DataFrame(sample_activity).T
+
+        # Merge with metadata
+        merged = sample_meta.merge(
+            sample_activity_df.reset_index().rename(columns={'index': 'sample'}),
+            on='sample', how='inner'
+        )
+
+        signatures = activity_df.index.tolist()
+
+        # For SecAct, limit to top 100 most variable signatures for performance
+        if sig_type == 'SecAct' and len(signatures) > 100:
+            # Compute variance across samples and keep top 100
+            sig_cols = [s for s in signatures if s in merged.columns]
+            variances = merged[sig_cols].var().sort_values(ascending=False)
+            top_sigs = variances.head(100).index.tolist()
+            # Also keep signatures mentioned in frontend (common ones)
+            important_sigs = ['IFNG', 'TNF', 'IL6', 'IL10', 'IL17A', 'IL1B', 'CXCL10', 'CCL2']
+            for imp in important_sigs:
+                if imp in signatures and imp not in top_sigs:
+                    top_sigs.append(imp)
+            signatures = top_sigs
+            print(f"    Limited to {len(signatures)} most variable signatures")
+
+        # Compute data for this signature type
+        strat_data = {
+            'signatures': signatures,
+            'cytokines': signatures,  # Keep for backward compatibility
+            'groups': compute_group_means(merged, signatures, strat_configs),
+            'effect_sizes': compute_effect_sizes(merged, signatures)
+        }
+
+        combined_strat_data[sig_type] = strat_data
+
+        # Print stats
+        print(f"    {sig_type} signatures: {len(signatures)}")
+        for strat_var in ['sex', 'age', 'bmi', 'blood_type', 'smoking']:
+            count = len(strat_data['effect_sizes'].get(strat_var, []))
+            print(f"    {strat_var} effects: {count}")
+
+    # Save combined data
     with open(OUTPUT_DIR / "cima_population_stratification.json", 'w') as f:
-        json.dump(strat_data, f)
+        json.dump(combined_strat_data, f)
 
-    print(f"  Sex effects: {len(strat_data['effect_sizes'].get('sex', []))}")
-    print(f"  Age effects: {len(strat_data['effect_sizes'].get('age', []))}")
-    print(f"  BMI effects: {len(strat_data['effect_sizes'].get('bmi', []))}")
-    print(f"  Blood type effects: {len(strat_data['effect_sizes'].get('blood_type', []))}")
-    print(f"  Smoking effects: {len(strat_data['effect_sizes'].get('smoking', []))}")
-    return strat_data
+    print(f"  Saved population stratification data for {list(combined_strat_data.keys())}")
+    return combined_strat_data
 
 
 def preprocess_inflammation_longitudinal():
@@ -2473,6 +2514,7 @@ def create_embedded_data():
         'inflammation_correlations.json',
         'inflammation_celltype_correlations.json',  # Cell type-specific age/BMI correlations
         ('inflammation_disease_filtered.json', 'inflammationdisease'),  # Use filtered version (56MB vs 275MB)
+        ('inflammation_severity_filtered.json', 'inflammationseverity'),  # Severity analysis (2MB filtered)
         'inflammation_differential.json',  # Disease vs healthy differential
         'inflammation_longitudinal.json',
         'inflammation_cell_drivers.json',
@@ -2528,27 +2570,62 @@ def preprocess_cancer_types():
     df = pd.read_csv(cancer_types_path)
     print(f"  Loaded {len(df)} records")
 
-    # Process for visualization
-    cancer_types = sorted(df['organ'].unique().tolist())  # organ column contains cancerType
-    signatures = sorted(df['signature'].unique().tolist())
+    # Rename 'organ' to 'cancer_type' for clarity
+    df = df.rename(columns={'organ': 'cancer_type'})
 
-    # Filter to CytoSig for manageable size
-    cytosig_df = df[df['signature_type'] == 'CytoSig'].copy()
+    # Get unique cancer types and signatures
+    cancer_types = sorted(df['cancer_type'].unique().tolist())
+    cytosig_sigs = sorted(df[df['signature_type'] == 'CytoSig']['signature'].unique().tolist())
+    secact_sigs = sorted(df[df['signature_type'] == 'SecAct']['signature'].unique().tolist())
 
-    # Create output
+    # Cancer type labels
+    cancer_labels = {
+        'BRCA': 'Breast Cancer',
+        'CRC': 'Colorectal Cancer',
+        'ESCA': 'Esophageal Cancer',
+        'HCC': 'Hepatocellular Carcinoma',
+        'HNSC': 'Head & Neck Squamous',
+        'ICC': 'Intrahepatic Cholangiocarcinoma',
+        'KIRC': 'Kidney Renal Clear Cell',
+        'LUAD': 'Lung Adenocarcinoma',
+        'LYM': 'Lymphoma',
+        'PAAD': 'Pancreatic Adenocarcinoma',
+        'STAD': 'Stomach Adenocarcinoma',
+        'THCA': 'Thyroid Carcinoma',
+        'cSCC': 'Cutaneous Squamous Cell'
+    }
+
+    # Prepare data records with all required fields
+    records = []
+    for _, row in df.iterrows():
+        records.append({
+            'cancer_type': row['cancer_type'],
+            'signature': row['signature'],
+            'mean_activity': round(row['mean_activity'], 4) if pd.notna(row['mean_activity']) else 0,
+            'other_mean': round(row['other_mean'], 4) if pd.notna(row.get('other_mean')) else 0,
+            'log2fc': round(row['log2fc'], 4) if pd.notna(row.get('log2fc')) else None,
+            'specificity_score': round(row['specificity_score'], 4) if pd.notna(row.get('specificity_score')) else 0,
+            'n_cells': int(row['n_cells']) if pd.notna(row.get('n_cells')) else 0,
+            'signature_type': row['signature_type']
+        })
+
+    # Create output structure
     cancer_data = {
-        'data': cytosig_df[['organ', 'signature', 'mean_activity', 'specificity_score', 'n_cells']].rename(
-            columns={'organ': 'cancer_type'}
-        ).round(4).to_dict('records'),
+        'data': records,
         'cancer_types': cancer_types,
-        'signatures': [s for s in signatures if s in cytosig_df['signature'].values]
+        'cancer_labels': cancer_labels,
+        'cytosig_signatures': cytosig_sigs,
+        'secact_signatures': secact_sigs[:100],  # Limit SecAct for performance
+        'total_secact': len(secact_sigs)
     }
 
     with open(OUTPUT_DIR / "cancer_types.json", 'w') as f:
         json.dump(cancer_data, f)
 
     print(f"  Cancer types: {len(cancer_types)}")
-    print(f"  Output records: {len(cancer_data['data'])}")
+    print(f"  CytoSig signatures: {len(cytosig_sigs)}")
+    print(f"  SecAct signatures: {len(secact_sigs)} (showing {min(100, len(secact_sigs))})")
+    print(f"  Output records: {len(records)}")
     return cancer_data
 
 

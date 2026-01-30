@@ -10,6 +10,7 @@ from app.schemas.scatlas import (
     ScAtlasCancerComparison,
     ScAtlasCancerComparisonData,
     ScAtlasCancerType,
+    ScAtlasCancerTypeData,
     ScAtlasCellTypeData,
     ScAtlasCellTypeSignature,
     ScAtlasExhaustion,
@@ -181,6 +182,35 @@ class ScAtlasService(BaseService):
             results = [r for r in results if r.get("cancer_type") == cancer_type]
 
         return [ScAtlasCancerType(**r) for r in results]
+
+    @cached(prefix="scatlas", ttl=3600)
+    async def get_cancer_types_data(
+        self,
+        signature_type: str = "CytoSig",
+    ) -> ScAtlasCancerTypeData:
+        """
+        Get full cancer type dataset with metadata.
+
+        Args:
+            signature_type: 'CytoSig' or 'SecAct'
+
+        Returns:
+            Cancer type data with metadata for visualization
+        """
+        raw_data = await self.load_json("cancer_types.json")
+
+        # Filter the data list by signature type
+        data_list = raw_data.get("data", [])
+        filtered_data = self.filter_by_signature_type(data_list, signature_type)
+
+        return ScAtlasCancerTypeData(
+            data=[ScAtlasCancerType(**r) for r in filtered_data],
+            cancer_types=raw_data.get("cancer_types", []),
+            cancer_labels=raw_data.get("cancer_labels", {}),
+            cytosig_signatures=raw_data.get("cytosig_signatures", []),
+            secact_signatures=raw_data.get("secact_signatures", []),
+            total_secact=raw_data.get("total_secact", 0),
+        )
 
     @cached(prefix="scatlas", ttl=3600)
     async def get_immune_infiltration(

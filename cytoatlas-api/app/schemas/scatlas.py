@@ -75,17 +75,27 @@ class ScAtlasCancerComparisonData(BaseModel):
 
 
 class ScAtlasCancerType(BaseModel):
-    """Cancer type specific analysis."""
+    """Cancer type signature activity (specificity vs other cancer types)."""
 
     cancer_type: str
-    cell_type: str
     signature: str
     signature_type: str
-    mean_tumor: float
-    mean_adjacent: float
-    difference: float
-    p_value: float
-    n_pairs: int
+    mean_activity: float
+    other_mean: float
+    log2fc: float | None = None
+    specificity_score: float
+    n_cells: int
+
+
+class ScAtlasCancerTypeData(BaseModel):
+    """Full cancer type dataset with metadata."""
+
+    data: list[ScAtlasCancerType]
+    cancer_types: list[str]
+    cancer_labels: dict[str, str]
+    cytosig_signatures: list[str]
+    secact_signatures: list[str]
+    total_secact: int
 
 
 class ScAtlasImmuneInfiltration(BaseModel):

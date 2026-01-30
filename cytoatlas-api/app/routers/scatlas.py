@@ -9,6 +9,7 @@ from app.schemas.scatlas import (
     ScAtlasCAFSignature,
     ScAtlasCancerComparisonData,
     ScAtlasCancerType,
+    ScAtlasCancerTypeData,
     ScAtlasCellTypeData,
     ScAtlasExhaustion,
     ScAtlasImmuneInfiltration,
@@ -152,6 +153,19 @@ async def get_cancer_comparison_by_celltype(
 
 
 # Cancer Type Specific
+@router.get("/cancer-types-signatures", response_model=ScAtlasCancerTypeData)
+async def get_cancer_types_signatures(
+    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
+    service: ScAtlasService = Depends(get_scatlas_service),
+) -> ScAtlasCancerTypeData:
+    """
+    Get cancer type signature activity with metadata.
+
+    Returns mean activity per cancer type with specificity scores.
+    """
+    return await service.get_cancer_types_data(signature_type)
+
+
 @router.get("/cancer-types-analysis", response_model=list[ScAtlasCancerType])
 async def get_cancer_types_analysis(
     signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
@@ -161,7 +175,7 @@ async def get_cancer_types_analysis(
     """
     Get cancer type specific analysis.
 
-    Returns tumor vs adjacent comparison stratified by cancer type.
+    Returns mean activity per cancer type.
     """
     return await service.get_cancer_types(signature_type, cancer_type)
 

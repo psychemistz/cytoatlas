@@ -106,6 +106,122 @@ class InflammationService(BaseService):
         return await self.get_disease_activity(disease, signature_type, cell_type)
 
     @cached(prefix="inflammation", ttl=3600)
+    async def get_disease_activity_summary(
+        self,
+        signature_type: str = "CytoSig",
+    ) -> dict:
+        """
+        Get pre-aggregated disease activity data for fast visualization.
+
+        Returns pre-computed aggregations instead of raw data to reduce
+        data transfer from ~9MB to ~100KB.
+
+        Args:
+            signature_type: 'CytoSig' or 'SecAct'
+
+        Returns:
+            Dictionary with:
+            - heatmap: {z, x (signatures), y (diseases)} for disease × signature matrix
+            - bar_data: {signature -> {cell_type -> mean_activity}} for bar charts
+            - diseases: list of unique diseases
+            - disease_groups: list of unique disease groups
+            - signatures: list of unique signatures
+            - cell_types: list of unique cell types
+            - disease_to_group: mapping of disease to disease_group
+        """
+        data = await self.load_json("inflammation_disease.json")
+
+        # Filter by signature type
+        filtered = self.filter_by_signature_type(data, signature_type)
+
+        if not filtered:
+            return {
+                "heatmap": {"z": [], "x": [], "y": []},
+                "bar_data": {},
+                "diseases": [],
+                "disease_groups": [],
+                "signatures": [],
+                "cell_types": [],
+                "disease_to_group": {},
+            }
+
+        # Extract unique values
+        diseases = sorted(set(r.get("disease") for r in filtered if r.get("disease")))
+        disease_groups = sorted(set(r.get("disease_group") for r in filtered if r.get("disease_group")))
+        signatures = sorted(set(r.get("signature") for r in filtered if r.get("signature")))
+        cell_types = sorted(set(r.get("cell_type") for r in filtered if r.get("cell_type")))
+
+        # Build disease to group mapping
+        disease_to_group = {}
+        for r in filtered:
+            if r.get("disease") and r.get("disease_group"):
+                disease_to_group[r["disease"]] = r["disease_group"]
+
+        # Pre-aggregate for heatmap: disease × signature (mean across cell types)
+        disease_sig_activity = {}
+        for r in filtered:
+            key = (r.get("disease"), r.get("signature"))
+            if key[0] and key[1]:
+                if key not in disease_sig_activity:
+                    disease_sig_activity[key] = []
+                disease_sig_activity[key].append(r.get("mean_activity", 0))
+
+        # Build heatmap matrix
+        z_data = []
+        for disease in diseases:
+            row = []
+            for sig in signatures:
+                vals = disease_sig_activity.get((disease, sig), [0])
+                row.append(sum(vals) / len(vals) if vals else 0)
+            z_data.append(row)
+
+        # Pre-aggregate for bar charts: signature -> cell_type -> mean_activity
+        # Group by (signature, cell_type, disease_group)
+        sig_ct_activity = {}
+        for r in filtered:
+            sig = r.get("signature")
+            ct = r.get("cell_type")
+            dg = r.get("disease_group", "all")
+            if sig and ct:
+                key = (sig, ct, dg)
+                if key not in sig_ct_activity:
+                    sig_ct_activity[key] = []
+                sig_ct_activity[key].append(r.get("mean_activity", 0))
+
+        # Build bar_data structure: {signature: {disease_group: [{cell_type, mean_activity}, ...]}}
+        bar_data = {}
+        for sig in signatures:
+            bar_data[sig] = {"all": {}}
+            for dg in disease_groups:
+                bar_data[sig][dg] = {}
+
+        for (sig, ct, dg), vals in sig_ct_activity.items():
+            mean_val = sum(vals) / len(vals) if vals else 0
+            # Add to disease group
+            if dg in bar_data.get(sig, {}):
+                bar_data[sig][dg][ct] = mean_val
+            # Add to "all" aggregation
+            if ct not in bar_data[sig]["all"]:
+                bar_data[sig]["all"][ct] = []
+            bar_data[sig]["all"][ct].append(mean_val)
+
+        # Finalize "all" aggregation (mean across disease groups)
+        for sig in signatures:
+            for ct, vals in bar_data[sig]["all"].items():
+                if isinstance(vals, list):
+                    bar_data[sig]["all"][ct] = sum(vals) / len(vals) if vals else 0
+
+        return {
+            "heatmap": {"z": z_data, "x": signatures, "y": diseases},
+            "bar_data": bar_data,
+            "diseases": diseases,
+            "disease_groups": disease_groups,
+            "signatures": signatures,
+            "cell_types": cell_types,
+            "disease_to_group": disease_to_group,
+        }
+
+    @cached(prefix="inflammation", ttl=3600)
     async def get_differential(
         self,
         disease: str | None = None,
@@ -433,6 +549,16 @@ class InflammationService(BaseService):
         return results
 
     @cached(prefix="inflammation", ttl=3600)
+    async def get_cell_drivers_raw(self) -> dict:
+        """
+        Get raw cell drivers data for direct frontend use.
+
+        Returns the full inflammation_cell_drivers.json structure unchanged,
+        matching the format expected by index.html.
+        """
+        return await self.load_json("inflammation_cell_drivers.json")
+
+    @cached(prefix="inflammation", ttl=3600)
     async def get_driving_populations(
         self,
         disease: str | None = None,
@@ -710,6 +836,45 @@ class InflammationService(BaseService):
         results.sort(key=lambda x: (x.get("disease", ""), x.get("severity_order", 99), x.get("signature", "")))
 
         return [InflammationSeverity(**r) for r in results]
+
+    @cached(prefix="inflammation", ttl=3600)
+    async def get_severity_raw(self) -> list[dict]:
+        """
+        Get raw severity data for direct frontend use.
+
+        Returns the full inflammation_severity.json array unchanged,
+        matching the format expected by index.html.
+        """
+        return await self.load_json("inflammation_severity.json")
+
+    @cached(prefix="inflammation", ttl=3600)
+    async def get_differential_raw(self) -> list[dict]:
+        """
+        Get raw differential data for direct frontend use.
+
+        Returns the full inflammation_differential.json array unchanged,
+        matching the format expected by index.html.
+
+        Fields: protein, disease, signature (CytoSig/SecAct), comparison,
+        healthy_note, n_g1, n_g2, log2fc, pvalue, qvalue, neg_log10_pval
+        """
+        return await self.load_json("inflammation_differential.json")
+
+    @cached(prefix="inflammation", ttl=3600)
+    async def get_treatment_response_raw(self) -> dict:
+        """
+        Get raw treatment response data for direct frontend use.
+
+        Returns the full treatment_response.json structure unchanged,
+        matching the format expected by index.html.
+
+        Structure: {
+            roc_curves: [...],  // disease, model, signature_type, auc, fpr, tpr
+            feature_importance: [...],  // disease, model, signature_type, feature, importance
+            predictions: [...]  // disease, signature_type, response, probability, model
+        }
+        """
+        return await self.load_json("treatment_response.json")
 
     async def get_severity_diseases(self) -> list[str]:
         """Get list of diseases with severity data."""

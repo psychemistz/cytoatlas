@@ -120,6 +120,20 @@ async def get_disease_activity_by_name(
     return await service.get_disease_activity(disease, signature_type, cell_type)
 
 
+@router.get("/disease-activity-summary")
+async def get_disease_activity_summary(
+    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
+    service: InflammationService = Depends(get_inflammation_service),
+) -> dict:
+    """
+    Get pre-aggregated disease activity data for fast visualization.
+
+    Returns pre-computed aggregations instead of raw data (~9MB -> ~100KB)
+    for efficient frontend rendering.
+    """
+    return await service.get_disease_activity_summary(signature_type)
+
+
 # Cell Type Stratified Analysis
 @router.get("/celltype-stratified", response_model=list[InflammationCellTypeStratified])
 async def get_celltype_stratified(
@@ -133,6 +147,27 @@ async def get_celltype_stratified(
     Returns disease differential computed within each cell type.
     """
     return await service.get_celltype_stratified(disease, signature_type)
+
+
+# Cell Drivers - Raw data for direct frontend use (matches index.html format)
+@router.get("/cell-drivers")
+async def get_cell_drivers(
+    service: InflammationService = Depends(get_inflammation_service),
+) -> dict:
+    """
+    Get raw cell drivers data.
+
+    Returns the full inflammation_cell_drivers.json structure with:
+    - diseases: list of disease names
+    - cell_types: list of cell type names
+    - cytokines: list of CytoSig signatures
+    - secact_proteins: list of SecAct signatures
+    - effects: array of effect records with fields (effect, pvalue, etc.)
+
+    This endpoint returns data in the same format as index.html expects,
+    suitable for direct client-side filtering and visualization.
+    """
+    return await service.get_cell_drivers_raw()
 
 
 # Disease-Level Differential (for Volcano plots)
@@ -149,6 +184,41 @@ async def get_differential(
     This is disease-level data (not cell-type stratified) - suitable for volcano plots.
     """
     return await service.get_differential(disease, signature_type)
+
+
+@router.get("/differential-raw")
+async def get_differential_raw(
+    service: InflammationService = Depends(get_inflammation_service),
+) -> list[dict]:
+    """
+    Get raw differential data for direct frontend use.
+
+    Returns the full inflammation_differential.json array unchanged,
+    matching the format expected by index.html.
+
+    Fields: protein, disease, signature (CytoSig/SecAct), comparison,
+    healthy_note, n_g1, n_g2, log2fc, pvalue, qvalue, neg_log10_pval
+    """
+    return await service.get_differential_raw()
+
+
+@router.get("/treatment-response-raw")
+async def get_treatment_response_raw(
+    service: InflammationService = Depends(get_inflammation_service),
+) -> dict:
+    """
+    Get raw treatment response data for direct frontend use.
+
+    Returns the full treatment_response.json structure unchanged,
+    matching the format expected by index.html.
+
+    Structure: {
+        roc_curves: [...],  // disease, model, signature_type, auc, fpr, tpr
+        feature_importance: [...],  // disease, model, signature_type, feature, importance
+        predictions: [...]  // disease, signature_type, response, probability, model
+    }
+    """
+    return await service.get_treatment_response_raw()
 
 
 # Age/BMI Stratified Boxplots
@@ -491,6 +561,19 @@ async def get_severity_analysis(
     Diseases with severity data: COVID, SLE, COPD, asthma, sepsis, HBV, cirrhosis, etc.
     """
     return await service.get_severity_analysis(disease, signature_type)
+
+
+@router.get("/severity-raw")
+async def get_severity_raw(
+    service: InflammationService = Depends(get_inflammation_service),
+) -> list[dict]:
+    """
+    Get raw severity data for direct frontend use.
+
+    Returns the full inflammation_severity.json array unchanged,
+    matching the format expected by index.html.
+    """
+    return await service.get_severity_raw()
 
 
 @router.get("/severity/diseases")

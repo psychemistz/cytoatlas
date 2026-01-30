@@ -455,11 +455,15 @@ class CIMAService(BaseService):
             signature_type: 'CytoSig' or 'SecAct'
 
         Returns:
-            Dict with cytokines, groups, and effect_sizes
+            Dict with cytokines/signatures, groups, and effect_sizes
         """
         data = await self.load_json("cima_population_stratification.json")
 
-        # Filter by signature type if data has signature_type field
+        # New format: data is organized by signature type at top level
+        if signature_type in data:
+            return data[signature_type]
+
+        # Legacy format: filter by signature type field in effect records
         if "effect_sizes" in data:
             filtered_effects = {}
             for var_name, effects in data["effect_sizes"].items():

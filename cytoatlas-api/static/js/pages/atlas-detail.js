@@ -32,7 +32,7 @@ const AtlasDetailPage = {
         },
         inflammation: {
             displayName: 'Inflammation Atlas',
-            description: 'Pan-disease immune profiling - 4.9M cells across 12+ inflammatory diseases with treatment response data',
+            description: 'Pan-disease immune profiling - 4.9M cells across 20 inflammatory diseases with treatment response data',
             tabs: [
                 { id: 'overview', label: 'Overview', icon: '&#127968;' },
                 { id: 'celltypes', label: 'Cell Types', icon: '&#128300;' },
@@ -44,7 +44,6 @@ const AtlasDetailPage = {
                 { id: 'differential', label: 'Differential', icon: '&#128209;' },
                 { id: 'treatment', label: 'Treatment Response', icon: '&#128137;' },
                 { id: 'validation', label: 'Cohort Validation', icon: '&#9989;' },
-                { id: 'longitudinal', label: 'Longitudinal', icon: '&#128197;' },
                 { id: 'drivers', label: 'Cell Drivers', icon: '&#128302;' },
             ],
         },
@@ -55,8 +54,8 @@ const AtlasDetailPage = {
                 { id: 'overview', label: 'Overview', icon: '&#127968;' },
                 { id: 'celltypes', label: 'Cell Types', icon: '&#128300;' },
                 { id: 'organ-map', label: 'Organ Map', icon: '&#128149;' },
-                { id: 'cancer-comparison', label: 'Tumor vs Adjacent', icon: '&#128201;' },
                 { id: 'cancer-types', label: 'Cancer Types', icon: '&#129656;' },
+                { id: 'cancer-comparison', label: 'Tumor vs Adjacent', icon: '&#128201;' },
                 { id: 'immune-infiltration', label: 'Immune Infiltration', icon: '&#128300;' },
                 { id: 'exhaustion', label: 'T Cell Exhaustion', icon: '&#128546;' },
                 { id: 'caf', label: 'CAF Types', icon: '&#128302;' },
@@ -361,10 +360,13 @@ const AtlasDetailPage = {
                         <h3>Cell Type Activity Profile</h3>
                         <p>Search and view activity of a specific ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'}</p>
                     </div>
-                    <div class="search-controls">
+                    <div class="search-controls" style="position: relative;">
                         <input type="text" id="cima-protein-search" class="search-input"
                                placeholder="Search ${this.signatureType === 'CytoSig' ? 'cytokine (e.g., IFNG, IL17A, TNF)' : 'protein'}..."
-                               onkeyup="AtlasDetailPage.filterProteinList(this.value, 'cima')">
+                               oninput="AtlasDetailPage.showCimaProteinSuggestions()"
+                               onkeyup="if(event.key==='Enter') AtlasDetailPage.selectFilteredProtein('cima')"
+                               onblur="setTimeout(() => document.getElementById('cima-protein-suggestions').style.display = 'none', 200)">
+                        <div id="cima-protein-suggestions" style="position: absolute; top: 100%; left: 0; width: 250px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
                         <select id="cima-protein-select" class="filter-select" onchange="AtlasDetailPage.updateCimaActivityProfile()">
                             <option value="">Select ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'}...</option>
                         </select>
@@ -476,18 +478,126 @@ const AtlasDetailPage = {
 
         if (!select || !signatures) return;
 
+        const searchLower = searchText.toLowerCase();
         const filtered = searchText ?
-            signatures.filter(s => s.toLowerCase().includes(searchText.toLowerCase())) :
+            signatures.filter(s => s.toLowerCase().includes(searchLower)) :
             signatures;
 
         const currentValue = select.value;
         select.innerHTML = `<option value="">Select ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'}...</option>` +
             filtered.map(s => `<option value="${s}">${s}</option>`).join('');
 
-        // Restore selection if still in filtered list
-        if (filtered.includes(currentValue)) {
+        // Check for exact match (case-insensitive) and auto-select
+        const exactMatch = filtered.find(s => s.toLowerCase() === searchLower);
+        if (exactMatch) {
+            select.value = exactMatch;
+            // Trigger the update function
+            if (atlas === 'cima') {
+                this.updateCimaActivityProfile();
+            } else if (atlas === 'inflammation') {
+                this.updateInflamActivityProfile?.();
+            } else if (atlas === 'scatlas') {
+                this.updateScatlasActivityProfile?.();
+            }
+        } else if (filtered.includes(currentValue)) {
+            // Restore selection if still in filtered list
             select.value = currentValue;
         }
+    },
+
+    selectFilteredProtein(atlas) {
+        const selectId = atlas === 'cima' ? 'cima-protein-select' :
+                         atlas === 'inflammation' ? 'inflam-protein-select' : 'scatlas-protein-select';
+        const searchId = atlas === 'cima' ? 'cima-protein-search' :
+                         atlas === 'inflammation' ? 'inflam-protein-search' : 'scatlas-protein-search';
+        const select = document.getElementById(selectId);
+        const searchInput = document.getElementById(searchId);
+
+        if (!select || !searchInput) return;
+
+        // Get visible options (excluding the placeholder)
+        const options = Array.from(select.options).filter(opt => opt.value);
+
+        // If there's exactly one option or an exact match, select it
+        if (options.length === 1) {
+            select.value = options[0].value;
+            searchInput.value = options[0].value;
+        } else if (options.length > 0) {
+            // Check for exact match
+            const searchLower = searchInput.value.toLowerCase();
+            const exactMatch = options.find(opt => opt.value.toLowerCase() === searchLower);
+            if (exactMatch) {
+                select.value = exactMatch.value;
+                searchInput.value = exactMatch.value;
+            } else {
+                // Select first match
+                select.value = options[0].value;
+                searchInput.value = options[0].value;
+            }
+        }
+
+        // Trigger the update function
+        if (atlas === 'cima') {
+            this.updateCimaActivityProfile();
+        } else if (atlas === 'inflammation') {
+            this.updateInflamActivityProfile?.();
+        } else if (atlas === 'scatlas') {
+            this.updateScatlasActivityProfile?.();
+        }
+    },
+
+    showCimaProteinSuggestions() {
+        const input = document.getElementById('cima-protein-search');
+        const div = document.getElementById('cima-protein-suggestions');
+        const select = document.getElementById('cima-protein-select');
+        if (!input || !div || !this.cimaSignatures) return;
+
+        const query = input.value.toLowerCase();
+        if (!query) {
+            div.style.display = 'none';
+            return;
+        }
+
+        const filtered = this.cimaSignatures.filter(s => s.toLowerCase().includes(query));
+
+        // Auto-update dropdown to show filtered options
+        if (select) {
+            const placeholder = this.signatureType === 'CytoSig' ? 'cytokine' : 'protein';
+            select.innerHTML = `<option value="">Select ${placeholder}...</option>` +
+                filtered.map(s => `<option value="${s}">${s}</option>`).join('');
+
+            // Auto-select if exact match or single result
+            const exactMatch = filtered.find(s => s.toLowerCase() === query);
+            if (exactMatch) {
+                select.value = exactMatch;
+            } else if (filtered.length === 1) {
+                select.value = filtered[0];
+            }
+        }
+
+        // Show suggestions dropdown
+        const suggestions = filtered.slice(0, 15);
+        if (suggestions.length === 0) {
+            div.style.display = 'none';
+            return;
+        }
+
+        div.innerHTML = suggestions.map(s =>
+            `<div style="padding:6px 10px;cursor:pointer;border-bottom:1px solid #eee"
+                 onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'"
+                 onclick="AtlasDetailPage.selectCimaProtein('${s}')">${s}</div>`
+        ).join('');
+        div.style.display = 'block';
+    },
+
+    selectCimaProtein(sig) {
+        const input = document.getElementById('cima-protein-search');
+        const select = document.getElementById('cima-protein-select');
+        const div = document.getElementById('cima-protein-suggestions');
+        if (input) input.value = sig;
+        if (select) select.value = sig;
+        if (div) div.style.display = 'none';
+        this.updateCimaActivityProfile();
     },
 
     async loadCimaAgeBmi(content) {
@@ -1499,34 +1609,25 @@ const AtlasDetailPage = {
         });
     },
 
-    // Store differential data
-    differentialData: null,
+    // Store population stratification data (matching index.html)
+    populationStratificationData: null,
 
     async loadCimaDifferential(content) {
         content.innerHTML = `
             <div class="panel-header">
-                <h3>Differential Analysis</h3>
-                <p>Activity differences by sex, smoking status, and blood type</p>
+                <h3>Population Stratification</h3>
+                <p>Compare cytokine activity across demographic groups in healthy donors</p>
             </div>
 
             <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
                 <div class="control-group">
-                    <label>Comparison</label>
-                    <select id="diff-comparison" class="filter-select" onchange="AtlasDetailPage.updateDifferentialPlots()">
-                        <option value="sex|Female|Male">Sex (Female vs Male)</option>
-                        <optgroup label="Smoking Status">
-                            <option value="smoking_status|current|never">Current vs Never</option>
-                            <option value="smoking_status|current|past">Current vs Past</option>
-                            <option value="smoking_status|never|past">Never vs Past</option>
-                        </optgroup>
-                        <optgroup label="Blood Type">
-                            <option value="blood_type|O|A">O vs A</option>
-                            <option value="blood_type|O|B">O vs B</option>
-                            <option value="blood_type|O|AB">O vs AB</option>
-                            <option value="blood_type|B|A">B vs A</option>
-                            <option value="blood_type|B|AB">B vs AB</option>
-                            <option value="blood_type|A|AB">A vs AB</option>
-                        </optgroup>
+                    <label>Stratification Variable</label>
+                    <select id="pop-stratify" class="filter-select" onchange="AtlasDetailPage.updatePopulationStratification()">
+                        <option value="sex">Sex (Male vs Female)</option>
+                        <option value="age">Age Group (Older vs Young)</option>
+                        <option value="bmi">BMI Category (Obese vs Normal)</option>
+                        <option value="blood_type">Blood Type (O vs A)</option>
+                        <option value="smoking">Smoking Status (Smoker vs Never)</option>
                     </select>
                 </div>
             </div>
@@ -1534,233 +1635,205 @@ const AtlasDetailPage = {
             <div class="viz-grid">
                 <div class="sub-panel">
                     <div class="panel-header">
-                        <h4>Volcano Plot</h4>
-                        <p id="volcano-subtitle">Effect size vs significance</p>
+                        <h4>Population Distribution</h4>
+                        <p>Sample distribution across stratification groups (N=421)</p>
                     </div>
-                    <div id="differential-volcano" class="plot-container" style="height: 500px;"></div>
+                    <div id="pop-distribution" class="plot-container" style="height: 350px;"></div>
                 </div>
                 <div class="sub-panel">
                     <div class="panel-header">
-                        <h4>Top Differential Signatures</h4>
-                        <p>Sorted by significance score</p>
+                        <h4>Top & Bottom Effect Sizes</h4>
+                        <p>Top 10 + Bottom 10 + IFNG/TNF. Red = positive, Blue = negative.</p>
                     </div>
-                    <div id="differential-bar" class="plot-container" style="height: 500px;"></div>
+                    <div id="pop-effect-sizes" class="plot-container" style="height: 450px;"></div>
                 </div>
+            </div>
+
+            <div class="sub-panel" style="margin-top: 16px;">
+                <div class="panel-header">
+                    <h4>Population-Stratified Heatmap</h4>
+                    <p>Mean activity across demographic groups. Red = high, Blue = low.</p>
+                </div>
+                <div id="pop-heatmap" class="plot-container" style="height: 400px;"></div>
             </div>
         `;
 
-        // Load differential data
-        this.differentialData = await API.get('/cima/differential', { signature_type: this.signatureType });
-        this.updateDifferentialPlots();
+        // Load population stratification data (same format as index.html)
+        this.populationStratificationData = await API.get('/cima/population-stratification', { signature_type: this.signatureType });
+        this.updatePopulationStratification();
     },
 
-    updateDifferentialPlots() {
-        const data = this.differentialData;
-        if (!data || data.length === 0) {
-            document.getElementById('differential-volcano').innerHTML = '<p class="loading">No differential data</p>';
-            document.getElementById('differential-bar').innerHTML = '<p class="loading">No differential data</p>';
+    updatePopulationStratification() {
+        const distContainer = document.getElementById('pop-distribution');
+        const effectContainer = document.getElementById('pop-effect-sizes');
+        const heatmapContainer = document.getElementById('pop-heatmap');
+
+        if (!distContainer) return;
+
+        const stratifyBy = document.getElementById('pop-stratify')?.value || 'sex';
+        const popData = this.populationStratificationData;
+
+        if (!popData || !popData.effect_sizes || !popData.effect_sizes[stratifyBy]) {
+            const noDataMsg = '<p style="text-align:center; padding:2rem; color:#666;">No data available for this stratification.</p>';
+            distContainer.innerHTML = noDataMsg;
+            if (effectContainer) effectContainer.innerHTML = '';
+            if (heatmapContainer) heatmapContainer.innerHTML = '';
             return;
         }
 
-        const comparisonValue = document.getElementById('diff-comparison')?.value || 'sex|Female|Male';
-        const [comparison, group1, group2] = comparisonValue.split('|');
+        // Get effect sizes array for selected stratification
+        const effects = popData.effect_sizes[stratifyBy];
+        const groupMeans = popData.groups[stratifyBy];
+        const groups = Object.keys(groupMeans || {});
 
-        // Filter data by exact match of comparison, group1, group2
-        let filtered = data.filter(d =>
-            d.comparison === comparison &&
-            d.group1 === group1 &&
-            d.group2 === group2 &&
-            !isNaN(d.log2fc) &&
-            d.neg_log10_pval !== null && d.neg_log10_pval !== undefined
-        );
-
-        // For SecAct (many proteins), limit to top 200 by significance score
-        if (this.signatureType === 'SecAct' && filtered.length > 200) {
-            filtered = [...filtered].sort((a, b) => {
-                const scoreA = (a.neg_log10_pval || 0) * Math.abs(a.log2fc || 0);
-                const scoreB = (b.neg_log10_pval || 0) * Math.abs(b.log2fc || 0);
-                return scoreB - scoreA;
-            }).slice(0, 200);
-        }
-
-        if (filtered.length === 0) {
-            document.getElementById('differential-volcano').innerHTML = `<p class="loading">No data for ${group1} vs ${group2}</p>`;
-            document.getElementById('differential-bar').innerHTML = '';
+        if (!effects || effects.length === 0 || groups.length === 0) {
+            const noDataMsg = '<p style="text-align:center; padding:2rem; color:#666;">No effect data for this comparison.</p>';
+            distContainer.innerHTML = noDataMsg;
+            if (effectContainer) effectContainer.innerHTML = '';
+            if (heatmapContainer) heatmapContainer.innerHTML = '';
             return;
         }
 
-        // Update subtitle
-        const subtitle = document.getElementById('volcano-subtitle');
-        if (subtitle) subtitle.textContent = `Positive log2FC = higher in ${group1}, Negative = higher in ${group2}`;
+        // Get sample counts from first effect record
+        const firstEffect = effects[0];
+        const n1 = firstEffect.n_male || firstEffect.n_young || firstEffect.n_normal || 100;
+        const n2 = firstEffect.n_female || firstEffect.n_older || firstEffect.n_obese || 100;
 
-        // Categorize points: significant up, significant down, not significant
-        const significantUp = filtered.filter(d => {
-            const qval = d.q_value ?? 1;
-            return qval < 0.05 && d.log2fc > 0.5;
+        // Define stratification labels and colors
+        const stratLabels = {
+            'sex': 'Sex', 'age': 'Age Group', 'bmi': 'BMI Category',
+            'blood_type': 'Blood Type', 'smoking': 'Smoking Status'
+        };
+        const pieColors = {
+            'sex': ['#e377c2', '#1f77b4'],
+            'age': ['#2ca02c', '#ff7f0e', '#9467bd'],
+            'bmi': ['#2ca02c', '#ff7f0e', '#d62728', '#9467bd'],
+            'blood_type': ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728'],
+            'smoking': ['#2ca02c', '#ff7f0e', '#d62728']
+        };
+        const compLabels = {
+            'sex': 'Male vs Female', 'age': 'Older vs Young', 'bmi': 'Obese vs Normal',
+            'blood_type': 'Blood Type Comparison', 'smoking': 'Smoker vs Non-Smoker'
+        };
+
+        // Estimate group counts based on first effect
+        const groupCounts = groups.map((g, i) => {
+            if (i === 0) return n1;
+            if (i === 1) return n2;
+            return Math.round((n1 + n2) / 2);
         });
-        const significantDown = filtered.filter(d => {
-            const qval = d.q_value ?? 1;
-            return qval < 0.05 && d.log2fc < -0.5;
-        });
-        const notSignificant = filtered.filter(d => {
-            const qval = d.q_value ?? 1;
-            return qval >= 0.05 || Math.abs(d.log2fc) <= 0.5;
-        });
 
-        // Identify top hits by significance score (|log2FC| * -log10(p))
-        const allSignificant = [...significantUp, ...significantDown];
-        const scoredSignificant = allSignificant.map(d => ({
-            ...d,
-            score: Math.abs(d.log2fc || 0) * (d.neg_log10_pval || 0)
-        }));
-        scoredSignificant.sort((a, b) => b.score - a.score);
-        const topHits = scoredSignificant.slice(0, 10);  // Top 10 hits for annotation
-        const topHitSignatures = new Set(topHits.map(d => d.signature));
-
-        // Separate top hits from other significant points
-        const topHitsUp = significantUp.filter(d => topHitSignatures.has(d.signature));
-        const topHitsDown = significantDown.filter(d => topHitSignatures.has(d.signature));
-        const otherSigUp = significantUp.filter(d => !topHitSignatures.has(d.signature));
-        const otherSigDown = significantDown.filter(d => !topHitSignatures.has(d.signature));
-
-        // Dynamic x-axis range
-        const maxAbsFC = Math.max(3, Math.ceil(Math.max(...filtered.map(d => Math.abs(d.log2fc || 0)))));
-        const maxNegLogP = Math.max(10, ...filtered.map(d => d.neg_log10_pval || 0));
-
-        // Build traces
-        const traces = [];
-
-        // Non-significant points (gray, small, no text)
-        if (notSignificant.length > 0) {
-            traces.push({
-                type: 'scatter',
-                mode: 'markers',
-                name: 'Not significant',
-                x: notSignificant.map(d => d.log2fc),
-                y: notSignificant.map(d => d.neg_log10_pval),
-                text: notSignificant.map(d => d.signature),
-                marker: { color: '#cccccc', size: 6, opacity: 0.5 },
-                hovertemplate: '<b>%{text}</b><br>log2FC: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
-            });
-        }
-
-        // Other significant up (colored, medium, no text)
-        if (otherSigUp.length > 0) {
-            traces.push({
-                type: 'scatter',
-                mode: 'markers',
-                name: `Higher in ${group1}`,
-                x: otherSigUp.map(d => d.log2fc),
-                y: otherSigUp.map(d => d.neg_log10_pval),
-                text: otherSigUp.map(d => d.signature),
-                marker: { color: '#f4a6a6', size: 8, opacity: 0.7 },
-                hovertemplate: '<b>%{text}</b><br>log2FC: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
-            });
-        }
-
-        // Other significant down (colored, medium, no text)
-        if (otherSigDown.length > 0) {
-            traces.push({
-                type: 'scatter',
-                mode: 'markers',
-                name: `Higher in ${group2}`,
-                x: otherSigDown.map(d => d.log2fc),
-                y: otherSigDown.map(d => d.neg_log10_pval),
-                text: otherSigDown.map(d => d.signature),
-                marker: { color: '#a8d4e6', size: 8, opacity: 0.7 },
-                hovertemplate: '<b>%{text}</b><br>log2FC: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
-            });
-        }
-
-        // Top hits up (large, with text labels)
-        if (topHitsUp.length > 0) {
-            traces.push({
-                type: 'scatter',
-                mode: 'markers+text',
-                name: `Top hits (${group1})`,
-                x: topHitsUp.map(d => d.log2fc),
-                y: topHitsUp.map(d => d.neg_log10_pval),
-                text: topHitsUp.map(d => d.signature),
-                textposition: 'top center',
-                textfont: { size: 10, color: '#b91c1c' },
-                marker: { color: '#dc2626', size: 12, opacity: 0.9, line: { color: '#fff', width: 1 } },
-                hovertemplate: '<b>%{text}</b><br>log2FC: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
-            });
-        }
-
-        // Top hits down (large, with text labels)
-        if (topHitsDown.length > 0) {
-            traces.push({
-                type: 'scatter',
-                mode: 'markers+text',
-                name: `Top hits (${group2})`,
-                x: topHitsDown.map(d => d.log2fc),
-                y: topHitsDown.map(d => d.neg_log10_pval),
-                text: topHitsDown.map(d => d.signature),
-                textposition: 'top center',
-                textfont: { size: 10, color: '#1e40af' },
-                marker: { color: '#2563eb', size: 12, opacity: 0.9, line: { color: '#fff', width: 1 } },
-                hovertemplate: '<b>%{text}</b><br>log2FC: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
-            });
-        }
-
-        // Volcano plot with multiple traces
-        Plotly.newPlot('differential-volcano', traces, {
-            xaxis: {
-                title: `log2 Fold Change (${group1} / ${group2})`,
-                zeroline: true,
-                zerolinecolor: '#ccc',
-                range: [-maxAbsFC, maxAbsFC]
-            },
-            yaxis: { title: '-log10(p-value)', range: [0, maxNegLogP * 1.15] },
-            shapes: [
-                // Horizontal line at p=0.05
-                { type: 'line', x0: -maxAbsFC, x1: maxAbsFC, y0: -Math.log10(0.05), y1: -Math.log10(0.05),
-                  line: { color: '#999', dash: 'dash', width: 1 } },
-                // Vertical lines at FC thresholds
-                { type: 'line', x0: -0.5, x1: -0.5, y0: 0, y1: maxNegLogP * 1.1,
-                  line: { color: '#999', dash: 'dash', width: 1 } },
-                { type: 'line', x0: 0.5, x1: 0.5, y0: 0, y1: maxNegLogP * 1.1,
-                  line: { color: '#999', dash: 'dash', width: 1 } }
-            ],
-            annotations: [
-                { x: -maxAbsFC * 0.8, y: -0.08, xref: 'x', yref: 'paper',
-                  text: `← Higher in ${group2}`, showarrow: false, font: { size: 11, color: '#2563eb' } },
-                { x: maxAbsFC * 0.8, y: -0.08, xref: 'x', yref: 'paper',
-                  text: `Higher in ${group1} →`, showarrow: false, font: { size: 11, color: '#dc2626' } }
-            ],
-            legend: { orientation: 'h', y: -0.18, x: 0.5, xanchor: 'center' },
-            margin: { l: 60, r: 30, t: 30, b: 80 },
-            font: { family: 'Inter, sans-serif' }
-        }, { responsive: true });
-
-        // Bar chart - top differential by significance score
-        const scored = filtered.map(d => ({
-            ...d,
-            score: Math.abs(d.log2fc || 0) * (d.neg_log10_pval || 0)
-        }));
-        scored.sort((a, b) => b.score - a.score);
-        const top20 = scored.slice(0, 20).reverse();  // Reverse for horizontal bar (top at top)
-
-        Plotly.newPlot('differential-bar', [{
-            type: 'bar',
-            orientation: 'h',
-            y: top20.map(d => d.signature),
-            x: top20.map(d => d.log2fc),
-            marker: {
-                color: top20.map(d => d.log2fc > 0 ? '#f4a6a6' : '#a8d4e6')
-            },
-            text: top20.map(d => d.log2fc.toFixed(2)),
-            textposition: 'outside',
-            textfont: { size: 9 },
-            hovertemplate: '<b>%{y}</b><br>log2FC: %{x:.3f}<br>q = %{customdata}<extra></extra>',
-            customdata: top20.map(d => d.q_value?.toExponential(2) || 'N/A')
+        // 1. Distribution pie chart
+        Plotly.purge(distContainer);
+        Plotly.newPlot(distContainer, [{
+            type: 'pie',
+            labels: groups,
+            values: groupCounts,
+            textinfo: 'label+percent',
+            marker: { colors: pieColors[stratifyBy] || ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728'] },
+            hovertemplate: '<b>%{label}</b><br>N ≈ %{value}<br>%{percent}<extra></extra>'
         }], {
-            xaxis: { title: 'log2 Fold Change', zeroline: true, zerolinecolor: '#ccc' },
-            yaxis: { automargin: true, tickfont: { size: 10 } },
-            margin: { l: 120, r: 50, t: 30, b: 50 },
+            margin: { l: 30, r: 30, t: 40, b: 30 },
+            height: 350,
+            title: { text: `Sample Distribution by ${stratLabels[stratifyBy] || stratifyBy}`, font: { size: 14 } },
             font: { family: 'Inter, sans-serif' }
         }, { responsive: true });
+
+        // 2. Effect sizes - Top 10 + Bottom 10 + always IFNG/TNFA
+        if (effectContainer) {
+            Plotly.purge(effectContainer);
+
+            // Sort by effect size (positive to negative)
+            const sortedByEffect = [...effects].sort((a, b) => b.effect - a.effect);
+
+            // Get top 10 (most positive) and bottom 10 (most negative)
+            const top10 = sortedByEffect.slice(0, 10);
+            const bottom10 = sortedByEffect.slice(-10);
+
+            // Always include IFNG and TNF/TNFA
+            const alwaysInclude = ['IFNG', 'TNFA', 'TNF'];
+            const mustHave = effects.filter(d => alwaysInclude.includes((d.cytokine || '').toUpperCase()));
+
+            // Combine and deduplicate
+            const combined = new Map();
+            [...top10, ...bottom10, ...mustHave].forEach(d => combined.set(d.cytokine, d));
+
+            // Sort final list by effect size
+            const selectedEffects = Array.from(combined.values()).sort((a, b) => b.effect - a.effect);
+
+            const effectSigs = selectedEffects.map(d => d.cytokine);
+            const effectVals = selectedEffects.map(d => d.effect);
+            const pvals = selectedEffects.map(d => d.pvalue);
+
+            Plotly.newPlot(effectContainer, [{
+                type: 'bar',
+                orientation: 'h',
+                y: effectSigs,
+                x: effectVals,
+                marker: {
+                    color: effectVals.map((e, i) => pvals[i] < 0.05 ? (e > 0 ? '#f4a6a6' : '#a8d4e6') : '#ccc')
+                },
+                text: pvals.map(p => p < 0.001 ? '***' : p < 0.01 ? '**' : p < 0.05 ? '*' : ''),
+                textposition: 'outside',
+                hovertemplate: '<b>%{y}</b><br>Effect: %{x:.3f}<br>p = %{customdata:.2e}<extra></extra>',
+                customdata: pvals
+            }], {
+                xaxis: { title: `Effect Size (${compLabels[stratifyBy] || stratifyBy})`, zeroline: true },
+                yaxis: { automargin: true },
+                margin: { l: 120, r: 60, t: 40, b: 50 },
+                height: Math.max(400, selectedEffects.length * 18),
+                title: { text: `Cytokine Variance by ${stratLabels[stratifyBy] || stratifyBy}`, font: { size: 14 } },
+                font: { family: 'Inter, sans-serif' },
+                annotations: [{
+                    x: 0.95, y: 1.02, xref: 'paper', yref: 'paper',
+                    text: '* p<0.05, ** p<0.01, *** p<0.001', showarrow: false, font: { size: 10 }
+                }]
+            }, { responsive: true });
+        }
+
+        // 3. Population heatmap - use selected signatures
+        if (heatmapContainer) {
+            Plotly.purge(heatmapContainer);
+
+            // Use same signatures from effect chart for heatmap
+            const sortedByEffect = [...effects].sort((a, b) => b.effect - a.effect);
+            const top10 = sortedByEffect.slice(0, 10);
+            const bottom10 = sortedByEffect.slice(-10);
+            const alwaysInclude = ['IFNG', 'TNFA', 'TNF'];
+            const mustHave = effects.filter(d => alwaysInclude.includes((d.cytokine || '').toUpperCase()));
+            const combined = new Map();
+            [...top10, ...bottom10, ...mustHave].forEach(d => combined.set(d.cytokine, d));
+            const heatmapSigs = Array.from(combined.values()).sort((a, b) => b.effect - a.effect).map(d => d.cytokine);
+
+            // Build z-matrix from group means
+            const zData = groups.map(group => {
+                return heatmapSigs.map(sig => groupMeans[group]?.[sig] ?? 0);
+            });
+
+            // Calculate z-score range for colorscale
+            const allValues = zData.flat();
+            const maxAbs = Math.max(...allValues.map(Math.abs), 1);
+
+            Plotly.newPlot(heatmapContainer, [{
+                type: 'heatmap',
+                z: zData,
+                x: heatmapSigs,
+                y: groups,
+                colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
+                zmid: 0,
+                zmin: -maxAbs,
+                zmax: maxAbs,
+                colorbar: { title: 'Mean Activity<br>(z-score)' },
+                hovertemplate: '<b>%{y}</b><br>%{x}: %{z:.3f}<extra></extra>'
+            }], {
+                margin: { l: 120, r: 50, t: 40, b: 120 },
+                xaxis: { tickangle: 45, title: 'Cytokine' },
+                yaxis: { title: stratLabels[stratifyBy] || stratifyBy },
+                height: 400,
+                title: { text: `Activity by ${stratLabels[stratifyBy] || stratifyBy}`, font: { size: 14 } },
+                font: { family: 'Inter, sans-serif' }
+            }, { responsive: true });
+        }
     },
 
     // Store population data
@@ -2123,7 +2196,11 @@ const AtlasDetailPage = {
         const stratify = document.getElementById('pop-stratify')?.value || 'sex';
         const groupMeans = data.groups?.[stratify] || {};
         const effects = data.effect_sizes?.[stratify] || [];
-        const cytokines = data.cytokines || [];
+        const signatures = data.signatures || data.cytokines || [];
+
+        // Use signature type to determine label
+        const isSecAct = this.signatureType === 'SecAct';
+        const signatureLabel = isSecAct ? 'Protein' : 'Cytokine';
 
         const groupNames = Object.keys(groupMeans);
 
@@ -2257,7 +2334,7 @@ const AtlasDetailPage = {
                     z: zData,
                     x: heatmapSigs,
                     y: groupNames,
-                    colorscale: [[0, '#a8d4e6'], [0.5, '#f5f5f5'], [1, '#f4a6a6']],
+                    colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
                     zmid: 0,
                     zmin: -maxAbs,
                     zmax: maxAbs,
@@ -2265,7 +2342,7 @@ const AtlasDetailPage = {
                     hovertemplate: '<b>%{y}</b><br>%{x}: %{z:.3f}<extra></extra>'
                 }], {
                     margin: { l: 120, r: 50, t: 40, b: 120 },
-                    xaxis: { tickangle: 45, title: 'Cytokine' },
+                    xaxis: { tickangle: 45, title: signatureLabel },
                     yaxis: { title: stratLabels[stratify] || stratify },
                     height: 400,
                     title: { text: `Activity by ${stratLabels[stratify] || stratify}`, font: { size: 14 } }
@@ -2287,10 +2364,13 @@ const AtlasDetailPage = {
             </div>
 
             <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
-                <div class="control-group">
+                <div class="control-group" style="position: relative;">
                     <label>Search Gene/Variant</label>
                     <input type="text" id="eqtl-search" class="filter-select" placeholder="e.g., IFNG, IL6" style="width: 150px;"
-                           onkeyup="if(event.key==='Enter') AtlasDetailPage.updateEqtlPlots()">
+                           oninput="AtlasDetailPage.showEqtlSuggestions()"
+                           onkeyup="if(event.key==='Enter') { document.getElementById('eqtl-suggestions').style.display='none'; AtlasDetailPage.updateEqtlPlots(); }"
+                           onblur="setTimeout(() => document.getElementById('eqtl-suggestions').style.display = 'none', 200)">
+                    <div id="eqtl-suggestions" style="position: absolute; top: 100%; left: 0; width: 150px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
                 </div>
                 <div class="control-group">
                     <label>Cell Type</label>
@@ -2358,6 +2438,42 @@ const AtlasDetailPage = {
         if (countEl && data.summary) {
             countEl.textContent = `${(data.summary.total_eqtls || data.eqtls?.length || 0).toLocaleString()}`;
         }
+    },
+
+    showEqtlSuggestions() {
+        const input = document.getElementById('eqtl-search');
+        const div = document.getElementById('eqtl-suggestions');
+        if (!input || !div || !this.eqtlData?.eqtls) return;
+
+        const query = input.value.toLowerCase();
+        if (!query) {
+            div.style.display = 'none';
+            return;
+        }
+
+        // Get unique genes from eQTL data
+        const genes = [...new Set(this.eqtlData.eqtls.map(d => d.gene).filter(Boolean))];
+        const filtered = genes.filter(g => g.toLowerCase().includes(query)).slice(0, 15);
+
+        if (filtered.length === 0) {
+            div.style.display = 'none';
+            return;
+        }
+
+        div.innerHTML = filtered.map(g =>
+            `<div style="padding:6px 10px;cursor:pointer;border-bottom:1px solid #eee"
+                 onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'"
+                 onclick="AtlasDetailPage.selectEqtlGene('${g}')">${g}</div>`
+        ).join('');
+        div.style.display = 'block';
+    },
+
+    selectEqtlGene(gene) {
+        const input = document.getElementById('eqtl-search');
+        const div = document.getElementById('eqtl-suggestions');
+        if (input) input.value = gene;
+        if (div) div.style.display = 'none';
+        this.updateEqtlPlots();
     },
 
     updateEqtlPlots() {
@@ -2551,9 +2667,6 @@ const AtlasDetailPage = {
             case 'validation':
                 await this.loadInflamValidation(content);
                 break;
-            case 'longitudinal':
-                await this.loadInflamLongitudinal(content);
-                break;
             case 'severity':
                 await this.loadInflamSeverity(content);
                 break;
@@ -2612,7 +2725,7 @@ const AtlasDetailPage = {
                 </div>
 
                 <div class="card" style="margin-top: 1rem;">
-                    <div class="card-title">Analysis Data Sources</div>
+                    <div class="card-title">Inflammation Atlas Analysis Data Sources</div>
                     <table class="data-table">
                         <thead>
                             <tr>
@@ -2624,63 +2737,53 @@ const AtlasDetailPage = {
                         <tbody>
                             <tr>
                                 <td>Cell Types</td>
-                                <td>66 cell types × (43 CytoSig + 1,170 SecAct proteins)</td>
-                                <td>80,058</td>
+                                <td>66 cell types × (43 CytoSig + 504 SecAct proteins)</td>
+                                <td>36,390</td>
                             </tr>
                             <tr>
-                                <td>Age Correlations</td>
-                                <td>1,213 proteins × Age correlation per cell type</td>
-                                <td>~80,000</td>
-                            </tr>
-                            <tr>
-                                <td>BMI Correlations</td>
-                                <td>1,213 proteins × BMI correlation per cell type</td>
-                                <td>~80,000</td>
+                                <td>Age/BMI Correlations</td>
+                                <td>Sample-level (1,213) + cell type-level (9,438 each)</td>
+                                <td>20,089</td>
                             </tr>
                             <tr>
                                 <td>Age/BMI Stratified</td>
-                                <td>1,213 proteins × 66 cell types × bins (boxplots)</td>
-                                <td>~500,000</td>
+                                <td>Activity boxplots by age decade and BMI category</td>
+                                <td>164,255</td>
                             </tr>
                             <tr>
                                 <td>Disease</td>
-                                <td>Disease vs healthy differential across 12+ diseases</td>
-                                <td>54,137</td>
+                                <td>20 diseases × 66 cell types × (43 CytoSig + 186 SecAct)</td>
+                                <td>310,973</td>
                             </tr>
                             <tr>
                                 <td>Differential</td>
-                                <td>Sex, smoking differential activity analysis</td>
-                                <td>Per comparison</td>
-                            </tr>
-                            <tr>
-                                <td>Treatment Response</td>
-                                <td>Responder vs non-responder ML prediction (8 diseases)</td>
-                                <td>288</td>
-                            </tr>
-                            <tr>
-                                <td>Disease Flow</td>
-                                <td>Sankey diagram: 20 diseases × 6 disease groups × 3 cohorts</td>
-                                <td>136</td>
-                            </tr>
-                            <tr>
-                                <td>Validation</td>
-                                <td>Cross-cohort consistency (main, validation, external)</td>
-                                <td>23</td>
-                            </tr>
-                            <tr>
-                                <td>Longitudinal</td>
-                                <td>Time-course cytokine dynamics during treatment</td>
-                                <td>Per disease</td>
+                                <td>Disease vs healthy differential (study-matched controls)</td>
+                                <td>4,693</td>
                             </tr>
                             <tr>
                                 <td>Severity</td>
                                 <td>Disease severity correlation with cytokine activity</td>
-                                <td>Per disease</td>
+                                <td>9,633</td>
+                            </tr>
+                            <tr>
+                                <td>Treatment Response</td>
+                                <td>ROC curves (28) + feature importance (560) + predictions</td>
+                                <td>1,780</td>
+                            </tr>
+                            <tr>
+                                <td>Validation</td>
+                                <td>Cross-cohort correlation (main vs validation vs external)</td>
+                                <td>1,219</td>
+                            </tr>
+                            <tr>
+                                <td>Disease Flow</td>
+                                <td>Sankey: 20 diseases → 6 disease groups → 3 cohorts</td>
+                                <td>116</td>
                             </tr>
                             <tr>
                                 <td>Cell Drivers</td>
-                                <td>Top driving cell types per disease-cytokine pair</td>
-                                <td>Per disease</td>
+                                <td>15 diseases × 66 cell types × 143 signatures (study-matched)</td>
+                                <td>44,695</td>
                             </tr>
                         </tbody>
                     </table>
@@ -2853,7 +2956,7 @@ const AtlasDetailPage = {
             orientation: 'h',
             marker: {
                 color: top30.map(d => d.mean_activity),
-                colorscale: [[0, '#a8d4e6'], [0.5, '#f5f5f5'], [1, '#f4a6a6']],
+                colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
                 cmid: 0
             },
             hovertemplate: '<b>%{y}</b><br>Activity: %{x:.2f}<br>Samples: %{customdata}<extra></extra>',
@@ -3221,8 +3324,8 @@ const AtlasDetailPage = {
     },
 
     // Store disease activity data and signatures
-    diseaseActivityData: null,
-    diseaseSignatures: { cytosig: [], secact: [] },
+    // Pre-aggregated disease activity data from summary endpoint
+    diseaseActivitySummary: null,
 
     async loadInflamDisease(content) {
         content.innerHTML = `
@@ -3255,49 +3358,27 @@ const AtlasDetailPage = {
                         <h4>Disease-Cell Type Activity</h4>
                         <p id="inflam-disease-bar-subtitle">Activity profile across cell types per disease</p>
                     </div>
-                    <div id="inflam-disease-bar" class="plot-container" style="height: 450px;"></div>
+                    <div id="inflam-disease-bar" class="plot-container" style="height: 450px;">Loading...</div>
                 </div>
                 <div class="sub-panel">
                     <div class="panel-header">
                         <h4>Disease Activity Heatmap</h4>
                         <p id="inflam-disease-heatmap-subtitle">Diseases × Signatures</p>
                     </div>
-                    <div id="inflam-disease-heatmap" class="plot-container" style="height: 450px;"></div>
+                    <div id="inflam-disease-heatmap" class="plot-container" style="height: 450px;">Loading...</div>
                 </div>
             </div>
         `;
 
-        // Load disease activity data
-        this.diseaseActivityData = await API.get('/inflammation/disease-activity', { signature_type: this.signatureType });
-        this.initDiseaseSignatures();
+        // Load pre-aggregated disease activity summary (much smaller than raw data)
+        this.diseaseActivitySummary = await API.get('/inflammation/disease-activity-summary', { signature_type: this.signatureType });
         this.populateInflamDiseaseGroups();
         this.updateInflamDiseaseBar();
         this.updateInflamDiseaseHeatmap();
     },
 
-    initDiseaseSignatures() {
-        const data = this.diseaseActivityData;
-        if (!data || !Array.isArray(data)) return;
-
-        const sigType = this.signatureType || 'CytoSig';
-
-        // Group signatures by type
-        this.diseaseSignatures.cytosig = [...new Set(
-            data.filter(d => d.signature_type === 'CytoSig').map(d => d.signature)
-        )].sort();
-        this.diseaseSignatures.secact = [...new Set(
-            data.filter(d => d.signature_type === 'SecAct').map(d => d.signature)
-        )].sort();
-
-        // Fallback if no signature_type field
-        if (this.diseaseSignatures.cytosig.length === 0 && this.diseaseSignatures.secact.length === 0) {
-            this.diseaseSignatures.cytosig = [...new Set(data.map(d => d.signature))].sort();
-        }
-    },
-
     getDiseaseSignatures() {
-        const sigType = this.signatureType || 'CytoSig';
-        return sigType === 'SecAct' ? this.diseaseSignatures.secact : this.diseaseSignatures.cytosig;
+        return this.diseaseActivitySummary?.signatures || [];
     },
 
     showDiseaseSuggestions() {
@@ -3331,14 +3412,13 @@ const AtlasDetailPage = {
     },
 
     populateInflamDiseaseGroups() {
-        const data = this.diseaseActivityData;
-        if (!data || !Array.isArray(data)) return;
+        const summary = this.diseaseActivitySummary;
+        if (!summary?.disease_groups) return;
 
-        const diseaseGroups = [...new Set(data.map(d => d.disease_group).filter(Boolean))].sort();
         const select = document.getElementById('inflam-disease-group');
-        if (select && diseaseGroups.length > 0) {
+        if (select && summary.disease_groups.length > 0) {
             select.innerHTML = '<option value="all">All Diseases</option>' +
-                diseaseGroups.map(g => `<option value="${g}">${g}</option>`).join('');
+                summary.disease_groups.map(g => `<option value="${g}">${g}</option>`).join('');
         }
     },
 
@@ -3346,14 +3426,13 @@ const AtlasDetailPage = {
         const container = document.getElementById('inflam-disease-bar');
         if (!container) return;
 
-        const data = this.diseaseActivityData;
-        if (!data || !Array.isArray(data)) {
+        const summary = this.diseaseActivitySummary;
+        if (!summary?.bar_data) {
             container.innerHTML = '<p style="text-align: center; color: #666; padding: 2rem;">Disease activity data not available</p>';
             return;
         }
 
         const diseaseGroup = document.getElementById('inflam-disease-group')?.value || 'all';
-        const sigType = this.signatureType || 'CytoSig';
         const signature = document.getElementById('inflam-disease-search')?.value || 'IFNG';
 
         // Update subtitle with current signature
@@ -3362,30 +3441,21 @@ const AtlasDetailPage = {
             subtitle.textContent = `${signature} activity across cell types`;
         }
 
-        // Filter by signature
-        let filtered = data.filter(d => d.signature === signature);
-
-        // Filter by signature_type if field exists
-        if (data[0]?.signature_type) {
-            filtered = filtered.filter(d => d.signature_type === sigType);
-        }
-        if (diseaseGroup !== 'all') {
-            filtered = filtered.filter(d => d.disease_group === diseaseGroup);
+        // Get pre-aggregated bar data for this signature and disease group
+        const sigData = summary.bar_data[signature];
+        if (!sigData) {
+            container.innerHTML = `<p style="text-align: center; color: #666; padding: 2rem;">No data for "${signature}"</p>`;
+            return;
         }
 
-        // Aggregate by cell type
-        const cellTypeActivity = {};
-        filtered.forEach(d => {
-            if (!cellTypeActivity[d.cell_type]) {
-                cellTypeActivity[d.cell_type] = [];
-            }
-            cellTypeActivity[d.cell_type].push(d.mean_activity || d.activity || 0);
-        });
+        // Get cell type -> mean_activity mapping for selected disease group
+        const cellTypeData = sigData[diseaseGroup] || sigData['all'] || {};
 
-        const aggData = Object.entries(cellTypeActivity).map(([ct, vals]) => ({
-            cell_type: ct,
-            mean_activity: vals.reduce((a, b) => a + b, 0) / vals.length
-        })).sort((a, b) => b.mean_activity - a.mean_activity).slice(0, 30);
+        // Convert to array and sort
+        const aggData = Object.entries(cellTypeData)
+            .map(([ct, val]) => ({ cell_type: ct, mean_activity: val }))
+            .sort((a, b) => b.mean_activity - a.mean_activity)
+            .slice(0, 30);
 
         Plotly.purge(container);
 
@@ -3401,7 +3471,7 @@ const AtlasDetailPage = {
             orientation: 'h',
             marker: {
                 color: aggData.map(d => d.mean_activity),
-                colorscale: [[0, '#a8d4e6'], [0.5, '#f5f5f5'], [1, '#f4a6a6']],
+                colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
                 cmid: 0
             },
             hovertemplate: '<b>%{y}</b><br>Activity: %{x:.4f}<extra></extra>'
@@ -3416,8 +3486,8 @@ const AtlasDetailPage = {
         const container = document.getElementById('inflam-disease-heatmap');
         if (!container) return;
 
-        const data = this.diseaseActivityData;
-        if (!data || !Array.isArray(data)) {
+        const summary = this.diseaseActivitySummary;
+        if (!summary?.heatmap) {
             container.innerHTML = '<p style="text-align: center; color: #666; padding: 2rem;">Disease activity data not available</p>';
             return;
         }
@@ -3433,61 +3503,32 @@ const AtlasDetailPage = {
                 : 'Diseases × Signatures';
         }
 
-        let filtered = data;
-        // Filter by signature type if field exists
-        if (data[0]?.signature_type) {
-            filtered = filtered.filter(d => d.signature_type === sigType);
+        // Use pre-computed heatmap data
+        let { z: zData, x: signatures, y: diseases } = summary.heatmap;
+
+        // Filter by disease group if specified
+        if (diseaseGroup !== 'all' && summary.disease_to_group) {
+            const filteredIndices = diseases
+                .map((d, i) => summary.disease_to_group[d] === diseaseGroup ? i : -1)
+                .filter(i => i !== -1);
+            diseases = filteredIndices.map(i => diseases[i]);
+            zData = filteredIndices.map(i => zData[i]);
         }
-        if (diseaseGroup !== 'all') {
-            filtered = filtered.filter(d => d.disease_group === diseaseGroup);
-        }
 
-        // Get unique diseases and signatures
-        const diseases = [...new Set(filtered.map(d => d.disease))];
-        let allSignatures = [...new Set(filtered.map(d => d.signature))];
-
-        // Aggregate by disease (mean across cell types)
-        const diseaseActivity = {};
-        filtered.forEach(d => {
-            const key = `${d.disease}|${d.signature}`;
-            if (!diseaseActivity[key]) {
-                diseaseActivity[key] = [];
-            }
-            diseaseActivity[key].push(d.mean_activity || d.activity || 0);
-        });
-
-        // For SecAct (many proteins), select top most variable signatures
-        const maxSignatures = sigType === 'SecAct' ? 50 : allSignatures.length;
-        let signatures = allSignatures;
-
-        if (allSignatures.length > maxSignatures) {
-            // Calculate variance for each signature across diseases
-            const sigVariance = allSignatures.map(sig => {
-                const vals = diseases.map(disease => {
-                    const key = `${disease}|${sig}`;
-                    const arr = diseaseActivity[key] || [0];
-                    return arr.reduce((a, b) => a + b, 0) / arr.length;
-                });
+        // For SecAct, limit to top 50 most variable signatures
+        if (sigType === 'SecAct' && signatures.length > 50) {
+            // Calculate variance for each signature column
+            const sigVariance = signatures.map((sig, colIdx) => {
+                const vals = zData.map(row => row[colIdx]);
                 const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
                 const variance = vals.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / vals.length;
-                return { sig, variance };
+                return { sig, colIdx, variance };
             });
-
-            // Sort by variance and take top N
             sigVariance.sort((a, b) => b.variance - a.variance);
-            signatures = sigVariance.slice(0, maxSignatures).map(s => s.sig);
+            const topIndices = sigVariance.slice(0, 50).map(s => s.colIdx).sort((a, b) => a - b);
+            signatures = topIndices.map(i => signatures[i]);
+            zData = zData.map(row => topIndices.map(i => row[i]));
         }
-
-        signatures.sort();
-
-        // Create matrix
-        const zData = diseases.map(disease =>
-            signatures.map(sig => {
-                const key = `${disease}|${sig}`;
-                const vals = diseaseActivity[key] || [0];
-                return vals.reduce((a, b) => a + b, 0) / vals.length;
-            })
-        );
 
         Plotly.purge(container);
 
@@ -3501,7 +3542,7 @@ const AtlasDetailPage = {
             x: signatures,
             y: diseases,
             type: 'heatmap',
-            colorscale: [[0, '#a8d4e6'], [0.5, '#f5f5f5'], [1, '#f4a6a6']],
+            colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
             zmid: 0,
             colorbar: { title: 'Activity' },
             hovertemplate: '<b>%{y}</b><br>%{x}: %{z:.4f}<extra></extra>'
@@ -3518,6 +3559,16 @@ const AtlasDetailPage = {
                 <h3>Disease Differential Analysis</h3>
                 <p>Compare cytokine activity between disease and healthy samples</p>
             </div>
+
+            <!-- Explanation card about study-matched vs pooled healthy -->
+            <div class="card" style="margin-bottom: 1rem; padding: 1rem; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
+                <strong>Disease vs Healthy Comparison:</strong> Wilcoxon rank-sum test comparing cytokine activity between disease and healthy samples.
+                <br><em style="color: #666;">
+                <strong>Study-matched:</strong> CD, COPD, COVID, HBV, HIV, HNSCC, MS, PS, PSA, RA, SLE, UC, asthma, flu, sepsis - compared to healthy from same study.
+                <br><strong style="color: #d62728;">Pooled healthy ⚠️:</strong> BRCA, CRC, NPC, cirrhosis - no matched controls in study; compared to all healthy samples (interpret with caution).
+                </em>
+            </div>
+
             <div class="controls" style="margin-bottom: 16px; display: flex; gap: 16px; flex-wrap: wrap;">
                 <div class="control-group">
                     <label>Disease</label>
@@ -3525,29 +3576,34 @@ const AtlasDetailPage = {
                         <option value="all">All Diseases vs Healthy</option>
                     </select>
                 </div>
-                <div class="control-group">
-                    <label>Signature Type</label>
-                    <select id="inflam-diff-sig-type" class="filter-select" onchange="AtlasDetailPage.updateInflamDifferential()">
-                        <option value="CytoSig">CytoSig (43 cytokines)</option>
-                        <option value="SecAct">SecAct (1,170 proteins)</option>
-                    </select>
-                </div>
             </div>
             <div class="viz-grid">
                 <div class="sub-panel">
                     <h4 id="inflam-diff-volcano-title">Volcano Plot: Disease vs Healthy</h4>
-                    <p style="color: #666; font-size: 0.9rem;">Effect size (log2FC) vs significance (-log10 p-value)</p>
+                    <p id="inflam-diff-volcano-subtitle" style="color: #666; font-size: 0.9rem;">Effect size (activity difference) vs significance (-log10 p-value)</p>
                     <div id="inflam-volcano" class="plot-container" style="height: 500px;"></div>
                 </div>
                 <div class="sub-panel">
                     <h4 id="inflam-diff-bar-title">Top Differential Signatures</h4>
-                    <p style="color: #666; font-size: 0.9rem;">Sorted by significance score (|log2FC| × -log10 p)</p>
+                    <p id="inflam-diff-bar-subtitle" style="color: #666; font-size: 0.9rem;">Sorted by significance (|effect| × -log10 p)</p>
                     <div id="inflam-diff-bar" class="plot-container" style="height: 500px;"></div>
                 </div>
             </div>
         `;
 
-        await this.populateDiseaseDropdown('inflam-diff-disease');
+        // Load raw differential data
+        this.inflamDifferentialRaw = await API.get('/inflammation/differential-raw');
+
+        // Populate disease dropdown from raw data
+        if (this.inflamDifferentialRaw && this.inflamDifferentialRaw.length > 0) {
+            const diseases = [...new Set(this.inflamDifferentialRaw.map(d => d.disease))].filter(d => d !== 'healthy').sort();
+            const select = document.getElementById('inflam-diff-disease');
+            if (select) {
+                select.innerHTML = '<option value="all">All Diseases vs Healthy</option>' +
+                    diseases.map(d => `<option value="${d}">${d} vs Healthy</option>`).join('');
+            }
+        }
+
         await this.updateInflamDifferential();
     },
 
@@ -3568,13 +3624,6 @@ const AtlasDetailPage = {
                         <option value="CD">Crohn's Disease (CD)</option>
                         <option value="UC">Ulcerative Colitis (UC)</option>
                         <option value="SLE">Systemic Lupus (SLE)</option>
-                    </select>
-                </div>
-                <div class="control-group">
-                    <label>Signature Type</label>
-                    <select id="treatment-sig-type" class="filter-select" onchange="AtlasDetailPage.updateTreatmentResponse()">
-                        <option value="CytoSig">CytoSig (43 cytokines)</option>
-                        <option value="SecAct">SecAct (1,170 proteins)</option>
                     </select>
                 </div>
                 <div class="control-group">
@@ -3605,6 +3654,9 @@ const AtlasDetailPage = {
             </div>
         `;
 
+        // Load raw treatment response data (same format as index.html)
+        this.treatmentResponseRaw = await API.get('/inflammation/treatment-response-raw');
+
         await this.updateTreatmentResponse();
     },
 
@@ -3629,65 +3681,31 @@ const AtlasDetailPage = {
         content.innerHTML = `
             <div class="panel-header">
                 <h3>Cross-Cohort Validation</h3>
-                <p>Consistency of cytokine/protein activity signatures across main, validation, and external cohorts.
-                   <strong>Click on points or rows to highlight across all views.</strong></p>
+                <p>Consistency of cytokine/protein activity signatures across main, validation, and external cohorts.</p>
             </div>
-            <div class="validation-controls" style="margin-bottom: 16px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+            <div class="controls" style="margin-bottom: 16px;">
                 <div class="control-group">
-                    <label for="validation-sig-type" style="font-weight: 500; margin-right: 8px;">Signature Type:</label>
-                    <select id="validation-sig-type" class="filter-select" onchange="AtlasDetailPage.updateInflamValidation()">
-                        <option value="CytoSig" ${this.signatureType === 'CytoSig' ? 'selected' : ''}>CytoSig (43 cytokines)</option>
-                        <option value="SecAct" ${this.signatureType === 'SecAct' ? 'selected' : ''}>SecAct (1,170 proteins)</option>
+                    <label for="validation-cohorts" style="font-weight: 500; margin-right: 8px;">Comparison:</label>
+                    <select id="validation-cohorts" class="filter-select" onchange="AtlasDetailPage.updateCohortValidation()">
+                        <option value="main-validation">Main vs Validation</option>
+                        <option value="main-external">Main vs External</option>
+                        <option value="validation-external">Validation vs External</option>
                     </select>
                 </div>
-                <div class="control-group">
-                    <label for="validation-search" style="font-weight: 500; margin-right: 8px;">Search:</label>
-                    <input type="text" id="validation-search" class="filter-input" placeholder="Filter signatures..."
-                           oninput="AtlasDetailPage.filterValidationViews()" style="width: 200px;">
-                </div>
-                <div class="control-group">
-                    <label style="font-weight: 500; margin-right: 8px;">Quality Filter:</label>
-                    <div id="quality-filter-btns" style="display: inline-flex; gap: 4px;">
-                        <button class="quality-btn active" data-quality="all" onclick="AtlasDetailPage.filterByQuality('all')"
-                                style="padding: 4px 12px; border: 1px solid #d1d5db; border-radius: 4px; background: #3b82f6; color: white; cursor: pointer; font-size: 13px;">All</button>
-                        <button class="quality-btn" data-quality="excellent" onclick="AtlasDetailPage.filterByQuality('excellent')"
-                                style="padding: 4px 12px; border: 1px solid #10b981; border-radius: 4px; background: white; color: #10b981; cursor: pointer; font-size: 13px;">Excellent</button>
-                        <button class="quality-btn" data-quality="good" onclick="AtlasDetailPage.filterByQuality('good')"
-                                style="padding: 4px 12px; border: 1px solid #f59e0b; border-radius: 4px; background: white; color: #f59e0b; cursor: pointer; font-size: 13px;">Good</button>
-                        <button class="quality-btn" data-quality="fair" onclick="AtlasDetailPage.filterByQuality('fair')"
-                                style="padding: 4px 12px; border: 1px solid #6b7280; border-radius: 4px; background: white; color: #6b7280; cursor: pointer; font-size: 13px;">Fair/Poor</button>
-                    </div>
-                </div>
-                <button onclick="AtlasDetailPage.clearValidationSelection()"
-                        style="padding: 4px 12px; border: 1px solid #ef4444; border-radius: 4px; background: white; color: #ef4444; cursor: pointer; font-size: 13px;">
-                    Clear Selection
-                </button>
             </div>
-            <div id="validation-summary" class="plot-container" style="height: 280px; margin-bottom: 20px;"></div>
-            <div id="validation-detail-card" style="display: none; margin-bottom: 20px; padding: 16px; background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%); border-radius: 12px; border: 2px solid #3b82f6; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <h4 id="validation-detail-name" style="margin: 0 0 8px 0; font-size: 18px; color: #1e40af;"></h4>
-                        <div id="validation-detail-info" style="display: flex; gap: 24px; font-size: 14px;"></div>
-                    </div>
-                    <button onclick="AtlasDetailPage.clearValidationSelection()" style="padding: 6px 12px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer;">×</button>
+
+            <div class="two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="viz-container" style="min-height: 450px;">
+                    <div class="viz-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Cross-Cohort Correlation</div>
+                    <div class="viz-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Signature activity correlation between cohorts</div>
+                    <div id="cohort-scatter" class="plot-container" style="height: 400px;">Loading data...</div>
+                </div>
+                <div class="viz-container" style="min-height: 450px;">
+                    <div class="viz-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Consistency Metrics</div>
+                    <div class="viz-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Per-signature correlation coefficients</div>
+                    <div id="cohort-consistency" class="plot-container" style="height: 400px;">Loading data...</div>
                 </div>
             </div>
-            <div id="validation-scatter" class="plot-container" style="height: 450px; margin-bottom: 24px;"></div>
-            <div id="validation-table-container" style="max-height: 400px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px;">
-                <table id="validation-table" class="data-table" style="width: 100%; border-collapse: collapse;">
-                    <thead style="position: sticky; top: 0; background: #f9fafb; z-index: 1;">
-                        <tr>
-                            <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e5e7eb; cursor: pointer;" onclick="AtlasDetailPage.sortValidationTable('signature')">Signature ↕</th>
-                            <th style="padding: 12px; text-align: center; border-bottom: 2px solid #e5e7eb; cursor: pointer;" onclick="AtlasDetailPage.sortValidationTable('main_validation_r')">Main↔Val (r) ↕</th>
-                            <th style="padding: 12px; text-align: center; border-bottom: 2px solid #e5e7eb; cursor: pointer;" onclick="AtlasDetailPage.sortValidationTable('main_external_r')">Main↔Ext (r) ↕</th>
-                            <th style="padding: 12px; text-align: center; border-bottom: 2px solid #e5e7eb;">Quality</th>
-                        </tr>
-                    </thead>
-                    <tbody id="validation-table-body"></tbody>
-                </table>
-            </div>
-            <div id="validation-stats" style="margin-top: 16px; padding: 12px; background: #f0f9ff; border-radius: 8px; font-size: 14px;"></div>
         `;
 
         await this.updateInflamValidation();
@@ -3695,228 +3713,179 @@ const AtlasDetailPage = {
 
     // Validation state
     validationData: null,
-    validationSortColumn: 'signature',
-    validationSortAsc: true,
-    validationSelectedSignature: null,
-    validationQualityFilter: 'all',
-    validationSearchTerm: '',
 
     async updateInflamValidation() {
-        const sigType = document.getElementById('validation-sig-type')?.value || this.signatureType;
-        this.signatureType = sigType;
-
-        // Reset selection state when switching signature type
-        this.validationSelectedSignature = null;
-        this.validationQualityFilter = 'all';
-        this.validationSearchTerm = '';
+        const sigType = this.signatureType;
 
         const data = await API.get('/inflammation/cohort-validation', { signature_type: sigType });
-        if (data && data.correlations) {
+        if (data && (data.correlations?.length || data.consistency?.length)) {
             this.validationData = data;
-            this.renderCohortValidation(data);
+            this.updateCohortValidation();
         } else {
-            document.getElementById('validation-summary').innerHTML = '<p class="loading">No validation data available</p>';
-            document.getElementById('validation-scatter').innerHTML = '';
-            document.getElementById('validation-table-body').innerHTML = '';
+            document.getElementById('cohort-scatter').innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Cross-cohort validation data will be available after running the full pipeline.</p>';
+            document.getElementById('cohort-consistency').innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Cross-cohort validation data will be available after running the full pipeline.</p>';
         }
     },
 
-    getFilteredValidationData() {
-        if (!this.validationData?.correlations) return [];
+    updateCohortValidation() {
+        const container1 = document.getElementById('cohort-scatter');
+        const container2 = document.getElementById('cohort-consistency');
 
-        let filtered = [...this.validationData.correlations];
-
-        // Apply search filter
-        if (this.validationSearchTerm) {
-            filtered = filtered.filter(c =>
-                c.signature.toLowerCase().includes(this.validationSearchTerm.toLowerCase())
-            );
-        }
-
-        // Apply quality filter
-        if (this.validationQualityFilter !== 'all') {
-            filtered = filtered.filter(c => {
-                const avgR = (c.main_validation_r + c.main_external_r) / 2;
-                switch (this.validationQualityFilter) {
-                    case 'excellent': return avgR >= 0.8;
-                    case 'good': return avgR >= 0.6 && avgR < 0.8;
-                    case 'fair': return avgR < 0.6;
-                    default: return true;
+        const data = this.validationData;
+        if (!data || (!data.correlations?.length && !data.consistency?.length)) {
+            [container1, container2].forEach(c => {
+                if (c) {
+                    c.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Cross-cohort validation data will be available after running the full pipeline.</p>';
                 }
             });
+            return;
         }
 
-        return filtered;
-    },
+        const sigType = this.signatureType;
+        const cohortComparison = document.getElementById('validation-cohorts')?.value || 'main-validation';
 
-    filterValidationViews() {
-        this.validationSearchTerm = document.getElementById('validation-search')?.value || '';
-        this.refreshValidationViews();
-    },
-
-    filterByQuality(quality) {
-        this.validationQualityFilter = quality;
-
-        // Update button states
-        document.querySelectorAll('#quality-filter-btns .quality-btn').forEach(btn => {
-            const btnQuality = btn.dataset.quality;
-            if (btnQuality === quality) {
-                btn.style.background = btnQuality === 'all' ? '#3b82f6' :
-                    btnQuality === 'excellent' ? '#10b981' :
-                    btnQuality === 'good' ? '#f59e0b' : '#6b7280';
-                btn.style.color = 'white';
-            } else {
-                btn.style.background = 'white';
-                btn.style.color = btnQuality === 'all' ? '#3b82f6' :
-                    btnQuality === 'excellent' ? '#10b981' :
-                    btnQuality === 'good' ? '#f59e0b' : '#6b7280';
-            }
-        });
-
-        this.refreshValidationViews();
-    },
-
-    refreshValidationViews() {
-        const filtered = this.getFilteredValidationData();
-        this.renderValidationScatter(filtered);
-        this.renderValidationTable(filtered);
-        this.renderValidationStats({ correlations: filtered, consistency: this.validationData?.consistency });
-
-        // Maintain selection highlight if still in filtered data
-        if (this.validationSelectedSignature) {
-            const stillVisible = filtered.some(c => c.signature === this.validationSelectedSignature);
-            if (stillVisible) {
-                this.highlightValidationSignature(this.validationSelectedSignature);
-            } else {
-                this.clearValidationSelection();
-            }
-        }
-    },
-
-    selectValidationSignature(signature) {
-        this.validationSelectedSignature = signature;
-        this.highlightValidationSignature(signature);
-        this.showValidationDetail(signature);
-    },
-
-    highlightValidationSignature(signature) {
-        // Highlight in scatter plot
-        this.highlightScatterPoint(signature);
-
-        // Highlight in table
-        this.highlightTableRow(signature);
-    },
-
-    highlightScatterPoint(signature) {
-        const scatterDiv = document.getElementById('validation-scatter');
-        if (!scatterDiv || !scatterDiv.data) return;
-
-        const filtered = this.getFilteredValidationData();
-        const idx = filtered.findIndex(c => c.signature === signature);
-
-        if (idx === -1) return;
-
-        // Update marker sizes and colors to highlight selected point
-        const sizes = filtered.map((c, i) => i === idx ? 16 : 8);
-        const opacities = filtered.map((c, i) => i === idx ? 1 : 0.5);
-        const lineWidths = filtered.map((c, i) => i === idx ? 3 : 1);
-        const lineColors = filtered.map((c, i) => i === idx ? '#1e40af' : '#fff');
-
-        Plotly.restyle('validation-scatter', {
-            'marker.size': [sizes],
-            'marker.opacity': [opacities],
-            'marker.line.width': [lineWidths],
-            'marker.line.color': [lineColors],
-        }, [1]); // Index 1 is the scatter trace (0 is ref line)
-    },
-
-    highlightTableRow(signature) {
-        // Remove previous highlight
-        document.querySelectorAll('#validation-table-body tr').forEach(row => {
-            row.classList.remove('selected-row');
-            row.style.outline = 'none';
-        });
-
-        // Find and highlight the row
-        const rows = document.querySelectorAll('#validation-table-body tr');
-        rows.forEach(row => {
-            if (row.dataset.signature === signature) {
-                row.classList.add('selected-row');
-                row.style.outline = '3px solid #3b82f6';
-                row.style.outlineOffset = '-3px';
-                row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }
-        });
-    },
-
-    showValidationDetail(signature) {
-        const data = this.validationData?.correlations?.find(c => c.signature === signature);
-        if (!data) return;
-
-        const detailCard = document.getElementById('validation-detail-card');
-        const nameEl = document.getElementById('validation-detail-name');
-        const infoEl = document.getElementById('validation-detail-info');
-
-        if (!detailCard || !nameEl || !infoEl) return;
-
-        const avgR = (data.main_validation_r + data.main_external_r) / 2;
-        const quality = avgR >= 0.8 ? 'Excellent' : avgR >= 0.6 ? 'Good' : avgR >= 0.4 ? 'Fair' : 'Poor';
-        const qualityColor = avgR >= 0.8 ? '#10b981' : avgR >= 0.6 ? '#f59e0b' : avgR >= 0.4 ? '#6b7280' : '#ef4444';
-
-        nameEl.textContent = data.signature;
-        infoEl.innerHTML = `
-            <span><strong>Main ↔ Validation:</strong> <span style="font-size: 16px; color: #1e40af;">${data.main_validation_r.toFixed(3)}</span></span>
-            <span><strong>Main ↔ External:</strong> <span style="font-size: 16px; color: #1e40af;">${data.main_external_r.toFixed(3)}</span></span>
-            <span><strong>Average:</strong> <span style="font-size: 16px; color: #1e40af;">${avgR.toFixed(3)}</span></span>
-            <span><strong>Quality:</strong> <span style="font-size: 16px; color: ${qualityColor}; font-weight: 600;">${quality}</span></span>
-            <span><strong>p-value:</strong> ${data.pvalue < 0.001 ? '<0.001' : data.pvalue.toFixed(3)}</span>
-        `;
-
-        detailCard.style.display = 'block';
-    },
-
-    clearValidationSelection() {
-        this.validationSelectedSignature = null;
-
-        // Hide detail card
-        const detailCard = document.getElementById('validation-detail-card');
-        if (detailCard) detailCard.style.display = 'none';
-
-        // Reset scatter plot highlighting
-        const filtered = this.getFilteredValidationData();
-        if (filtered.length > 0) {
-            const avgR = filtered.map(c => (c.main_validation_r + c.main_external_r) / 2);
-            const colors = avgR.map(r => r >= 0.8 ? '#10b981' : r >= 0.6 ? '#f59e0b' : '#ef4444');
-
-            Plotly.restyle('validation-scatter', {
-                'marker.size': [filtered.map(() => 8)],
-                'marker.opacity': [filtered.map(() => 0.7)],
-                'marker.line.width': [filtered.map(() => 1)],
-                'marker.line.color': [filtered.map(() => '#fff')],
-                'marker.color': [colors],
-            }, [1]);
+        // Filter correlations by signature type
+        let correlations = data.correlations || [];
+        if (sigType !== 'both') {
+            correlations = correlations.filter(d => d.signature_type === sigType);
         }
 
-        // Remove table row highlights
-        document.querySelectorAll('#validation-table-body tr').forEach(row => {
-            row.classList.remove('selected-row');
-            row.style.outline = 'none';
-        });
-    },
-
-    sortValidationTable(column) {
-        if (this.validationSortColumn === column) {
-            this.validationSortAsc = !this.validationSortAsc;
+        // Determine which correlation values to use based on cohort comparison
+        let xKey, xLabel;
+        if (cohortComparison === 'main-validation') {
+            xKey = 'main_validation_r';
+            xLabel = 'Main vs Validation (r)';
+        } else if (cohortComparison === 'main-external') {
+            xKey = 'main_external_r';
+            xLabel = 'Main vs External (r)';
         } else {
-            this.validationSortColumn = column;
-            this.validationSortAsc = true;
+            xKey = 'validation_external_r';
+            xLabel = 'Validation vs External (r)';
         }
-        const filtered = this.getFilteredValidationData();
-        this.renderValidationTable(filtered);
 
-        // Re-apply highlight if there's a selection
-        if (this.validationSelectedSignature) {
-            this.highlightTableRow(this.validationSelectedSignature);
+        // 1. Histogram of correlation values for selected comparison
+        if (container1) {
+            Plotly.purge(container1);
+
+            if (correlations.length === 0) {
+                container1.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No correlation data available for selected signature type</p>';
+            } else {
+                // Get correlation values for the selected comparison
+                const rValues = correlations
+                    .map(d => d[xKey])
+                    .filter(v => v !== null && v !== undefined && !isNaN(v));
+
+                if (rValues.length === 0) {
+                    container1.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No data available for selected cohort comparison</p>';
+                } else {
+                    // Calculate statistics
+                    const meanR = rValues.reduce((a, b) => a + b, 0) / rValues.length;
+                    const sortedR = [...rValues].sort((a, b) => a - b);
+                    const medianR = sortedR[Math.floor(sortedR.length / 2)];
+
+                    // Create histogram
+                    const histTrace = {
+                        type: 'histogram',
+                        x: rValues,
+                        name: 'Distribution',
+                        marker: {
+                            color: '#1f77b4',
+                            opacity: 0.7
+                        },
+                        xbins: { start: 0, end: 1, size: 0.05 },
+                        hovertemplate: 'r: %{x:.2f}<br>Count: %{y}<extra></extra>'
+                    };
+
+                    // Add vertical lines for mean and median
+                    const shapes = [
+                        {
+                            type: 'line',
+                            x0: meanR, x1: meanR, y0: 0, y1: 1, yref: 'paper',
+                            line: { color: '#d62728', width: 2, dash: 'dash' }
+                        },
+                        {
+                            type: 'line',
+                            x0: medianR, x1: medianR, y0: 0, y1: 1, yref: 'paper',
+                            line: { color: '#2ca02c', width: 2, dash: 'dot' }
+                        }
+                    ];
+
+                    // Add annotations
+                    const annotations = [
+                        {
+                            x: meanR, y: 1, yref: 'paper', xanchor: 'left',
+                            text: ` Mean: ${meanR.toFixed(3)}`, showarrow: false,
+                            font: { color: '#d62728', size: 11 }
+                        },
+                        {
+                            x: medianR, y: 0.9, yref: 'paper', xanchor: 'left',
+                            text: ` Median: ${medianR.toFixed(3)}`, showarrow: false,
+                            font: { color: '#2ca02c', size: 11 }
+                        }
+                    ];
+
+                    Plotly.newPlot(container1, [histTrace], {
+                        xaxis: { title: xLabel, range: [0, 1] },
+                        yaxis: { title: 'Number of Signatures' },
+                        margin: { l: 60, r: 30, t: 40, b: 60 },
+                        height: 400,
+                        shapes: shapes,
+                        annotations: annotations,
+                        title: {
+                            text: `${sigType} Signature Reproducibility (n=${rValues.length})`,
+                            font: { size: 14 }
+                        }
+                    }, { responsive: true });
+                }
+            }
+        }
+
+        // 2. Consistency comparison bar chart - show all three comparisons for selected sig type
+        if (container2) {
+            Plotly.purge(container2);
+
+            let consistency = data.consistency || [];
+            // Filter by signature type
+            if (sigType !== 'both') {
+                consistency = consistency.filter(d => d.signature_type === sigType);
+            }
+
+            if (consistency.length === 0) {
+                container2.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No consistency data available</p>';
+            } else {
+                // Sort by cohort_pair for consistent ordering
+                const order = ['Main vs Validation', 'Main vs External', 'Validation vs External'];
+                consistency = consistency.sort((a, b) => order.indexOf(a.cohort_pair) - order.indexOf(b.cohort_pair));
+
+                // Highlight the selected comparison
+                const selectedLabel = cohortComparison === 'main-validation' ? 'Main vs Validation' :
+                                     cohortComparison === 'main-external' ? 'Main vs External' :
+                                     'Validation vs External';
+
+                const colors = consistency.map(d =>
+                    d.cohort_pair === selectedLabel ? '#1f77b4' : '#aec7e8'
+                );
+
+                Plotly.newPlot(container2, [{
+                    type: 'bar',
+                    x: consistency.map(d => d.cohort_pair),
+                    y: consistency.map(d => d.mean_r),
+                    text: consistency.map(d => `r=${d.mean_r.toFixed(3)}`),
+                    textposition: 'auto',
+                    marker: { color: colors },
+                    hovertemplate: '<b>%{x}</b><br>Mean r: %{y:.3f}<br>n = %{customdata} signatures<extra></extra>',
+                    customdata: consistency.map(d => d.n_signatures)
+                }], {
+                    xaxis: { title: 'Cohort Comparison' },
+                    yaxis: { title: 'Mean Correlation', range: [0, 1] },
+                    margin: { l: 50, r: 30, t: 40, b: 100 },
+                    height: 400,
+                    title: {
+                        text: `${sigType} Cross-Cohort Consistency`,
+                        font: { size: 14 }
+                    }
+                }, { responsive: true });
+            }
         }
     },
 
@@ -4122,7 +4091,7 @@ const AtlasDetailPage = {
             x: data.columns,
             y: data.rows,
             type: 'heatmap',
-            colorscale: [[0, '#3b82f6'], [0.5, '#f5f5f5'], [1, '#ef4444']],
+            colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
             zmid: 0,
             colorbar: { title: 'Activity', titleside: 'right' },
             hovertemplate: '<b>%{y}</b><br>%{x}: %{z:.3f}<extra></extra>',
@@ -4271,341 +4240,363 @@ const AtlasDetailPage = {
     },
 
     async loadInflamSeverity(content) {
+        // Match index.html layout exactly
         content.innerHTML = `
             <div class="panel-header">
-                <h3>Disease Severity Correlation</h3>
-                <p>Cytokine activity patterns across disease severity levels. Select a disease to explore how signatures change with severity.</p>
+                <h3>Disease Severity Analysis</h3>
+                <p>Compare cytokine activity across severity stages within each disease.</p>
             </div>
-            <div class="severity-controls" style="margin-bottom: 16px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+            <div class="controls" style="margin-bottom: 16px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
                 <div class="control-group">
-                    <label for="severity-disease" style="font-weight: 500; margin-right: 8px;">Disease:</label>
-                    <select id="severity-disease" class="filter-select" onchange="AtlasDetailPage.updateSeverityPanel()">
+                    <label>Disease</label>
+                    <select id="severity-disease" class="filter-select" onchange="AtlasDetailPage.updateSeverityCorrelation()">
                         <option value="">Loading...</option>
                     </select>
                 </div>
                 <div class="control-group">
-                    <label for="severity-signature" style="font-weight: 500; margin-right: 8px;">Signature:</label>
-                    <select id="severity-signature" class="filter-select" onchange="AtlasDetailPage.updateSeverityLineChart()">
-                        <option value="">All signatures (heatmap)</option>
+                    <label>Select Signature</label>
+                    <select id="severity-dropdown" class="filter-select" style="width: 150px;" onchange="AtlasDetailPage.onSeverityDropdownChange()">
+                        <option value="IFNG">IFNG</option>
                     </select>
                 </div>
+                <div class="control-group" style="position: relative;">
+                    <label>Or Search</label>
+                    <input type="text" id="severity-search" placeholder="Search..."
+                           style="width: 120px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"
+                           autocomplete="off" value="IFNG"
+                           onfocus="AtlasDetailPage.showSeveritySuggestions()"
+                           oninput="AtlasDetailPage.showSeveritySuggestions()"
+                           onkeydown="if(event.key==='Enter'){document.getElementById('severity-suggestions').style.display='none';AtlasDetailPage.updateSeverityCorrelation();}">
+                    <div id="severity-suggestions" style="position: absolute; top: 100%; left: 0; width: 150px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                </div>
             </div>
-            <div id="severity-info" style="margin-bottom: 16px; padding: 12px; background: #f0f9ff; border-radius: 8px; font-size: 14px;"></div>
-            <div id="severity-heatmap" class="plot-container" style="height: 500px; margin-bottom: 24px;"></div>
-            <div id="severity-linechart" class="plot-container" style="height: 350px; display: none;"></div>
-            <div id="severity-table-container" style="max-height: 400px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; margin-top: 16px;">
-                <table id="severity-table" class="data-table" style="width: 100%; border-collapse: collapse;">
-                    <thead style="position: sticky; top: 0; background: #f9fafb; z-index: 1;">
-                        <tr>
-                            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #e5e7eb;">Signature</th>
-                            <th style="padding: 10px; text-align: center; border-bottom: 2px solid #e5e7eb;">Severity Trend</th>
-                            <th style="padding: 10px; text-align: center; border-bottom: 2px solid #e5e7eb;">Min → Max</th>
-                            <th style="padding: 10px; text-align: center; border-bottom: 2px solid #e5e7eb;">Change</th>
-                        </tr>
-                    </thead>
-                    <tbody id="severity-table-body"></tbody>
-                </table>
+            <div class="card" style="margin-bottom: 16px; padding: 12px; background: #f0f9ff; border-radius: 8px;">
+                <strong>Disease Severity Analysis:</strong> Compare cytokine activity across severity stages within each disease.
+                Select a disease and signature to explore activity patterns.
+            </div>
+            <div class="viz-grid">
+                <div class="sub-panel" style="min-height: 450px;">
+                    <h4>Activity by Severity Stage</h4>
+                    <p id="severity-heatmap-subtitle" style="color: #666; font-size: 0.9rem;">Mean activity across severity categories</p>
+                    <div id="severity-heatmap" class="plot-container" style="height: 420px;"></div>
+                </div>
+                <div class="sub-panel" style="min-height: 450px;">
+                    <h4>Severity Progression</h4>
+                    <p id="severity-line-subtitle" style="color: #666; font-size: 0.9rem;">Activity trend across severity stages</p>
+                    <div id="severity-line" class="plot-container" style="height: 420px;"></div>
+                </div>
+            </div>
+            <div class="sub-panel" style="margin-top: 16px; min-height: 400px;">
+                <h4>Activity Distribution by Severity</h4>
+                <p id="severity-boxplot-subtitle" style="color: #666; font-size: 0.9rem;">Distribution across severity categories</p>
+                <div id="severity-boxplot" class="plot-container" style="height: 380px;"></div>
             </div>
         `;
 
         await this.initSeverityPanel();
     },
 
-    severityData: null,
-    severityDiseases: [],
+    // Raw severity data (matching index.html format)
+    severityRawData: null,
+    severitySignatures: { cytosig: [], secact: [] },
 
     async initSeverityPanel() {
-        // Load list of diseases with severity data
-        this.severityDiseases = await API.get('/inflammation/severity/diseases') || [];
+        // Load raw severity data (same format as index.html)
+        this.severityRawData = await API.get('/inflammation/severity-raw') || [];
+
+        if (!this.severityRawData || this.severityRawData.length === 0) {
+            console.log('initSeverityPanel: No severity data available');
+            return;
+        }
+
+        // Extract unique diseases
+        const diseases = [...new Set(this.severityRawData.map(d => d.disease))].sort();
+
+        // Disease display names (matching index.html)
+        const diseaseLabels = {
+            'COVID': 'COVID-19 (7 severity stages)',
+            'COPD': 'COPD (GOLD 3-4)',
+            'asthma': 'Asthma (Severity levels)',
+            'sepsis': 'Sepsis (Severity stages)',
+            'HBV': 'Hepatitis B (Fibrosis stages)',
+            'cirrhosis': 'Cirrhosis (Child-Pugh)',
+            'SLE': 'SLE (SLEDAI scores)',
+        };
 
         const diseaseSelect = document.getElementById('severity-disease');
-        if (diseaseSelect && this.severityDiseases.length > 0) {
-            diseaseSelect.innerHTML = this.severityDiseases.map(d =>
-                `<option value="${d}" ${d === 'COVID' ? 'selected' : ''}>${d}</option>`
+        if (diseaseSelect && diseases.length > 0) {
+            diseaseSelect.innerHTML = diseases.map(d =>
+                `<option value="${d}" ${d === 'COVID' ? 'selected' : ''}>${diseaseLabels[d] || d}</option>`
             ).join('');
         }
 
-        // Load signatures for dropdown
-        const signatures = await API.get('/inflammation/signatures', { signature_type: this.signatureType }) || [];
-        const sigSelect = document.getElementById('severity-signature');
-        if (sigSelect && signatures.length > 0) {
-            sigSelect.innerHTML = '<option value="">All signatures (heatmap)</option>' +
-                signatures.map(s => `<option value="${s}">${s}</option>`).join('');
-        }
+        // Extract signatures by type
+        this.severitySignatures.cytosig = [...new Set(
+            this.severityRawData.filter(d => d.signature_type === 'CytoSig').map(d => d.signature)
+        )].sort();
+        this.severitySignatures.secact = [...new Set(
+            this.severityRawData.filter(d => d.signature_type === 'SecAct').map(d => d.signature)
+        )].sort();
 
-        await this.updateSeverityPanel();
-    },
+        // Populate signature dropdown
+        this.populateSeverityDropdown();
 
-    async updateSeverityPanel() {
-        const disease = document.getElementById('severity-disease')?.value;
-        if (!disease) return;
-
-        // Get severity levels for this disease
-        const levels = await API.get(`/inflammation/severity/levels/${disease}`) || [];
-
-        // Get heatmap data
-        const heatmapData = await API.get(`/inflammation/severity/heatmap/${disease}`, {
-            signature_type: this.signatureType
+        // Add blur handler to hide suggestions
+        document.getElementById('severity-search')?.addEventListener('blur', () => {
+            setTimeout(() => {
+                const div = document.getElementById('severity-suggestions');
+                if (div) div.style.display = 'none';
+            }, 200);
         });
 
-        // Get full severity data for this disease
-        this.severityData = await API.get('/inflammation/severity', {
-            disease: disease,
-            signature_type: this.signatureType
-        }) || [];
-
-        // Update info panel
-        const infoDiv = document.getElementById('severity-info');
-        if (infoDiv) {
-            const nSignatures = new Set(this.severityData.map(d => d.signature)).size;
-            const nSamples = this.severityData.length > 0 ? this.severityData[0].n_samples : 0;
-            infoDiv.innerHTML = `
-                <strong>${disease}</strong>: ${levels.length} severity levels
-                <span style="margin-left: 16px;">Signatures: <strong>${nSignatures}</strong></span>
-                <span style="margin-left: 16px;">Severity progression: <strong>${levels.join(' → ')}</strong></span>
-            `;
-        }
-
-        // Render heatmap
-        this.renderSeverityHeatmap(heatmapData, disease, levels);
-
-        // Render table with severity trends
-        this.renderSeverityTable(this.severityData, levels);
-
-        // Reset signature dropdown and hide line chart
-        const sigSelect = document.getElementById('severity-signature');
-        if (sigSelect) sigSelect.value = '';
-        document.getElementById('severity-linechart').style.display = 'none';
+        this.updateSeverityCorrelation();
     },
 
-    renderSeverityHeatmap(data, disease, levels) {
-        const container = document.getElementById('severity-heatmap');
-        if (!container || !data || !data.rows || data.rows.length === 0) {
-            container.innerHTML = '<p class="loading">No severity heatmap data available</p>';
-            return;
+    populateSeverityDropdown() {
+        const sigType = this.signatureType;
+        const sigs = sigType === 'SecAct' ? this.severitySignatures.secact : this.severitySignatures.cytosig;
+
+        const dropdown = document.getElementById('severity-dropdown');
+        if (dropdown && sigs.length > 0) {
+            const defaultSig = sigs.includes('IFNG') ? 'IFNG' : sigs[0];
+            dropdown.innerHTML = sigs.map(s =>
+                `<option value="${s}" ${s === defaultSig ? 'selected' : ''}>${s}</option>`
+            ).join('');
         }
+    },
 
-        // data.rows = severity levels, data.columns = signatures, data.values = matrix
-        const trace = {
-            z: data.values,
-            x: data.columns,
-            y: data.rows,
-            type: 'heatmap',
-            colorscale: [
-                [0, '#3b82f6'],      // Blue for low/negative
-                [0.5, '#f5f5f5'],    // White for zero
-                [1, '#ef4444']       // Red for high/positive
-            ],
-            zmid: 0,
-            colorbar: {
-                title: 'Activity',
-                titleside: 'right'
-            },
-            hovertemplate: '<b>%{y}</b><br>%{x}: %{z:.3f}<extra></extra>',
-        };
+    getSeveritySignatures() {
+        const sigType = this.signatureType;
+        return sigType === 'SecAct' ? this.severitySignatures.secact : this.severitySignatures.cytosig;
+    },
 
-        Plotly.newPlot(container, [trace], {
-            title: { text: `${disease}: Cytokine Activity by Severity`, font: { size: 16 } },
-            xaxis: {
-                title: 'Cytokine Signature',
-                tickangle: 45,
-                tickfont: { size: 10 }
-            },
-            yaxis: {
-                title: 'Severity Level',
-                categoryorder: 'array',
-                categoryarray: levels,
-            },
-            margin: { l: 150, r: 80, t: 50, b: 150 },
-            font: { family: 'Inter, sans-serif' },
-        });
+    showSeveritySuggestions() {
+        const input = document.getElementById('severity-search');
+        const div = document.getElementById('severity-suggestions');
+        if (!input || !div) return;
 
-        // Add click handler to select signature
-        container.on('plotly_click', (eventData) => {
-            if (eventData.points && eventData.points.length > 0) {
-                const signature = eventData.points[0].x;
-                const sigSelect = document.getElementById('severity-signature');
-                if (sigSelect) {
-                    sigSelect.value = signature;
-                    this.updateSeverityLineChart();
+        const query = input.value.toLowerCase();
+        const sigs = this.getSeveritySignatures();
+        const filtered = sigs.filter(s => s.toLowerCase().includes(query)).slice(0, 15);
+
+        if (filtered.length > 0 && query.length > 0) {
+            div.innerHTML = filtered.map(s =>
+                `<div style="padding: 8px; cursor: pointer; border-bottom: 1px solid #eee;"
+                      onmouseover="this.style.background='#f0f0f0'"
+                      onmouseout="this.style.background='white'"
+                      onclick="AtlasDetailPage.selectSeveritySig('${s}')">${s}</div>`
+            ).join('');
+            div.style.display = 'block';
+        } else {
+            div.style.display = 'none';
+        }
+    },
+
+    selectSeveritySig(sig) {
+        const input = document.getElementById('severity-search');
+        const div = document.getElementById('severity-suggestions');
+        if (input) input.value = sig;
+        if (div) div.style.display = 'none';
+        this.updateSeverityCorrelation();
+    },
+
+    onSeveritySigTypeChange() {
+        // Reset to appropriate default signature when global signature type changes
+        const sigType = this.signatureType;
+        const input = document.getElementById('severity-search');
+        if (input) {
+            const sigs = this.getSeveritySignatures();
+            if (sigType === 'SecAct' && sigs.length > 0) {
+                const defaultSig = ['IFNG', 'CCL3', 'S100A8', 'GRN'].find(s => sigs.includes(s)) || sigs[0];
+                input.value = defaultSig;
+            } else if (sigs.length > 0) {
+                input.value = sigs.includes('IFNG') ? 'IFNG' : sigs[0];
+            }
+        }
+        this.populateSeverityDropdown();
+        this.updateSeverityCorrelation();
+    },
+
+    onSeverityDropdownChange() {
+        const dropdown = document.getElementById('severity-dropdown');
+        const search = document.getElementById('severity-search');
+        if (dropdown && search) {
+            search.value = dropdown.value;
+        }
+        this.updateSeverityCorrelation();
+    },
+
+    // Main update function matching index.html's updateSeverityCorrelation
+    updateSeverityCorrelation() {
+        const heatmapContainer = document.getElementById('severity-heatmap');
+        const lineContainer = document.getElementById('severity-line');
+        const boxplotContainer = document.getElementById('severity-boxplot');
+
+        const data = this.severityRawData;
+        if (!data || data.length === 0) {
+            [heatmapContainer, lineContainer, boxplotContainer].forEach(c => {
+                if (c) {
+                    c.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Severity data not available.</p>';
                 }
-            }
-        });
-    },
-
-    updateSeverityLineChart() {
-        const signature = document.getElementById('severity-signature')?.value;
-        const lineChartDiv = document.getElementById('severity-linechart');
-
-        if (!signature) {
-            lineChartDiv.style.display = 'none';
-            return;
-        }
-
-        lineChartDiv.style.display = 'block';
-
-        // Filter data for selected signature
-        const sigData = this.severityData.filter(d => d.signature === signature);
-
-        if (sigData.length === 0) {
-            lineChartDiv.innerHTML = '<p class="loading">No data for selected signature</p>';
-            return;
-        }
-
-        // Sort by severity order
-        sigData.sort((a, b) => a.severity_order - b.severity_order);
-
-        const severities = sigData.map(d => d.severity);
-        const means = sigData.map(d => d.mean_activity);
-        const stds = sigData.map(d => d.std_activity);
-
-        // Line trace
-        const lineTrace = {
-            x: severities,
-            y: means,
-            type: 'scatter',
-            mode: 'lines+markers',
-            name: 'Mean Activity',
-            line: { color: '#3b82f6', width: 3 },
-            marker: { size: 10, color: '#3b82f6' },
-            hovertemplate: '<b>%{x}</b><br>Mean: %{y:.3f}<extra></extra>',
-        };
-
-        // Error bars
-        const errorTrace = {
-            x: severities,
-            y: means,
-            type: 'scatter',
-            mode: 'markers',
-            error_y: {
-                type: 'data',
-                array: stds,
-                visible: true,
-                color: 'rgba(59, 130, 246, 0.4)',
-            },
-            marker: { size: 0.1, color: 'rgba(0,0,0,0)' },
-            hoverinfo: 'skip',
-            showlegend: false,
-        };
-
-        const disease = document.getElementById('severity-disease')?.value || '';
-
-        Plotly.newPlot(lineChartDiv, [errorTrace, lineTrace], {
-            title: { text: `${signature} Activity Across ${disease} Severity`, font: { size: 15 } },
-            xaxis: {
-                title: 'Severity Level',
-                categoryorder: 'array',
-                categoryarray: severities,
-            },
-            yaxis: { title: 'Mean Activity (z-score)' },
-            margin: { l: 60, r: 30, t: 50, b: 80 },
-            font: { family: 'Inter, sans-serif' },
-            showlegend: false,
-        });
-
-        // Highlight corresponding row in table
-        document.querySelectorAll('#severity-table-body tr').forEach(row => {
-            if (row.dataset.signature === signature) {
-                row.style.background = '#dbeafe';
-                row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            } else {
-                row.style.background = '';
-            }
-        });
-    },
-
-    renderSeverityTable(data, levels) {
-        const tbody = document.getElementById('severity-table-body');
-        if (!tbody || !data || data.length === 0) return;
-
-        // Group by signature and compute trend
-        const signatureStats = {};
-        data.forEach(d => {
-            if (!signatureStats[d.signature]) {
-                signatureStats[d.signature] = {};
-            }
-            signatureStats[d.signature][d.severity] = {
-                mean: d.mean_activity,
-                order: d.severity_order
-            };
-        });
-
-        // Compute trend for each signature
-        const rows = [];
-        for (const [sig, severities] of Object.entries(signatureStats)) {
-            const orderedSeverities = Object.entries(severities)
-                .sort((a, b) => a[1].order - b[1].order);
-
-            if (orderedSeverities.length < 2) continue;
-
-            const values = orderedSeverities.map(([_, v]) => v.mean);
-            const minVal = Math.min(...values);
-            const maxVal = Math.max(...values);
-            const firstVal = values[0];
-            const lastVal = values[values.length - 1];
-            const change = lastVal - firstVal;
-
-            // Determine trend direction
-            let trend = '→';
-            let trendColor = '#6b7280';
-            if (change > 0.3) {
-                trend = '↑';
-                trendColor = '#ef4444';
-            } else if (change < -0.3) {
-                trend = '↓';
-                trendColor = '#3b82f6';
-            }
-
-            // Create sparkline data
-            const sparkline = values.map((v, i) => {
-                const normalized = (v - minVal) / (maxVal - minVal + 0.001);
-                return `${i * 20},${30 - normalized * 25}`;
-            }).join(' ');
-
-            rows.push({
-                signature: sig,
-                trend,
-                trendColor,
-                minVal,
-                maxVal,
-                change,
-                sparkline,
-                values
             });
+            return;
         }
 
-        // Sort by absolute change (most variable first)
-        rows.sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
+        const disease = document.getElementById('severity-disease')?.value || 'COVID';
+        const sigType = this.signatureType;
+        const selectedSig = document.getElementById('severity-search')?.value || 'IFNG';
 
-        tbody.innerHTML = rows.map(r => `
-            <tr data-signature="${r.signature}" style="cursor: pointer;"
-                onclick="AtlasDetailPage.selectSeveritySignature('${r.signature}')"
-                onmouseover="this.style.background='#f0f9ff'"
-                onmouseout="this.style.background=''">
-                <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; font-weight: 500;">${r.signature}</td>
-                <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: center;">
-                    <svg width="${r.values.length * 20}" height="30" style="vertical-align: middle;">
-                        <polyline points="${r.sparkline}" fill="none" stroke="${r.trendColor}" stroke-width="2"/>
-                    </svg>
-                </td>
-                <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: center;">
-                    ${r.minVal.toFixed(2)} → ${r.maxVal.toFixed(2)}
-                </td>
-                <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: center;">
-                    <span style="color: ${r.trendColor}; font-weight: 600; font-size: 18px;">${r.trend}</span>
-                    <span style="color: ${r.trendColor}; margin-left: 4px;">${r.change >= 0 ? '+' : ''}${r.change.toFixed(2)}</span>
-                </td>
-            </tr>
-        `).join('');
-    },
+        // Filter data for this disease and signature type
+        let filtered = data.filter(d => d.disease === disease && d.signature_type === sigType);
 
-    selectSeveritySignature(signature) {
-        const sigSelect = document.getElementById('severity-signature');
-        if (sigSelect) {
-            sigSelect.value = signature;
-            this.updateSeverityLineChart();
+        if (filtered.length === 0) {
+            [heatmapContainer, lineContainer, boxplotContainer].forEach(c => {
+                if (c) {
+                    c.innerHTML = `<p style="text-align:center; color:#666; padding:2rem;">No ${sigType} data for ${disease}</p>`;
+                }
+            });
+            return;
+        }
+
+        // Get severity stages in order
+        const severityOrder = [...new Set(filtered.map(d => JSON.stringify({s: d.severity, o: d.severity_order})))]
+            .map(s => JSON.parse(s))
+            .sort((a, b) => a.o - b.o)
+            .map(x => x.s);
+
+        // Get top signatures by variance across severity stages
+        const sigVariance = {};
+        const signatures = [...new Set(filtered.map(d => d.signature))];
+        signatures.forEach(sig => {
+            const vals = severityOrder.map(sev => {
+                const rec = filtered.find(d => d.signature === sig && d.severity === sev);
+                return rec ? rec.mean_activity : 0;
+            });
+            const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+            sigVariance[sig] = vals.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / vals.length;
+        });
+        const topSigs = Object.entries(sigVariance)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 20)
+            .map(x => x[0]);
+
+        // 1. Heatmap: Signatures × Severity stages (same as index.html)
+        if (heatmapContainer) {
+            const zData = topSigs.map(sig =>
+                severityOrder.map(sev => {
+                    const rec = filtered.find(d => d.signature === sig && d.severity === sev);
+                    return rec ? rec.mean_activity : null;
+                })
+            );
+
+            Plotly.newPlot(heatmapContainer, [{
+                z: zData,
+                x: severityOrder,
+                y: topSigs,
+                type: 'heatmap',
+                colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
+                zmid: 0,
+                colorbar: { title: 'Activity', len: 0.8 },
+                hovertemplate: '<b>%{y}</b><br>%{x}<br>Activity: %{z:.3f}<extra></extra>'
+            }], {
+                margin: { l: 100, r: 60, t: 30, b: 100 },
+                xaxis: { title: 'Severity Stage', tickangle: 45 },
+                yaxis: { automargin: true },
+                height: 420
+            }, { responsive: true });
+
+            const subtitle = document.getElementById('severity-heatmap-subtitle');
+            if (subtitle) subtitle.textContent = `Top 20 ${sigType} signatures by variance across ${disease} severity stages`;
+        }
+
+        // 2. Line chart: Selected signature across severity (same as index.html)
+        if (lineContainer) {
+            // Get data for selected signature
+            const sigData = severityOrder.map(sev => {
+                const rec = filtered.find(d => d.signature === selectedSig && d.severity === sev);
+                return {
+                    severity: sev,
+                    mean: rec ? rec.mean_activity : null,
+                    std: rec ? rec.std_activity : 0,
+                    n: rec ? rec.n_samples : 0
+                };
+            }).filter(d => d.mean !== null);
+
+            if (sigData.length === 0) {
+                lineContainer.innerHTML = `<p style="text-align:center; color:#666; padding:2rem;">No data for ${selectedSig} in ${disease}</p>`;
+            } else {
+                Plotly.newPlot(lineContainer, [{
+                    x: sigData.map(d => d.severity),
+                    y: sigData.map(d => d.mean),
+                    error_y: {
+                        type: 'data',
+                        array: sigData.map(d => d.std / Math.sqrt(d.n)),
+                        visible: true,
+                        color: 'rgba(31, 119, 180, 0.5)'
+                    },
+                    type: 'scatter',
+                    mode: 'lines+markers',
+                    marker: { size: 10, color: '#1f77b4' },
+                    line: { width: 2, color: '#1f77b4' },
+                    hovertemplate: '<b>%{x}</b><br>Activity: %{y:.3f}<br>n=%{customdata}<extra></extra>',
+                    customdata: sigData.map(d => d.n)
+                }], {
+                    margin: { l: 60, r: 30, t: 30, b: 100 },
+                    xaxis: { title: 'Severity Stage', tickangle: 45 },
+                    yaxis: { title: `${selectedSig} Activity`, zeroline: true },
+                    height: 420
+                }, { responsive: true });
+            }
+
+            const subtitle = document.getElementById('severity-line-subtitle');
+            if (subtitle) subtitle.textContent = `${selectedSig} activity across ${disease} severity stages (mean ± SE)`;
+        }
+
+        // 3. Grouped bar chart: Top 5 most variable signatures (same as index.html)
+        if (boxplotContainer) {
+            const top5 = topSigs.slice(0, 5);
+            const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'];
+
+            const traces = top5.map((sig, i) => ({
+                type: 'bar',
+                name: sig,
+                x: severityOrder,
+                y: severityOrder.map(sev => {
+                    const rec = filtered.find(d => d.signature === sig && d.severity === sev);
+                    return rec ? rec.mean_activity : 0;
+                }),
+                error_y: {
+                    type: 'data',
+                    array: severityOrder.map(sev => {
+                        const rec = filtered.find(d => d.signature === sig && d.severity === sev);
+                        return rec ? rec.std_activity : 0;
+                    }),
+                    visible: true
+                },
+                marker: { color: colors[i] },
+                hovertemplate: '<b>%{x}</b><br>' + sig + ': %{y:.3f}<extra></extra>'
+            }));
+
+            Plotly.newPlot(boxplotContainer, traces, {
+                barmode: 'group',
+                margin: { l: 60, r: 30, t: 30, b: 100 },
+                xaxis: { title: 'Severity Stage', tickangle: 45 },
+                yaxis: { title: 'Activity (mean ± SD)', zeroline: true },
+                legend: { orientation: 'h', y: -0.25 },
+                height: 380
+            }, { responsive: true });
+
+            const subtitle = document.getElementById('severity-boxplot-subtitle');
+            if (subtitle) subtitle.textContent = `Top 5 most variable ${sigType} signatures in ${disease}`;
         }
     },
+
+    // Keep for backward compatibility
+    severityData: null,
+    severityDiseases: [],
+    async updateSeverityPanel() { this.updateSeverityCorrelation(); },
+    updateSeverityLineChart() { this.updateSeverityCorrelation(); },
+    selectSeveritySignature(sig) { this.selectSeveritySig(sig); },
 
     async loadInflamDrivers(content) {
         content.innerHTML = `
@@ -4615,13 +4606,6 @@ const AtlasDetailPage = {
                    Shows which cell types contribute most to each disease's signature profile.</p>
             </div>
             <div class="controls" style="margin-bottom: 16px; display: flex; gap: 16px; flex-wrap: wrap;">
-                <div class="control-group">
-                    <label>Signature Type</label>
-                    <select id="drivers-sig-type" class="filter-select" onchange="AtlasDetailPage.updateDriversPanel()">
-                        <option value="CytoSig">CytoSig (43 cytokines)</option>
-                        <option value="SecAct">SecAct (1,170 proteins)</option>
-                    </select>
-                </div>
                 <div class="control-group">
                     <label>Disease</label>
                     <select id="drivers-disease" class="filter-select" onchange="AtlasDetailPage.updateDriversPanel()">
@@ -4663,210 +4647,174 @@ const AtlasDetailPage = {
         await this.initDriversPanel();
     },
 
-    driversData: null,
-    driversStratifiedData: null,
+    // Cell Drivers data (raw format matching index.html)
+    cellDriversData: null,
 
     async initDriversPanel() {
+        // Load raw cell drivers data (same format as index.html)
+        this.cellDriversData = await API.get('/inflammation/cell-drivers');
+
+        if (!this.cellDriversData || !this.cellDriversData.effects) {
+            console.log('initDriversPanel: No cell drivers data available');
+            return;
+        }
+
+        // Populate dropdowns from the data (same as index.html)
+        this.populateDriversDropdowns();
+        this.updateCellDrivers();
+    },
+
+    populateDriversDropdowns() {
+        const data = this.cellDriversData;
+        if (!data || !data.effects || data.effects.length === 0) {
+            console.log('populateDriversDropdowns: No cell drivers data available');
+            return;
+        }
+
+        const sigType = this.signatureType;
+
+        // Get unique diseases and signatures for the selected signature type
+        const filtered = data.effects.filter(d => d.signature_type === sigType);
+        const diseases = [...new Set(filtered.map(d => d.disease))].sort();
+        const signatures = [...new Set(filtered.map(d => d.signature))].sort();
+
         // Populate disease dropdown
-        const diseases = await API.get('/inflammation/diseases') || [];
         const diseaseSelect = document.getElementById('drivers-disease');
         if (diseaseSelect && diseases.length > 0) {
-            const filteredDiseases = diseases.filter(d => d !== 'healthy');
-            diseaseSelect.innerHTML = filteredDiseases.map((d, i) =>
+            diseaseSelect.innerHTML = diseases.map((d, i) =>
                 `<option value="${d}" ${i === 0 ? 'selected' : ''}>${d}</option>`
             ).join('');
         }
 
-        // Populate cytokine dropdown
-        const sigType = document.getElementById('drivers-sig-type')?.value || 'CytoSig';
-        const signatures = await API.get('/inflammation/signatures', { signature_type: sigType }) || [];
+        // Populate signature/cytokine dropdown
         const cytokineSelect = document.getElementById('drivers-cytokine');
         if (cytokineSelect && signatures.length > 0) {
-            cytokineSelect.innerHTML = '<option value="">All (summary)</option>' +
-                signatures.map(s => `<option value="${s}">${s}</option>`).join('');
+            // Set default to IFNG if available, otherwise first signature
+            const defaultSig = signatures.includes('IFNG') ? 'IFNG' : signatures[0];
+            cytokineSelect.innerHTML = signatures.map(s =>
+                `<option value="${s}" ${s === defaultSig ? 'selected' : ''}>${s}</option>`
+            ).join('');
         }
 
-        await this.updateDriversPanel();
+        console.log(`populateDriversDropdowns: ${diseases.length} diseases, ${signatures.length} signatures for ${sigType}`);
     },
 
     async updateDriversPanel() {
-        const disease = document.getElementById('drivers-disease')?.value;
-        const sigType = document.getElementById('drivers-sig-type')?.value || 'CytoSig';
-
-        if (!disease) return;
-
-        // Get cell type stratified data for this disease
-        this.driversStratifiedData = await API.get('/inflammation/celltype-stratified', {
-            disease: disease,
-            signature_type: sigType,
-        }) || [];
-
-        // Get driving populations summary
-        this.driversData = await API.get('/inflammation/driving-populations', { disease, signature_type: sigType }) || [];
-
-        // Update all visualizations
-        this.updateDriversBar();
-        this.updateDriversHeatmap();
-        this.updateDriversImportance();
+        // Re-populate dropdowns when signature type changes
+        this.populateDriversDropdowns();
+        this.updateCellDrivers();
     },
 
-    updateDriversBar() {
-        const container = document.getElementById('drivers-bar');
-        if (!container || !this.driversStratifiedData) return;
+    // Main update function matching index.html's updateCellDrivers
+    updateCellDrivers() {
+        const barContainer = document.getElementById('drivers-bar');
+        const heatmapContainer = document.getElementById('drivers-heatmap');
+        const importanceContainer = document.getElementById('drivers-importance');
 
-        const cytokine = document.getElementById('drivers-cytokine')?.value;
-        const disease = document.getElementById('drivers-disease')?.value;
+        if (!barContainer) return;
 
-        let data = this.driversStratifiedData;
+        const data = this.cellDriversData;
 
-        if (cytokine) {
-            // Filter for specific cytokine
-            data = data.filter(d => d.signature === cytokine);
-        }
-
-        if (data.length === 0) {
-            container.innerHTML = '<p class="loading">No data available</p>';
+        // Check if data is available
+        if (!data || !data.effects || data.effects.length === 0) {
+            [barContainer, heatmapContainer, importanceContainer].forEach(c => {
+                if (c) {
+                    c.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Cell type driver data not available.</p>';
+                }
+            });
             return;
         }
 
-        // Group by cell type and compute mean log2FC
-        const cellTypeStats = {};
-        data.forEach(d => {
-            if (!cellTypeStats[d.cell_type]) {
-                cellTypeStats[d.cell_type] = { values: [], sigCount: 0 };
-            }
-            cellTypeStats[d.cell_type].values.push(d.log2fc);
-            if ((d.q_value || d.p_value) < 0.05 && Math.abs(d.log2fc) > 0.5) {
-                cellTypeStats[d.cell_type].sigCount++;
-            }
-        });
+        const disease = document.getElementById('drivers-disease')?.value || data.diseases[0];
+        const signature = document.getElementById('drivers-cytokine')?.value || 'IFNG';
+        const sigType = this.signatureType;
 
-        const cellTypes = Object.keys(cellTypeStats);
-        const meanLog2FCs = cellTypes.map(ct => {
-            const vals = cellTypeStats[ct].values;
-            return vals.reduce((a, b) => a + b, 0) / vals.length;
-        });
-
-        // Sort by mean absolute log2FC
-        const sorted = cellTypes.map((ct, i) => ({ ct, mean: meanLog2FCs[i] }))
-            .sort((a, b) => Math.abs(b.mean) - Math.abs(a.mean))
-            .slice(0, 25);  // Top 25
-
-        Plotly.newPlot(container, [{
-            type: 'bar',
-            x: sorted.map(d => d.mean),
-            y: sorted.map(d => d.ct),
-            orientation: 'h',
-            marker: { color: sorted.map(d => d.mean > 0 ? '#ef4444' : '#2563eb') },
-            hovertemplate: '<b>%{y}</b><br>Mean log2FC: %{x:.3f}<extra></extra>',
-        }], {
-            title: cytokine ? `${cytokine} Effect by Cell Type (${disease})` : `Mean Effect by Cell Type (${disease})`,
-            xaxis: { title: 'Log2 Fold Change (Disease vs Healthy)', zeroline: true },
-            yaxis: { automargin: true, tickfont: { size: 10 } },
-            margin: { l: 150, r: 30, t: 50, b: 50 },
-            font: { family: 'Inter, sans-serif' },
-        });
-    },
-
-    updateDriversHeatmap() {
-        const container = document.getElementById('drivers-heatmap');
-        if (!container || !this.driversStratifiedData) return;
-
-        const disease = document.getElementById('drivers-disease')?.value;
-        const data = this.driversStratifiedData;
-
-        // Get unique cell types and signatures
-        const cellTypes = [...new Set(data.map(d => d.cell_type))].sort();
-        const signatures = [...new Set(data.map(d => d.signature))].sort();
-
-        // Limit for visualization
-        const topCellTypes = cellTypes.slice(0, 30);
-        const topSignatures = signatures.slice(0, 30);
-
-        // Build lookup
-        const lookup = {};
-        data.forEach(d => {
-            lookup[`${d.cell_type}|${d.signature}`] = d.log2fc;
-        });
-
-        // Build matrix
-        const zValues = topCellTypes.map(ct =>
-            topSignatures.map(sig => lookup[`${ct}|${sig}`] || 0)
+        // Filter effects by disease, signature, and signature type (same as index.html)
+        let filtered = data.effects.filter(d =>
+            d.disease === disease &&
+            d.signature === signature &&
+            d.signature_type === sigType
         );
 
-        Plotly.newPlot(container, [{
-            z: zValues,
-            x: topSignatures,
-            y: topCellTypes,
-            type: 'heatmap',
-            colorscale: 'RdBu',
-            reversescale: true,
-            zmid: 0,
-            colorbar: { title: 'log2FC', titleside: 'right' },
-            hovertemplate: '<b>%{y}</b><br>%{x}: %{z:.3f}<extra></extra>',
+        if (filtered.length === 0) {
+            // Try without signature type filter
+            filtered = data.effects.filter(d => d.disease === disease && d.signature === signature);
+        }
+
+        if (filtered.length === 0) {
+            barContainer.innerHTML = `<p style="text-align:center; color:#666; padding:2rem;">No data for ${signature} in ${disease}</p>`;
+            return;
+        }
+
+        // Sort by effect size
+        const effects = filtered.sort((a, b) => b.effect - a.effect).slice(0, 20);
+
+        // 1. Bar chart of effect sizes (same as index.html)
+        Plotly.newPlot(barContainer, [{
+            type: 'bar',
+            orientation: 'h',
+            y: effects.map(d => d.cell_type),
+            x: effects.map(d => d.effect),
+            marker: {
+                color: effects.map(d => d.pvalue < 0.05 ? (d.effect > 0 ? '#d62728' : '#2ca02c') : '#ccc')
+            },
+            text: effects.map(d => d.pvalue < 0.05 ? '*' : ''),
+            textposition: 'outside',
+            hovertemplate: '<b>%{y}</b><br>Effect: %{x:.3f}<br>p = %{customdata[0]:.4f}<br>n_healthy = %{customdata[1]}, n_disease = %{customdata[2]}<extra></extra>',
+            customdata: effects.map(d => [d.pvalue, d.n_healthy, d.n_disease])
         }], {
-            title: `Cell Type × Signature Differential (${disease})`,
-            xaxis: { title: 'Signature', tickangle: 45, tickfont: { size: 9 } },
-            yaxis: { title: 'Cell Type', tickfont: { size: 9 }, automargin: true },
-            margin: { l: 120, r: 50, t: 50, b: 100 },
-            font: { family: 'Inter, sans-serif' },
-        });
-    },
+            xaxis: { title: `${signature} Effect Size (Disease vs Matched Healthy)`, zeroline: true },
+            yaxis: { automargin: true },
+            margin: { l: 150, r: 50, t: 30, b: 50 },
+            height: Math.max(300, effects.length * 25),
+            annotations: [{
+                x: 0.95, y: 1.02, xref: 'paper', yref: 'paper',
+                text: '<span style="color:#d62728">↑Disease</span> | <span style="color:#2ca02c">↑Healthy</span>', showarrow: false, font: { size: 10 }
+            }]
+        }, { responsive: true });
 
-    updateDriversImportance() {
-        const container = document.getElementById('drivers-importance');
-        if (!container) return;
+        // 2. Heatmap of signatures × cell types for this disease (same as index.html)
+        if (heatmapContainer) {
+            // Get all effects for this disease
+            const diseaseEffects = data.effects.filter(d => d.disease === disease && d.signature_type === sigType);
 
-        const disease = document.getElementById('drivers-disease')?.value;
+            // Get unique signatures and cell types
+            const signatures = [...new Set(diseaseEffects.map(d => d.signature))].slice(0, 15);
+            const cellTypes = [...new Set(diseaseEffects.map(d => d.cell_type))].slice(0, 15);
 
-        if (this.driversData && this.driversData.length > 0) {
-            // Filter for current disease if available
-            let data = this.driversData;
-            if (disease) {
-                data = data.filter(d => d.disease === disease);
-            }
-
-            if (data.length === 0) {
-                container.innerHTML = '<p class="loading">No driving population data for this disease</p>';
-                return;
-            }
-
-            // Sort by number of signatures
-            data.sort((a, b) => b.n_signatures - a.n_signatures);
-            const top15 = data.slice(0, 15);
-
-            Plotly.newPlot(container, [{
-                type: 'bar',
-                x: top15.map(d => d.n_signatures),
-                y: top15.map(d => d.cell_type),
-                orientation: 'h',
-                marker: {
-                    color: top15.map((d, i) => `rgba(16, 185, 129, ${1 - i * 0.05})`),
-                },
-                text: top15.map(d => d.top_signatures?.slice(0, 3).join(', ') || ''),
-                textposition: 'inside',
-                hovertemplate: '<b>%{y}</b><br>Significant signatures: %{x}<br>Top: %{text}<extra></extra>',
-            }], {
-                title: `Driving Cell Types (${disease})`,
-                xaxis: { title: 'Number of Significant Signatures' },
-                yaxis: { automargin: true, tickfont: { size: 10 } },
-                margin: { l: 120, r: 30, t: 50, b: 50 },
-                font: { family: 'Inter, sans-serif' },
+            // Build matrix
+            const zData = cellTypes.map(ct => {
+                return signatures.map(sig => {
+                    const effect = diseaseEffects.find(d => d.cell_type === ct && d.signature === sig);
+                    return effect ? effect.effect : 0;
+                });
             });
-        } else {
-            // Fallback: compute from stratified data
-            if (!this.driversStratifiedData) {
-                container.innerHTML = '<p class="loading">No data available</p>';
-                return;
-            }
 
-            const sigThreshold = 0.05;
-            const fcThreshold = 0.5;
+            Plotly.newPlot(heatmapContainer, [{
+                type: 'heatmap',
+                z: zData,
+                x: signatures,
+                y: cellTypes,
+                colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
+                zmid: 0,
+                colorbar: { title: 'Effect' },
+                hovertemplate: '<b>%{y}</b><br>%{x}: %{z:.3f}<extra></extra>'
+            }], {
+                title: `${disease}: Cell Type × Signature Effects`,
+                xaxis: { tickangle: 45, tickfont: { size: 9 } },
+                yaxis: { automargin: true, tickfont: { size: 9 } },
+                margin: { l: 120, r: 50, t: 50, b: 80 }
+            }, { responsive: true });
+        }
 
-            // Count significant signatures per cell type
+        // 3. Cell type importance ranking (same as index.html)
+        if (importanceContainer) {
+            // Count significant signatures per cell type for this disease
+            const diseaseEffects = data.effects.filter(d => d.disease === disease && d.signature_type === sigType);
             const cellTypeCounts = {};
-            this.driversStratifiedData.forEach(d => {
-                if ((d.q_value || d.p_value) < sigThreshold && Math.abs(d.log2fc) > fcThreshold) {
+
+            diseaseEffects.forEach(d => {
+                if (d.pvalue < 0.05 && Math.abs(d.effect) > 0.5) {
                     cellTypeCounts[d.cell_type] = (cellTypeCounts[d.cell_type] || 0) + 1;
                 }
             });
@@ -4875,23 +4823,37 @@ const AtlasDetailPage = {
                 .sort((a, b) => b[1] - a[1])
                 .slice(0, 15);
 
-            Plotly.newPlot(container, [{
-                type: 'bar',
-                x: sorted.map(d => d[1]),
-                y: sorted.map(d => d[0]),
-                orientation: 'h',
-                marker: {
-                    color: sorted.map((d, i) => `rgba(16, 185, 129, ${1 - i * 0.05})`),
-                },
-                hovertemplate: '<b>%{y}</b><br>Significant signatures: %{x}<extra></extra>',
-            }], {
-                title: `Driving Cell Types (${disease})`,
-                xaxis: { title: 'Number of Significant Signatures' },
-                yaxis: { automargin: true, tickfont: { size: 10 } },
-                margin: { l: 120, r: 30, t: 50, b: 50 },
-                font: { family: 'Inter, sans-serif' },
-            });
+            if (sorted.length > 0) {
+                Plotly.newPlot(importanceContainer, [{
+                    type: 'bar',
+                    orientation: 'h',
+                    y: sorted.map(d => d[0]),
+                    x: sorted.map(d => d[1]),
+                    marker: { color: '#10b981' },
+                    hovertemplate: '<b>%{y}</b><br>Significant signatures: %{x}<extra></extra>'
+                }], {
+                    title: `${disease}: Driving Cell Types`,
+                    xaxis: { title: 'Number of Significant Signatures (p<0.05, |effect|>0.5)' },
+                    yaxis: { automargin: true, tickfont: { size: 9 } },
+                    margin: { l: 120, r: 30, t: 50, b: 50 }
+                }, { responsive: true });
+            } else {
+                importanceContainer.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No significant driving cell types found.</p>';
+            }
         }
+    },
+
+    // Backward compatibility stubs - all functionality now in updateCellDrivers
+    updateDriversBar() {
+        this.updateCellDrivers();
+    },
+
+    updateDriversHeatmap() {
+        // Handled by updateCellDrivers
+    },
+
+    updateDriversImportance() {
+        // Handled by updateCellDrivers
     },
 
     // ==================== scAtlas Tab Loaders ====================
@@ -5043,138 +5005,537 @@ const AtlasDetailPage = {
         `;
     },
 
+    // scAtlas Organ Map state
+    scatlasOrganData: null,
+
     async loadScatlasOrganMap(content) {
         content.innerHTML = `
             <div class="panel-header">
                 <h3>Organ-Specific Activity</h3>
-                <p>Mean cytokine activity across 35 human organs</p>
+                <p>Mean cytokine activity across human organs</p>
             </div>
-            <div class="organ-controls">
-                <select id="organ-signature" class="filter-select" onchange="AtlasDetailPage.updateOrganMap()">
-                    <option value="IFNG">IFNG</option>
-                </select>
+
+            <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+                <div class="control-group">
+                    <label>Select ${this.signatureType === 'CytoSig' ? 'Cytokine' : 'Protein'}</label>
+                    <select id="organ-signature-dropdown" class="filter-select" style="width: 150px;" onchange="AtlasDetailPage.updateOrganBarChart()">
+                        <option value="IFNG">IFNG</option>
+                    </select>
+                </div>
+                <div class="control-group" style="position: relative;">
+                    <label>Or Search</label>
+                    <input type="text" id="organ-signature-search" class="filter-select"
+                           placeholder="Search..." style="width: 120px;" autocomplete="off" value=""
+                           oninput="AtlasDetailPage.showOrganSignatureSuggestions()"
+                           onkeyup="if(event.key==='Enter') AtlasDetailPage.updateOrganBarChart()"
+                           onblur="setTimeout(() => document.getElementById('organ-signature-suggestions').style.display = 'none', 200)">
+                    <div id="organ-signature-suggestions" style="position: absolute; top: 100%; left: 0; width: 150px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                </div>
             </div>
-            <div id="organ-bar" class="plot-container" style="height: 500px;"></div>
-            <div id="organ-heatmap" class="plot-container" style="height: 600px;"></div>
+
+            <!-- Single Signature Bar Chart (Top) -->
+            <div class="viz-container" style="min-height: 400px;">
+                <div class="viz-title" id="organ-bar-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Single Signature Activity Across Organs</div>
+                <div class="viz-subtitle" id="organ-bar-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Select a signature to view its activity pattern</div>
+                <div id="organ-bar-chart" class="plot-container" style="height: 350px;">Loading...</div>
+            </div>
+
+            <!-- Heatmap Overview (Bottom) -->
+            <div class="viz-container" style="margin-top: 1.5rem; overflow: hidden;">
+                <div class="viz-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Signature × Organ Heatmap</div>
+                <div class="viz-subtitle" id="organ-heatmap-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">All signatures across organs (click cell to select signature above)</div>
+                <div id="organ-heatmap" class="plot-container" style="height: 500px; max-height: 500px; overflow: hidden;">Loading...</div>
+            </div>
         `;
 
-        await this.populateSignatureDropdown('organ-signature');
-        await this.updateOrganMap();
+        // Load organ signatures data
+        this.scatlasOrganData = await API.get('/scatlas/organ-signatures', { signature_type: this.signatureType });
+
+        if (this.scatlasOrganData && this.scatlasOrganData.length > 0) {
+            // Get unique signatures and store for suggestions
+            this.organSignatures = [...new Set(this.scatlasOrganData.map(d => d.signature))].sort();
+
+            // Populate dropdown
+            const dropdown = document.getElementById('organ-signature-dropdown');
+            if (dropdown && this.organSignatures.length > 0) {
+                dropdown.innerHTML = this.organSignatures.map(s => `<option value="${s}">${s}</option>`).join('');
+                dropdown.value = this.organSignatures.includes('IFNG') ? 'IFNG' : this.organSignatures[0];
+            }
+
+            // Render visualizations
+            this.updateOrganBarChart();
+            this.updateOrganHeatmap();
+        } else {
+            document.getElementById('organ-bar-chart').innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Organ data not available.</p>';
+            document.getElementById('organ-heatmap').innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Organ data not available.</p>';
+        }
     },
+
+    // Store organ signatures for autocomplete
+    organSignatures: [],
+
+    showOrganSignatureSuggestions() {
+        const input = document.getElementById('organ-signature-search');
+        const div = document.getElementById('organ-signature-suggestions');
+        const dropdown = document.getElementById('organ-signature-dropdown');
+        if (!input || !div || !this.organSignatures) return;
+
+        const query = input.value.toLowerCase();
+        if (!query) {
+            div.style.display = 'none';
+            return;
+        }
+
+        const filtered = this.organSignatures.filter(s => s.toLowerCase().includes(query));
+
+        // Auto-update dropdown to show filtered options
+        if (dropdown && query) {
+            dropdown.innerHTML = filtered.map(s => `<option value="${s}">${s}</option>`).join('');
+
+            // Auto-select if exact match or single result
+            const exactMatch = filtered.find(s => s.toLowerCase() === query);
+            if (exactMatch) {
+                dropdown.value = exactMatch;
+            } else if (filtered.length === 1) {
+                dropdown.value = filtered[0];
+            }
+        }
+
+        // Show suggestions dropdown
+        const suggestions = filtered.slice(0, 15);
+        if (suggestions.length === 0) {
+            div.style.display = 'none';
+            return;
+        }
+
+        div.innerHTML = suggestions.map(s =>
+            `<div style="padding:6px 10px;cursor:pointer;border-bottom:1px solid #eee"
+                 onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'"
+                 onclick="AtlasDetailPage.selectOrganSignature('${s}')">${s}</div>`
+        ).join('');
+        div.style.display = 'block';
+    },
+
+    selectOrganSignature(sig) {
+        const input = document.getElementById('organ-signature-search');
+        const dropdown = document.getElementById('organ-signature-dropdown');
+        const div = document.getElementById('organ-signature-suggestions');
+        if (input) input.value = sig;
+        if (dropdown) dropdown.value = sig;
+        if (div) div.style.display = 'none';
+        this.updateOrganBarChart();
+    },
+
+    updateOrganBarChart() {
+        const container = document.getElementById('organ-bar-chart');
+        const searchInput = document.getElementById('organ-signature-search')?.value?.trim();
+        const signature = searchInput || document.getElementById('organ-signature-dropdown')?.value || 'IFNG';
+
+        if (!container || !this.scatlasOrganData) {
+            if (container) container.innerHTML = '<p style="text-align: center; color: #666; padding: 2rem;">Select a signature to view its activity across organs</p>';
+            return;
+        }
+
+        // Filter data for selected signature
+        const data = this.scatlasOrganData.filter(d => d.signature === signature);
+
+        if (data.length === 0) {
+            Plotly.purge(container);
+            container.innerHTML = `<p style="text-align: center; color: #666; padding: 2rem;">No data for "${signature}" in ${this.signatureType}</p>`;
+            return;
+        }
+
+        // Sort by activity
+        data.sort((a, b) => b.mean_activity - a.mean_activity);
+        const organs = data.map(d => d.organ);
+        const values = data.map(d => d.mean_activity);
+
+        // Update title
+        const titleEl = document.getElementById('organ-bar-title');
+        const subtitleEl = document.getElementById('organ-bar-subtitle');
+        if (titleEl) titleEl.textContent = `${signature} Activity Across Organs`;
+        if (subtitleEl) subtitleEl.textContent = `${this.signatureType} activity z-scores (${organs.length} organs)`;
+
+        Plotly.purge(container);
+        Plotly.newPlot(container, [{
+            y: organs,
+            x: values,
+            type: 'bar',
+            orientation: 'h',
+            marker: {
+                color: values,
+                colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
+                cmid: 0
+            },
+            hovertemplate: '<b>%{y}</b><br>Activity: %{x:.3f}<extra></extra>'
+        }], {
+            margin: { l: 100, r: 30, t: 10, b: 40 },
+            xaxis: { title: 'Mean Activity' },
+            height: 350
+        }, { responsive: true });
+    },
+
+    updateOrganHeatmap() {
+        const container = document.getElementById('organ-heatmap');
+
+        if (!container || !this.scatlasOrganData || this.scatlasOrganData.length === 0) {
+            if (container) container.innerHTML = '<p style="text-align: center; color: #666; padding: 2rem;">Organ data not available.</p>';
+            return;
+        }
+
+        // Get unique organs and all signatures
+        const organs = [...new Set(this.scatlasOrganData.map(d => d.organ))].sort();
+        const signatures = [...new Set(this.scatlasOrganData.map(d => d.signature))].sort();
+
+        // Build heatmap matrix (signatures × organs)
+        const zValues = [];
+        const hoverText = [];
+
+        // Build lookup map for O(1) access
+        const dataMap = {};
+        this.scatlasOrganData.forEach(d => {
+            dataMap[`${d.signature}|${d.organ}`] = d.mean_activity;
+        });
+
+        for (const sig of signatures) {
+            const row = [];
+            const textRow = [];
+            for (const organ of organs) {
+                const val = dataMap[`${sig}|${organ}`] ?? null;
+                row.push(val);
+                textRow.push(`${sig}<br>${organ}<br>Activity: ${val !== null ? val.toFixed(3) : 'N/A'}`);
+            }
+            zValues.push(row);
+            hoverText.push(textRow);
+        }
+
+        // Update subtitle
+        const subtitle = document.getElementById('organ-heatmap-subtitle');
+        if (subtitle) {
+            subtitle.textContent = `${signatures.length} ${this.signatureType} signatures × ${organs.length} organs (click cell to select)`;
+        }
+
+        // Fixed height to fit within container (500px max)
+        const heatmapHeight = 480;
+
+        Plotly.purge(container);
+        Plotly.newPlot(container, [{
+            z: zValues,
+            x: organs,
+            y: signatures,
+            type: 'heatmap',
+            colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
+            zmid: 0,
+            text: hoverText,
+            hovertemplate: '%{text}<extra></extra>',
+            colorbar: {
+                title: 'Activity',
+                titleside: 'right',
+                len: 0.8
+            }
+        }], {
+            margin: { l: 80, r: 60, t: 10, b: 80 },
+            height: heatmapHeight,
+            xaxis: {
+                title: 'Organ',
+                tickangle: -45,
+                tickfont: { size: 10 }
+            },
+            yaxis: {
+                title: '',
+                autorange: 'reversed',
+                tickfont: { size: 9 }
+            }
+        }, { responsive: true });
+
+        // Add click handler to select signature
+        container.on('plotly_click', (clickData) => {
+            const sig = clickData.points[0].y;
+            // Update search box, dropdown, and bar chart with selected signature
+            const input = document.getElementById('organ-signature-search');
+            const dropdown = document.getElementById('organ-signature-dropdown');
+            if (input) input.value = sig;
+            if (dropdown) dropdown.value = sig;
+            this.updateOrganBarChart();
+        });
+    },
+
+    // scAtlas Cell Types state
+    scatlasCelltypeData: null,
 
     async loadScatlasCelltypes(content) {
         content.innerHTML = `
-            <div class="viz-grid">
-                <!-- Sub-panel 1: Activity Profile with Search -->
-                <div class="sub-panel">
-                    <div class="panel-header">
-                        <h3>Cell Type Activity Profile</h3>
-                        <p>Search and view activity of a specific ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'}</p>
-                    </div>
-                    <div class="search-controls">
-                        <input type="text" id="scatlas-protein-search" class="search-input"
-                               placeholder="Search ${this.signatureType === 'CytoSig' ? 'cytokine (e.g., IFNG, IL17A, TNF)' : 'protein'}..."
-                               onkeyup="AtlasDetailPage.filterProteinList(this.value, 'scatlas')">
-                        <select id="scatlas-protein-select" class="filter-select" onchange="AtlasDetailPage.updateScatlasActivityProfile()">
-                            <option value="">Select ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'}...</option>
-                        </select>
-                    </div>
-                    <div id="scatlas-activity-profile" class="plot-container" style="height: 450px;">
-                        <p class="loading">Select a ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'} to view its activity profile</p>
-                    </div>
-                </div>
+            <div class="panel-header">
+                <h3>Cell Type Activity</h3>
+                <p>Cytokine activity patterns across cell types in normal human organs</p>
+            </div>
 
-                <!-- Sub-panel 2: Activity Heatmap -->
-                <div class="sub-panel">
-                    <div class="panel-header">
-                        <h3>Activity Heatmap</h3>
-                        <p>Mean ${this.signatureType} activity z-scores (top 50 cell types)</p>
-                    </div>
-                    <div id="scatlas-celltype-heatmap" class="plot-container" style="height: 500px;"></div>
+            <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+                <div class="control-group">
+                    <label>Filter by Organ</label>
+                    <select id="scatlas-organ-filter" class="filter-select" onchange="AtlasDetailPage.updateScatlasCelltypeBar(); AtlasDetailPage.updateScatlasCelltypeHeatmap();">
+                        <option value="">All Organs</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Select ${this.signatureType === 'CytoSig' ? 'Cytokine' : 'Protein'}</label>
+                    <select id="scatlas-ct-protein-dropdown" class="filter-select" style="width: 150px;" onchange="AtlasDetailPage.updateScatlasCelltypeBar();">
+                        <option value="IFNG">IFNG</option>
+                    </select>
+                </div>
+                <div class="control-group" style="position: relative;">
+                    <label>Or Search</label>
+                    <input type="text" id="scatlas-ct-protein-search" class="filter-select"
+                           placeholder="Search..." style="width: 120px;" autocomplete="off" value="IFNG"
+                           oninput="AtlasDetailPage.showScatlasCelltypeSuggestions()"
+                           onkeyup="if(event.key==='Enter') AtlasDetailPage.updateScatlasCelltypeBar()">
+                    <div id="scatlas-ct-suggestions" style="position: absolute; top: 100%; left: 0; width: 120px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                </div>
+            </div>
+
+            <div class="two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="viz-container" style="min-height: 500px;">
+                    <div class="viz-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Cell Type Activity Profile</div>
+                    <div class="viz-subtitle" id="scatlas-celltype-bar-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Mean activity across cell types</div>
+                    <div id="scatlas-celltype-bar" class="plot-container" style="height: 450px;">Loading...</div>
+                </div>
+                <div class="viz-container" style="min-height: 500px;">
+                    <div class="viz-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Activity Heatmap</div>
+                    <div class="viz-subtitle" id="scatlas-celltype-heatmap-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Top variable cell types × signatures</div>
+                    <div id="scatlas-celltype-heatmap" class="plot-container" style="height: 450px;">Loading...</div>
                 </div>
             </div>
         `;
 
-        // Load signatures for dropdown and heatmap data
-        const [signatures, heatmapData] = await Promise.all([
-            API.get('/cima/signatures', { signature_type: this.signatureType }), // Use CIMA signatures as reference
-            API.get('/scatlas/heatmap/celltype', { signature_type: this.signatureType }),
-        ]);
+        // Load cell type signatures data
+        this.scatlasCelltypeData = await API.get('/scatlas/celltype-signatures', { signature_type: this.signatureType });
 
-        // Populate protein dropdown
-        const select = document.getElementById('scatlas-protein-select');
-        if (signatures && select) {
-            this.scatlasSignatures = signatures;
-            select.innerHTML = `<option value="">Select ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'}...</option>` +
-                signatures.map(s => `<option value="${s}">${s}</option>`).join('');
-
-            if (signatures.length > 0) {
-                select.value = signatures[0];
-                this.updateScatlasActivityProfile();
+        if (this.scatlasCelltypeData) {
+            // Populate organ dropdown
+            const organSelect = document.getElementById('scatlas-organ-filter');
+            if (organSelect && this.scatlasCelltypeData.organs) {
+                organSelect.innerHTML = '<option value="">All Organs</option>' +
+                    this.scatlasCelltypeData.organs.map(o => `<option value="${o}">${o}</option>`).join('');
             }
-        }
 
-        // Render heatmap
-        if (heatmapData && heatmapData.values) {
-            const data = {
-                z: heatmapData.values,
-                cell_types: heatmapData.rows,
-                signatures: heatmapData.columns,
-            };
-            Heatmap.createActivityHeatmap('scatlas-celltype-heatmap', data, {
-                title: `${this.signatureType} Activity by Cell Type`,
-            });
+            // Populate protein dropdown
+            const proteinSelect = document.getElementById('scatlas-ct-protein-dropdown');
+            const signatures = this.signatureType === 'CytoSig'
+                ? this.scatlasCelltypeData.cytosig_signatures
+                : this.scatlasCelltypeData.secact_signatures;
+            if (proteinSelect && signatures) {
+                proteinSelect.innerHTML = signatures.map(s => `<option value="${s}">${s}</option>`).join('');
+            }
+
+            // Render visualizations
+            this.updateScatlasCelltypeBar();
+            this.updateScatlasCelltypeHeatmap();
         } else {
-            document.getElementById('scatlas-celltype-heatmap').innerHTML = '<p class="loading">No heatmap data available</p>';
+            document.getElementById('scatlas-celltype-bar').innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Cell type data not available.</p>';
+            document.getElementById('scatlas-celltype-heatmap').innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Cell type data not available.</p>';
         }
     },
 
-    async updateScatlasActivityProfile() {
-        const protein = document.getElementById('scatlas-protein-select')?.value;
-        const container = document.getElementById('scatlas-activity-profile');
-        if (!container || !protein) return;
+    showScatlasCelltypeSuggestions() {
+        const input = document.getElementById('scatlas-ct-protein-search');
+        const div = document.getElementById('scatlas-ct-suggestions');
+        const dropdown = document.getElementById('scatlas-ct-protein-dropdown');
+        if (!input || !div || !this.scatlasCelltypeData) return;
 
-        container.innerHTML = '<p class="loading">Loading...</p>';
+        const query = input.value.toLowerCase();
+        const signatures = this.signatureType === 'CytoSig'
+            ? this.scatlasCelltypeData.cytosig_signatures
+            : this.scatlasCelltypeData.secact_signatures;
 
-        try {
-            // Get cell type signatures data
-            const response = await API.get('/scatlas/celltype-signatures', { signature_type: this.signatureType });
+        if (!signatures) return;
 
-            if (response && response.data && response.data.length > 0) {
-                const proteinData = response.data.filter(d => d.signature === protein);
+        const filtered = signatures.filter(s => s.toLowerCase().includes(query));
 
-                if (proteinData.length > 0) {
-                    proteinData.sort((a, b) => b.mean_activity - a.mean_activity);
+        // Auto-update dropdown to show filtered options
+        if (dropdown && query) {
+            dropdown.innerHTML = filtered.map(s => `<option value="${s}">${s}</option>`).join('');
 
-                    // Take top 30 for readability
-                    const topData = proteinData.slice(0, 30);
-                    const cellTypes = topData.map(d => d.cell_type);
-                    const activities = topData.map(d => d.mean_activity);
-                    const colors = activities.map(v => v >= 0 ? '#ef4444' : '#2563eb');
-
-                    Plotly.newPlot('scatlas-activity-profile', [{
-                        type: 'bar',
-                        x: activities,
-                        y: cellTypes,
-                        orientation: 'h',
-                        marker: { color: colors },
-                        hovertemplate: '<b>%{y}</b><br>Activity: %{x:.3f}<extra></extra>',
-                    }], {
-                        title: `${protein} [${this.signatureType}] Activity (Top 30 Cell Types)`,
-                        xaxis: { title: 'Activity (z-score)', zeroline: true, zerolinecolor: '#888' },
-                        yaxis: { title: '', automargin: true },
-                        margin: { l: 150, r: 20, t: 40, b: 40 },
-                        font: { family: 'Inter, sans-serif' },
-                    });
-                } else {
-                    container.innerHTML = `<p class="loading">No data found for ${protein} [${this.signatureType}]</p>`;
-                }
-            } else {
-                container.innerHTML = '<p class="loading">No activity data available</p>';
+            // Auto-select if exact match or single result
+            const exactMatch = filtered.find(s => s.toLowerCase() === query);
+            if (exactMatch) {
+                dropdown.value = exactMatch;
+            } else if (filtered.length === 1) {
+                dropdown.value = filtered[0];
             }
-        } catch (e) {
-            container.innerHTML = `<p class="loading">Error: ${e.message}</p>`;
         }
+
+        // Show suggestions dropdown
+        const suggestions = filtered.slice(0, 15);
+        if (suggestions.length === 0 || !query) {
+            div.style.display = 'none';
+            return;
+        }
+
+        div.innerHTML = suggestions.map(s =>
+            `<div style="padding:6px 10px;cursor:pointer;border-bottom:1px solid #eee"
+                 onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'"
+                 onclick="AtlasDetailPage.selectScatlasCelltypeSig('${s}')">${s}</div>`
+        ).join('');
+        div.style.display = 'block';
+    },
+
+    selectScatlasCelltypeSig(sig) {
+        const input = document.getElementById('scatlas-ct-protein-search');
+        const dropdown = document.getElementById('scatlas-ct-protein-dropdown');
+        const div = document.getElementById('scatlas-ct-suggestions');
+        if (input) input.value = sig;
+        if (dropdown) dropdown.value = sig;
+        if (div) div.style.display = 'none';
+        this.updateScatlasCelltypeBar();
+    },
+
+    updateScatlasCelltypeBar() {
+        const container = document.getElementById('scatlas-celltype-bar');
+        if (!container) return;
+
+        const ctData = this.scatlasCelltypeData;
+        if (!ctData?.data) {
+            container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Cell type data not available.</p>';
+            return;
+        }
+
+        const organFilter = document.getElementById('scatlas-organ-filter')?.value || '';
+        const searchInput = document.getElementById('scatlas-ct-protein-search')?.value?.trim();
+        const signature = searchInput || document.getElementById('scatlas-ct-protein-dropdown')?.value || 'IFNG';
+
+        // Filter data by signature type and signature
+        let data = ctData.data.filter(d => d.signature_type === this.signatureType && d.signature === signature);
+
+        // Filter by organ if selected
+        if (organFilter) {
+            data = data.filter(d => d.organ === organFilter);
+        }
+
+        if (data.length === 0) {
+            container.innerHTML = `<p style="text-align:center; color:#666; padding:2rem;">No data for ${signature} in selected organ.</p>`;
+            return;
+        }
+
+        // Aggregate by cell type (average across organs if not filtered)
+        const cellTypeMap = {};
+        data.forEach(d => {
+            if (!cellTypeMap[d.cell_type]) {
+                cellTypeMap[d.cell_type] = { sum: 0, count: 0 };
+            }
+            cellTypeMap[d.cell_type].sum += d.mean_activity;
+            cellTypeMap[d.cell_type].count += 1;
+        });
+
+        const barData = Object.entries(cellTypeMap)
+            .map(([ct, v]) => ({ cell_type: ct, mean: v.sum / v.count }))
+            .sort((a, b) => b.mean - a.mean)
+            .slice(0, 25);
+
+        // Update subtitle
+        const subtitle = document.getElementById('scatlas-celltype-bar-subtitle');
+        if (subtitle) {
+            const organText = organFilter ? ` in ${organFilter}` : ' across all organs';
+            subtitle.textContent = `${signature} activity${organText} (top 25 cell types)`;
+        }
+
+        Plotly.purge(container);
+
+        Plotly.newPlot(container, [{
+            type: 'bar',
+            orientation: 'h',
+            y: barData.map(d => d.cell_type),
+            x: barData.map(d => d.mean),
+            marker: {
+                color: barData.map(d => d.mean >= 0 ? '#1f77b4' : '#d62728')
+            },
+            hovertemplate: '<b>%{y}</b><br>Activity: %{x:.3f}<extra></extra>'
+        }], {
+            xaxis: { title: `${signature} Activity (z-score)`, zeroline: true },
+            yaxis: { automargin: true },
+            margin: { l: 150, r: 30, t: 20, b: 50 },
+            height: Math.max(400, barData.length * 20)
+        }, { responsive: true });
+    },
+
+    updateScatlasCelltypeHeatmap() {
+        const container = document.getElementById('scatlas-celltype-heatmap');
+        if (!container) return;
+
+        const ctData = this.scatlasCelltypeData;
+        if (!ctData?.data) {
+            container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Cell type data not available.</p>';
+            return;
+        }
+
+        const organFilter = document.getElementById('scatlas-organ-filter')?.value || '';
+        const sigType = this.signatureType;
+
+        // Filter data by signature type
+        let data = ctData.data.filter(d => d.signature_type === sigType);
+
+        // Filter by organ if selected
+        if (organFilter) {
+            data = data.filter(d => d.organ === organFilter);
+        }
+
+        // Get signatures for this type - limit SecAct to 50 for heatmap performance
+        let signatures = sigType === 'CytoSig'
+            ? (ctData.cytosig_signatures || [...new Set(data.map(d => d.signature))].sort())
+            : (ctData.secact_signatures || [...new Set(data.map(d => d.signature))].sort()).slice(0, 50);
+
+        // Get unique cell types from filtered data - limit to 50 for performance
+        let cellTypes = [...new Set(data.map(d => d.cell_type))].slice(0, 50);
+
+        // Update subtitle
+        const subtitle = document.getElementById('scatlas-celltype-heatmap-subtitle');
+        if (subtitle) {
+            const organText = organFilter ? ` in ${organFilter}` : '';
+            const sigCount = sigType === 'SecAct' ? ' (top 50 signatures)' : '';
+            subtitle.textContent = `${sigType} activity${sigCount} across cell types${organText} (${cellTypes.length} cell types)`;
+        }
+
+        Plotly.purge(container);
+
+        if (cellTypes.length === 0 || signatures.length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: #666; padding: 2rem;">No data available for this selection</p>';
+            return;
+        }
+
+        // Build lookup map for O(1) access instead of O(n) filtering
+        const dataMap = {};
+        data.forEach(d => {
+            const key = `${d.cell_type}|${d.signature}`;
+            if (!dataMap[key]) dataMap[key] = [];
+            dataMap[key].push(d.mean_activity);
+        });
+
+        // Create matrix using lookup map
+        const zData = cellTypes.map(ct => {
+            return signatures.map(sig => {
+                const key = `${ct}|${sig}`;
+                const values = dataMap[key];
+                if (!values || values.length === 0) return 0;
+                return values.reduce((a, b) => a + b, 0) / values.length;
+            });
+        });
+
+        Plotly.newPlot(container, [{
+            z: zData,
+            x: signatures,
+            y: cellTypes,
+            type: 'heatmap',
+            colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
+            zmid: 0,
+            colorbar: {
+                title: 'Activity',
+                titleside: 'right'
+            },
+            hovertemplate: '<b>%{y}</b><br>%{x}: %{z:.2f}<extra></extra>'
+        }], {
+            margin: { l: 200, r: 50, t: 30, b: 100 },
+            xaxis: { tickangle: 45 },
+            height: 500
+        }, { responsive: true });
     },
 
     async loadScatlasCancerComparison(content) {
@@ -5209,12 +5570,232 @@ const AtlasDetailPage = {
         content.innerHTML = `
             <div class="panel-header">
                 <h3>Cancer Type Signatures</h3>
-                <p>Activity patterns across different cancer types</p>
+                <p>Activity patterns across different cancer types (mean activity vs. other cancer types)</p>
             </div>
-            <div id="cancer-types-heatmap" class="plot-container" style="height: 600px;">
-                <p class="loading">Cancer types heatmap coming soon</p>
+
+            <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+                <div class="control-group">
+                    <label>Select ${this.signatureType === 'CytoSig' ? 'Cytokine' : 'Protein'}</label>
+                    <select id="cancer-types-protein-dropdown" class="filter-select" style="width: 150px;" onchange="AtlasDetailPage.updateCancerTypesBar();">
+                        <option value="IFNG">IFNG</option>
+                    </select>
+                </div>
+                <div class="control-group" style="position: relative;">
+                    <label>Or Search</label>
+                    <input type="text" id="cancer-types-protein-search" class="filter-select"
+                           placeholder="Search..." style="width: 120px;" autocomplete="off" value="IFNG"
+                           oninput="AtlasDetailPage.showCancerTypesSuggestions()"
+                           onkeyup="if(event.key==='Enter') AtlasDetailPage.updateCancerTypesBar()">
+                    <div id="cancer-types-suggestions" style="position: absolute; top: 100%; left: 0; width: 120px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                </div>
+            </div>
+
+            <div class="two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="viz-container" style="min-height: 500px;">
+                    <div class="viz-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Cancer Type Activity Profile</div>
+                    <div class="viz-subtitle" id="cancer-types-bar-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Mean activity across cancer types</div>
+                    <div id="cancer-types-bar" class="plot-container" style="height: 450px;">Loading...</div>
+                </div>
+                <div class="viz-container" style="overflow: hidden;">
+                    <div class="viz-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Activity Heatmap</div>
+                    <div class="viz-subtitle" id="cancer-types-heatmap-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Cancer types × signatures</div>
+                    <div id="cancer-types-heatmap" class="plot-container" style="height: 450px; max-height: 450px; overflow: hidden;">Loading...</div>
+                </div>
             </div>
         `;
+
+        // Load cancer types signatures data
+        this.cancerTypesData = await API.get('/scatlas/cancer-types-signatures', { signature_type: this.signatureType });
+
+        if (this.cancerTypesData) {
+            // Populate protein dropdown
+            const proteinSelect = document.getElementById('cancer-types-protein-dropdown');
+            const signatures = this.signatureType === 'CytoSig'
+                ? this.cancerTypesData.cytosig_signatures
+                : this.cancerTypesData.secact_signatures;
+            if (proteinSelect && signatures) {
+                proteinSelect.innerHTML = signatures.map(s => `<option value="${s}">${s}</option>`).join('');
+            }
+
+            // Render visualizations
+            this.updateCancerTypesBar();
+            this.updateCancerTypesHeatmap();
+        } else {
+            document.getElementById('cancer-types-bar').innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Cancer types data not available.</p>';
+            document.getElementById('cancer-types-heatmap').innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Cancer types data not available.</p>';
+        }
+    },
+
+    showCancerTypesSuggestions() {
+        const input = document.getElementById('cancer-types-protein-search');
+        const div = document.getElementById('cancer-types-suggestions');
+        const dropdown = document.getElementById('cancer-types-protein-dropdown');
+        if (!input || !div || !this.cancerTypesData) return;
+
+        const query = input.value.toLowerCase();
+        const signatures = this.signatureType === 'CytoSig'
+            ? this.cancerTypesData.cytosig_signatures
+            : this.cancerTypesData.secact_signatures;
+
+        if (!signatures) return;
+
+        const filtered = signatures.filter(s => s.toLowerCase().includes(query));
+
+        // Auto-update dropdown to show filtered options
+        if (dropdown && query) {
+            dropdown.innerHTML = filtered.map(s => `<option value="${s}">${s}</option>`).join('');
+
+            // Auto-select if exact match or single result
+            const exactMatch = filtered.find(s => s.toLowerCase() === query);
+            if (exactMatch) {
+                dropdown.value = exactMatch;
+            } else if (filtered.length === 1) {
+                dropdown.value = filtered[0];
+            }
+        }
+
+        // Show suggestions dropdown
+        const suggestions = filtered.slice(0, 15);
+        if (suggestions.length === 0 || !query) {
+            div.style.display = 'none';
+            return;
+        }
+
+        div.innerHTML = suggestions.map(s =>
+            `<div style="padding:6px 10px;cursor:pointer;border-bottom:1px solid #eee"
+                 onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'"
+                 onclick="AtlasDetailPage.selectCancerTypesSig('${s}')">${s}</div>`
+        ).join('');
+        div.style.display = 'block';
+    },
+
+    selectCancerTypesSig(sig) {
+        const input = document.getElementById('cancer-types-protein-search');
+        const dropdown = document.getElementById('cancer-types-protein-dropdown');
+        const div = document.getElementById('cancer-types-suggestions');
+        if (input) input.value = sig;
+        if (dropdown) dropdown.value = sig;
+        if (div) div.style.display = 'none';
+        this.updateCancerTypesBar();
+    },
+
+    updateCancerTypesBar() {
+        const container = document.getElementById('cancer-types-bar');
+        if (!container) return;
+
+        const ctData = this.cancerTypesData;
+        if (!ctData?.data) {
+            container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Cancer types data not available.</p>';
+            return;
+        }
+
+        const searchInput = document.getElementById('cancer-types-protein-search')?.value?.trim();
+        const signature = searchInput || document.getElementById('cancer-types-protein-dropdown')?.value || 'IFNG';
+        const labels = ctData.cancer_labels || {};
+
+        // Filter data by signature
+        const data = ctData.data.filter(d => d.signature === signature);
+
+        if (data.length === 0) {
+            container.innerHTML = `<p style="text-align:center; color:#666; padding:2rem;">No data for ${signature}.</p>`;
+            return;
+        }
+
+        // Sort by mean activity
+        const barData = data
+            .map(d => ({
+                cancer_type: d.cancer_type,
+                label: labels[d.cancer_type] || d.cancer_type,
+                mean_activity: d.mean_activity,
+                specificity_score: d.specificity_score,
+                n_cells: d.n_cells
+            }))
+            .sort((a, b) => b.mean_activity - a.mean_activity);
+
+        // Update subtitle
+        const subtitle = document.getElementById('cancer-types-bar-subtitle');
+        if (subtitle) {
+            subtitle.textContent = `${signature} activity across cancer types`;
+        }
+
+        Plotly.purge(container);
+
+        Plotly.newPlot(container, [{
+            type: 'bar',
+            orientation: 'h',
+            y: barData.map(d => `${d.label} (${d.cancer_type})`),
+            x: barData.map(d => d.mean_activity),
+            marker: {
+                color: barData.map(d => d.mean_activity >= 0 ? '#1f77b4' : '#d62728')
+            },
+            text: barData.map(d => `Specificity: ${d.specificity_score?.toFixed(3) || 'N/A'}`),
+            hovertemplate: '<b>%{y}</b><br>Activity: %{x:.3f}<br>%{text}<extra></extra>'
+        }], {
+            xaxis: { title: `${signature} Activity (z-score)`, zeroline: true },
+            yaxis: { automargin: true },
+            margin: { l: 200, r: 30, t: 20, b: 50 },
+            height: Math.max(400, barData.length * 35)
+        }, { responsive: true });
+    },
+
+    updateCancerTypesHeatmap() {
+        const container = document.getElementById('cancer-types-heatmap');
+        if (!container) return;
+
+        const ctData = this.cancerTypesData;
+        if (!ctData?.data) {
+            container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Cancer types data not available.</p>';
+            return;
+        }
+
+        const labels = ctData.cancer_labels || {};
+
+        // Get signatures for this type
+        const signatures = this.signatureType === 'CytoSig'
+            ? ctData.cytosig_signatures
+            : ctData.secact_signatures?.slice(0, 50); // Limit SecAct for performance
+
+        if (!signatures || signatures.length === 0) {
+            container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No signatures available.</p>';
+            return;
+        }
+
+        // Get all cancer types
+        const cancerTypes = ctData.cancer_types;
+
+        // Build heatmap matrix (cancer_types × signatures)
+        const z = cancerTypes.map(ct => {
+            return signatures.map(sig => {
+                const item = ctData.data.find(d => d.cancer_type === ct && d.signature === sig);
+                return item ? item.mean_activity : 0;
+            });
+        });
+
+        // Update subtitle
+        const subtitle = document.getElementById('cancer-types-heatmap-subtitle');
+        if (subtitle) {
+            const sigCount = this.signatureType === 'CytoSig' ? signatures.length : `${signatures.length} of ${ctData.total_secact}`;
+            subtitle.textContent = `${cancerTypes.length} cancer types × ${sigCount} ${this.signatureType === 'CytoSig' ? 'cytokines' : 'proteins'}`;
+        }
+
+        Plotly.purge(container);
+
+        Plotly.newPlot(container, [{
+            type: 'heatmap',
+            z: z,
+            x: signatures,
+            y: cancerTypes.map(ct => labels[ct] || ct),
+            colorscale: 'RdBu',
+            reversescale: true,
+            zmid: 0,
+            colorbar: { title: 'Activity', titleside: 'right', len: 0.8 },
+            hovertemplate: '<b>%{y}</b><br>%{x}: %{z:.3f}<extra></extra>'
+        }], {
+            xaxis: { title: this.signatureType === 'CytoSig' ? 'Cytokine' : 'Protein', tickangle: 45, tickfont: { size: 10 } },
+            yaxis: { title: '', automargin: true, tickfont: { size: 10 } },
+            margin: { l: 150, r: 60, t: 10, b: 80 },
+            height: 430
+        }, { responsive: true });
     },
 
     async loadScatlasImmuneInfiltration(content) {
@@ -5474,248 +6055,6 @@ const AtlasDetailPage = {
         }, { responsive: true });
     },
 
-    renderCohortValidation(data) {
-        // Render summary bar chart
-        this.renderValidationSummary(data.consistency);
-
-        // Render scatter plot of all signatures
-        const filtered = this.getFilteredValidationData();
-        this.renderValidationScatter(filtered);
-
-        // Render table of all signatures
-        this.renderValidationTable(filtered);
-
-        // Update stats
-        this.renderValidationStats({ correlations: filtered, consistency: data.consistency });
-    },
-
-    renderValidationSummary(consistency) {
-        const container = document.getElementById('validation-summary');
-        if (!container || !consistency || consistency.length === 0) {
-            container.innerHTML = '<p class="loading">No summary data available</p>';
-            return;
-        }
-
-        // Also show quality distribution from correlations
-        const correlations = this.validationData?.correlations || [];
-        const excellent = correlations.filter(c => (c.main_validation_r + c.main_external_r) / 2 >= 0.8).length;
-        const good = correlations.filter(c => {
-            const avg = (c.main_validation_r + c.main_external_r) / 2;
-            return avg >= 0.6 && avg < 0.8;
-        }).length;
-        const fair = correlations.length - excellent - good;
-
-        // Create two subplots: mean correlation bars and quality distribution pie
-        const meanTrace = {
-            x: consistency.map(c => c.cohort_pair),
-            y: consistency.map(c => c.mean_r),
-            type: 'bar',
-            name: 'Mean Correlation',
-            marker: {
-                color: consistency.map(c => c.mean_r >= 0.8 ? '#10b981' : c.mean_r >= 0.6 ? '#f59e0b' : '#ef4444'),
-            },
-            text: consistency.map(c => `r=${c.mean_r.toFixed(3)}`),
-            textposition: 'auto',
-            hovertemplate: '<b>%{x}</b><br>Mean r: %{y:.3f}<br>n=%{customdata}<extra></extra>',
-            customdata: consistency.map(c => c.n_signatures),
-            xaxis: 'x',
-            yaxis: 'y',
-        };
-
-        const pieTrace = {
-            values: [excellent, good, fair],
-            labels: ['Excellent (r≥0.8)', 'Good (0.6≤r<0.8)', 'Fair/Poor (r<0.6)'],
-            type: 'pie',
-            marker: { colors: ['#10b981', '#f59e0b', '#ef4444'] },
-            textinfo: 'value+percent',
-            hovertemplate: '<b>%{label}</b><br>Count: %{value}<br>%{percent}<extra></extra>',
-            domain: { x: [0.6, 1], y: [0, 1] },
-            hole: 0.4,
-        };
-
-        Plotly.newPlot('validation-summary', [meanTrace, pieTrace], {
-            title: { text: 'Cross-Cohort Validation Summary', font: { size: 16 } },
-            xaxis: { title: 'Cohort Comparison', domain: [0, 0.5] },
-            yaxis: { title: 'Mean Correlation (r)', range: [0, 1] },
-            showlegend: false,
-            font: { family: 'Inter, sans-serif' },
-            margin: { t: 50, b: 60, l: 60, r: 30 },
-            annotations: [{
-                text: `n=${correlations.length}`,
-                x: 0.8, y: 0.5,
-                font: { size: 14, color: '#666' },
-                showarrow: false,
-                xref: 'paper', yref: 'paper',
-            }],
-        });
-    },
-
-    renderValidationScatter(correlations) {
-        const container = document.getElementById('validation-scatter');
-        if (!container || !correlations || correlations.length === 0) {
-            container.innerHTML = '<p class="loading">No correlation data available for current filters</p>';
-            return;
-        }
-
-        const mainValR = correlations.map(c => c.main_validation_r);
-        const mainExtR = correlations.map(c => c.main_external_r);
-        const signatures = correlations.map(c => c.signature);
-
-        // Color by average quality
-        const avgR = correlations.map(c => (c.main_validation_r + c.main_external_r) / 2);
-        const colors = avgR.map(r => r >= 0.8 ? '#10b981' : r >= 0.6 ? '#f59e0b' : '#ef4444');
-
-        // Highlight selected point if any
-        const selectedIdx = this.validationSelectedSignature
-            ? correlations.findIndex(c => c.signature === this.validationSelectedSignature)
-            : -1;
-
-        const sizes = correlations.map((c, i) => i === selectedIdx ? 16 : 8);
-        const opacities = correlations.map((c, i) => selectedIdx === -1 ? 0.7 : (i === selectedIdx ? 1 : 0.4));
-        const lineWidths = correlations.map((c, i) => i === selectedIdx ? 3 : 1);
-        const lineColors = correlations.map((c, i) => i === selectedIdx ? '#1e40af' : '#fff');
-
-        const trace = {
-            x: mainValR,
-            y: mainExtR,
-            mode: 'markers',
-            type: 'scatter',
-            marker: {
-                size: sizes,
-                color: colors,
-                opacity: opacities,
-                line: { color: lineColors, width: lineWidths },
-            },
-            text: signatures,
-            customdata: correlations.map(c => c.signature),
-            hovertemplate: '<b>%{text}</b><br>Main↔Val: %{x:.3f}<br>Main↔Ext: %{y:.3f}<br><i>Click to select</i><extra></extra>',
-        };
-
-        // Diagonal reference line
-        const refLine = {
-            x: [0, 1],
-            y: [0, 1],
-            mode: 'lines',
-            type: 'scatter',
-            line: { color: '#9ca3af', dash: 'dash', width: 1 },
-            hoverinfo: 'skip',
-            showlegend: false,
-        };
-
-        // Quality threshold lines
-        const thresholdLine08 = {
-            x: [0.8, 0.8, 1],
-            y: [0.8, 1, 0.8],
-            mode: 'lines',
-            type: 'scatter',
-            line: { color: '#10b981', dash: 'dot', width: 1 },
-            hoverinfo: 'skip',
-            showlegend: false,
-        };
-
-        Plotly.newPlot('validation-scatter', [refLine, thresholdLine08, trace], {
-            title: { text: `Per-Signature Correlations (${correlations.length} signatures)`, font: { size: 16 } },
-            xaxis: { title: 'Main ↔ Validation (r)', range: [-0.05, 1.05] },
-            yaxis: { title: 'Main ↔ External (r)', range: [-0.05, 1.05] },
-            showlegend: false,
-            font: { family: 'Inter, sans-serif' },
-            margin: { t: 50, b: 60, l: 60, r: 30 },
-            hovermode: 'closest',
-            shapes: [
-                // Excellent zone background
-                { type: 'rect', x0: 0.8, x1: 1, y0: 0.8, y1: 1, fillcolor: 'rgba(16, 185, 129, 0.1)', line: { width: 0 } },
-            ],
-            annotations: [
-                { x: 0.9, y: 0.95, text: 'Excellent', font: { size: 11, color: '#10b981' }, showarrow: false },
-            ],
-        });
-
-        // Add click handler for scatter plot
-        container.removeAllListeners?.('plotly_click');
-        container.on('plotly_click', (data) => {
-            if (data.points && data.points.length > 0) {
-                const point = data.points[0];
-                // Only handle clicks on the scatter trace (index 2)
-                if (point.curveNumber === 2 && point.customdata) {
-                    this.selectValidationSignature(point.customdata);
-                }
-            }
-        });
-    },
-
-    renderValidationTable(correlations) {
-        const tbody = document.getElementById('validation-table-body');
-        if (!tbody || !correlations) return;
-
-        // Sort data
-        const sorted = [...correlations].sort((a, b) => {
-            const aVal = this.validationSortColumn === 'signature' ? a.signature : a[this.validationSortColumn];
-            const bVal = this.validationSortColumn === 'signature' ? b.signature : b[this.validationSortColumn];
-
-            if (typeof aVal === 'string') {
-                return this.validationSortAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-            }
-            return this.validationSortAsc ? aVal - bVal : bVal - aVal;
-        });
-
-        // Generate table rows with click handlers
-        tbody.innerHTML = sorted.map(c => {
-            const avgR = (c.main_validation_r + c.main_external_r) / 2;
-            const quality = avgR >= 0.8 ? 'Excellent' : avgR >= 0.6 ? 'Good' : avgR >= 0.4 ? 'Fair' : 'Poor';
-            const qualityColor = avgR >= 0.8 ? '#10b981' : avgR >= 0.6 ? '#f59e0b' : avgR >= 0.4 ? '#6b7280' : '#ef4444';
-            const bgColor = avgR >= 0.8 ? '#f0fdf4' : avgR >= 0.6 ? '#fffbeb' : '#fff';
-            const isSelected = c.signature === this.validationSelectedSignature;
-            const outline = isSelected ? '3px solid #3b82f6' : 'none';
-
-            return `
-                <tr data-signature="${c.signature}"
-                    style="background: ${bgColor}; cursor: pointer; outline: ${outline}; outline-offset: -3px; transition: all 0.2s;"
-                    onclick="AtlasDetailPage.selectValidationSignature('${c.signature}')"
-                    onmouseover="this.style.background='#e0f2fe'"
-                    onmouseout="this.style.background='${bgColor}'">
-                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; font-weight: 500;">${c.signature}</td>
-                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: center;">${c.main_validation_r.toFixed(3)}</td>
-                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: center;">${c.main_external_r.toFixed(3)}</td>
-                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: center;">
-                        <span style="color: ${qualityColor}; font-weight: 500;">${quality}</span>
-                    </td>
-                </tr>
-            `;
-        }).join('');
-    },
-
-    renderValidationStats(data) {
-        const statsContainer = document.getElementById('validation-stats');
-        if (!statsContainer || !data.correlations) return;
-
-        const correlations = data.correlations;
-        const n = correlations.length;
-
-        if (n === 0) {
-            statsContainer.innerHTML = '<strong>No signatures match current filters</strong>';
-            return;
-        }
-
-        const avgMainVal = correlations.reduce((sum, c) => sum + c.main_validation_r, 0) / n;
-        const avgMainExt = correlations.reduce((sum, c) => sum + c.main_external_r, 0) / n;
-        const excellent = correlations.filter(c => (c.main_validation_r + c.main_external_r) / 2 >= 0.8).length;
-        const good = correlations.filter(c => {
-            const avg = (c.main_validation_r + c.main_external_r) / 2;
-            return avg >= 0.6 && avg < 0.8;
-        }).length;
-
-        const totalInData = this.validationData?.correlations?.length || n;
-        const filterNote = n < totalInData ? ` (filtered from ${totalInData})` : '';
-
-        statsContainer.innerHTML = `
-            <strong>Summary Statistics${filterNote}:</strong>
-            <span style="margin-left: 16px;">Showing: <strong>${n}</strong></span>
-            <span style="margin-left: 16px;">Mean Main↔Val: <strong>${avgMainVal.toFixed(3)}</strong></span>
-            <span style="margin-left: 16px;">Mean Main↔Ext: <strong>${avgMainExt.toFixed(3)}</strong></span>
-            <span style="margin-left: 16px; color: #10b981;">Excellent (r≥0.8): <strong>${excellent}</strong></span>
-            <span style="margin-left: 16px; color: #f59e0b;">Good (0.6≤r<0.8): <strong>${good}</strong></span>
-        `;
-    },
 
     async populateStratifiedDropdowns() {
         try {
@@ -5875,6 +6214,7 @@ const AtlasDetailPage = {
             x: bins,
             y: cell_types,
             colorscale: 'RdBu',
+            reversescale: true,
             zmid: 0,
             colorbar: {
                 title: 'Median Activity',
@@ -6030,321 +6370,399 @@ const AtlasDetailPage = {
     },
 
     async updateInflamDifferential() {
-        const disease = document.getElementById('inflam-diff-disease')?.value || 'all';
-        const sigType = document.getElementById('inflam-diff-sig-type')?.value || this.signatureType;
         const volcanoContainer = document.getElementById('inflam-volcano');
         const barContainer = document.getElementById('inflam-diff-bar');
-
         if (!volcanoContainer) return;
 
-        try {
-            // Use the differential endpoint for disease-level volcano plot data
-            const data = await API.get('/inflammation/differential', {
-                disease: disease === 'all' ? null : disease,
-                signature_type: sigType,
-            });
+        const sigType = this.signatureType;
+        const diseaseFilter = document.getElementById('inflam-diff-disease')?.value || 'all';
 
-            if (data && data.length > 0) {
-                // Add computed fields (neg_log10_pval may already be present)
-                data.forEach(d => {
-                    if (!d.neg_log10_pval) {
-                        d.neg_log10_pval = -Math.log10(d.p_value || 1);
-                    }
-                    d.score = Math.abs(d.log2fc || 0) * d.neg_log10_pval;
-                });
+        // Get differential data (use raw data matching index.html format)
+        const diffData = this.inflamDifferentialRaw;
 
-                // ===== Volcano Plot =====
-                const sigThreshold = 0.05;
-                const fcThreshold = 0.5;
+        if (!diffData || diffData.length === 0) {
+            volcanoContainer.innerHTML = '<p style="text-align:center;color:#666;padding:2rem;">No differential data available</p>';
+            if (barContainer) barContainer.innerHTML = '<p style="text-align:center;color:#666;padding:2rem;">No differential data available</p>';
+            return;
+        }
 
-                // Separate into categories
-                const sigUp = data.filter(d => (d.q_value || d.p_value) < sigThreshold && d.log2fc > fcThreshold);
-                const sigDown = data.filter(d => (d.q_value || d.p_value) < sigThreshold && d.log2fc < -fcThreshold);
-                const notSig = data.filter(d => !((d.q_value || d.p_value) < sigThreshold && Math.abs(d.log2fc) > fcThreshold));
+        // Filter by signature type (d.signature is the type: CytoSig/SecAct)
+        let filteredData = diffData.filter(d => d.signature === sigType);
 
-                // Get top hits (by signature name for disease-level data)
-                const allSig = [...sigUp, ...sigDown].sort((a, b) => b.score - a.score);
-                const topHits = new Set(allSig.slice(0, 10).map(d => d.signature + '|' + d.disease));
+        if (diseaseFilter !== 'all') {
+            filteredData = filteredData.filter(d => d.disease === diseaseFilter);
+        }
 
-                const topHitsUp = sigUp.filter(d => topHits.has(d.signature + '|' + d.disease));
-                const topHitsDown = sigDown.filter(d => topHits.has(d.signature + '|' + d.disease));
-                const regularUp = sigUp.filter(d => !topHits.has(d.signature + '|' + d.disease));
-                const regularDown = sigDown.filter(d => !topHits.has(d.signature + '|' + d.disease));
+        // For SecAct (many proteins), limit to top 200 by significance score
+        if (sigType === 'SecAct' && filteredData.length > 200) {
+            filteredData = [...filteredData].sort((a, b) => {
+                const scoreA = a.neg_log10_pval * Math.abs(a.log2fc);
+                const scoreB = b.neg_log10_pval * Math.abs(b.log2fc);
+                return scoreB - scoreA;
+            }).slice(0, 200);
+        }
 
-                const traces = [];
+        // Update titles with comparison type info
+        const diseaseLabel = diseaseFilter === 'all' ? 'All Diseases' : diseaseFilter;
+        const volcanoTitle = document.getElementById('inflam-diff-volcano-title');
+        const volcanoSubtitle = document.getElementById('inflam-diff-volcano-subtitle');
+        const barTitle = document.getElementById('inflam-diff-bar-title');
+        const barSubtitle = document.getElementById('inflam-diff-bar-subtitle');
 
-                // Not significant (gray)
-                if (notSig.length > 0) {
-                    traces.push({
-                        type: 'scatter', mode: 'markers', name: 'Not significant',
-                        x: notSig.map(d => d.log2fc), y: notSig.map(d => d.neg_log10_pval),
-                        text: notSig.map(d => `${d.signature} (${d.disease})`),
-                        marker: { color: '#9ca3af', size: 6, opacity: 0.5 },
-                        hovertemplate: '<b>%{text}</b><br>log2FC: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>',
-                    });
-                }
-
-                // Regular up (red)
-                if (regularUp.length > 0) {
-                    traces.push({
-                        type: 'scatter', mode: 'markers', name: 'Up (Disease)',
-                        x: regularUp.map(d => d.log2fc), y: regularUp.map(d => d.neg_log10_pval),
-                        text: regularUp.map(d => `${d.signature} (${d.disease})`),
-                        marker: { color: '#ef4444', size: 8, opacity: 0.7 },
-                        hovertemplate: '<b>%{text}</b><br>log2FC: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>',
-                    });
-                }
-
-                // Regular down (blue)
-                if (regularDown.length > 0) {
-                    traces.push({
-                        type: 'scatter', mode: 'markers', name: 'Down (Disease)',
-                        x: regularDown.map(d => d.log2fc), y: regularDown.map(d => d.neg_log10_pval),
-                        text: regularDown.map(d => `${d.signature} (${d.disease})`),
-                        marker: { color: '#2563eb', size: 8, opacity: 0.7 },
-                        hovertemplate: '<b>%{text}</b><br>log2FC: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>',
-                    });
-                }
-
-                // Top hits up (large red with labels)
-                if (topHitsUp.length > 0) {
-                    traces.push({
-                        type: 'scatter', mode: 'markers+text', name: 'Top Up',
-                        x: topHitsUp.map(d => d.log2fc), y: topHitsUp.map(d => d.neg_log10_pval),
-                        text: topHitsUp.map(d => d.signature),
-                        textposition: 'top center', textfont: { size: 10, color: '#b91c1c' },
-                        marker: { color: '#dc2626', size: 12, opacity: 0.9, line: { color: '#fff', width: 1 } },
-                        hovertemplate: '<b>%{text}</b><br>log2FC: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>',
-                    });
-                }
-
-                // Top hits down (large blue with labels)
-                if (topHitsDown.length > 0) {
-                    traces.push({
-                        type: 'scatter', mode: 'markers+text', name: 'Top Down',
-                        x: topHitsDown.map(d => d.log2fc), y: topHitsDown.map(d => d.neg_log10_pval),
-                        text: topHitsDown.map(d => d.signature),
-                        textposition: 'top center', textfont: { size: 10, color: '#1e40af' },
-                        marker: { color: '#1d4ed8', size: 12, opacity: 0.9, line: { color: '#fff', width: 1 } },
-                        hovertemplate: '<b>%{text}</b><br>log2FC: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>',
-                    });
-                }
-
-                Plotly.newPlot('inflam-volcano', traces, {
-                    xaxis: { title: 'Log2 Fold Change', zeroline: true, zerolinecolor: '#aaa' },
-                    yaxis: { title: '-log10(p-value)' },
-                    margin: { l: 60, r: 30, t: 30, b: 50 },
-                    font: { family: 'Inter, sans-serif' },
-                    showlegend: true,
-                    legend: { orientation: 'h', y: -0.15 },
-                    shapes: [
-                        { type: 'line', x0: fcThreshold, x1: fcThreshold, y0: 0, y1: 1, yref: 'paper', line: { dash: 'dash', color: '#ccc' } },
-                        { type: 'line', x0: -fcThreshold, x1: -fcThreshold, y0: 0, y1: 1, yref: 'paper', line: { dash: 'dash', color: '#ccc' } },
-                        { type: 'line', x0: 0, x1: 1, y0: -Math.log10(sigThreshold), y1: -Math.log10(sigThreshold), xref: 'paper', line: { dash: 'dash', color: '#ccc' } },
-                    ],
-                });
-
-                // ===== Bar Chart: Top Differential =====
-                if (barContainer) {
-                    const top20 = allSig.slice(0, 20);
-                    const barColors = top20.map(d => d.log2fc > 0 ? '#ef4444' : '#2563eb');
-
-                    Plotly.newPlot('inflam-diff-bar', [{
-                        type: 'bar',
-                        x: top20.map(d => d.log2fc),
-                        y: top20.map(d => `${d.signature} (${d.disease})`),
-                        orientation: 'h',
-                        marker: { color: barColors },
-                        text: top20.map(d => `q=${(d.q_value || d.p_value)?.toExponential(1)}`),
-                        textposition: 'outside',
-                        hovertemplate: '<b>%{y}</b><br>log2FC: %{x:.3f}<extra></extra>',
-                    }], {
-                        xaxis: { title: 'Log2 Fold Change', zeroline: true },
-                        yaxis: { automargin: true, tickfont: { size: 10 } },
-                        margin: { l: 180, r: 60, t: 30, b: 50 },
-                        font: { family: 'Inter, sans-serif' },
-                    });
-                }
-
-                // Update titles
-                const diseaseLabel = disease === 'all' ? 'All Diseases' : disease;
-                const volcanoTitle = document.getElementById('inflam-diff-volcano-title');
-                const barTitle = document.getElementById('inflam-diff-bar-title');
-                if (volcanoTitle) volcanoTitle.textContent = `Volcano Plot: ${diseaseLabel} vs Healthy`;
-                if (barTitle) barTitle.textContent = `Top Differential Signatures (${diseaseLabel})`;
-
+        // Get comparison type for this disease
+        let comparisonNote = '';
+        if (diseaseFilter !== 'all' && filteredData.length > 0) {
+            const compType = filteredData[0].comparison;
+            const nHealthy = filteredData[0].n_g2;
+            if (compType === 'study_matched') {
+                comparisonNote = ` (study-matched healthy, n=${nHealthy})`;
             } else {
-                volcanoContainer.innerHTML = `<p class="loading">No differential data available [${sigType}]</p>`;
-                if (barContainer) barContainer.innerHTML = `<p class="loading">No data</p>`;
+                comparisonNote = ` (pooled healthy - no matched controls, n=${nHealthy})`;
             }
-        } catch (e) {
-            volcanoContainer.innerHTML = `<p class="loading">Error: ${e.message}</p>`;
+        }
+
+        if (volcanoTitle) volcanoTitle.textContent = `Volcano Plot: ${diseaseLabel} vs Healthy`;
+        if (volcanoSubtitle) {
+            const noteColor = comparisonNote.includes('pooled') ? '#d62728' : '#666';
+            volcanoSubtitle.innerHTML = `Positive = higher in ${diseaseLabel}, Negative = higher in Healthy<br><span style="font-size: 0.85em; color: ${noteColor};">${comparisonNote}</span>`;
+        }
+        if (barTitle) barTitle.textContent = `Top Differential Signatures`;
+        if (barSubtitle) barSubtitle.textContent = `Sorted by significance (|effect| × -log10 p)`;
+
+        // Handle empty data
+        if (filteredData.length === 0) {
+            volcanoContainer.innerHTML = `<p style="text-align:center;color:#666;padding:2rem;">No data available for ${diseaseLabel} (${sigType})</p>`;
+            if (barContainer) barContainer.innerHTML = '<p style="text-align:center;color:#666;padding:2rem;">No data available</p>';
+            return;
+        }
+
+        // 1. Volcano plot
+        Plotly.purge(volcanoContainer);
+
+        // Color by significance (matching index.html style)
+        const colors = filteredData.map(d => {
+            if (d.qvalue < 0.05 && Math.abs(d.log2fc) > 0.5) {
+                return d.log2fc > 0 ? '#f4a6a6' : '#a8d4e6';
+            }
+            return '#cccccc';
+        });
+
+        // Only show text for significant points
+        const textLabels = filteredData.map(d => {
+            if (d.qvalue < 0.05 && Math.abs(d.log2fc) > 0.5) {
+                return d.protein;  // Use protein field for signature name
+            }
+            return '';
+        });
+
+        // Dynamic x-axis range based on data
+        const maxAbsFC = Math.max(3, Math.ceil(Math.max(...filteredData.map(d => Math.abs(d.log2fc)))));
+        const maxY = Math.max(4, Math.ceil(Math.max(...filteredData.map(d => d.neg_log10_pval))));
+
+        Plotly.newPlot(volcanoContainer, [{
+            x: filteredData.map(d => d.log2fc),
+            y: filteredData.map(d => d.neg_log10_pval),
+            text: textLabels,
+            customdata: filteredData.map(d => d.protein),  // Use protein for hover
+            mode: 'markers+text',
+            type: 'scatter',
+            marker: {
+                color: colors,
+                size: 10,
+                opacity: 0.7
+            },
+            textposition: 'top center',
+            textfont: { size: 10 },
+            hovertemplate: '<b>%{customdata}</b><br>Effect: %{x:.2f}<br>-log10(p): %{y:.2f}<extra></extra>'
+        }], {
+            xaxis: {
+                title: `Activity Difference (${diseaseLabel} - Healthy)`,
+                zeroline: true,
+                zerolinecolor: '#ccc',
+                range: [-maxAbsFC, maxAbsFC]
+            },
+            yaxis: {
+                title: '-log10(p-value)',
+                range: [0, maxY * 1.1]
+            },
+            shapes: [
+                // Horizontal line at p=0.05
+                { type: 'line', x0: -maxAbsFC, x1: maxAbsFC, y0: -Math.log10(0.05), y1: -Math.log10(0.05), line: { color: '#999', dash: 'dash', width: 1 } },
+                // Vertical lines at effect thresholds
+                { type: 'line', x0: -0.5, x1: -0.5, y0: 0, y1: maxY * 1.1, line: { color: '#999', dash: 'dash', width: 1 } },
+                { type: 'line', x0: 0.5, x1: 0.5, y0: 0, y1: maxY * 1.1, line: { color: '#999', dash: 'dash', width: 1 } }
+            ],
+            margin: { l: 60, r: 30, t: 30, b: 60 },
+            height: 450,
+            font: { family: 'Inter, sans-serif' },
+            annotations: [{
+                x: -maxAbsFC * 0.8,
+                y: -0.08,
+                xref: 'x',
+                yref: 'paper',
+                text: `← Higher in Healthy`,
+                showarrow: false,
+                font: { size: 11, color: '#a8d4e6' }
+            }, {
+                x: maxAbsFC * 0.8,
+                y: -0.08,
+                xref: 'x',
+                yref: 'paper',
+                text: `Higher in ${diseaseLabel} →`,
+                showarrow: false,
+                font: { size: 11, color: '#f4a6a6' }
+            }]
+        }, { responsive: true });
+
+        // 2. Top differential bar chart - sorted by significance score
+        if (barContainer) {
+            Plotly.purge(barContainer);
+
+            // Calculate significance score and sort
+            const scoredData = filteredData.map(d => ({
+                ...d,
+                score: Math.abs(d.log2fc) * d.neg_log10_pval
+            }));
+
+            // Sort by score descending and take top 20
+            const sorted = [...scoredData].sort((a, b) => b.score - a.score);
+            const top20 = sorted.slice(0, 20).reverse();  // Reverse for horizontal bar (top at top)
+
+            Plotly.newPlot(barContainer, [{
+                type: 'bar',
+                orientation: 'h',
+                y: top20.map(d => d.protein),  // Use protein field for signature name
+                x: top20.map(d => d.log2fc),
+                marker: {
+                    color: top20.map(d => d.log2fc > 0 ? '#f4a6a6' : '#a8d4e6')
+                },
+                text: top20.map(d => d.log2fc.toFixed(2)),
+                textposition: 'outside',
+                textfont: { size: 9 },
+                hovertemplate: '<b>%{y}</b><br>Effect: %{x:.3f}<br>q = %{customdata}<extra></extra>',
+                customdata: top20.map(d => d.qvalue?.toExponential(2) || 'N/A')
+            }], {
+                xaxis: { title: 'Activity Difference', zeroline: true, zerolinecolor: '#ccc' },
+                yaxis: { automargin: true, tickfont: { size: 10 } },
+                margin: { l: 120, r: 50, t: 30, b: 50 },
+                height: 500,
+                font: { family: 'Inter, sans-serif' }
+            }, { responsive: true });
         }
     },
 
     async updateTreatmentResponse() {
-        const disease = document.getElementById('treatment-disease')?.value || 'all';
-        const sigType = document.getElementById('treatment-sig-type')?.value || this.signatureType;
-        const modelFilter = document.getElementById('treatment-model')?.value || 'all';
+        const container1 = document.getElementById('treatment-roc');
+        const container2 = document.getElementById('treatment-importance');
+        const container3 = document.getElementById('treatment-violin');
 
-        const rocContainer = document.getElementById('treatment-roc');
-        const importanceContainer = document.getElementById('treatment-importance');
-        const violinContainer = document.getElementById('treatment-violin');
+        const data = this.treatmentResponseRaw;
 
-        if (!rocContainer) return;
+        // Get filter values (use global signature type)
+        const selectedDisease = document.getElementById('treatment-disease')?.value || 'all';
+        const selectedSigType = this.signatureType;
+        const selectedModel = document.getElementById('treatment-model')?.value || 'all';
 
-        try {
-            const params = {};
-            if (disease !== 'all') params.disease = disease;
-            if (modelFilter !== 'all') params.model = modelFilter;
+        if (!data || (!data.roc_curves?.length && !data.feature_importance?.length)) {
+            [container1, container2, container3].forEach(c => {
+                if (c) {
+                    c.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Treatment response data will be available after running the analysis pipeline.</p>';
+                }
+            });
+            return;
+        }
 
-            // Get ROC data
-            const rocData = await API.get('/inflammation/treatment-response/roc', params);
+        // 1. ROC Curves visualization (actual ROC curves)
+        if (container1) {
+            Plotly.purge(container1);
 
-            if (rocData && rocData.length > 0) {
-                // Color palette for different disease/model combos
-                const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
+            let rocData = data.roc_curves || [];
+            // Filter by signature type
+            rocData = rocData.filter(d => d.signature_type === selectedSigType);
+            // Handle "All Diseases" - maps to "All Diseases" in data
+            if (selectedDisease !== 'all') {
+                rocData = rocData.filter(d => d.disease === selectedDisease);
+            } else {
+                // Show "All Diseases" entry when all is selected
+                rocData = rocData.filter(d => d.disease === 'All Diseases');
+            }
+            if (selectedModel !== 'all') {
+                rocData = rocData.filter(d => d.model === selectedModel);
+            }
 
-                // Plot ROC curves
-                const rocTraces = rocData.map((curve, i) => ({
-                    x: curve.fpr,
-                    y: curve.tpr,
-                    name: disease === 'all'
-                        ? `${curve.disease} - ${curve.model} (AUC=${curve.auc?.toFixed(2)})`
-                        : `${curve.model} (AUC=${curve.auc?.toFixed(2)})`,
-                    mode: 'lines',
+            if (rocData.length === 0) {
+                container1.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No ROC data for selected filters</p>';
+            } else {
+                // Color palette for different curves
+                const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f'];
+
+                // Create traces for each ROC curve
+                const traces = rocData.map((d, i) => ({
                     type: 'scatter',
+                    mode: 'lines',
+                    name: `${d.disease} - ${d.model} (AUC=${d.auc.toFixed(2)})`,
+                    x: d.fpr || [0, 1],
+                    y: d.tpr || [0, 1],
                     line: { color: colors[i % colors.length], width: 2 },
-                    hovertemplate: `${curve.disease} - ${curve.model}<br>FPR: %{x:.3f}<br>TPR: %{y:.3f}<extra></extra>`,
+                    hovertemplate: `<b>${d.disease}</b><br>${d.model}<br>FPR: %{x:.2f}<br>TPR: %{y:.2f}<extra></extra>`
                 }));
 
                 // Add diagonal reference line
-                rocTraces.push({
-                    x: [0, 1], y: [0, 1],
+                traces.push({
+                    type: 'scatter',
                     mode: 'lines',
-                    name: 'Random',
-                    line: { dash: 'dash', color: '#9ca3af', width: 1 },
-                    showlegend: false,
-                    hoverinfo: 'skip',
+                    name: 'Random (AUC=0.50)',
+                    x: [0, 1],
+                    y: [0, 1],
+                    line: { color: '#ccc', width: 1, dash: 'dash' },
+                    hoverinfo: 'skip'
                 });
 
-                Plotly.newPlot('treatment-roc', rocTraces, {
+                Plotly.newPlot(container1, traces, {
                     xaxis: { title: 'False Positive Rate', range: [0, 1] },
                     yaxis: { title: 'True Positive Rate', range: [0, 1] },
                     margin: { l: 60, r: 30, t: 30, b: 50 },
-                    font: { family: 'Inter, sans-serif' },
-                    legend: { orientation: 'v', x: 1.02, y: 0.5 },
-                });
+                    legend: { orientation: 'h', y: -0.25, font: { size: 10 } },
+                    height: 400,
+                    font: { family: 'Inter, sans-serif' }
+                }, { responsive: true });
+            }
+        }
+
+        // 2. Feature Importance visualization
+        if (container2) {
+            Plotly.purge(container2);
+
+            let impData = data.feature_importance || [];
+            // Filter by signature type
+            impData = impData.filter(d => d.signature_type === selectedSigType);
+            // Filter by model
+            if (selectedModel !== 'all') {
+                impData = impData.filter(d => d.model === selectedModel);
+            }
+            // Handle disease filter
+            if (selectedDisease !== 'all') {
+                impData = impData.filter(d => d.disease === selectedDisease);
             } else {
-                rocContainer.innerHTML = `<p class="loading">No ROC data available [${sigType}]</p>`;
+                impData = impData.filter(d => d.disease === 'All Diseases');
             }
 
-            // Get feature importance
-            if (importanceContainer) {
-                const featureParams = { ...params };
-                if (modelFilter === 'all') featureParams.model = 'Random Forest';  // Default to RF for importance
+            if (impData.length === 0) {
+                container2.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No feature importance data for selected filters</p>';
+            } else {
+                const isLR = selectedModel === 'Logistic Regression';
 
-                const featData = await API.get('/inflammation/treatment-response/features', featureParams);
+                // Aggregate importance across records
+                const featureMap = {};
+                impData.forEach(d => {
+                    if (!featureMap[d.feature]) {
+                        featureMap[d.feature] = { importance: [], coefficient: [] };
+                    }
+                    featureMap[d.feature].importance.push(d.importance);
+                    if (d.coefficient !== undefined) {
+                        featureMap[d.feature].coefficient.push(d.coefficient);
+                    }
+                });
 
-                if (featData && featData.length > 0) {
-                    // Sort by importance and take top 15
-                    const top15 = featData.sort((a, b) => b.importance - a.importance).slice(0, 15);
+                const aggregated = Object.entries(featureMap)
+                    .map(([feature, vals]) => ({
+                        feature,
+                        importance: vals.importance.reduce((a, b) => a + b, 0) / vals.importance.length,
+                        coefficient: vals.coefficient.length > 0
+                            ? vals.coefficient.reduce((a, b) => a + b, 0) / vals.coefficient.length
+                            : null
+                    }))
+                    .sort((a, b) => b.importance - a.importance)
+                    .slice(0, 15);
 
-                    Plotly.newPlot('treatment-importance', [{
-                        type: 'bar',
-                        x: top15.map(d => d.importance),
-                        y: top15.map(d => d.feature),
-                        orientation: 'h',
-                        marker: {
-                            color: top15.map((d, i) => `rgba(59, 130, 246, ${1 - i * 0.05})`),
-                        },
-                        hovertemplate: '<b>%{y}</b><br>Importance: %{x:.4f}<extra></extra>',
-                    }], {
-                        xaxis: { title: 'Feature Importance' },
-                        yaxis: { automargin: true, tickfont: { size: 10 } },
-                        margin: { l: 120, r: 30, t: 30, b: 50 },
-                        font: { family: 'Inter, sans-serif' },
-                    });
-                } else {
-                    importanceContainer.innerHTML = `<p class="loading">No feature importance data</p>`;
-                }
+                // For LR, color by coefficient direction (green = positive, red = negative)
+                const colors = isLR
+                    ? aggregated.map(d => d.coefficient !== null
+                        ? (d.coefficient >= 0 ? '#2ca02c' : '#d62728')
+                        : '#1f77b4')
+                    : aggregated.map(() => '#2ca02c');
+
+                const hoverText = isLR
+                    ? aggregated.map(d => d.coefficient !== null
+                        ? `${d.feature}<br>Importance: ${d.importance.toFixed(3)}<br>Coef: ${d.coefficient.toFixed(3)} (${d.coefficient >= 0 ? '+' : '-'})`
+                        : `${d.feature}<br>Importance: ${d.importance.toFixed(3)}`)
+                    : aggregated.map(d => `${d.feature}<br>Importance: ${d.importance.toFixed(3)}`);
+
+                Plotly.newPlot(container2, [{
+                    type: 'bar',
+                    orientation: 'h',
+                    y: aggregated.map(d => d.feature),
+                    x: aggregated.map(d => d.importance),
+                    marker: { color: colors },
+                    text: aggregated.map(d => d.importance.toFixed(3)),
+                    textposition: 'auto',
+                    hovertext: hoverText,
+                    hoverinfo: 'text'
+                }], {
+                    xaxis: { title: isLR ? 'Normalized |Coefficient|' : 'Importance Score' },
+                    yaxis: { automargin: true },
+                    margin: { l: 80, r: 30, t: 30, b: 50 },
+                    height: 400,
+                    font: { family: 'Inter, sans-serif' },
+                    annotations: isLR ? [{
+                        x: 0.95, y: 1.05, xref: 'paper', yref: 'paper',
+                        text: '<span style="color:#2ca02c">■</span> Positive  <span style="color:#d62728">■</span> Negative',
+                        showarrow: false, font: { size: 11 }
+                    }] : []
+                }, { responsive: true });
+            }
+        }
+
+        // 3. Prediction Violin/Box plots
+        if (container3) {
+            Plotly.purge(container3);
+
+            let predData = data.predictions || [];
+            // Filter by signature type
+            predData = predData.filter(d => d.signature_type === selectedSigType);
+            // Handle disease filter
+            if (selectedDisease !== 'all') {
+                predData = predData.filter(d => d.disease === selectedDisease);
+            } else {
+                predData = predData.filter(d => d.disease === 'All Diseases');
             }
 
-            // Placeholder for violin plot (requires prediction probability data)
-            if (violinContainer) {
-                // Note: This would require a new API endpoint that returns prediction probabilities
-                // For now, show a placeholder or summary
-                const summaryData = await API.get('/inflammation/treatment-response', params);
+            if (predData.length === 0) {
+                container3.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No prediction data for selected filters</p>';
+            } else {
+                const responders = predData.filter(d => d.response === 'Responder').map(d => d.probability);
+                const nonResponders = predData.filter(d => d.response === 'Non-responder').map(d => d.probability);
 
-                if (summaryData && summaryData.length > 0) {
-                    // Show summary as grouped bar chart instead
-                    const diseases = [...new Set(summaryData.map(d => d.disease))];
-                    const models = [...new Set(summaryData.map(d => d.model))];
-
-                    const traces = models.map((model, i) => ({
-                        type: 'bar',
-                        name: model,
-                        x: diseases,
-                        y: diseases.map(dis => {
-                            const match = summaryData.find(d => d.disease === dis && d.model === model);
-                            return match?.auc || 0;
-                        }),
-                        marker: { color: i === 0 ? '#3b82f6' : '#ef4444' },
-                        hovertemplate: '<b>%{x}</b><br>%{data.name}: AUC=%{y:.3f}<extra></extra>',
-                    }));
-
-                    Plotly.newPlot('treatment-violin', traces, {
-                        barmode: 'group',
-                        xaxis: { title: 'Disease' },
-                        yaxis: { title: 'AUC Score', range: [0, 1] },
-                        margin: { l: 60, r: 30, t: 30, b: 50 },
-                        font: { family: 'Inter, sans-serif' },
-                        legend: { orientation: 'h', y: -0.15 },
-                        shapes: [{
-                            type: 'line', x0: 0, x1: 1, y0: 0.5, y1: 0.5, xref: 'paper',
-                            line: { dash: 'dash', color: '#9ca3af', width: 1 },
-                        }],
-                    });
-                } else {
-                    violinContainer.innerHTML = `<p class="loading">No prediction summary data</p>`;
-                }
+                Plotly.newPlot(container3, [
+                    {
+                        type: 'violin',
+                        y: responders,
+                        name: 'Responder',
+                        box: { visible: true },
+                        meanline: { visible: true },
+                        fillcolor: '#2ca02c',
+                        line: { color: '#2ca02c' }
+                    },
+                    {
+                        type: 'violin',
+                        y: nonResponders,
+                        name: 'Non-responder',
+                        box: { visible: true },
+                        meanline: { visible: true },
+                        fillcolor: '#d62728',
+                        line: { color: '#d62728' }
+                    }
+                ], {
+                    yaxis: { title: 'Predicted Probability', range: [0, 1] },
+                    margin: { l: 50, r: 30, t: 30, b: 50 },
+                    showlegend: true,
+                    height: 350,
+                    font: { family: 'Inter, sans-serif' }
+                }, { responsive: true });
             }
-        } catch (e) {
-            rocContainer.innerHTML = `<p class="loading">Error: ${e.message}</p>`;
         }
     },
 
-    async updateOrganMap() {
-        const signature = document.getElementById('organ-signature')?.value || 'IFNG';
-
-        try {
-            const data = await API.get('/scatlas/organ-signatures', { signature_type: this.signatureType });
-
-            if (data && data.length > 0) {
-                // Filter for selected signature
-                const sigData = data.filter(d => d.signature === signature || d.protein === signature);
-
-                if (sigData.length > 0) {
-                    const organs = sigData.map(d => d.organ);
-                    const values = sigData.map(d => d.mean_activity || d.value);
-
-                    Plotly.newPlot('organ-bar', [{
-                        x: values,
-                        y: organs,
-                        type: 'bar',
-                        orientation: 'h',
-                        marker: { color: values.map(v => v > 0 ? '#ef4444' : '#2563eb') },
-                    }], {
-                        title: `${signature} [${this.signatureType}] Activity by Organ`,
-                        xaxis: { title: 'Mean Activity (z-score)' },
-                        margin: { l: 150 },
-                    });
-                }
-            }
-        } catch (e) {
-            document.getElementById('organ-bar').innerHTML = `<p class="loading">Error: ${e.message}</p>`;
-        }
-    },
 
     async updateBiochemScatter() {
         const marker = document.getElementById('biochem-marker')?.value;

@@ -1784,47 +1784,64 @@
 
             <div class="tabs">
                 <button class="tab active" data-tab="scatlas-celltypes">Cell Types</button>
-                <button class="tab" data-tab="organ-map">Organ Map</button>
-                <button class="tab" data-tab="cancer-comparison">Tumor vs Adjacent</button>
+                <button class="tab" data-tab="tissue-atlas">Tissue Atlas</button>
                 <button class="tab" data-tab="cancer-types">Cancer Types</button>
+                <button class="tab" data-tab="cancer-comparison">Tumor vs Adjacent</button>
                 <button class="tab" data-tab="immune-infiltration">Immune Infiltration</button>
                 <button class="tab" data-tab="exhaustion">T Cell Exhaustion</button>
                 <button class="tab" data-tab="caf-classification">CAF Types</button>
-                <button class="tab" data-tab="organ-cancer-matrix">Organ-Cancer</button>
                 <button class="tab" data-tab="adjacent-tissue">Adjacent Tissue</button>
             </div>
 
-            <!-- Organ Map Tab -->
-            <div class="tab-content" id="tab-organ-map">
+            <!-- Tissue Atlas Tab (Combined Normal & Cancer) -->
+            <div class="tab-content" id="tab-tissue-atlas">
                 <div class="controls">
                     <div class="control-group">
+                        <label>View Mode</label>
+                        <select id="tissue-mode" onchange="updateTissueAtlas()">
+                            <option value="normal">Normal Tissues (35 organs)</option>
+                            <option value="cancer">Cancer vs Normal (12 matched pairs)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
                         <label>Signature Type</label>
-                        <select id="organ-sig-type">
-                            <option value="CytoSig">CytoSig (44 cytokines)</option>
-                            <option value="SecAct">SecAct (1,249 proteins)</option>
+                        <select id="tissue-sig-type" onchange="updateTissueAtlas()">
+                            <option value="CytoSig">CytoSig (43 cytokines)</option>
+                            <option value="SecAct">SecAct (1,170 proteins)</option>
                         </select>
                     </div>
                     <div class="control-group">
                         <label>Select Signature</label>
-                        <input type="text" id="organ-signature" list="organ-signature-list-data" placeholder="Search signatures..." autocomplete="off" style="width: 200px; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-                        <datalist id="organ-signature-list-data">
-                            <!-- Populated dynamically -->
-                        </datalist>
+                        <select id="tissue-signature" onchange="updateTissueAtlas()" style="width: 150px;">
+                            <option value="IFNG">IFNG</option>
+                        </select>
+                    </div>
+                    <div class="control-group" style="position: relative;">
+                        <label>Or Search</label>
+                        <input type="text" id="tissue-search" placeholder="Search..."
+                               style="width: 120px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" autocomplete="off" value="IFNG"
+                               oninput="showTissueSuggestions()" onkeyup="if(event.key==='Enter') updateTissueAtlas()">
+                        <div id="tissue-suggestions" style="position: absolute; top: 100%; left: 0; width: 120px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
                     </div>
                 </div>
 
-                <!-- Single Signature Bar Chart (Top) -->
-                <div class="viz-container" style="min-height: 400px;">
-                    <div class="viz-title" id="organ-bar-title">Single Signature Activity Across Organs</div>
-                    <div class="viz-subtitle" id="organ-bar-subtitle">Select a signature to view its activity pattern</div>
-                    <div id="organ-bar-chart" style="height: 350px;"></div>
+                <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
+                    <strong id="tissue-atlas-description">Tissue Atlas:</strong>
+                    <span id="tissue-atlas-desc-text">Compare cytokine activity across 35 normal human organs from scAtlas.</span>
                 </div>
 
-                <!-- Heatmap Overview (Bottom) -->
-                <div class="viz-container" style="min-height: 600px; margin-top: 1.5rem;">
-                    <div class="viz-title">Signature × Organ Heatmap</div>
-                    <div class="viz-subtitle" id="organ-heatmap-subtitle">All signatures across organs (click cell to select signature above)</div>
-                    <div id="organ-heatmap" style="height: 550px;"></div>
+                <!-- Activity Boxplots (Cell-type agnostic) -->
+                <div class="viz-container" style="min-height: 400px;">
+                    <div class="viz-title" id="tissue-boxplot-title">Activity Distribution by Tissue</div>
+                    <div class="viz-subtitle" id="tissue-boxplot-subtitle">Cell-type agnostic mean activity per tissue</div>
+                    <div id="tissue-boxplot" class="loading">Loading...</div>
+                </div>
+
+                <!-- Heatmap -->
+                <div class="viz-container" style="min-height: 500px; margin-top: 1rem;">
+                    <div class="viz-title" id="tissue-heatmap-title">Signature × Tissue Heatmap</div>
+                    <div class="viz-subtitle" id="tissue-heatmap-subtitle">Activity patterns across tissues</div>
+                    <div id="tissue-heatmap" class="loading">Loading...</div>
                 </div>
             </div>
 
@@ -1908,13 +1925,6 @@
             <!-- Cancer Types Tab -->
             <div class="tab-content" id="tab-cancer-types">
                 <div class="controls">
-                    <div class="control-group">
-                        <label>Cancer Type</label>
-                        <select id="cancer-type-select">
-                            <option value="all">All Cancer Types</option>
-                            <!-- Populated dynamically from data -->
-                        </select>
-                    </div>
                     <div class="control-group">
                         <label>Signature Type</label>
                         <select id="cancer-type-sig">
@@ -2079,85 +2089,40 @@
                 </div>
             </div>
 
-            <!-- Organ-Cancer Matrix Tab -->
-            <div class="tab-content" id="tab-organ-cancer-matrix">
-                <div class="controls">
-                    <div class="control-group">
-                        <label>Cytokine</label>
-                        <select id="matrix-cytokine">
-                            <option value="IFNG">IFN-γ</option>
-                            <option value="TNF">TNF</option>
-                            <option value="IL6">IL-6</option>
-                            <option value="IL17A">IL-17A</option>
-                            <option value="TGFB1">TGF-β1</option>
-                            <option value="VEGFA">VEGF-A</option>
-                        </select>
-                    </div>
-                    <div class="control-group">
-                        <label>Value Type</label>
-                        <select id="matrix-value">
-                            <option value="tumor">Tumor Activity</option>
-                            <option value="adjacent">Adjacent Activity</option>
-                            <option value="difference">Tumor - Adjacent</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
-                    <strong>Organ-Cancer Matrix:</strong> Compare cytokine activity patterns across tissue origins and cancer types. Bubble size represents sample count; color represents activity level.
-                </div>
-
-                <div class="viz-container full-height">
-                    <div class="viz-title">Organ × Cancer Type Matrix</div>
-                    <div class="viz-subtitle">Cytokine activity across tissue-of-origin and cancer type combinations</div>
-                    <div id="organ-cancer-bubble" class="loading">Loading...</div>
-                </div>
-            </div>
-
             <!-- Adjacent Tissue Analysis Tab -->
             <div class="tab-content" id="tab-adjacent-tissue">
                 <div class="controls">
                     <div class="control-group">
-                        <label>Cancer Type</label>
-                        <select id="adjacent-cancer">
-                            <option value="all">All Cancers</option>
-                            <option value="Breast">Breast</option>
-                            <option value="Lung">Lung</option>
-                            <option value="Colon">Colon</option>
-                            <option value="Liver">Liver</option>
-                            <option value="Kidney">Kidney</option>
-                        </select>
-                    </div>
-                    <div class="control-group">
-                        <label>Comparison</label>
-                        <select id="adjacent-comparison">
-                            <option value="adj-normal">Adjacent vs Normal Tissue</option>
-                            <option value="tumor-adj">Tumor vs Adjacent</option>
-                            <option value="all-three">All Three (Normal, Adjacent, Tumor)</option>
+                        <label>Signature Type</label>
+                        <select id="adjacent-sig-type" onchange="updateAdjacentTissue()">
+                            <option value="CytoSig">CytoSig (43 cytokines)</option>
+                            <option value="SecAct">SecAct (1,170 proteins)</option>
                         </select>
                     </div>
                 </div>
 
                 <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
-                    <strong>Adjacent Tissue Analysis:</strong> Investigate pre-malignant changes in tumor-adjacent tissue compared to healthy tissue from the same organ. Identifies "field effect" cytokine signatures that may precede cancer development.
+                    <strong>Adjacent Tissue Analysis:</strong> Compare cytokine activity between tumor-adjacent tissue and tumor tissue across pan-cancer samples.
+                    Identifies "field effect" signatures - cytokines elevated in adjacent tissue may indicate pre-malignant microenvironment changes.
+                    <br><em style="color: #666;">Data: 147 tumor samples vs 105 adjacent tissue samples from scAtlas pan-cancer cohort.</em>
                 </div>
 
                 <div class="two-col">
                     <div class="viz-container large">
-                        <div class="viz-title">Adjacent vs Normal Differential</div>
-                        <div class="viz-subtitle">Cytokines altered in tumor-adjacent tissue</div>
+                        <div class="viz-title">Tumor vs Adjacent Volcano Plot</div>
+                        <div class="viz-subtitle" id="adjacent-volcano-subtitle">Differential activity between adjacent and tumor tissue</div>
                         <div id="adjacent-volcano" class="loading">Loading...</div>
                     </div>
                     <div class="viz-container">
-                        <div class="viz-title">Top Field Effect Signatures</div>
-                        <div class="viz-subtitle">Most consistent changes in adjacent tissue</div>
+                        <div class="viz-title">Top Differential Signatures</div>
+                        <div class="viz-subtitle">Signatures with largest activity difference</div>
                         <div id="adjacent-top" class="loading">Loading...</div>
                     </div>
                 </div>
 
                 <div class="viz-container">
-                    <div class="viz-title">Tissue State Comparison</div>
-                    <div class="viz-subtitle">Activity distribution: Normal → Adjacent → Tumor</div>
+                    <div class="viz-title">Adjacent vs Tumor Activity Scatter</div>
+                    <div class="viz-subtitle">Mean activity comparison (diagonal = no difference)</div>
                     <div id="adjacent-boxplot" class="loading">Loading...</div>
                 </div>
             </div>
@@ -2669,16 +2634,14 @@
                 populateScatlasCelltypeDropdown();
                 updateScatlasCelltypeBar();
                 updateCelltypeHeatmap();
-                // Organ Map tab
-                updateOrganBarChart();
-                updateOrganHeatmap();
+                // Tissue Atlas tab (combined normal + cancer)
+                updateTissueAtlas();
                 updateCancerComparison();
                 updateCancerTypes();
                 updateImmuneInfiltration();
                 updateExhaustion();
                 // New scAtlas panels
                 updateCafClassification();
-                updateOrganCancerMatrix();
                 updateAdjacentTissue();
             } else if (section === 'cross-atlas') {
                 updateAtlasOverview();
@@ -3768,6 +3731,262 @@
                 document.getElementById('organ-signature').value = sig;
                 updateOrganBarChart();
             });
+        }
+
+        // Tissue Atlas - Unified Normal + Cancer view
+        function getTissueSignatures() {
+            const mode = document.getElementById('tissue-mode')?.value || 'normal';
+            const sigType = document.getElementById('tissue-sig-type')?.value || 'CytoSig';
+
+            if (mode === 'normal') {
+                const organData = state.data.scatlasorgans;
+                if (!organData) return [];
+                return [...new Set(organData.filter(d => d.signature_type === sigType).map(d => d.signature))].sort();
+            } else {
+                const matrixData = state.data.organcancermatrix;
+                if (!matrixData) return [];
+                return sigType === 'CytoSig' ? (matrixData.cytosig_signatures || []) : (matrixData.secact_signatures || []);
+            }
+        }
+
+        function showTissueSuggestions() {
+            const input = document.getElementById('tissue-search');
+            const div = document.getElementById('tissue-suggestions');
+            if (!input || !div) return;
+
+            const query = input.value.toLowerCase();
+            const sigs = getTissueSignatures();
+            const filtered = sigs.filter(s => s.toLowerCase().includes(query)).slice(0, 15);
+
+            if (filtered.length === 0) { div.style.display = 'none'; return; }
+
+            div.innerHTML = filtered.map(s =>
+                `<div style="padding:6px 10px;cursor:pointer;border-bottom:1px solid #eee"
+                     onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'"
+                     onclick="selectTissueSig('${s}')">${s}</div>`
+            ).join('');
+            div.style.display = 'block';
+        }
+
+        function selectTissueSig(sig) {
+            const input = document.getElementById('tissue-search');
+            const dropdown = document.getElementById('tissue-signature');
+            const div = document.getElementById('tissue-suggestions');
+            if (input) input.value = sig;
+            if (dropdown) dropdown.value = sig;
+            if (div) div.style.display = 'none';
+            updateTissueAtlas();
+        }
+
+        function updateTissueAtlas() {
+            const boxplotContainer = document.getElementById('tissue-boxplot');
+            const heatmapContainer = document.getElementById('tissue-heatmap');
+
+            if (!boxplotContainer) return;
+
+            const mode = document.getElementById('tissue-mode')?.value || 'normal';
+            const sigType = document.getElementById('tissue-sig-type')?.value || 'CytoSig';
+            const searchVal = document.getElementById('tissue-search')?.value?.trim();
+            const selectedSig = searchVal || document.getElementById('tissue-signature')?.value || 'IFNG';
+
+            // Populate signature dropdown
+            const sigDropdown = document.getElementById('tissue-signature');
+            const sigs = getTissueSignatures();
+            if (sigDropdown && sigs.length > 0) {
+                const currentVal = sigDropdown.value;
+                sigDropdown.innerHTML = sigs.slice(0, 100).map(s => `<option value="${s}">${s}</option>`).join('');
+                if (sigs.includes(currentVal)) sigDropdown.value = currentVal;
+                else if (sigs.includes('IFNG')) sigDropdown.value = 'IFNG';
+            }
+
+            // Update description
+            const descText = document.getElementById('tissue-atlas-desc-text');
+            if (descText) {
+                descText.textContent = mode === 'normal'
+                    ? 'Compare cytokine activity across 35 normal human organs from scAtlas.'
+                    : 'Compare cytokine activity between 13 cancer types and their matched normal organs.';
+            }
+
+            if (mode === 'normal') {
+                updateTissueAtlasNormal(boxplotContainer, heatmapContainer, sigType, selectedSig);
+            } else {
+                updateTissueAtlasCancer(boxplotContainer, heatmapContainer, sigType, selectedSig);
+            }
+        }
+
+        function updateTissueAtlasNormal(boxplotContainer, heatmapContainer, sigType, selectedSig) {
+            const organData = state.data.scatlasorgans;
+
+            if (!organData || organData.length === 0) {
+                [boxplotContainer, heatmapContainer].forEach(c => {
+                    if (c) {
+                        c.classList.remove('loading');
+                        c.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Normal organ data not available.</p>';
+                    }
+                });
+                return;
+            }
+
+            // Filter by signature type
+            const filtered = organData.filter(d => d.signature_type === sigType);
+            const organs = [...new Set(filtered.map(d => d.organ))].sort();
+            const signatures = [...new Set(filtered.map(d => d.signature))].sort();
+
+            // 1. Boxplot: Single signature across organs
+            boxplotContainer.classList.remove('loading');
+            Plotly.purge(boxplotContainer);
+
+            const sigData = filtered.filter(d => d.signature === selectedSig);
+            if (sigData.length > 0) {
+                sigData.sort((a, b) => b.mean_activity - a.mean_activity);
+
+                Plotly.newPlot(boxplotContainer, [{
+                    type: 'bar',
+                    orientation: 'h',
+                    y: sigData.map(d => d.organ),
+                    x: sigData.map(d => d.mean_activity),
+                    marker: {
+                        color: sigData.map(d => d.mean_activity),
+                        colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
+                        cmid: 0
+                    },
+                    hovertemplate: '<b>%{y}</b><br>Activity: %{x:.3f}<extra></extra>'
+                }], {
+                    xaxis: { title: `${selectedSig} Activity (z-score)`, zeroline: true },
+                    yaxis: { automargin: true },
+                    margin: { l: 120, r: 30, t: 20, b: 50 },
+                    height: Math.max(350, sigData.length * 12)
+                }, { responsive: true });
+
+                document.getElementById('tissue-boxplot-title').textContent = `${selectedSig} Activity Across Normal Organs`;
+                document.getElementById('tissue-boxplot-subtitle').textContent = `${sigType} activity across ${sigData.length} organs`;
+            }
+
+            // 2. Heatmap: Signatures × Organs
+            if (heatmapContainer) {
+                heatmapContainer.classList.remove('loading');
+                Plotly.purge(heatmapContainer);
+
+                const dispSigs = sigType === 'CytoSig' ? signatures : signatures.slice(0, 50);
+                const zMatrix = dispSigs.map(sig =>
+                    organs.map(org => {
+                        const item = filtered.find(d => d.signature === sig && d.organ === org);
+                        return item ? item.mean_activity : 0;
+                    })
+                );
+
+                Plotly.newPlot(heatmapContainer, [{
+                    type: 'heatmap',
+                    z: zMatrix,
+                    x: organs,
+                    y: dispSigs,
+                    colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
+                    zmid: 0,
+                    colorbar: { title: 'Activity' },
+                    hovertemplate: '<b>%{y}</b><br>%{x}: %{z:.3f}<extra></extra>'
+                }], {
+                    xaxis: { tickangle: 45, tickfont: { size: 9 } },
+                    yaxis: { automargin: true, tickfont: { size: 9 } },
+                    margin: { l: 100, r: 50, t: 20, b: 100 },
+                    height: Math.min(600, Math.max(350, dispSigs.length * 12))
+                }, { responsive: true });
+
+                document.getElementById('tissue-heatmap-title').textContent = 'Normal Organ Activity Heatmap';
+                document.getElementById('tissue-heatmap-subtitle').textContent = `${dispSigs.length} ${sigType} signatures × ${organs.length} organs`;
+            }
+        }
+
+        function updateTissueAtlasCancer(boxplotContainer, heatmapContainer, sigType, selectedSig) {
+            const matrixData = state.data.organcancermatrix;
+
+            if (!matrixData || !matrixData.comparisons?.length) {
+                [boxplotContainer, heatmapContainer].forEach(c => {
+                    if (c) {
+                        c.classList.remove('loading');
+                        c.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Cancer comparison data not available.</p>';
+                    }
+                });
+                return;
+            }
+
+            const filtered = matrixData.comparisons.filter(d => d.signature_type === sigType);
+            const cancerTypes = matrixData.cancer_types || [];
+            const labels = matrixData.cancer_labels || {};
+            const organMap = matrixData.organ_mapping || {};
+            const signatures = sigType === 'CytoSig' ? matrixData.cytosig_signatures : matrixData.secact_signatures?.slice(0, 50);
+
+            // 1. Boxplot: Normal vs Cancer side-by-side for selected signature
+            boxplotContainer.classList.remove('loading');
+            Plotly.purge(boxplotContainer);
+
+            const sigData = filtered.filter(d => d.signature === selectedSig);
+            if (sigData.length > 0) {
+                sigData.sort((a, b) => b.log2fc - a.log2fc);
+
+                const traces = [
+                    {
+                        type: 'bar',
+                        name: 'Normal',
+                        y: sigData.map(d => labels[d.cancer_type] || d.cancer_type),
+                        x: sigData.map(d => d.mean_normal),
+                        orientation: 'h',
+                        marker: { color: '#2166ac' }
+                    },
+                    {
+                        type: 'bar',
+                        name: 'Cancer',
+                        y: sigData.map(d => labels[d.cancer_type] || d.cancer_type),
+                        x: sigData.map(d => d.mean_cancer),
+                        orientation: 'h',
+                        marker: { color: '#b2182b' }
+                    }
+                ];
+
+                Plotly.newPlot(boxplotContainer, traces, {
+                    barmode: 'group',
+                    xaxis: { title: `${selectedSig} Activity (z-score)`, zeroline: true },
+                    yaxis: { automargin: true },
+                    legend: { orientation: 'h', y: 1.1 },
+                    margin: { l: 150, r: 30, t: 40, b: 50 },
+                    height: Math.max(350, sigData.length * 35)
+                }, { responsive: true });
+
+                document.getElementById('tissue-boxplot-title').textContent = `${selectedSig}: Normal vs Cancer`;
+                document.getElementById('tissue-boxplot-subtitle').textContent = `Comparing ${sigData.length} organ-cancer pairs`;
+            }
+
+            // 2. Heatmap: Log2FC Cancer vs Normal
+            if (heatmapContainer) {
+                heatmapContainer.classList.remove('loading');
+                Plotly.purge(heatmapContainer);
+
+                const dispSigs = signatures || [];
+                const zMatrix = cancerTypes.map(ct =>
+                    dispSigs.map(sig => {
+                        const item = filtered.find(d => d.cancer_type === ct && d.signature === sig);
+                        return item ? item.log2fc : 0;
+                    })
+                );
+
+                Plotly.newPlot(heatmapContainer, [{
+                    type: 'heatmap',
+                    z: zMatrix,
+                    x: dispSigs,
+                    y: cancerTypes.map(ct => labels[ct] || ct),
+                    colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
+                    zmid: 0,
+                    colorbar: { title: 'Log2FC' },
+                    hovertemplate: '<b>%{y}</b><br>%{x}: %{z:.3f}<extra></extra>'
+                }], {
+                    xaxis: { tickangle: 45, tickfont: { size: 9 } },
+                    yaxis: { automargin: true },
+                    margin: { l: 150, r: 50, t: 20, b: 100 },
+                    height: Math.max(350, cancerTypes.length * 30)
+                }, { responsive: true });
+
+                document.getElementById('tissue-heatmap-title').textContent = 'Cancer vs Normal Log2 Fold Change';
+                document.getElementById('tissue-heatmap-subtitle').textContent = `${cancerTypes.length} cancer types × ${dispSigs.length} ${sigType} signatures (red = higher in cancer)`;
+            }
         }
 
         // scAtlas Cell Types - Search functions
@@ -8383,16 +8602,6 @@
             const data = state.data.cancertypes;
             if (!data) return;
 
-            // Populate cancer type dropdown
-            const cancerSelect = document.getElementById('cancer-type-select');
-            if (cancerSelect && data.cancer_types) {
-                const labels = data.cancer_labels || {};
-                cancerSelect.innerHTML = '<option value="all">All Cancer Types</option>' +
-                    data.cancer_types.map(ct =>
-                        `<option value="${ct}">${labels[ct] || ct}</option>`
-                    ).join('');
-            }
-
             // Populate protein dropdown
             const proteinDropdown = document.getElementById('cancer-type-protein-dropdown');
             const searchInput = document.getElementById('cancer-type-protein-search');
@@ -8425,19 +8634,13 @@
             }
 
             const sigType = document.getElementById('cancer-type-sig')?.value || 'CytoSig';
-            const cancerType = document.getElementById('cancer-type-select')?.value || 'all';
             const searchInput = document.getElementById('cancer-type-protein-search')?.value?.trim();
             const signature = searchInput || document.getElementById('cancer-type-protein-dropdown')?.value || 'IFNG';
 
             // Filter by signature type and signature
-            let filtered = data.data.filter(d =>
+            const filtered = data.data.filter(d =>
                 d.signature_type === sigType && d.signature === signature
             );
-
-            // Filter by cancer type if not "all"
-            if (cancerType !== 'all') {
-                filtered = filtered.filter(d => d.cancer_type === cancerType);
-            }
 
             if (filtered.length === 0) {
                 container.classList.remove('loading');
@@ -8451,9 +8654,7 @@
             // Update subtitle
             const subtitle = document.getElementById('cancer-type-bar-subtitle');
             if (subtitle) {
-                const labels = data.cancer_labels || {};
-                const cancerText = cancerType === 'all' ? 'all cancer types' : (labels[cancerType] || cancerType);
-                subtitle.textContent = `${signature} activity across ${cancerText}`;
+                subtitle.textContent = `${signature} activity across all cancer types`;
             }
 
             container.classList.remove('loading');
@@ -8491,15 +8692,12 @@
             }
 
             const sigType = document.getElementById('cancer-type-sig')?.value || 'CytoSig';
-            const cancerType = document.getElementById('cancer-type-select')?.value || 'all';
 
             // Filter by signature type
-            let filtered = data.data.filter(d => d.signature_type === sigType);
+            const filtered = data.data.filter(d => d.signature_type === sigType);
 
-            // Get cancer types and signatures
-            const cancerTypes = cancerType === 'all'
-                ? (data.cancer_types || [...new Set(filtered.map(d => d.cancer_type))])
-                : [cancerType];
+            // Get all cancer types
+            const cancerTypes = data.cancer_types || [...new Set(filtered.map(d => d.cancer_type))];
             const signatures = sigType === 'CytoSig'
                 ? (data.cytosig_signatures || [])
                 : (data.secact_signatures || []).slice(0, 50);
@@ -8846,70 +9044,6 @@
             }
         }
 
-        // scAtlas: Organ-Cancer Matrix
-        function updateOrganCancerMatrix() {
-            const container = document.getElementById('organ-cancer-bubble');
-            if (!container) return;
-
-            container.classList.remove('loading');
-            Plotly.purge(container);
-
-            // Use real organ-cancer matrix data if available
-            const data = state.data.organcancermatrix;
-
-            if (!data || !data.comparisons?.length) {
-                container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Organ-cancer matrix data will be available after running scAtlas analysis.</p>';
-                return;
-            }
-
-            const signature = document.getElementById('matrix-cytokine')?.value || 'IFNG';
-            const valueType = document.getElementById('matrix-value')?.value || 'difference';
-
-            // Filter by selected signature
-            let filtered = data.comparisons.filter(d => d.signature === signature);
-
-            // If no data for signature, show all signatures aggregated
-            if (filtered.length === 0) {
-                filtered = data.comparisons;
-            }
-
-            // Get unique organs and cancer types
-            const organs = [...new Set(filtered.map(d => d.organ))];
-            const cancerTypes = [...new Set(filtered.map(d => d.cancer_type))];
-
-            // Prepare bubble data
-            const bubbleData = filtered.map(d => ({
-                organ: d.organ,
-                cancer: d.cancer_type,
-                activity: valueType === 'normal' ? d.normal_activity :
-                          valueType === 'cancer' ? d.cancer_activity : d.difference,
-                signature: d.signature
-            }));
-
-            Plotly.newPlot(container, [{
-                type: 'scatter',
-                mode: 'markers',
-                x: bubbleData.map(d => d.organ),
-                y: bubbleData.map(d => d.cancer),
-                marker: {
-                    size: 20,
-                    color: bubbleData.map(d => d.activity),
-                    colorscale: [[0, '#a8d4e6'], [0.5, '#f5f5f5'], [1, '#f4a6a6']],
-                    cmin: -1.5,
-                    cmax: 1.5,
-                    colorbar: { title: `${signature}<br>${valueType}` },
-                    line: { width: 1, color: '#333' }
-                },
-                text: bubbleData.map(d => `${d.organ} → ${d.cancer}<br>${d.signature}: ${d.activity.toFixed(3)}`),
-                hoverinfo: 'text'
-            }], {
-                xaxis: { title: 'Normal Organ', tickangle: 45 },
-                yaxis: { title: 'Cancer Type' },
-                margin: { l: 100, r: 80, t: 30, b: 100 },
-                height: 550
-            }, { responsive: true });
-        }
-
         // scAtlas: Adjacent Tissue Analysis
         function updateAdjacentTissue() {
             const volcanoContainer = document.getElementById('adjacent-volcano');
@@ -8921,7 +9055,7 @@
             // Use real adjacent tissue data if available
             const data = state.data.adjacenttissue;
 
-            if (!data || !data.data?.length) {
+            if (!data || !data.tumor_vs_adjacent?.length) {
                 [volcanoContainer, topContainer, boxplotContainer].forEach(c => {
                     if (c) {
                         c.classList.remove('loading');
@@ -8931,26 +9065,29 @@
                 return;
             }
 
-            const cancerType = document.getElementById('adjacent-cancer')?.value || 'All';
+            // Get signature type from selector
+            const sigType = document.getElementById('adjacent-sig-type')?.value || 'CytoSig';
 
-            // Filter by cancer type
-            let filtered = data.data;
-            if (cancerType !== 'All') {
-                filtered = filtered.filter(d => d.cancer_type === cancerType);
-            } else {
-                // Use 'All' cancer type aggregate
-                filtered = filtered.filter(d => d.cancer_type === 'All');
+            // Update subtitle with sample counts
+            const subtitle = document.getElementById('adjacent-volcano-subtitle');
+            if (subtitle && data.summary) {
+                const nSig = sigType === 'CytoSig' ? data.summary.n_significant_cytosig : data.summary.n_significant_secact;
+                subtitle.textContent = `${nSig} significant signatures (q<0.05) | ${data.summary.n_tumor_samples} tumor vs ${data.summary.n_adjacent_samples} adjacent samples`;
             }
+
+            // Filter by signature type
+            const filtered = data.tumor_vs_adjacent.filter(d => d.signature_type === sigType);
 
             // Prepare data for volcano plot
             const diffData = filtered.map(d => ({
                 cytokine: d.signature,
-                log2fc: d.log2fc_adj_vs_tumor || 0,
+                log2fc: d.log2fc || 0,
                 pvalue: d.pvalue || 1,
                 qvalue: d.qvalue || 1,
-                negLogP: -Math.log10(Math.max(d.pvalue || 1, 1e-100)),
+                negLogP: d.neg_log10_pval || -Math.log10(Math.max(d.pvalue || 1, 1e-100)),
                 mean_adjacent: d.mean_adjacent,
-                mean_tumor: d.mean_tumor
+                mean_tumor: d.mean_tumor,
+                direction: d.direction
             }));
 
             // 1. Volcano plot
@@ -10166,10 +10303,6 @@
             }
 
             // scAtlas Cancer Types
-            document.getElementById('cancer-type-select')?.addEventListener('change', () => {
-                updateCancerTypesBar();
-                updateCancerTypesHeatmap();
-            });
             document.getElementById('cancer-type-sig')?.addEventListener('change', () => {
                 populateCancerTypesDropdowns();
                 updateCancerTypesBar();
@@ -10214,12 +10347,10 @@
             document.getElementById('caf-sig-type')?.addEventListener('change', updateCafClassification);
 
             // scAtlas Organ-Cancer Matrix
-            document.getElementById('matrix-cytokine')?.addEventListener('change', updateOrganCancerMatrix);
-            document.getElementById('matrix-value')?.addEventListener('change', updateOrganCancerMatrix);
+            // Organ-cancer matrix changes are handled via onchange in HTML
 
             // scAtlas Adjacent Tissue
-            document.getElementById('adjacent-cancer')?.addEventListener('change', updateAdjacentTissue);
-            document.getElementById('adjacent-comparison')?.addEventListener('change', updateAdjacentTissue);
+            // Adjacent tissue signature type change is handled via onchange in HTML
 
             // Cross-Atlas panels
             document.getElementById('conserved-sig-type')?.addEventListener('change', updateConservedSignatures);
