@@ -6322,8 +6322,18 @@
                 updateInflamCelltypeStratifiedHeatmap();
             });
             document.getElementById('inflam-boxplot-sig-type')?.addEventListener('change', () => {
+                const sigType = document.getElementById('inflam-boxplot-sig-type')?.value || 'CytoSig';
                 const input = document.getElementById('inflam-boxplot-search');
-                if (input) input.value = 'IFNG';
+                if (input) {
+                    const sigs = getInflamBoxplotSignatures();
+                    if (sigType === 'SecAct' && sigs.length > 0) {
+                        // Use a common SecAct signature as default
+                        const defaultSig = ['IFNG', 'CCL3', 'S100A8', 'GRN', 'CTSB'].find(s => sigs.includes(s)) || sigs[0];
+                        input.value = defaultSig;
+                    } else {
+                        input.value = 'IFNG';
+                    }
+                }
                 updateInflamStratifiedBoxplot();
                 updateInflamCelltypeStratifiedHeatmap();
             });
