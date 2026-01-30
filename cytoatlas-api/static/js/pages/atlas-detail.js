@@ -3239,12 +3239,13 @@ const AtlasDetailPage = {
                     </select>
                 </div>
                 <div class="control-group" style="position: relative;">
-                    <label>Search Signature</label>
-                    <input type="text" id="inflam-disease-search" class="filter-select" placeholder="e.g., IFNG, IL6"
-                           style="width: 150px;" autocomplete="off" value="IFNG"
+                    <label>Search ${this.signatureType === 'SecAct' ? 'Protein' : 'Cytokine'}</label>
+                    <input type="text" id="inflam-disease-search" class="filter-select"
+                           placeholder="${this.signatureType === 'SecAct' ? 'e.g., IFNG, CCL2, MMP9' : 'e.g., IFNG, IL6, TNF'}"
+                           style="width: 180px;" autocomplete="off" value="IFNG"
                            oninput="AtlasDetailPage.showDiseaseSuggestions()"
                            onkeyup="if(event.key==='Enter') AtlasDetailPage.updateInflamDiseaseBar()">
-                    <div id="inflam-disease-suggestions" style="position: absolute; top: 100%; left: 0; width: 150px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                    <div id="inflam-disease-suggestions" style="position: absolute; top: 100%; left: 0; width: 180px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
                 </div>
             </div>
 
@@ -3259,7 +3260,7 @@ const AtlasDetailPage = {
                 <div class="sub-panel">
                     <div class="panel-header">
                         <h4>Disease Activity Heatmap</h4>
-                        <p>Diseases × Signatures</p>
+                        <p id="inflam-disease-heatmap-subtitle">Diseases × Signatures</p>
                     </div>
                     <div id="inflam-disease-heatmap" class="plot-container" style="height: 450px;"></div>
                 </div>
@@ -3424,6 +3425,14 @@ const AtlasDetailPage = {
         const diseaseGroup = document.getElementById('inflam-disease-group')?.value || 'all';
         const sigType = this.signatureType || 'CytoSig';
 
+        // Update subtitle based on signature type
+        const subtitle = document.getElementById('inflam-disease-heatmap-subtitle');
+        if (subtitle) {
+            subtitle.textContent = sigType === 'SecAct'
+                ? 'Top 50 most variable proteins × Diseases'
+                : 'Diseases × Signatures';
+        }
+
         let filtered = data;
         // Filter by signature type if field exists
         if (data[0]?.signature_type) {
@@ -3435,7 +3444,7 @@ const AtlasDetailPage = {
 
         // Get unique diseases and signatures
         const diseases = [...new Set(filtered.map(d => d.disease))];
-        const signatures = [...new Set(filtered.map(d => d.signature))].sort();
+        let allSignatures = [...new Set(filtered.map(d => d.signature))];
 
         // Aggregate by disease (mean across cell types)
         const diseaseActivity = {};
@@ -3446,6 +3455,30 @@ const AtlasDetailPage = {
             }
             diseaseActivity[key].push(d.mean_activity || d.activity || 0);
         });
+
+        // For SecAct (many proteins), select top most variable signatures
+        const maxSignatures = sigType === 'SecAct' ? 50 : allSignatures.length;
+        let signatures = allSignatures;
+
+        if (allSignatures.length > maxSignatures) {
+            // Calculate variance for each signature across diseases
+            const sigVariance = allSignatures.map(sig => {
+                const vals = diseases.map(disease => {
+                    const key = `${disease}|${sig}`;
+                    const arr = diseaseActivity[key] || [0];
+                    return arr.reduce((a, b) => a + b, 0) / arr.length;
+                });
+                const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+                const variance = vals.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / vals.length;
+                return { sig, variance };
+            });
+
+            // Sort by variance and take top N
+            sigVariance.sort((a, b) => b.variance - a.variance);
+            signatures = sigVariance.slice(0, maxSignatures).map(s => s.sig);
+        }
+
+        signatures.sort();
 
         // Create matrix
         const zData = diseases.map(disease =>
