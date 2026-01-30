@@ -380,9 +380,12 @@ def generate_cross_cohort_simple():
 def generate_cell_drivers():
     """
     Generate cell type driver data: which cell types drive cytokine changes in each disease.
+
+    Uses STUDY-MATCHED controls: for each disease, only healthy samples from the same
+    study are used as controls. This accounts for batch effects between studies.
     """
     log("\n" + "=" * 60)
-    log("CELL TYPE DRIVERS")
+    log("CELL TYPE DRIVERS (Study-Matched Controls)")
     log("=" * 60)
 
     sample_meta = load_sample_metadata()
@@ -391,6 +394,7 @@ def generate_cell_drivers():
         'diseases': [],
         'cell_types': [],
         'cytokines': [],
+        'secact_proteins': [],
         'effects': []
     }
 
@@ -408,57 +412,93 @@ def generate_cell_drivers():
 
         log(f"  Activity matrix: {activity_df.shape}")
 
-        # Merge with disease metadata
+        # Merge with disease AND study metadata for matched controls
         original_index = var_info.index.copy()
         var_info_reset = var_info.reset_index(drop=True)
         var_info_reset['_original_index'] = original_index
         var_info_merged = var_info_reset.merge(
-            sample_meta[['sampleID', 'disease', 'diseaseStatus']],
+            sample_meta[['sampleID', 'disease', 'diseaseStatus', 'studyID']],
             left_on='sample', right_on='sampleID', how='left'
         )
         var_info_merged = var_info_merged.set_index('_original_index')
         var_info_merged.index.name = None
 
-        # Get unique diseases (exclude healthy, need sufficient samples)
-        disease_counts = var_info_merged['disease'].value_counts()
-        diseases = [d for d in disease_counts.index if str(d).lower() != 'healthy' and disease_counts[d] >= 10][:15]
+        # Get all healthy samples with their study IDs
+        healthy_mask = var_info_merged['disease'].str.lower() == 'healthy'
+        healthy_df = var_info_merged[healthy_mask]
+        healthy_studies = set(healthy_df['studyID'].dropna().unique())
+        log(f"  Studies with healthy samples: {len(healthy_studies)}")
+
+        # Get diseases that have matched healthy controls (same study)
+        all_diseases = var_info_merged['disease'].dropna().unique()
+        diseases_with_matched = []
+        for disease in all_diseases:
+            if str(disease).lower() == 'healthy':
+                continue
+            disease_studies = set(var_info_merged[var_info_merged['disease'] == disease]['studyID'].dropna().unique())
+            matched_studies = disease_studies & healthy_studies
+            if matched_studies:
+                # Check if we have enough samples
+                n_disease = len(var_info_merged[(var_info_merged['disease'] == disease) &
+                                                 (var_info_merged['studyID'].isin(matched_studies))])
+                if n_disease >= 10:
+                    diseases_with_matched.append(disease)
+
+        diseases = diseases_with_matched[:20]  # Limit to 20 diseases
+        log(f"  Diseases with matched controls: {len(diseases)}")
 
         # Get cell types with sufficient data
         celltype_counts = var_info_merged['cell_type'].value_counts()
-        cell_types = celltype_counts[celltype_counts >= 20].index.tolist()[:30]
+        cell_types = celltype_counts[celltype_counts >= 20].index.tolist()
 
-        # Get cytokines (limit for CytoSig, more for SecAct)
-        cytokines = activity_df.index.tolist()
+        # Get signatures
+        signatures = activity_df.index.tolist()
         if sig_type == 'CytoSig':
-            cytokines = cytokines[:44]  # All CytoSig
+            signatures = signatures[:44]  # All CytoSig
+            drivers_data['cytokines'] = list(set(drivers_data['cytokines']) | set(signatures))
         else:
-            cytokines = cytokines[:100]  # Top 100 SecAct
+            signatures = signatures[:100]  # Top 100 SecAct
+            drivers_data['secact_proteins'] = list(set(drivers_data['secact_proteins']) | set(signatures))
 
-        if sig_type == 'CytoSig':
-            drivers_data['diseases'] = list(set(drivers_data['diseases']) | set(diseases))
-            drivers_data['cell_types'] = list(set(drivers_data['cell_types']) | set(cell_types))
-            drivers_data['cytokines'] = list(set(drivers_data['cytokines']) | set(cytokines))
+        drivers_data['diseases'] = list(set(drivers_data['diseases']) | set(diseases))
+        drivers_data['cell_types'] = list(set(drivers_data['cell_types']) | set(cell_types))
 
-        # Get healthy baseline
-        healthy_samples = var_info_merged[var_info_merged['disease'].str.lower() == 'healthy'].index
-
-        log(f"  Diseases: {len(diseases)}, Cell types: {len(cell_types)}, Cytokines: {len(cytokines)}")
-        log(f"  Healthy pseudobulks: {len(healthy_samples)}")
+        log(f"  Diseases: {len(diseases)}, Cell types: {len(cell_types)}, Signatures: {len(signatures)}")
 
         effect_count = 0
+        skipped_no_match = 0
+
         for disease in diseases:
-            disease_samples = var_info_merged[var_info_merged['disease'] == disease].index
+            # Find studies that have BOTH this disease AND healthy samples
+            disease_studies = set(var_info_merged[var_info_merged['disease'] == disease]['studyID'].dropna().unique())
+            matched_studies = disease_studies & healthy_studies
+
+            if not matched_studies:
+                skipped_no_match += 1
+                continue
+
+            # Get disease samples from matched studies only
+            disease_mask = (var_info_merged['disease'] == disease) & \
+                          (var_info_merged['studyID'].isin(matched_studies))
+            disease_samples = var_info_merged[disease_mask].index.tolist()
+
+            # Get matched healthy samples (same studies as disease)
+            matched_healthy_mask = (var_info_merged['disease'].str.lower() == 'healthy') & \
+                                   (var_info_merged['studyID'].isin(matched_studies))
+            matched_healthy_samples = var_info_merged[matched_healthy_mask].index.tolist()
+
+            log(f"    {disease}: {len(disease_samples)} disease, {len(matched_healthy_samples)} matched healthy from {len(matched_studies)} studies")
 
             for ct in cell_types:
-                ct_healthy = [s for s in healthy_samples if var_info_merged.loc[s, 'cell_type'] == ct]
+                ct_healthy = [s for s in matched_healthy_samples if var_info_merged.loc[s, 'cell_type'] == ct]
                 ct_disease = [s for s in disease_samples if var_info_merged.loc[s, 'cell_type'] == ct]
 
                 if len(ct_healthy) < 3 or len(ct_disease) < 3:
                     continue
 
-                for cyt in cytokines:
-                    healthy_vals = activity_df.loc[cyt, ct_healthy].dropna()
-                    disease_vals = activity_df.loc[cyt, ct_disease].dropna()
+                for sig in signatures:
+                    healthy_vals = activity_df.loc[sig, ct_healthy].dropna()
+                    disease_vals = activity_df.loc[sig, ct_disease].dropna()
 
                     if len(healthy_vals) < 3 or len(disease_vals) < 3:
                         continue
@@ -472,7 +512,7 @@ def generate_cell_drivers():
                             drivers_data['effects'].append({
                                 'disease': disease,
                                 'cell_type': ct,
-                                'cytokine': cyt,
+                                'signature': sig,
                                 'signature_type': sig_type,
                                 'effect': round(float(effect), 4),
                                 'pvalue': round(float(pval), 6),
@@ -484,6 +524,8 @@ def generate_cell_drivers():
                         continue
 
         log(f"  Computed {effect_count} significant effects")
+        if skipped_no_match > 0:
+            log(f"  Skipped {skipped_no_match} diseases without matched controls")
 
     return drivers_data
 

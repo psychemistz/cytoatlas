@@ -1683,7 +1683,7 @@
                         </select>
                     </div>
                     <div class="control-group">
-                        <label>Cytokine</label>
+                        <label>Signature</label>
                         <select id="drivers-cytokine">
                             <!-- Populated dynamically -->
                         </select>
@@ -2761,10 +2761,10 @@
 
             const sigType = document.getElementById('drivers-sig-type')?.value || 'CytoSig';
 
-            // Get unique diseases and cytokines for the selected signature type
+            // Get unique diseases and signatures for the selected signature type
             const filtered = data.effects.filter(d => d.signature_type === sigType);
             const diseases = [...new Set(filtered.map(d => d.disease))].sort();
-            const cytokines = [...new Set(filtered.map(d => d.cytokine))].sort();
+            const signatures = [...new Set(filtered.map(d => d.signature))].sort();
 
             // Populate disease dropdown
             const diseaseSelect = document.getElementById('drivers-disease');
@@ -2783,24 +2783,24 @@
                 }
             }
 
-            // Populate cytokine dropdown
-            const cytokineSelect = document.getElementById('drivers-cytokine');
-            if (cytokineSelect) {
-                const currentCytokine = cytokineSelect.value;
-                cytokineSelect.innerHTML = cytokines.map(c =>
-                    `<option value="${c}">${c}</option>`
+            // Populate signature dropdown
+            const signatureSelect = document.getElementById('drivers-cytokine');
+            if (signatureSelect) {
+                const currentSig = signatureSelect.value;
+                signatureSelect.innerHTML = signatures.map(s =>
+                    `<option value="${s}">${s}</option>`
                 ).join('');
                 // Restore selection or default
-                if (cytokines.includes(currentCytokine)) {
-                    cytokineSelect.value = currentCytokine;
-                } else if (cytokines.includes('IFNG')) {
-                    cytokineSelect.value = 'IFNG';
-                } else if (cytokines.length > 0) {
-                    cytokineSelect.value = cytokines[0];
+                if (signatures.includes(currentSig)) {
+                    signatureSelect.value = currentSig;
+                } else if (signatures.includes('IFNG')) {
+                    signatureSelect.value = 'IFNG';
+                } else if (signatures.length > 0) {
+                    signatureSelect.value = signatures[0];
                 }
             }
 
-            console.log(`populateCellDriversDropdowns: ${diseases.length} diseases, ${cytokines.length} cytokines for ${sigType}`);
+            console.log(`populateCellDriversDropdowns: ${diseases.length} diseases, ${signatures.length} signatures for ${sigType}`);
         }
 
         // Populate organ signatures based on selected signature type
@@ -7791,24 +7791,24 @@
             }
 
             const disease = document.getElementById('drivers-disease')?.value || 'RA';
-            const cytokine = document.getElementById('drivers-cytokine')?.value || 'IFNG';
+            const signature = document.getElementById('drivers-cytokine')?.value || 'IFNG';
             const sigType = document.getElementById('drivers-sig-type')?.value || 'CytoSig';
 
-            // Filter effects by disease, cytokine, and signature type
+            // Filter effects by disease, signature, and signature type
             let filtered = data.effects.filter(d =>
                 d.disease === disease &&
-                d.cytokine === cytokine &&
+                d.signature === signature &&
                 d.signature_type === sigType
             );
 
             if (filtered.length === 0) {
                 // Try without signature type filter
-                filtered = data.effects.filter(d => d.disease === disease && d.cytokine === cytokine);
+                filtered = data.effects.filter(d => d.disease === disease && d.signature === signature);
             }
 
             if (filtered.length === 0) {
                 barContainer.classList.remove('loading');
-                barContainer.innerHTML = `<p style="text-align:center; color:#666; padding:2rem;">No data for ${cytokine} in ${disease}</p>`;
+                barContainer.innerHTML = `<p style="text-align:center; color:#666; padding:2rem;">No data for ${signature} in ${disease}</p>`;
                 return;
             }
 
@@ -7832,7 +7832,7 @@
                 hovertemplate: '<b>%{y}</b><br>Effect: %{x:.3f}<br>p = %{customdata[0]:.4f}<br>n_healthy = %{customdata[1]}, n_disease = %{customdata[2]}<extra></extra>',
                 customdata: effects.map(d => [d.pvalue, d.n_healthy, d.n_disease])
             }], {
-                xaxis: { title: `${cytokine} Effect Size (Disease vs Healthy)`, zeroline: true },
+                xaxis: { title: `${signature} Effect Size (Disease vs Matched Healthy)`, zeroline: true },
                 yaxis: { automargin: true },
                 margin: { l: 150, r: 50, t: 30, b: 50 },
                 height: Math.max(300, effects.length * 25),
@@ -7842,7 +7842,7 @@
                 }]
             }, { responsive: true });
 
-            // 2. Heatmap of cytokines × cell types for this disease
+            // 2. Heatmap of signatures × cell types for this disease
             if (heatmapContainer) {
                 heatmapContainer.classList.remove('loading');
                 Plotly.purge(heatmapContainer);
@@ -7850,14 +7850,14 @@
                 // Get all effects for this disease
                 const diseaseEffects = data.effects.filter(d => d.disease === disease && d.signature_type === sigType);
 
-                // Get unique cytokines and cell types
-                const cytokines = [...new Set(diseaseEffects.map(d => d.cytokine))].slice(0, 15);
+                // Get unique signatures and cell types
+                const signatures = [...new Set(diseaseEffects.map(d => d.signature))].slice(0, 15);
                 const cellTypes = [...new Set(diseaseEffects.map(d => d.cell_type))].slice(0, 15);
 
                 // Build matrix
                 const zData = cellTypes.map(ct => {
-                    return cytokines.map(cyt => {
-                        const effect = diseaseEffects.find(d => d.cell_type === ct && d.cytokine === cyt);
+                    return signatures.map(sig => {
+                        const effect = diseaseEffects.find(d => d.cell_type === ct && d.signature === sig);
                         return effect ? effect.effect : 0;
                     });
                 });
@@ -7865,7 +7865,7 @@
                 Plotly.newPlot(heatmapContainer, [{
                     type: 'heatmap',
                     z: zData,
-                    x: cytokines,
+                    x: signatures,
                     y: cellTypes,
                     colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
                     zmid: 0,
