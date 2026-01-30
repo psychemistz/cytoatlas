@@ -6470,8 +6470,9 @@
             // Update cell type availability based on signature type
             updateBoxplotCellTypeAvailability();
 
-            // Effective cell type (SecAct only has 'All')
-            const effectiveCellType = (sigType === 'SecAct') ? 'All' : cellType;
+            // Use selected cell type for both CytoSig and SecAct (data has cell types for both)
+            // Only force 'All' for "both" mode to ensure consistent comparison
+            const effectiveCellType = (sigType === 'both') ? 'All' : cellType;
 
             // Update title
             const titleEl = document.getElementById('boxplot-title');
@@ -6642,17 +6643,11 @@
                 ? ['<30', '30-39', '40-49', '50-59', '60-69', '70+']
                 : ['Underweight', 'Normal', 'Overweight', 'Obese'];
 
-            // Filter data for this signature (CytoSig only has cell type data)
+            // Filter data for this signature (both CytoSig and SecAct have cell type data in CIMA)
             let sigData = boxplotData[stratifyBy].filter(d =>
                 d.signature === signature &&
                 d.sig_type === (sigType === 'both' ? 'CytoSig' : sigType)
             );
-
-            // If SecAct, only 'All' is available
-            if (sigType === 'SecAct') {
-                container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Cell type-specific data only available for CytoSig signatures</p>';
-                return;
-            }
 
             // Get unique cell types (excluding 'All' and undefined/null for sample-level records)
             const cellTypes = [...new Set(sigData.map(d => d.cell_type))].filter(ct => ct && ct !== 'All').sort();
@@ -6758,11 +6753,12 @@
             const cellTypeSelect = document.getElementById('boxplot-celltype');
             if (!cellTypeSelect) return;
 
-            // Cell type-specific data only available for CytoSig
-            if (sigType === 'SecAct') {
+            // Cell type-specific data available for both CytoSig and SecAct in CIMA
+            // Only disable for "both" mode to ensure consistent comparison
+            if (sigType === 'both') {
                 cellTypeSelect.value = 'All';
                 cellTypeSelect.disabled = true;
-                cellTypeSelect.title = 'Cell type-specific data only available for CytoSig';
+                cellTypeSelect.title = 'Cell type selection disabled when comparing CytoSig vs SecAct';
             } else {
                 cellTypeSelect.disabled = false;
                 cellTypeSelect.title = '';
