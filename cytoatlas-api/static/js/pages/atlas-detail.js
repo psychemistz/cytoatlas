@@ -129,8 +129,8 @@ const AtlasDetailPage = {
             </div>
             <div class="atlas-controls">
                 <select id="signature-type-select" class="filter-select" onchange="AtlasDetailPage.changeSignatureType(this.value)">
-                    <option value="CytoSig">CytoSig (44 cytokines)</option>
-                    <option value="SecAct">SecAct (1,249 proteins)</option>
+                    <option value="CytoSig">CytoSig (43 cytokines)</option>
+                    <option value="SecAct">SecAct (1,170 proteins)</option>
                 </select>
                 <a href="/validate?atlas=${this.currentAtlas}" class="btn btn-secondary">View Validation</a>
                 <button class="btn btn-secondary" onclick="AtlasDetailPage.exportData()">Export CSV</button>
@@ -3238,13 +3238,6 @@ const AtlasDetailPage = {
                         <option value="all">All Diseases</option>
                     </select>
                 </div>
-                <div class="control-group">
-                    <label>Signature Type</label>
-                    <select id="inflam-disease-sig-type" class="filter-select" onchange="AtlasDetailPage.initDiseaseSignatures(); AtlasDetailPage.updateInflamDiseaseBar(); AtlasDetailPage.updateInflamDiseaseHeatmap();">
-                        <option value="CytoSig">CytoSig (44 cytokines)</option>
-                        <option value="SecAct">SecAct (1,249 proteins)</option>
-                    </select>
-                </div>
                 <div class="control-group" style="position: relative;">
                     <label>Search Signature</label>
                     <input type="text" id="inflam-disease-search" class="filter-select" placeholder="e.g., IFNG, IL6"
@@ -3259,16 +3252,16 @@ const AtlasDetailPage = {
                 <div class="sub-panel">
                     <div class="panel-header">
                         <h4>Disease-Cell Type Activity</h4>
-                        <p>Activity profile across cell types per disease</p>
+                        <p id="inflam-disease-bar-subtitle">Activity profile across cell types per disease</p>
                     </div>
-                    <div id="inflam-disease-bar" class="plot-container" style="height: 500px;"></div>
+                    <div id="inflam-disease-bar" class="plot-container" style="height: 450px;"></div>
                 </div>
                 <div class="sub-panel">
                     <div class="panel-header">
                         <h4>Disease Activity Heatmap</h4>
                         <p>Diseases × Signatures</p>
                     </div>
-                    <div id="inflam-disease-heatmap" class="plot-container" style="height: 500px;"></div>
+                    <div id="inflam-disease-heatmap" class="plot-container" style="height: 450px;"></div>
                 </div>
             </div>
         `;
@@ -3285,7 +3278,7 @@ const AtlasDetailPage = {
         const data = this.diseaseActivityData;
         if (!data || !Array.isArray(data)) return;
 
-        const sigType = document.getElementById('inflam-disease-sig-type')?.value || 'CytoSig';
+        const sigType = this.signatureType || 'CytoSig';
 
         // Group signatures by type
         this.diseaseSignatures.cytosig = [...new Set(
@@ -3302,7 +3295,7 @@ const AtlasDetailPage = {
     },
 
     getDiseaseSignatures() {
-        const sigType = document.getElementById('inflam-disease-sig-type')?.value || 'CytoSig';
+        const sigType = this.signatureType || 'CytoSig';
         return sigType === 'SecAct' ? this.diseaseSignatures.secact : this.diseaseSignatures.cytosig;
     },
 
@@ -3359,8 +3352,14 @@ const AtlasDetailPage = {
         }
 
         const diseaseGroup = document.getElementById('inflam-disease-group')?.value || 'all';
-        const sigType = document.getElementById('inflam-disease-sig-type')?.value || 'CytoSig';
+        const sigType = this.signatureType || 'CytoSig';
         const signature = document.getElementById('inflam-disease-search')?.value || 'IFNG';
+
+        // Update subtitle with current signature
+        const subtitle = document.getElementById('inflam-disease-bar-subtitle');
+        if (subtitle) {
+            subtitle.textContent = `${signature} activity across cell types`;
+        }
 
         // Filter by signature
         let filtered = data.filter(d => d.signature === signature);
@@ -3423,7 +3422,7 @@ const AtlasDetailPage = {
         }
 
         const diseaseGroup = document.getElementById('inflam-disease-group')?.value || 'all';
-        const sigType = document.getElementById('inflam-disease-sig-type')?.value || 'CytoSig';
+        const sigType = this.signatureType || 'CytoSig';
 
         let filtered = data;
         // Filter by signature type if field exists
@@ -3474,11 +3473,9 @@ const AtlasDetailPage = {
             colorbar: { title: 'Activity' },
             hovertemplate: '<b>%{y}</b><br>%{x}: %{z:.4f}<extra></extra>'
         }], {
-            margin: { l: 120, r: 50, t: 40, b: 120 },
-            xaxis: { tickangle: 45, title: 'Signature' },
-            yaxis: { title: 'Disease' },
-            title: { text: 'Disease × Signature Activity', font: { size: 14 } },
-            height: 480
+            margin: { l: 120, r: 50, t: 30, b: 100 },
+            xaxis: { tickangle: 45 },
+            height: 450
         }, { responsive: true });
     },
 
@@ -3606,8 +3603,8 @@ const AtlasDetailPage = {
                 <div class="control-group">
                     <label for="validation-sig-type" style="font-weight: 500; margin-right: 8px;">Signature Type:</label>
                     <select id="validation-sig-type" class="filter-select" onchange="AtlasDetailPage.updateInflamValidation()">
-                        <option value="CytoSig" ${this.signatureType === 'CytoSig' ? 'selected' : ''}>CytoSig (44 cytokines)</option>
-                        <option value="SecAct" ${this.signatureType === 'SecAct' ? 'selected' : ''}>SecAct (1,249 proteins)</option>
+                        <option value="CytoSig" ${this.signatureType === 'CytoSig' ? 'selected' : ''}>CytoSig (43 cytokines)</option>
+                        <option value="SecAct" ${this.signatureType === 'SecAct' ? 'selected' : ''}>SecAct (1,170 proteins)</option>
                     </select>
                 </div>
                 <div class="control-group">
