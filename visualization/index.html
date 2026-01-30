@@ -690,12 +690,12 @@
                         <div class="stat-label">Cell Types</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-number" id="stat-inflam-diseases">12+</div>
+                        <div class="stat-number" id="stat-inflam-diseases">20</div>
                         <div class="stat-label">Diseases Studied</div>
                     </div>
                 </div>
                 <p style="color: #666; margin-top: 1rem; font-size: 0.9rem;">
-                    Inflammation Atlas: Multi-disease cohort spanning RA, IBD, MS, SLE, and other inflammatory conditions with treatment response data.
+                    Inflammation Atlas: Multi-disease cohort (4.9M cells, 817 samples) spanning RA, IBD (CD/UC), MS, SLE, COVID, sepsis, and other inflammatory conditions with treatment response prediction.
                 </p>
                 <p class="citation" style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">
                     <strong>Citation:</strong> Jiménez-Gracia et al. (2026) <em>Nature Medicine</em>.
@@ -1293,7 +1293,7 @@
     <section id="inflammation">
         <div class="container">
             <h2>Inflammation Atlas: Disease Signatures</h2>
-            <p class="narrow">Explore cytokine activity signatures across 66 immune cell types from 817 patient samples spanning multiple inflammatory diseases.</p>
+            <p class="narrow">Explore cytokine activity signatures across 66 immune cell types from 817 patient samples (4.9M cells) spanning 20 inflammatory diseases including RA, IBD, MS, SLE, COVID, and sepsis.</p>
 
             <div class="tabs">
                 <button class="tab active" data-tab="inflam-celltypes">Cell Types</button>
@@ -2718,19 +2718,18 @@
                 `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td></tr>`
             ).join('');
 
-            // Inflammation Atlas data sources table (11 analyses)
+            // Inflammation Atlas data sources table (10 analyses)
             const inflamData = [
-                ['Cell Types', '66 cell types × (43 CytoSig + 1,170 SecAct proteins)', '80,058'],
-                ['Age Correlations', '1,213 proteins × Age correlation per cell type', '~80,000'],
-                ['BMI Correlations', '1,213 proteins × BMI correlation per cell type', '~80,000'],
-                ['Age/BMI Stratified', '1,213 proteins × 66 cell types × bins (boxplots)', '~500,000'],
-                ['Disease', 'Disease vs healthy differential across 12+ diseases', '54,137'],
-                ['Differential', 'Sex, smoking differential activity analysis', 'Per comparison'],
-                ['Treatment Response', 'Responder vs non-responder ML prediction (8 diseases)', '288'],
-                ['Disease Flow', 'Sankey diagram: 20 diseases × 6 disease groups × 3 cohorts', '136'],
-                ['Validation', 'Cross-cohort consistency (main, validation, external)', '23'],
-                ['Severity', 'Disease severity correlation with cytokine activity', 'Per disease'],
-                ['Cell Drivers', 'Top driving cell types per disease-cytokine pair', 'Per disease']
+                ['Cell Types', '66 cell types × (43 CytoSig + 504 SecAct proteins)', '36,390'],
+                ['Age/BMI Correlations', 'Sample-level (1,213) + cell type-level (9,438 each)', '20,089'],
+                ['Age/BMI Stratified', 'Activity boxplots by age decade and BMI category', '164,255'],
+                ['Disease', '20 diseases × 66 cell types × (43 CytoSig + 186 SecAct)', '310,973'],
+                ['Differential', 'Disease vs healthy differential (study-matched controls)', '4,693'],
+                ['Severity', 'Disease severity correlation with cytokine activity', '9,633'],
+                ['Treatment Response', 'ROC curves (28) + feature importance (560) + predictions', '1,780'],
+                ['Validation', 'Cross-cohort correlation (main vs validation vs external)', '1,219'],
+                ['Disease Flow', 'Sankey: 20 diseases → 6 disease groups → 3 cohorts', '116'],
+                ['Cell Drivers', '15 diseases × 66 cell types × 143 signatures (study-matched)', '44,695']
             ];
             document.getElementById('data-sources-inflammation').innerHTML = inflamData.map(row =>
                 `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td></tr>`
