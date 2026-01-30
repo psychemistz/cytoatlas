@@ -1458,29 +1458,9 @@ def preprocess_treatment_response():
         'predictions': []
     }
 
-    # Check for treatment prediction files from the pipeline
-    treatment_file = INFLAM_DIR / "treatment_prediction_summary.csv"
+    # Load from treatment prediction details file (has actual ROC curves and feature importance)
     details_file = INFLAM_DIR / "treatment_prediction_details.json"
 
-    if treatment_file.exists():
-        df = pd.read_csv(treatment_file)
-        print(f"  Found treatment prediction summary: {len(df)} entries")
-
-        # Parse ROC data if available
-        for _, row in df.iterrows():
-            auc = round(row.get('auc', 0.5), 3)
-            fpr, tpr = generate_roc_curve_points(auc)
-            treatment_data['roc_curves'].append({
-                'disease': row.get('disease', 'Unknown'),
-                'model': row.get('model', 'Unknown'),
-                'signature_type': row.get('signature_type', 'CytoSig'),
-                'auc': auc,
-                'n_samples': int(row.get('n_samples', 0)),
-                'fpr': [round(x, 4) for x in fpr],
-                'tpr': [round(x, 4) for x in tpr]
-            })
-
-    # Load feature importance from details file
     if details_file.exists():
         with open(details_file, 'r') as f:
             details = json.load(f)
@@ -1490,6 +1470,37 @@ def preprocess_treatment_response():
             sig_data = details.get(sig_type, [])
             for entry in sig_data:
                 disease = entry.get('disease', 'Unknown')
+                n_samples = entry.get('n_samples', 0)
+
+                # Logistic Regression ROC curve (actual FPR/TPR from cross-validation)
+                lr_fpr = entry.get('lr_fpr')
+                lr_tpr = entry.get('lr_tpr')
+                lr_auc = entry.get('lr_auc')
+                if lr_fpr and lr_tpr and lr_auc is not None:
+                    treatment_data['roc_curves'].append({
+                        'disease': disease,
+                        'model': 'Logistic Regression',
+                        'signature_type': sig_type,
+                        'auc': round(lr_auc, 3),
+                        'n_samples': n_samples,
+                        'fpr': [round(x, 4) for x in lr_fpr],
+                        'tpr': [round(x, 4) for x in lr_tpr]
+                    })
+
+                # Random Forest ROC curve (actual FPR/TPR from cross-validation)
+                rf_fpr = entry.get('rf_fpr')
+                rf_tpr = entry.get('rf_tpr')
+                rf_auc = entry.get('rf_auc')
+                if rf_fpr and rf_tpr and rf_auc is not None:
+                    treatment_data['roc_curves'].append({
+                        'disease': disease,
+                        'model': 'Random Forest',
+                        'signature_type': sig_type,
+                        'auc': round(rf_auc, 3),
+                        'n_samples': n_samples,
+                        'fpr': [round(x, 4) for x in rf_fpr],
+                        'tpr': [round(x, 4) for x in rf_tpr]
+                    })
 
                 # Random Forest feature importance
                 rf_features = entry.get('rf_top_features', [])
@@ -1520,19 +1531,21 @@ def preprocess_treatment_response():
                             'model': 'Logistic Regression'
                         })
 
-                # Prediction probabilities for violin plots
-                lr_probs = entry.get('lr_probs', [])
-                true_labels = entry.get('true_labels', [])
-                if lr_probs and true_labels and len(lr_probs) == len(true_labels):
-                    for prob, label in zip(lr_probs, true_labels):
-                        treatment_data['predictions'].append({
-                            'disease': disease,
-                            'signature_type': sig_type,
-                            'response': 'Responder' if label == 1 else 'Non-responder',
-                            'probability': round(prob, 3),
-                            'model': 'Logistic Regression'
-                        })
+                # Prediction probabilities for violin plots (from both models)
+                for model_prefix, model_name in [('lr', 'Logistic Regression'), ('rf', 'Random Forest')]:
+                    probs = entry.get(f'{model_prefix}_probs', [])
+                    true_labels = entry.get('true_labels', [])
+                    if probs and true_labels and len(probs) == len(true_labels):
+                        for prob, label in zip(probs, true_labels):
+                            treatment_data['predictions'].append({
+                                'disease': disease,
+                                'signature_type': sig_type,
+                                'response': 'Responder' if label == 1 else 'Non-responder',
+                                'probability': round(prob, 3),
+                                'model': model_name
+                            })
 
+        print(f"  Loaded {len(treatment_data['roc_curves'])} ROC curves (actual from CV)")
         print(f"  Loaded {len(treatment_data['feature_importance'])} feature importance entries")
         print(f"  Loaded {len(treatment_data['predictions'])} prediction entries")
 
