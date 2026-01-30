@@ -308,6 +308,7 @@ async def get_biochem_scatter_samples(
 # Population Stratification
 @router.get("/population-stratification")
 async def get_population_stratification_all(
+    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
     service: CIMAService = Depends(get_cima_service),
 ) -> dict:
     """
@@ -315,7 +316,7 @@ async def get_population_stratification_all(
 
     Returns cytokines, groups, and effect sizes for all stratification variables.
     """
-    return await service.get_population_stratification_all()
+    return await service.get_population_stratification_all(signature_type)
 
 
 @router.get("/stratification/{signature}")

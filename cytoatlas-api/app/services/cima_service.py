@@ -447,14 +447,42 @@ class CIMAService(BaseService):
         return results
 
     @cached(prefix="cima", ttl=3600)
-    async def get_population_stratification_all(self) -> dict:
+    async def get_population_stratification_all(self, signature_type: str = "CytoSig") -> dict:
         """
         Get all population stratification data.
+
+        Args:
+            signature_type: 'CytoSig' or 'SecAct'
 
         Returns:
             Dict with cytokines, groups, and effect_sizes
         """
-        return await self.load_json("cima_population_stratification.json")
+        data = await self.load_json("cima_population_stratification.json")
+
+        # Filter by signature type if data has signature_type field
+        if "effect_sizes" in data:
+            filtered_effects = {}
+            for var_name, effects in data["effect_sizes"].items():
+                # Check if effects have signature_type field
+                if effects and isinstance(effects[0], dict) and "signature_type" in effects[0]:
+                    filtered = [e for e in effects if e.get("signature_type") == signature_type]
+                    filtered_effects[var_name] = filtered
+                else:
+                    # No signature_type in data - return as-is for CytoSig, empty for SecAct
+                    if signature_type == "CytoSig":
+                        filtered_effects[var_name] = effects
+                    else:
+                        filtered_effects[var_name] = []
+            data["effect_sizes"] = filtered_effects
+
+        # Filter cytokines list if applicable
+        if "cytokines" in data and signature_type == "SecAct":
+            # For SecAct, we'd need the protein list from the data
+            # If not available, indicate it
+            if not any(data.get("effect_sizes", {}).values()):
+                data["cytokines"] = []
+
+        return data
 
     @cached(prefix="cima", ttl=86400)
     async def get_eqtl_browser_data(self) -> dict:

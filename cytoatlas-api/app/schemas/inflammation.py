@@ -28,7 +28,7 @@ class InflammationDiseaseActivity(BaseModel):
 
 
 class InflammationDiseaseComparison(BaseModel):
-    """Disease vs healthy comparison result."""
+    """Disease vs healthy comparison result (from cell type stratified data)."""
 
     cell_type: str
     signature: str
@@ -44,6 +44,26 @@ class InflammationDiseaseComparison(BaseModel):
 
     class Config:
         populate_by_name = True
+
+
+class InflammationDifferential(BaseModel):
+    """Disease-level differential analysis result (disease vs healthy)."""
+
+    signature: str  # Cytokine/protein name (was 'protein' in raw data)
+    signature_type: str  # CytoSig or SecAct
+    disease: str
+    group1: str  # Disease name
+    group2: str  # Usually 'healthy'
+    mean_g1: float  # Mean activity in disease
+    mean_g2: float  # Mean activity in healthy
+    n_g1: int  # Sample count in disease
+    n_g2: int  # Sample count in healthy
+    log2fc: float
+    p_value: float = Field(alias="pvalue")
+    q_value: float | None = Field(default=None, alias="qvalue")
+    neg_log10_pval: float | None = None
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class InflammationDiseaseGroupComparison(BaseModel):
@@ -100,8 +120,34 @@ class InflammationPrediction(BaseModel):
     probability: float
 
 
+class InflammationCohortValidationSignature(BaseModel):
+    """Per-signature cross-cohort validation result."""
+
+    signature: str
+    signature_type: str
+    main_validation_r: float
+    main_external_r: float
+    pvalue: float
+
+
+class InflammationCohortValidationSummary(BaseModel):
+    """Summary of cross-cohort validation consistency."""
+
+    cohort_pair: str
+    signature_type: str
+    mean_r: float
+    n_signatures: int
+
+
+class InflammationCohortValidationResponse(BaseModel):
+    """Full cohort validation response with correlations and summary."""
+
+    correlations: list[InflammationCohortValidationSignature]
+    consistency: list[InflammationCohortValidationSummary]
+
+
 class InflammationCohortValidation(BaseModel):
-    """Cross-cohort validation result."""
+    """Cross-cohort validation result (legacy format)."""
 
     signature: str
     signature_type: str
@@ -147,13 +193,29 @@ class InflammationConservedProgram(BaseModel):
     consistency_score: float
 
 
-class InflammationSankeyData(BaseModel):
-    """Sankey diagram data for disease flow."""
+class InflammationSankeyNode(BaseModel):
+    """Sankey node (study/disease/disease_group)."""
 
-    source: str
-    target: str
+    name: str
+    type: str  # 'cohort', 'disease', or 'disease_group'
+
+
+class InflammationSankeyLink(BaseModel):
+    """Sankey link connecting nodes."""
+
+    source: int  # Index into nodes array
+    target: int  # Index into nodes array
     value: int
-    signature: str | None = None
+
+
+class InflammationSankeyData(BaseModel):
+    """Sankey diagram data for disease flow visualization."""
+
+    nodes: list[InflammationSankeyNode]
+    links: list[InflammationSankeyLink]
+    cohorts: list[str]
+    diseases: list[str]
+    disease_groups: list[str]
 
 
 class InflammationCorrelation(BaseModel):
@@ -170,15 +232,29 @@ class InflammationCorrelation(BaseModel):
 
 
 class InflammationLongitudinal(BaseModel):
-    """Longitudinal analysis result."""
+    """Longitudinal/temporal analysis result - activity by timepoint."""
 
-    sample_id: str
     disease: str
     timepoint: str
+    timepoint_num: int
     signature: str
     signature_type: str
-    activity: float
-    response: str | None = None
+    mean_activity: float
+    std_activity: float
+    median_activity: float | None = None
+    n_samples: int
+    n_records: int | None = None
+
+
+class InflammationTemporalResponse(BaseModel):
+    """Full temporal analysis response."""
+
+    has_longitudinal: bool
+    note: str
+    timepoint_distribution: dict[str, int]
+    disease_timepoints: dict[str, dict[str, int]]
+    timepoint_activity: list[InflammationLongitudinal]
+    treatment_by_timepoint: dict[str, dict[str, int]]
 
 
 class InflammationSeverity(BaseModel):
@@ -186,11 +262,14 @@ class InflammationSeverity(BaseModel):
 
     disease: str
     severity: str
+    severity_order: int = 0
     signature: str
     signature_type: str
     mean_activity: float
     std_activity: float
+    median_activity: float | None = None
     n_samples: int
+    n_records: int | None = None
 
 
 class InflammationSummaryStats(BaseModel):

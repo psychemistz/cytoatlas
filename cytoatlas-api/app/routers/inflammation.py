@@ -8,15 +8,19 @@ from app.schemas.inflammation import (
     InflammationAgeBMIBoxplot,
     InflammationCellTypeActivity,
     InflammationCellTypeStratified,
-    InflammationCohortValidation,
+    InflammationCohortValidationResponse,
     InflammationConservedProgram,
     InflammationCorrelation,
+    InflammationDifferential,
     InflammationDiseaseActivity,
     InflammationDrivingPopulation,
     InflammationFeatureImportance,
+    InflammationLongitudinal,
     InflammationROCCurve,
     InflammationSankeyData,
+    InflammationSeverity,
     InflammationSummaryStats,
+    InflammationTemporalResponse,
     InflammationTreatmentResponse,
 )
 from app.services.inflammation_service import InflammationService
@@ -131,6 +135,22 @@ async def get_celltype_stratified(
     return await service.get_celltype_stratified(disease, signature_type)
 
 
+# Disease-Level Differential (for Volcano plots)
+@router.get("/differential", response_model=list[InflammationDifferential])
+async def get_differential(
+    disease: str | None = Query(None, description="Filter by disease (use 'all' for all diseases)"),
+    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
+    service: InflammationService = Depends(get_inflammation_service),
+) -> list[InflammationDifferential]:
+    """
+    Get disease vs healthy differential analysis.
+
+    Returns log2FC, p-value, and other statistics for each signature.
+    This is disease-level data (not cell-type stratified) - suitable for volcano plots.
+    """
+    return await service.get_differential(disease, signature_type)
+
+
 # Age/BMI Stratified Boxplots
 @router.get("/boxplots/age/{signature}", response_model=list[InflammationAgeBMIBoxplot])
 async def get_age_boxplots(
@@ -193,6 +213,7 @@ async def get_bmi_heatmap(
 @router.get("/driving-populations", response_model=list[InflammationDrivingPopulation])
 async def get_driving_populations(
     disease: str | None = Query(None),
+    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
     service: InflammationService = Depends(get_inflammation_service),
 ) -> list[InflammationDrivingPopulation]:
     """
@@ -200,7 +221,7 @@ async def get_driving_populations(
 
     Returns cell types with the most significantly altered signatures per disease.
     """
-    return await service.get_driving_populations(disease)
+    return await service.get_driving_populations(disease, signature_type)
 
 
 @router.get("/conserved-programs", response_model=list[InflammationConservedProgram])
@@ -283,28 +304,30 @@ async def get_feature_importance_by_disease(
 
 
 # Cohort Validation
-@router.get("/cohort-validation", response_model=list[InflammationCohortValidation])
+@router.get("/cohort-validation", response_model=InflammationCohortValidationResponse)
 async def get_cohort_validation(
     signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
     service: InflammationService = Depends(get_inflammation_service),
-) -> list[InflammationCohortValidation]:
+) -> InflammationCohortValidationResponse:
     """
     Get cross-cohort validation results.
 
-    Returns correlation between main, validation, and external cohorts.
+    Returns per-signature correlations between main, validation, and external cohorts,
+    plus summary consistency metrics. For CytoSig: 43 signatures, for SecAct: 1,170 signatures.
     """
     return await service.get_cohort_validation(signature_type)
 
 
 # Sankey Diagram
-@router.get("/sankey", response_model=list[InflammationSankeyData])
+@router.get("/sankey", response_model=InflammationSankeyData)
 async def get_disease_sankey(
     service: Annotated[InflammationService, Depends(get_inflammation_service)],
-) -> list[InflammationSankeyData]:
+) -> InflammationSankeyData:
     """
     Get Sankey diagram data for disease flow.
 
-    Returns source-target-value data for visualizing patient/sample flow.
+    Returns nodes and links for Sankey visualization of sample flow:
+    Study → Disease → Disease Group
     """
     return await service.get_disease_sankey()
 
@@ -447,6 +470,156 @@ async def get_celltype_disease_heatmap(
 
     return {
         "rows": cell_types,
+        "columns": signatures,
+        "values": matrix,
+        "disease": disease,
+        "signature_type": signature_type,
+    }
+
+
+# Severity Analysis
+@router.get("/severity", response_model=list[InflammationSeverity])
+async def get_severity_analysis(
+    disease: str | None = Query(None, description="Filter by disease"),
+    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
+    service: InflammationService = Depends(get_inflammation_service),
+) -> list[InflammationSeverity]:
+    """
+    Get disease severity correlation analysis.
+
+    Returns mean cytokine activity across severity levels for each disease.
+    Diseases with severity data: COVID, SLE, COPD, asthma, sepsis, HBV, cirrhosis, etc.
+    """
+    return await service.get_severity_analysis(disease, signature_type)
+
+
+@router.get("/severity/diseases")
+async def get_severity_diseases(
+    service: InflammationService = Depends(get_inflammation_service),
+) -> list[str]:
+    """Get list of diseases that have severity stratification data."""
+    return await service.get_severity_diseases()
+
+
+@router.get("/severity/levels/{disease}")
+async def get_severity_levels(
+    disease: str,
+    service: InflammationService = Depends(get_inflammation_service),
+) -> list[str]:
+    """Get severity levels for a specific disease, ordered from mild to severe."""
+    return await service.get_severity_levels(disease)
+
+
+@router.get("/severity/heatmap/{disease}")
+async def get_severity_heatmap(
+    disease: str,
+    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
+    service: InflammationService = Depends(get_inflammation_service),
+) -> dict:
+    """
+    Get severity × signature heatmap for a specific disease.
+
+    Returns mean activity matrix with severity levels as rows and signatures as columns.
+    """
+    data = await service.get_severity_analysis(disease, signature_type)
+
+    if not data:
+        return {"rows": [], "columns": [], "values": [], "disease": disease}
+
+    # Get unique severity levels (ordered) and signatures
+    severity_order = {}
+    for d in data:
+        if d.severity not in severity_order:
+            severity_order[d.severity] = d.severity_order
+
+    severities = sorted(severity_order.keys(), key=lambda x: severity_order.get(x, 99))
+    signatures = sorted(set(d.signature for d in data))
+
+    # Build lookup
+    lookup = {(d.severity, d.signature): d.mean_activity for d in data}
+
+    # Build matrix
+    matrix = []
+    for sev in severities:
+        row = [lookup.get((sev, sig), None) for sig in signatures]
+        matrix.append(row)
+
+    return {
+        "rows": severities,
+        "columns": signatures,
+        "values": matrix,
+        "disease": disease,
+        "signature_type": signature_type,
+    }
+
+
+# Temporal/Longitudinal Analysis
+@router.get("/temporal", response_model=InflammationTemporalResponse)
+async def get_temporal_analysis(
+    service: InflammationService = Depends(get_inflammation_service),
+) -> InflammationTemporalResponse:
+    """
+    Get temporal analysis data including sample distribution and activity by timepoint.
+
+    Note: The Inflammation Atlas is cross-sectional, so this shows comparison
+    between sampling timepoints (T0, T1, T2), not the same patients over time.
+    """
+    return await service.get_temporal_analysis()
+
+
+@router.get("/temporal/activity", response_model=list[InflammationLongitudinal])
+async def get_temporal_activity(
+    disease: str | None = Query(None, description="Filter by disease"),
+    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
+    service: InflammationService = Depends(get_inflammation_service),
+) -> list[InflammationLongitudinal]:
+    """
+    Get cytokine activity data by timepoint.
+
+    Returns mean activity for each disease × timepoint × signature combination.
+    """
+    return await service.get_temporal_activity(disease, signature_type)
+
+
+@router.get("/temporal/diseases")
+async def get_temporal_diseases(
+    service: InflammationService = Depends(get_inflammation_service),
+) -> list[str]:
+    """Get list of diseases that have samples at multiple timepoints."""
+    return await service.get_temporal_diseases()
+
+
+@router.get("/temporal/heatmap/{disease}")
+async def get_temporal_heatmap(
+    disease: str,
+    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
+    service: InflammationService = Depends(get_inflammation_service),
+) -> dict:
+    """
+    Get timepoint × signature heatmap for a specific disease.
+
+    Returns mean activity matrix with timepoints as rows and signatures as columns.
+    """
+    data = await service.get_temporal_activity(disease, signature_type)
+
+    if not data:
+        return {"rows": [], "columns": [], "values": [], "disease": disease}
+
+    # Get unique timepoints (ordered) and signatures
+    timepoints = sorted(set(d.timepoint for d in data), key=lambda x: int(x[1:]) if x[1:].isdigit() else 99)
+    signatures = sorted(set(d.signature for d in data))
+
+    # Build lookup
+    lookup = {(d.timepoint, d.signature): d.mean_activity for d in data}
+
+    # Build matrix
+    matrix = []
+    for tp in timepoints:
+        row = [lookup.get((tp, sig), None) for sig in signatures]
+        matrix.append(row)
+
+    return {
+        "rows": timepoints,
         "columns": signatures,
         "values": matrix,
         "disease": disease,

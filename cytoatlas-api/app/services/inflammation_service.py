@@ -9,15 +9,22 @@ from app.schemas.inflammation import (
     InflammationCellTypeActivity,
     InflammationCellTypeStratified,
     InflammationCohortValidation,
+    InflammationCohortValidationResponse,
+    InflammationCohortValidationSignature,
+    InflammationCohortValidationSummary,
     InflammationConservedProgram,
     InflammationCorrelation,
+    InflammationDifferential,
     InflammationDiseaseActivity,
     InflammationDiseaseComparison,
     InflammationDrivingPopulation,
     InflammationFeatureImportance,
+    InflammationLongitudinal,
     InflammationROCCurve,
     InflammationSankeyData,
+    InflammationSeverity,
     InflammationSummaryStats,
+    InflammationTemporalResponse,
     InflammationTreatmentResponse,
 )
 from app.services.base import BaseService
@@ -97,6 +104,59 @@ class InflammationService(BaseService):
     ) -> list[InflammationDiseaseActivity]:
         """Alias for get_disease_activity (backward compatibility)."""
         return await self.get_disease_activity(disease, signature_type, cell_type)
+
+    @cached(prefix="inflammation", ttl=3600)
+    async def get_differential(
+        self,
+        disease: str | None = None,
+        signature_type: str = "CytoSig",
+    ) -> list[InflammationDifferential]:
+        """
+        Get disease vs healthy differential analysis.
+
+        This loads from pre-computed differential data (not cell-type stratified).
+
+        Args:
+            disease: Optional disease filter
+            signature_type: 'CytoSig' or 'SecAct'
+
+        Returns:
+            List of differential results with log2FC, p-value, etc.
+        """
+        data = await self.load_json("inflammation_differential.json")
+
+        results = []
+        for item in data:
+            # Map 'signature' field to 'signature_type' (data format quirk)
+            sig_type = item.get("signature", "CytoSig")
+
+            # Apply signature type filter
+            if signature_type and sig_type != signature_type:
+                continue
+
+            # Apply disease filter
+            if disease and disease != "all" and item.get("disease") != disease:
+                continue
+
+            results.append(
+                InflammationDifferential(
+                    signature=item.get("protein", ""),
+                    signature_type=sig_type,
+                    disease=item.get("disease", ""),
+                    group1=item.get("group1", ""),
+                    group2=item.get("group2", "healthy"),
+                    mean_g1=item.get("mean_g1", 0),
+                    mean_g2=item.get("mean_g2", 0),
+                    n_g1=item.get("n_g1", 0),
+                    n_g2=item.get("n_g2", 0),
+                    log2fc=item.get("log2fc", 0),
+                    pvalue=item.get("pvalue", 1.0),
+                    qvalue=item.get("qvalue"),
+                    neg_log10_pval=item.get("neg_log10_pval"),
+                )
+            )
+
+        return results
 
     @cached(prefix="inflammation", ttl=3600)
     async def get_treatment_response_summary(
@@ -207,7 +267,7 @@ class InflammationService(BaseService):
     async def get_cohort_validation(
         self,
         signature_type: str = "CytoSig",
-    ) -> list[InflammationCohortValidation]:
+    ) -> InflammationCohortValidationResponse:
         """
         Get cross-cohort validation results.
 
@@ -215,25 +275,44 @@ class InflammationService(BaseService):
             signature_type: 'CytoSig' or 'SecAct'
 
         Returns:
-            List of cohort validation results
+            Cohort validation response with correlations and summary
         """
         data = await self.load_json("cohort_validation.json")
 
-        results = self.filter_by_signature_type(data, signature_type)
+        # Extract correlations array and filter by signature type
+        correlations_raw = data.get("correlations", [])
+        correlations_filtered = self.filter_by_signature_type(
+            correlations_raw, signature_type
+        )
+        correlations = [
+            InflammationCohortValidationSignature(**r) for r in correlations_filtered
+        ]
 
-        return [InflammationCohortValidation(**r) for r in results]
+        # Extract consistency array and filter by signature type
+        consistency_raw = data.get("consistency", [])
+        consistency_filtered = self.filter_by_signature_type(
+            consistency_raw, signature_type
+        )
+        consistency = [
+            InflammationCohortValidationSummary(**r) for r in consistency_filtered
+        ]
+
+        return InflammationCohortValidationResponse(
+            correlations=correlations,
+            consistency=consistency,
+        )
 
     @cached(prefix="inflammation", ttl=3600)
-    async def get_disease_sankey(self) -> list[InflammationSankeyData]:
+    async def get_disease_sankey(self) -> InflammationSankeyData:
         """
         Get Sankey diagram data for disease flow.
 
         Returns:
-            List of Sankey node/link data
+            Sankey data with nodes and links for visualization
         """
         data = await self.load_json("disease_sankey.json")
 
-        return [InflammationSankeyData(**item) for item in data]
+        return InflammationSankeyData(**data)
 
     @cached(prefix="inflammation", ttl=3600)
     async def get_correlations(
@@ -321,26 +400,31 @@ class InflammationService(BaseService):
         Returns:
             List of stratified results
         """
-        # Derive from disease activity data
-        data = await self.get_disease_activity(
-            disease=disease, signature_type=signature_type
-        )
+        # Load from pre-computed cell drivers data
+        data = await self.load_json("inflammation_cell_drivers.json")
+        effects = data.get("effects", [])
 
         results = []
-        for item in data:
-            # Use mean_activity as proxy for log2fc since actual comparison data not available
-            log2fc = item.mean_activity
-            # Consider high activity as "driving"
-            is_driving = abs(log2fc) > 1
+        for item in effects:
+            # Apply filters
+            if signature_type and item.get("signature_type") != signature_type:
+                continue
+            if disease and item.get("disease") != disease:
+                continue
+
+            log2fc = item.get("effect", 0)
+            pvalue = item.get("pvalue", 1.0)
+            # Consider significant and large effect as "driving"
+            is_driving = pvalue < 0.05 and abs(log2fc) > 0.5
 
             results.append(
                 InflammationCellTypeStratified(
-                    cell_type=item.cell_type,
-                    signature=item.signature,
-                    signature_type=item.signature_type,
-                    disease=item.disease,
+                    cell_type=item.get("cell_type", ""),
+                    signature=item.get("signature", item.get("cytokine", "")),
+                    signature_type=item.get("signature_type", ""),
+                    disease=item.get("disease", ""),
                     log2fc=log2fc,
-                    p_value=0.01,  # Placeholder - actual p-values not in this data
+                    p_value=pvalue,
                     q_value=None,
                     is_driving=is_driving,
                 )
@@ -352,18 +436,20 @@ class InflammationService(BaseService):
     async def get_driving_populations(
         self,
         disease: str | None = None,
+        signature_type: str = "CytoSig",
     ) -> list[InflammationDrivingPopulation]:
         """
         Get driving cell populations for diseases.
 
         Args:
             disease: Optional disease filter
+            signature_type: 'CytoSig' or 'SecAct'
 
         Returns:
             List of driving population results
         """
         # Compute from stratified analysis
-        stratified = await self.get_celltype_stratified(disease=disease)
+        stratified = await self.get_celltype_stratified(disease=disease, signature_type=signature_type)
 
         # Group by disease and cell type
         driving_map: dict = {}
@@ -596,3 +682,126 @@ class InflammationService(BaseService):
             "bins": bins,
             "medians": medians,
         }
+
+    @cached(prefix="inflammation", ttl=3600)
+    async def get_severity_analysis(
+        self,
+        disease: str | None = None,
+        signature_type: str = "CytoSig",
+    ) -> list[InflammationSeverity]:
+        """
+        Get disease severity correlation analysis.
+
+        Args:
+            disease: Optional disease filter
+            signature_type: 'CytoSig' or 'SecAct'
+
+        Returns:
+            List of severity analysis results
+        """
+        data = await self.load_json("inflammation_severity.json")
+
+        results = self.filter_by_signature_type(data, signature_type)
+
+        if disease:
+            results = [r for r in results if r.get("disease") == disease]
+
+        # Sort by disease, then severity order, then signature
+        results.sort(key=lambda x: (x.get("disease", ""), x.get("severity_order", 99), x.get("signature", "")))
+
+        return [InflammationSeverity(**r) for r in results]
+
+    async def get_severity_diseases(self) -> list[str]:
+        """Get list of diseases with severity data."""
+        data = await self.load_json("inflammation_severity.json")
+        diseases = sorted(set(r.get("disease") for r in data if r.get("disease")))
+        return diseases
+
+    async def get_severity_levels(self, disease: str) -> list[str]:
+        """Get severity levels for a specific disease, ordered from mild to severe."""
+        data = await self.load_json("inflammation_severity.json")
+        disease_data = [r for r in data if r.get("disease") == disease]
+
+        # Get unique severities with their order
+        severity_order = {}
+        for r in disease_data:
+            sev = r.get("severity")
+            order = r.get("severity_order", 99)
+            if sev and sev not in severity_order:
+                severity_order[sev] = order
+
+        # Sort by order
+        return sorted(severity_order.keys(), key=lambda x: severity_order.get(x, 99))
+
+    @cached(prefix="inflammation", ttl=3600)
+    async def get_temporal_analysis(self) -> InflammationTemporalResponse:
+        """
+        Get temporal/longitudinal analysis data.
+
+        Note: The Inflammation Atlas is cross-sectional, so this shows
+        comparison between sampling timepoints, not the same patients over time.
+
+        Returns:
+            Temporal analysis response with distribution and activity data
+        """
+        data = await self.load_json("inflammation_longitudinal.json")
+
+        # Convert activity records to Pydantic models
+        activity_records = [
+            InflammationLongitudinal(**r) for r in data.get("timepoint_activity", [])
+        ]
+
+        return InflammationTemporalResponse(
+            has_longitudinal=data.get("has_longitudinal", False),
+            note=data.get("note", ""),
+            timepoint_distribution=data.get("timepoint_distribution", {}),
+            disease_timepoints=data.get("disease_timepoints", {}),
+            timepoint_activity=activity_records,
+            treatment_by_timepoint=data.get("treatment_by_timepoint", {}),
+        )
+
+    @cached(prefix="inflammation", ttl=3600)
+    async def get_temporal_activity(
+        self,
+        disease: str | None = None,
+        signature_type: str = "CytoSig",
+    ) -> list[InflammationLongitudinal]:
+        """
+        Get activity data by timepoint.
+
+        Args:
+            disease: Optional disease filter
+            signature_type: 'CytoSig' or 'SecAct'
+
+        Returns:
+            List of temporal activity records
+        """
+        data = await self.load_json("inflammation_longitudinal.json")
+
+        results = data.get("timepoint_activity", [])
+        results = self.filter_by_signature_type(results, signature_type)
+
+        if disease:
+            results = [r for r in results if r.get("disease") == disease]
+
+        # Sort by disease, timepoint, signature
+        results.sort(key=lambda x: (x.get("disease", ""), x.get("timepoint_num", 0), x.get("signature", "")))
+
+        return [InflammationLongitudinal(**r) for r in results]
+
+    async def get_temporal_diseases(self) -> list[str]:
+        """Get list of diseases with temporal (multi-timepoint) data."""
+        data = await self.load_json("inflammation_longitudinal.json")
+        activity = data.get("timepoint_activity", [])
+
+        # Get diseases that have activity at multiple timepoints
+        disease_timepoints = {}
+        for r in activity:
+            disease = r.get("disease")
+            tp = r.get("timepoint")
+            if disease not in disease_timepoints:
+                disease_timepoints[disease] = set()
+            disease_timepoints[disease].add(tp)
+
+        # Return diseases with >1 timepoint
+        return sorted([d for d, tps in disease_timepoints.items() if len(tps) > 1])
