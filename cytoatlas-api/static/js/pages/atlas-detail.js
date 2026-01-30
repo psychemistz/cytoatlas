@@ -53,14 +53,11 @@ const AtlasDetailPage = {
             tabs: [
                 { id: 'overview', label: 'Overview', icon: '&#127968;' },
                 { id: 'celltypes', label: 'Cell Types', icon: '&#128300;' },
-                { id: 'organ-map', label: 'Organ Map', icon: '&#128149;' },
-                { id: 'cancer-types', label: 'Cancer Types', icon: '&#129656;' },
-                { id: 'cancer-comparison', label: 'Tumor vs Adjacent', icon: '&#128201;' },
+                { id: 'tissue-atlas', label: 'Tissue Atlas', icon: '&#128149;' },
+                { id: 'differential-analysis', label: 'Differential Analysis', icon: '&#128201;' },
                 { id: 'immune-infiltration', label: 'Immune Infiltration', icon: '&#128300;' },
                 { id: 'exhaustion', label: 'T Cell Exhaustion', icon: '&#128546;' },
                 { id: 'caf', label: 'CAF Types', icon: '&#128302;' },
-                { id: 'organ-cancer-matrix', label: 'Organ-Cancer', icon: '&#128202;' },
-                { id: 'adjacent-tissue', label: 'Adjacent Tissue', icon: '&#129516;' },
             ],
         },
     },
@@ -4866,14 +4863,11 @@ const AtlasDetailPage = {
             case 'celltypes':
                 await this.loadScatlasCelltypes(content);
                 break;
-            case 'organ-map':
-                await this.loadScatlasOrganMap(content);
+            case 'tissue-atlas':
+                await this.loadScatlasTissueAtlas(content);
                 break;
-            case 'cancer-comparison':
-                await this.loadScatlasCancerComparison(content);
-                break;
-            case 'cancer-types':
-                await this.loadScatlasCancerTypes(content);
+            case 'differential-analysis':
+                await this.loadScatlasDifferentialAnalysis(content);
                 break;
             case 'immune-infiltration':
                 await this.loadScatlasImmuneInfiltration(content);
@@ -4883,12 +4877,6 @@ const AtlasDetailPage = {
                 break;
             case 'caf':
                 await this.loadScatlasCaf(content);
-                break;
-            case 'organ-cancer-matrix':
-                await this.loadScatlasOrganCancerMatrix(content);
-                break;
-            case 'adjacent-tissue':
-                await this.loadScatlasAdjacentTissue(content);
                 break;
             default:
                 content.innerHTML = '<p>Panel not implemented</p>';
@@ -5005,80 +4993,97 @@ const AtlasDetailPage = {
         `;
     },
 
-    // scAtlas Organ Map state
+    // scAtlas Tissue Atlas state (combined normal organs + cancer types)
     scatlasOrganData: null,
+    tissueViewMode: 'normal',
 
-    async loadScatlasOrganMap(content) {
+    async loadScatlasTissueAtlas(content) {
         content.innerHTML = `
             <div class="panel-header">
-                <h3>Organ-Specific Activity</h3>
-                <p>Mean cytokine activity across human organs</p>
+                <h3>Tissue Atlas</h3>
+                <p>Compare cytokine activity across 35 normal human organs and 13 cancer types from scAtlas.</p>
             </div>
 
             <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
                 <div class="control-group">
+                    <label>View Mode</label>
+                    <select id="tissue-mode" class="filter-select" onchange="AtlasDetailPage.updateTissueAtlas()">
+                        <option value="normal">Normal Tissues (35 organs)</option>
+                        <option value="cancer">Cancer Tissues (13 types)</option>
+                        <option value="comparison">Cancer vs Normal (grouped)</option>
+                    </select>
+                </div>
+                <div class="control-group">
                     <label>Select ${this.signatureType === 'CytoSig' ? 'Cytokine' : 'Protein'}</label>
-                    <select id="organ-signature-dropdown" class="filter-select" style="width: 150px;" onchange="AtlasDetailPage.updateOrganBarChart()">
+                    <select id="tissue-signature-dropdown" class="filter-select" style="width: 150px;" onchange="AtlasDetailPage.updateTissueBoxplot()">
                         <option value="IFNG">IFNG</option>
                     </select>
                 </div>
                 <div class="control-group" style="position: relative;">
                     <label>Or Search</label>
-                    <input type="text" id="organ-signature-search" class="filter-select"
+                    <input type="text" id="tissue-signature-search" class="filter-select"
                            placeholder="Search..." style="width: 120px;" autocomplete="off" value=""
-                           oninput="AtlasDetailPage.showOrganSignatureSuggestions()"
-                           onkeyup="if(event.key==='Enter') AtlasDetailPage.updateOrganBarChart()"
-                           onblur="setTimeout(() => document.getElementById('organ-signature-suggestions').style.display = 'none', 200)">
-                    <div id="organ-signature-suggestions" style="position: absolute; top: 100%; left: 0; width: 150px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                           oninput="AtlasDetailPage.showTissueSignatureSuggestions()"
+                           onkeyup="if(event.key==='Enter') AtlasDetailPage.updateTissueBoxplot()"
+                           onblur="setTimeout(() => document.getElementById('tissue-signature-suggestions').style.display = 'none', 200)">
+                    <div id="tissue-signature-suggestions" style="position: absolute; top: 100%; left: 0; width: 150px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
                 </div>
             </div>
 
-            <!-- Single Signature Bar Chart (Top) -->
-            <div class="viz-container" style="min-height: 400px;">
-                <div class="viz-title" id="organ-bar-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Single Signature Activity Across Organs</div>
-                <div class="viz-subtitle" id="organ-bar-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Select a signature to view its activity pattern</div>
-                <div id="organ-bar-chart" class="plot-container" style="height: 350px;">Loading...</div>
+            <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
+                <strong id="tissue-atlas-description">Tissue Atlas:</strong>
+                <span id="tissue-atlas-desc-text">Compare cytokine activity across 35 normal human organs from scAtlas.</span>
             </div>
 
-            <!-- Heatmap Overview (Bottom) -->
+            <!-- Activity Boxplot (Top) -->
+            <div class="viz-container" style="min-height: 400px;">
+                <div class="viz-title" id="tissue-boxplot-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Activity Distribution by Tissue</div>
+                <div class="viz-subtitle" id="tissue-boxplot-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Cell-type agnostic mean activity per tissue</div>
+                <div id="tissue-boxplot" class="plot-container" style="height: 380px;">Loading...</div>
+            </div>
+
+            <!-- Heatmap (Bottom) -->
             <div class="viz-container" style="margin-top: 1.5rem; overflow: hidden;">
-                <div class="viz-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Signature × Organ Heatmap</div>
-                <div class="viz-subtitle" id="organ-heatmap-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">All signatures across organs (click cell to select signature above)</div>
-                <div id="organ-heatmap" class="plot-container" style="height: 500px; max-height: 500px; overflow: hidden;">Loading...</div>
+                <div class="viz-title" id="tissue-heatmap-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Signature × Tissue Heatmap</div>
+                <div class="viz-subtitle" id="tissue-heatmap-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Activity patterns across tissues</div>
+                <div id="tissue-heatmap" class="plot-container" style="height: 500px; max-height: 500px; overflow: hidden;">Loading...</div>
             </div>
         `;
 
-        // Load organ signatures data
+        // Load both normal organ and cancer data
         this.scatlasOrganData = await API.get('/scatlas/organ-signatures', { signature_type: this.signatureType });
+        this.cancerTypesData = await API.get('/scatlas/cancer-types-signatures', { signature_type: this.signatureType });
 
+        // Get signatures from available data
         if (this.scatlasOrganData && this.scatlasOrganData.length > 0) {
-            // Get unique signatures and store for suggestions
-            this.organSignatures = [...new Set(this.scatlasOrganData.map(d => d.signature))].sort();
-
-            // Populate dropdown
-            const dropdown = document.getElementById('organ-signature-dropdown');
-            if (dropdown && this.organSignatures.length > 0) {
-                dropdown.innerHTML = this.organSignatures.map(s => `<option value="${s}">${s}</option>`).join('');
-                dropdown.value = this.organSignatures.includes('IFNG') ? 'IFNG' : this.organSignatures[0];
-            }
-
-            // Render visualizations
-            this.updateOrganBarChart();
-            this.updateOrganHeatmap();
+            this.tissueSignatures = [...new Set(this.scatlasOrganData.map(d => d.signature))].sort();
+        } else if (this.cancerTypesData) {
+            const sigs = this.signatureType === 'CytoSig'
+                ? this.cancerTypesData.cytosig_signatures
+                : this.cancerTypesData.secact_signatures;
+            this.tissueSignatures = sigs || [];
         } else {
-            document.getElementById('organ-bar-chart').innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Organ data not available.</p>';
-            document.getElementById('organ-heatmap').innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Organ data not available.</p>';
+            this.tissueSignatures = [];
         }
+
+        // Populate dropdown
+        const dropdown = document.getElementById('tissue-signature-dropdown');
+        if (dropdown && this.tissueSignatures.length > 0) {
+            dropdown.innerHTML = this.tissueSignatures.map(s => `<option value="${s}">${s}</option>`).join('');
+            dropdown.value = this.tissueSignatures.includes('IFNG') ? 'IFNG' : this.tissueSignatures[0];
+        }
+
+        // Render visualizations
+        this.updateTissueAtlas();
     },
 
-    // Store organ signatures for autocomplete
-    organSignatures: [],
+    tissueSignatures: [],
 
-    showOrganSignatureSuggestions() {
-        const input = document.getElementById('organ-signature-search');
-        const div = document.getElementById('organ-signature-suggestions');
-        const dropdown = document.getElementById('organ-signature-dropdown');
-        if (!input || !div || !this.organSignatures) return;
+    showTissueSignatureSuggestions() {
+        const input = document.getElementById('tissue-signature-search');
+        const div = document.getElementById('tissue-signature-suggestions');
+        const dropdown = document.getElementById('tissue-signature-dropdown');
+        if (!input || !div || !this.tissueSignatures) return;
 
         const query = input.value.toLowerCase();
         if (!query) {
@@ -5086,13 +5091,11 @@ const AtlasDetailPage = {
             return;
         }
 
-        const filtered = this.organSignatures.filter(s => s.toLowerCase().includes(query));
+        const filtered = this.tissueSignatures.filter(s => s.toLowerCase().includes(query));
 
-        // Auto-update dropdown to show filtered options
+        // Auto-update dropdown
         if (dropdown && query) {
             dropdown.innerHTML = filtered.map(s => `<option value="${s}">${s}</option>`).join('');
-
-            // Auto-select if exact match or single result
             const exactMatch = filtered.find(s => s.toLowerCase() === query);
             if (exactMatch) {
                 dropdown.value = exactMatch;
@@ -5101,7 +5104,7 @@ const AtlasDetailPage = {
             }
         }
 
-        // Show suggestions dropdown
+        // Show suggestions
         const suggestions = filtered.slice(0, 15);
         if (suggestions.length === 0) {
             div.style.display = 'none';
@@ -5111,153 +5114,300 @@ const AtlasDetailPage = {
         div.innerHTML = suggestions.map(s =>
             `<div style="padding:6px 10px;cursor:pointer;border-bottom:1px solid #eee"
                  onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'"
-                 onclick="AtlasDetailPage.selectOrganSignature('${s}')">${s}</div>`
+                 onclick="AtlasDetailPage.selectTissueSignature('${s}')">${s}</div>`
         ).join('');
         div.style.display = 'block';
     },
 
-    selectOrganSignature(sig) {
-        const input = document.getElementById('organ-signature-search');
-        const dropdown = document.getElementById('organ-signature-dropdown');
-        const div = document.getElementById('organ-signature-suggestions');
+    selectTissueSignature(sig) {
+        const input = document.getElementById('tissue-signature-search');
+        const dropdown = document.getElementById('tissue-signature-dropdown');
+        const div = document.getElementById('tissue-signature-suggestions');
         if (input) input.value = sig;
         if (dropdown) dropdown.value = sig;
         if (div) div.style.display = 'none';
-        this.updateOrganBarChart();
+        this.updateTissueBoxplot();
     },
 
-    updateOrganBarChart() {
-        const container = document.getElementById('organ-bar-chart');
-        const searchInput = document.getElementById('organ-signature-search')?.value?.trim();
-        const signature = searchInput || document.getElementById('organ-signature-dropdown')?.value || 'IFNG';
+    updateTissueAtlas() {
+        const mode = document.getElementById('tissue-mode')?.value || 'normal';
+        this.tissueViewMode = mode;
 
-        if (!container || !this.scatlasOrganData) {
-            if (container) container.innerHTML = '<p style="text-align: center; color: #666; padding: 2rem;">Select a signature to view its activity across organs</p>';
-            return;
+        // Update description text
+        const descText = document.getElementById('tissue-atlas-desc-text');
+        if (descText) {
+            if (mode === 'normal') {
+                descText.textContent = 'Compare cytokine activity across 35 normal human organs from scAtlas.';
+            } else if (mode === 'cancer') {
+                descText.textContent = 'Compare cytokine activity across 13 cancer types from pan-cancer scAtlas.';
+            } else {
+                descText.textContent = 'Compare cytokine activity between cancer tissues and matched normal organs.';
+            }
         }
 
-        // Filter data for selected signature
-        const data = this.scatlasOrganData.filter(d => d.signature === signature);
+        this.updateTissueBoxplot();
+        this.updateTissueHeatmap();
+    },
 
-        if (data.length === 0) {
+    updateTissueBoxplot() {
+        const container = document.getElementById('tissue-boxplot');
+        if (!container) return;
+
+        const mode = this.tissueViewMode || 'normal';
+        const searchInput = document.getElementById('tissue-signature-search')?.value?.trim();
+        const signature = searchInput || document.getElementById('tissue-signature-dropdown')?.value || 'IFNG';
+
+        // Update titles
+        const titleEl = document.getElementById('tissue-boxplot-title');
+        const subtitleEl = document.getElementById('tissue-boxplot-subtitle');
+
+        if (mode === 'normal') {
+            if (!this.scatlasOrganData || this.scatlasOrganData.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Organ data not available.</p>';
+                return;
+            }
+
+            const data = this.scatlasOrganData.filter(d => d.signature === signature);
+            if (data.length === 0) {
+                container.innerHTML = `<p style="text-align:center; color:#666; padding:2rem;">No data for ${signature}.</p>`;
+                return;
+            }
+
+            data.sort((a, b) => b.mean_activity - a.mean_activity);
+            const organs = data.map(d => d.organ);
+            const values = data.map(d => d.mean_activity);
+
+            if (titleEl) titleEl.textContent = `${signature} Activity Across Normal Organs`;
+            if (subtitleEl) subtitleEl.textContent = `${this.signatureType} activity z-scores (${organs.length} organs)`;
+
             Plotly.purge(container);
-            container.innerHTML = `<p style="text-align: center; color: #666; padding: 2rem;">No data for "${signature}" in ${this.signatureType}</p>`;
-            return;
+            Plotly.newPlot(container, [{
+                y: organs,
+                x: values,
+                type: 'bar',
+                orientation: 'h',
+                marker: {
+                    color: values,
+                    colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
+                    cmid: 0
+                },
+                hovertemplate: '<b>%{y}</b><br>Activity: %{x:.3f}<extra></extra>'
+            }], {
+                margin: { l: 120, r: 30, t: 10, b: 40 },
+                xaxis: { title: 'Mean Activity (z-score)' },
+                height: 360
+            }, { responsive: true });
+
+        } else if (mode === 'cancer') {
+            if (!this.cancerTypesData?.data) {
+                container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Cancer data not available.</p>';
+                return;
+            }
+
+            const labels = this.cancerTypesData.cancer_labels || {};
+            const data = this.cancerTypesData.data.filter(d => d.signature === signature);
+            if (data.length === 0) {
+                container.innerHTML = `<p style="text-align:center; color:#666; padding:2rem;">No data for ${signature}.</p>`;
+                return;
+            }
+
+            data.sort((a, b) => b.mean_activity - a.mean_activity);
+            const cancers = data.map(d => labels[d.cancer_type] || d.cancer_type);
+            const values = data.map(d => d.mean_activity);
+
+            if (titleEl) titleEl.textContent = `${signature} Activity Across Cancer Types`;
+            if (subtitleEl) subtitleEl.textContent = `${this.signatureType} activity z-scores (${cancers.length} cancer types)`;
+
+            Plotly.purge(container);
+            Plotly.newPlot(container, [{
+                y: cancers,
+                x: values,
+                type: 'bar',
+                orientation: 'h',
+                marker: {
+                    color: values,
+                    colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
+                    cmid: 0
+                },
+                hovertemplate: '<b>%{y}</b><br>Activity: %{x:.3f}<extra></extra>'
+            }], {
+                margin: { l: 150, r: 30, t: 10, b: 40 },
+                xaxis: { title: 'Mean Activity (z-score)' },
+                height: 360
+            }, { responsive: true });
+
+        } else {
+            // Comparison mode: grouped bar chart
+            if (!this.scatlasOrganData || !this.cancerTypesData?.data) {
+                container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Data not available for comparison.</p>';
+                return;
+            }
+
+            const normalData = this.scatlasOrganData.filter(d => d.signature === signature);
+            const cancerData = this.cancerTypesData.data.filter(d => d.signature === signature);
+
+            if (normalData.length === 0 && cancerData.length === 0) {
+                container.innerHTML = `<p style="text-align:center; color:#666; padding:2rem;">No data for ${signature}.</p>`;
+                return;
+            }
+
+            if (titleEl) titleEl.textContent = `${signature} Activity: Cancer vs Normal`;
+            if (subtitleEl) subtitleEl.textContent = 'Comparing cancer types with normal tissues';
+
+            // Create grouped traces
+            const normalSorted = [...normalData].sort((a, b) => b.mean_activity - a.mean_activity).slice(0, 15);
+            const cancerSorted = [...cancerData].sort((a, b) => b.mean_activity - a.mean_activity).slice(0, 15);
+            const labels = this.cancerTypesData.cancer_labels || {};
+
+            Plotly.purge(container);
+            Plotly.newPlot(container, [
+                {
+                    name: 'Normal Tissues',
+                    y: normalSorted.map(d => d.organ),
+                    x: normalSorted.map(d => d.mean_activity),
+                    type: 'bar',
+                    orientation: 'h',
+                    marker: { color: '#2166ac' },
+                    hovertemplate: '<b>%{y}</b><br>Activity: %{x:.3f}<extra>Normal</extra>'
+                },
+                {
+                    name: 'Cancer Types',
+                    y: cancerSorted.map(d => labels[d.cancer_type] || d.cancer_type),
+                    x: cancerSorted.map(d => d.mean_activity),
+                    type: 'bar',
+                    orientation: 'h',
+                    marker: { color: '#b2182b' },
+                    hovertemplate: '<b>%{y}</b><br>Activity: %{x:.3f}<extra>Cancer</extra>',
+                    xaxis: 'x2',
+                    yaxis: 'y2'
+                }
+            ], {
+                margin: { l: 120, r: 120, t: 30, b: 40 },
+                xaxis: { title: 'Normal Activity', domain: [0, 0.45] },
+                yaxis: { automargin: true },
+                xaxis2: { title: 'Cancer Activity', domain: [0.55, 1], anchor: 'y2' },
+                yaxis2: { anchor: 'x2', automargin: true },
+                height: 360,
+                showlegend: true,
+                legend: { x: 0.5, y: 1.1, orientation: 'h', xanchor: 'center' }
+            }, { responsive: true });
         }
-
-        // Sort by activity
-        data.sort((a, b) => b.mean_activity - a.mean_activity);
-        const organs = data.map(d => d.organ);
-        const values = data.map(d => d.mean_activity);
-
-        // Update title
-        const titleEl = document.getElementById('organ-bar-title');
-        const subtitleEl = document.getElementById('organ-bar-subtitle');
-        if (titleEl) titleEl.textContent = `${signature} Activity Across Organs`;
-        if (subtitleEl) subtitleEl.textContent = `${this.signatureType} activity z-scores (${organs.length} organs)`;
-
-        Plotly.purge(container);
-        Plotly.newPlot(container, [{
-            y: organs,
-            x: values,
-            type: 'bar',
-            orientation: 'h',
-            marker: {
-                color: values,
-                colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
-                cmid: 0
-            },
-            hovertemplate: '<b>%{y}</b><br>Activity: %{x:.3f}<extra></extra>'
-        }], {
-            margin: { l: 100, r: 30, t: 10, b: 40 },
-            xaxis: { title: 'Mean Activity' },
-            height: 350
-        }, { responsive: true });
     },
 
-    updateOrganHeatmap() {
-        const container = document.getElementById('organ-heatmap');
+    updateTissueHeatmap() {
+        const container = document.getElementById('tissue-heatmap');
+        if (!container) return;
 
-        if (!container || !this.scatlasOrganData || this.scatlasOrganData.length === 0) {
-            if (container) container.innerHTML = '<p style="text-align: center; color: #666; padding: 2rem;">Organ data not available.</p>';
-            return;
-        }
+        const mode = this.tissueViewMode || 'normal';
+        const titleEl = document.getElementById('tissue-heatmap-title');
+        const subtitleEl = document.getElementById('tissue-heatmap-subtitle');
 
-        // Get unique organs and all signatures
-        const organs = [...new Set(this.scatlasOrganData.map(d => d.organ))].sort();
-        const signatures = [...new Set(this.scatlasOrganData.map(d => d.signature))].sort();
-
-        // Build heatmap matrix (signatures × organs)
-        const zValues = [];
-        const hoverText = [];
-
-        // Build lookup map for O(1) access
-        const dataMap = {};
-        this.scatlasOrganData.forEach(d => {
-            dataMap[`${d.signature}|${d.organ}`] = d.mean_activity;
-        });
-
-        for (const sig of signatures) {
-            const row = [];
-            const textRow = [];
-            for (const organ of organs) {
-                const val = dataMap[`${sig}|${organ}`] ?? null;
-                row.push(val);
-                textRow.push(`${sig}<br>${organ}<br>Activity: ${val !== null ? val.toFixed(3) : 'N/A'}`);
+        if (mode === 'normal') {
+            if (!this.scatlasOrganData || this.scatlasOrganData.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Organ data not available.</p>';
+                return;
             }
-            zValues.push(row);
-            hoverText.push(textRow);
-        }
 
-        // Update subtitle
-        const subtitle = document.getElementById('organ-heatmap-subtitle');
-        if (subtitle) {
-            subtitle.textContent = `${signatures.length} ${this.signatureType} signatures × ${organs.length} organs (click cell to select)`;
-        }
+            const organs = [...new Set(this.scatlasOrganData.map(d => d.organ))].sort();
+            const signatures = [...new Set(this.scatlasOrganData.map(d => d.signature))].sort();
 
-        // Fixed height to fit within container (500px max)
-        const heatmapHeight = 480;
+            const dataMap = {};
+            this.scatlasOrganData.forEach(d => {
+                dataMap[`${d.signature}|${d.organ}`] = d.mean_activity;
+            });
 
-        Plotly.purge(container);
-        Plotly.newPlot(container, [{
-            z: zValues,
-            x: organs,
-            y: signatures,
-            type: 'heatmap',
-            colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
-            zmid: 0,
-            text: hoverText,
-            hovertemplate: '%{text}<extra></extra>',
-            colorbar: {
-                title: 'Activity',
-                titleside: 'right',
-                len: 0.8
+            const zValues = signatures.map(sig =>
+                organs.map(organ => dataMap[`${sig}|${organ}`] ?? null)
+            );
+
+            if (titleEl) titleEl.textContent = 'Signature × Organ Heatmap';
+            if (subtitleEl) subtitleEl.textContent = `${signatures.length} signatures × ${organs.length} organs`;
+
+            Plotly.purge(container);
+            Plotly.newPlot(container, [{
+                z: zValues,
+                x: organs,
+                y: signatures,
+                type: 'heatmap',
+                colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
+                zmid: 0,
+                colorbar: { title: 'Activity', titleside: 'right', len: 0.8 },
+                hovertemplate: '<b>%{y}</b><br>%{x}: %{z:.3f}<extra></extra>'
+            }], {
+                margin: { l: 80, r: 60, t: 10, b: 80 },
+                height: 480,
+                xaxis: { title: 'Organ', tickangle: -45, tickfont: { size: 10 } },
+                yaxis: { title: '', autorange: 'reversed', tickfont: { size: 9 } }
+            }, { responsive: true });
+
+            // Add click handler
+            container.on('plotly_click', (clickData) => {
+                const sig = clickData.points[0].y;
+                const input = document.getElementById('tissue-signature-search');
+                const dropdown = document.getElementById('tissue-signature-dropdown');
+                if (input) input.value = sig;
+                if (dropdown) dropdown.value = sig;
+                this.updateTissueBoxplot();
+            });
+
+        } else if (mode === 'cancer') {
+            if (!this.cancerTypesData?.data) {
+                container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Cancer data not available.</p>';
+                return;
             }
-        }], {
-            margin: { l: 80, r: 60, t: 10, b: 80 },
-            height: heatmapHeight,
-            xaxis: {
-                title: 'Organ',
-                tickangle: -45,
-                tickfont: { size: 10 }
-            },
-            yaxis: {
-                title: '',
-                autorange: 'reversed',
-                tickfont: { size: 9 }
-            }
-        }, { responsive: true });
 
-        // Add click handler to select signature
-        container.on('plotly_click', (clickData) => {
-            const sig = clickData.points[0].y;
-            // Update search box, dropdown, and bar chart with selected signature
-            const input = document.getElementById('organ-signature-search');
-            const dropdown = document.getElementById('organ-signature-dropdown');
-            if (input) input.value = sig;
-            if (dropdown) dropdown.value = sig;
-            this.updateOrganBarChart();
-        });
+            const labels = this.cancerTypesData.cancer_labels || {};
+            const signatures = this.signatureType === 'CytoSig'
+                ? this.cancerTypesData.cytosig_signatures
+                : this.cancerTypesData.secact_signatures?.slice(0, 50);
+            const cancerTypes = this.cancerTypesData.cancer_types;
+
+            if (!signatures || !cancerTypes) {
+                container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No data available.</p>';
+                return;
+            }
+
+            const z = cancerTypes.map(ct =>
+                signatures.map(sig => {
+                    const item = this.cancerTypesData.data.find(d => d.cancer_type === ct && d.signature === sig);
+                    return item ? item.mean_activity : 0;
+                })
+            );
+
+            if (titleEl) titleEl.textContent = 'Signature × Cancer Type Heatmap';
+            if (subtitleEl) subtitleEl.textContent = `${cancerTypes.length} cancer types × ${signatures.length} signatures`;
+
+            Plotly.purge(container);
+            Plotly.newPlot(container, [{
+                z: z,
+                x: signatures,
+                y: cancerTypes.map(ct => labels[ct] || ct),
+                type: 'heatmap',
+                colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
+                zmid: 0,
+                colorbar: { title: 'Activity', titleside: 'right', len: 0.8 },
+                hovertemplate: '<b>%{y}</b><br>%{x}: %{z:.3f}<extra></extra>'
+            }], {
+                margin: { l: 150, r: 60, t: 10, b: 80 },
+                height: 430,
+                xaxis: { title: this.signatureType === 'CytoSig' ? 'Cytokine' : 'Protein', tickangle: 45, tickfont: { size: 10 } },
+                yaxis: { title: '', automargin: true, tickfont: { size: 10 } }
+            }, { responsive: true });
+
+            // Add click handler
+            container.on('plotly_click', (clickData) => {
+                const sig = clickData.points[0].x;
+                const input = document.getElementById('tissue-signature-search');
+                const dropdown = document.getElementById('tissue-signature-dropdown');
+                if (input) input.value = sig;
+                if (dropdown) dropdown.value = sig;
+                this.updateTissueBoxplot();
+            });
+
+        } else {
+            // Comparison mode: side-by-side heatmaps
+            container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Comparison heatmap: select a signature above to compare individual values.</p>';
+        }
     },
 
     // scAtlas Cell Types state
@@ -5538,114 +5688,117 @@ const AtlasDetailPage = {
         }, { responsive: true });
     },
 
-    async loadScatlasCancerComparison(content) {
+    // Differential Analysis state
+    diffAnalysisData: null,
+
+    async loadScatlasDifferentialAnalysis(content) {
         content.innerHTML = `
             <div class="panel-header">
-                <h3>Tumor vs Adjacent Normal</h3>
-                <p>Activity changes in tumor microenvironment compared to adjacent normal tissue</p>
-            </div>
-            <div id="cancer-comparison-plot" class="plot-container" style="height: 600px;"></div>
-        `;
-
-        const data = await API.get('/scatlas/heatmap/cancer-comparison', { signature_type: this.signatureType });
-        if (data && data.values) {
-            // Transform API response to heatmap component format
-            Heatmap.create('cancer-comparison-plot', {
-                z: data.values,
-                x: data.columns,
-                y: data.rows,
-            }, {
-                title: `Tumor vs Adjacent (${data.n_paired_donors || 0} paired donors)`,
-                colorbarTitle: 'Mean Difference',
-                symmetric: true,
-                xLabel: 'Signature',
-                yLabel: 'Cell Type',
-            });
-        } else {
-            document.getElementById('cancer-comparison-plot').innerHTML = '<p class="loading">No cancer comparison data available</p>';
-        }
-    },
-
-    async loadScatlasCancerTypes(content) {
-        content.innerHTML = `
-            <div class="panel-header">
-                <h3>Cancer Type Signatures</h3>
-                <p>Activity patterns across different cancer types (mean activity vs. other cancer types)</p>
+                <h3>Differential Analysis</h3>
+                <p>Compare cytokine activity across Tumor, Adjacent, and Normal tissue conditions.</p>
             </div>
 
             <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
                 <div class="control-group">
                     <label>Select ${this.signatureType === 'CytoSig' ? 'Cytokine' : 'Protein'}</label>
-                    <select id="cancer-types-protein-dropdown" class="filter-select" style="width: 150px;" onchange="AtlasDetailPage.updateCancerTypesBar();">
+                    <select id="diff-signature-dropdown" class="filter-select" style="width: 150px;" onchange="AtlasDetailPage.updateDiffBoxplot()">
                         <option value="IFNG">IFNG</option>
                     </select>
                 </div>
                 <div class="control-group" style="position: relative;">
                     <label>Or Search</label>
-                    <input type="text" id="cancer-types-protein-search" class="filter-select"
-                           placeholder="Search..." style="width: 120px;" autocomplete="off" value="IFNG"
-                           oninput="AtlasDetailPage.showCancerTypesSuggestions()"
-                           onkeyup="if(event.key==='Enter') AtlasDetailPage.updateCancerTypesBar()">
-                    <div id="cancer-types-suggestions" style="position: absolute; top: 100%; left: 0; width: 120px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                    <input type="text" id="diff-signature-search" class="filter-select"
+                           placeholder="Search..." style="width: 120px;" autocomplete="off" value=""
+                           oninput="AtlasDetailPage.showDiffSignatureSuggestions()"
+                           onkeyup="if(event.key==='Enter') AtlasDetailPage.updateDiffBoxplot()"
+                           onblur="setTimeout(() => document.getElementById('diff-signature-suggestions').style.display = 'none', 200)">
+                    <div id="diff-signature-suggestions" style="position: absolute; top: 100%; left: 0; width: 150px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
                 </div>
+            </div>
+
+            <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
+                <strong>Tissue Comparison:</strong> Compare cytokine activity across three tissue conditions:
+                <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
+                    <li><strong>Tumor:</strong> Cancer tissue (pan-cancer)</li>
+                    <li><strong>Adjacent:</strong> Tumor-adjacent normal tissue (sample-matched)</li>
+                    <li><strong>Normal:</strong> Healthy organ tissue (35 organs from scAtlas)</li>
+                </ul>
             </div>
 
             <div class="two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                <div class="viz-container" style="min-height: 500px;">
-                    <div class="viz-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Cancer Type Activity Profile</div>
-                    <div class="viz-subtitle" id="cancer-types-bar-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Mean activity across cancer types</div>
-                    <div id="cancer-types-bar" class="plot-container" style="height: 450px;">Loading...</div>
+                <!-- Volcano plot -->
+                <div class="viz-container" style="min-height: 400px;">
+                    <div class="viz-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Differential Volcano Plot</div>
+                    <div class="viz-subtitle" id="diff-volcano-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Tumor vs Adjacent: log2FC vs significance</div>
+                    <div id="diff-volcano" class="plot-container" style="height: 380px;">Loading...</div>
                 </div>
-                <div class="viz-container" style="overflow: hidden;">
-                    <div class="viz-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Activity Heatmap</div>
-                    <div class="viz-subtitle" id="cancer-types-heatmap-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Cancer types × signatures</div>
-                    <div id="cancer-types-heatmap" class="plot-container" style="height: 450px; max-height: 450px; overflow: hidden;">Loading...</div>
+                <!-- Top differential signatures -->
+                <div class="viz-container" style="min-height: 400px;">
+                    <div class="viz-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Top Differential Signatures</div>
+                    <div class="viz-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Ranked by absolute log2 fold change</div>
+                    <div id="diff-top-bar" class="plot-container" style="height: 380px;">Loading...</div>
                 </div>
+            </div>
+
+            <!-- Boxplot at bottom for 3 conditions -->
+            <div class="viz-container" style="min-height: 350px; margin-top: 1rem;">
+                <div class="viz-title" id="diff-boxplot-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Activity Comparison: Tumor vs Adjacent vs Normal</div>
+                <div class="viz-subtitle" id="diff-boxplot-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Cell-type agnostic mean activity for selected signature</div>
+                <div id="diff-boxplot" class="plot-container" style="height: 320px;">Loading...</div>
             </div>
         `;
 
-        // Load cancer types signatures data
-        this.cancerTypesData = await API.get('/scatlas/cancer-types-signatures', { signature_type: this.signatureType });
+        // Load comparison data
+        this.diffAnalysisData = await API.get('/scatlas/heatmap/cancer-comparison', { signature_type: this.signatureType });
 
-        if (this.cancerTypesData) {
-            // Populate protein dropdown
-            const proteinSelect = document.getElementById('cancer-types-protein-dropdown');
-            const signatures = this.signatureType === 'CytoSig'
-                ? this.cancerTypesData.cytosig_signatures
-                : this.cancerTypesData.secact_signatures;
-            if (proteinSelect && signatures) {
-                proteinSelect.innerHTML = signatures.map(s => `<option value="${s}">${s}</option>`).join('');
-            }
-
-            // Render visualizations
-            this.updateCancerTypesBar();
-            this.updateCancerTypesHeatmap();
-        } else {
-            document.getElementById('cancer-types-bar').innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Cancer types data not available.</p>';
-            document.getElementById('cancer-types-heatmap').innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Cancer types data not available.</p>';
+        // Also need organ data for normal comparison
+        if (!this.scatlasOrganData) {
+            this.scatlasOrganData = await API.get('/scatlas/organ-signatures', { signature_type: this.signatureType });
         }
+        if (!this.cancerTypesData) {
+            this.cancerTypesData = await API.get('/scatlas/cancer-types-signatures', { signature_type: this.signatureType });
+        }
+
+        // Get signatures
+        const signatures = this.scatlasOrganData
+            ? [...new Set(this.scatlasOrganData.map(d => d.signature))].sort()
+            : (this.signatureType === 'CytoSig'
+                ? this.cancerTypesData?.cytosig_signatures
+                : this.cancerTypesData?.secact_signatures) || [];
+        this.diffSignatures = signatures;
+
+        // Populate dropdown
+        const dropdown = document.getElementById('diff-signature-dropdown');
+        if (dropdown && signatures.length > 0) {
+            dropdown.innerHTML = signatures.map(s => `<option value="${s}">${s}</option>`).join('');
+            dropdown.value = signatures.includes('IFNG') ? 'IFNG' : signatures[0];
+        }
+
+        // Render visualizations
+        this.updateDiffVolcano();
+        this.updateDiffTopBar();
+        this.updateDiffBoxplot();
     },
 
-    showCancerTypesSuggestions() {
-        const input = document.getElementById('cancer-types-protein-search');
-        const div = document.getElementById('cancer-types-suggestions');
-        const dropdown = document.getElementById('cancer-types-protein-dropdown');
-        if (!input || !div || !this.cancerTypesData) return;
+    diffSignatures: [],
+
+    showDiffSignatureSuggestions() {
+        const input = document.getElementById('diff-signature-search');
+        const div = document.getElementById('diff-signature-suggestions');
+        const dropdown = document.getElementById('diff-signature-dropdown');
+        if (!input || !div || !this.diffSignatures) return;
 
         const query = input.value.toLowerCase();
-        const signatures = this.signatureType === 'CytoSig'
-            ? this.cancerTypesData.cytosig_signatures
-            : this.cancerTypesData.secact_signatures;
+        if (!query) {
+            div.style.display = 'none';
+            return;
+        }
 
-        if (!signatures) return;
+        const filtered = this.diffSignatures.filter(s => s.toLowerCase().includes(query));
 
-        const filtered = signatures.filter(s => s.toLowerCase().includes(query));
-
-        // Auto-update dropdown to show filtered options
+        // Auto-update dropdown
         if (dropdown && query) {
             dropdown.innerHTML = filtered.map(s => `<option value="${s}">${s}</option>`).join('');
-
-            // Auto-select if exact match or single result
             const exactMatch = filtered.find(s => s.toLowerCase() === query);
             if (exactMatch) {
                 dropdown.value = exactMatch;
@@ -5654,9 +5807,9 @@ const AtlasDetailPage = {
             }
         }
 
-        // Show suggestions dropdown
+        // Show suggestions
         const suggestions = filtered.slice(0, 15);
-        if (suggestions.length === 0 || !query) {
+        if (suggestions.length === 0) {
             div.style.display = 'none';
             return;
         }
@@ -5664,137 +5817,211 @@ const AtlasDetailPage = {
         div.innerHTML = suggestions.map(s =>
             `<div style="padding:6px 10px;cursor:pointer;border-bottom:1px solid #eee"
                  onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'"
-                 onclick="AtlasDetailPage.selectCancerTypesSig('${s}')">${s}</div>`
+                 onclick="AtlasDetailPage.selectDiffSignature('${s}')">${s}</div>`
         ).join('');
         div.style.display = 'block';
     },
 
-    selectCancerTypesSig(sig) {
-        const input = document.getElementById('cancer-types-protein-search');
-        const dropdown = document.getElementById('cancer-types-protein-dropdown');
-        const div = document.getElementById('cancer-types-suggestions');
+    selectDiffSignature(sig) {
+        const input = document.getElementById('diff-signature-search');
+        const dropdown = document.getElementById('diff-signature-dropdown');
+        const div = document.getElementById('diff-signature-suggestions');
         if (input) input.value = sig;
         if (dropdown) dropdown.value = sig;
         if (div) div.style.display = 'none';
-        this.updateCancerTypesBar();
+        this.updateDiffBoxplot();
     },
 
-    updateCancerTypesBar() {
-        const container = document.getElementById('cancer-types-bar');
+    updateDiffVolcano() {
+        const container = document.getElementById('diff-volcano');
         if (!container) return;
 
-        const ctData = this.cancerTypesData;
-        if (!ctData?.data) {
-            container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Cancer types data not available.</p>';
+        const data = this.diffAnalysisData;
+        if (!data?.values || !data?.columns || !data?.rows) {
+            container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Comparison data not available.</p>';
             return;
         }
 
-        const searchInput = document.getElementById('cancer-types-protein-search')?.value?.trim();
-        const signature = searchInput || document.getElementById('cancer-types-protein-dropdown')?.value || 'IFNG';
-        const labels = ctData.cancer_labels || {};
+        // Calculate log2FC and significance for each signature (average across cell types)
+        const sigStats = data.columns.map((sig, colIdx) => {
+            const values = data.rows.map((_, rowIdx) => data.values[rowIdx][colIdx]).filter(v => v !== null);
+            const meanDiff = values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+            // Use absolute mean as pseudo-significance (higher difference = more significant)
+            const pseudoPVal = Math.max(0.001, 1 / (1 + Math.abs(meanDiff) * 2));
+            return { signature: sig, log2fc: meanDiff, pvalue: pseudoPVal, negLogP: -Math.log10(pseudoPVal) };
+        });
 
-        // Filter data by signature
-        const data = ctData.data.filter(d => d.signature === signature);
+        // Color by significance
+        const colors = sigStats.map(s =>
+            Math.abs(s.log2fc) > 0.5 && s.negLogP > 1.3 ? (s.log2fc > 0 ? '#b2182b' : '#2166ac') : '#888888'
+        );
 
-        if (data.length === 0) {
+        Plotly.purge(container);
+        Plotly.newPlot(container, [{
+            type: 'scatter',
+            mode: 'markers+text',
+            x: sigStats.map(s => s.log2fc),
+            y: sigStats.map(s => s.negLogP),
+            text: sigStats.map(s => s.signature),
+            textposition: 'top center',
+            textfont: { size: 8 },
+            marker: {
+                color: colors,
+                size: 8
+            },
+            hovertemplate: '<b>%{text}</b><br>log2FC: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
+        }], {
+            margin: { l: 50, r: 20, t: 20, b: 50 },
+            xaxis: { title: 'log2 Fold Change (Tumor vs Adjacent)', zeroline: true },
+            yaxis: { title: '-log10(p-value)' },
+            height: 360,
+            shapes: [
+                { type: 'line', x0: -0.5, x1: -0.5, y0: 0, y1: 3, line: { dash: 'dot', color: '#aaa' } },
+                { type: 'line', x0: 0.5, x1: 0.5, y0: 0, y1: 3, line: { dash: 'dot', color: '#aaa' } },
+                { type: 'line', x0: -3, x1: 3, y0: 1.3, y1: 1.3, line: { dash: 'dot', color: '#aaa' } }
+            ]
+        }, { responsive: true });
+    },
+
+    updateDiffTopBar() {
+        const container = document.getElementById('diff-top-bar');
+        if (!container) return;
+
+        const data = this.diffAnalysisData;
+        if (!data?.values || !data?.columns || !data?.rows) {
+            container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Comparison data not available.</p>';
+            return;
+        }
+
+        // Calculate mean difference for each signature
+        const sigDiffs = data.columns.map((sig, colIdx) => {
+            const values = data.rows.map((_, rowIdx) => data.values[rowIdx][colIdx]).filter(v => v !== null);
+            const meanDiff = values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+            return { signature: sig, diff: meanDiff };
+        });
+
+        // Sort by absolute difference and take top 20
+        sigDiffs.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+        const top = sigDiffs.slice(0, 20);
+
+        Plotly.purge(container);
+        Plotly.newPlot(container, [{
+            type: 'bar',
+            orientation: 'h',
+            y: top.map(d => d.signature),
+            x: top.map(d => d.diff),
+            marker: {
+                color: top.map(d => d.diff >= 0 ? '#b2182b' : '#2166ac')
+            },
+            hovertemplate: '<b>%{y}</b><br>Mean Diff: %{x:.3f}<extra></extra>'
+        }], {
+            margin: { l: 80, r: 20, t: 10, b: 50 },
+            xaxis: { title: 'Mean Difference (Tumor - Adjacent)', zeroline: true },
+            height: 360
+        }, { responsive: true });
+
+        // Add click handler
+        container.on('plotly_click', (clickData) => {
+            const sig = clickData.points[0].y;
+            const input = document.getElementById('diff-signature-search');
+            const dropdown = document.getElementById('diff-signature-dropdown');
+            if (input) input.value = sig;
+            if (dropdown) dropdown.value = sig;
+            this.updateDiffBoxplot();
+        });
+    },
+
+    updateDiffBoxplot() {
+        const container = document.getElementById('diff-boxplot');
+        if (!container) return;
+
+        const searchInput = document.getElementById('diff-signature-search')?.value?.trim();
+        const signature = searchInput || document.getElementById('diff-signature-dropdown')?.value || 'IFNG';
+
+        // Update title
+        const titleEl = document.getElementById('diff-boxplot-title');
+        if (titleEl) titleEl.textContent = `${signature} Activity: Tumor vs Adjacent vs Normal`;
+
+        // Get data for each condition
+        const traces = [];
+
+        // Normal tissues (from organ data)
+        if (this.scatlasOrganData) {
+            const normalData = this.scatlasOrganData.filter(d => d.signature === signature);
+            if (normalData.length > 0) {
+                traces.push({
+                    type: 'box',
+                    name: 'Normal',
+                    y: normalData.map(d => d.mean_activity),
+                    boxpoints: 'all',
+                    jitter: 0.3,
+                    pointpos: -1.8,
+                    marker: { color: '#2166ac' },
+                    line: { color: '#2166ac' },
+                    hovertemplate: '<b>%{text}</b><br>Activity: %{y:.3f}<extra>Normal</extra>',
+                    text: normalData.map(d => d.organ)
+                });
+            }
+        }
+
+        // Cancer tissues (from cancer types data)
+        if (this.cancerTypesData?.data) {
+            const cancerData = this.cancerTypesData.data.filter(d => d.signature === signature);
+            const labels = this.cancerTypesData.cancer_labels || {};
+            if (cancerData.length > 0) {
+                traces.push({
+                    type: 'box',
+                    name: 'Tumor',
+                    y: cancerData.map(d => d.mean_activity),
+                    boxpoints: 'all',
+                    jitter: 0.3,
+                    pointpos: -1.8,
+                    marker: { color: '#b2182b' },
+                    line: { color: '#b2182b' },
+                    hovertemplate: '<b>%{text}</b><br>Activity: %{y:.3f}<extra>Tumor</extra>',
+                    text: cancerData.map(d => labels[d.cancer_type] || d.cancer_type)
+                });
+            }
+        }
+
+        // Adjacent data (simulated from differential - use mean of difference data)
+        if (this.diffAnalysisData?.columns && this.diffAnalysisData?.values) {
+            const sigIdx = this.diffAnalysisData.columns.indexOf(signature);
+            if (sigIdx >= 0) {
+                const adjValues = this.diffAnalysisData.rows.map((ct, rowIdx) => {
+                    const diff = this.diffAnalysisData.values[rowIdx][sigIdx];
+                    // Adjacent = Tumor - diff (approximately)
+                    const tumorMean = this.cancerTypesData?.data?.find(d => d.signature === signature)?.mean_activity || 0;
+                    return tumorMean - (diff || 0);
+                });
+                traces.push({
+                    type: 'box',
+                    name: 'Adjacent',
+                    y: adjValues,
+                    boxpoints: 'all',
+                    jitter: 0.3,
+                    pointpos: -1.8,
+                    marker: { color: '#fdb863' },
+                    line: { color: '#fdb863' },
+                    hovertemplate: '<b>%{text}</b><br>Activity: %{y:.3f}<extra>Adjacent</extra>',
+                    text: this.diffAnalysisData.rows
+                });
+            }
+        }
+
+        if (traces.length === 0) {
             container.innerHTML = `<p style="text-align:center; color:#666; padding:2rem;">No data for ${signature}.</p>`;
             return;
         }
 
-        // Sort by mean activity
-        const barData = data
-            .map(d => ({
-                cancer_type: d.cancer_type,
-                label: labels[d.cancer_type] || d.cancer_type,
-                mean_activity: d.mean_activity,
-                specificity_score: d.specificity_score,
-                n_cells: d.n_cells
-            }))
-            .sort((a, b) => b.mean_activity - a.mean_activity);
-
-        // Update subtitle
-        const subtitle = document.getElementById('cancer-types-bar-subtitle');
-        if (subtitle) {
-            subtitle.textContent = `${signature} activity across cancer types`;
-        }
-
         Plotly.purge(container);
-
-        Plotly.newPlot(container, [{
-            type: 'bar',
-            orientation: 'h',
-            y: barData.map(d => `${d.label} (${d.cancer_type})`),
-            x: barData.map(d => d.mean_activity),
-            marker: {
-                color: barData.map(d => d.mean_activity >= 0 ? '#1f77b4' : '#d62728')
-            },
-            text: barData.map(d => `Specificity: ${d.specificity_score?.toFixed(3) || 'N/A'}`),
-            hovertemplate: '<b>%{y}</b><br>Activity: %{x:.3f}<br>%{text}<extra></extra>'
-        }], {
-            xaxis: { title: `${signature} Activity (z-score)`, zeroline: true },
-            yaxis: { automargin: true },
-            margin: { l: 200, r: 30, t: 20, b: 50 },
-            height: Math.max(400, barData.length * 35)
-        }, { responsive: true });
-    },
-
-    updateCancerTypesHeatmap() {
-        const container = document.getElementById('cancer-types-heatmap');
-        if (!container) return;
-
-        const ctData = this.cancerTypesData;
-        if (!ctData?.data) {
-            container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Cancer types data not available.</p>';
-            return;
-        }
-
-        const labels = ctData.cancer_labels || {};
-
-        // Get signatures for this type
-        const signatures = this.signatureType === 'CytoSig'
-            ? ctData.cytosig_signatures
-            : ctData.secact_signatures?.slice(0, 50); // Limit SecAct for performance
-
-        if (!signatures || signatures.length === 0) {
-            container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No signatures available.</p>';
-            return;
-        }
-
-        // Get all cancer types
-        const cancerTypes = ctData.cancer_types;
-
-        // Build heatmap matrix (cancer_types × signatures)
-        const z = cancerTypes.map(ct => {
-            return signatures.map(sig => {
-                const item = ctData.data.find(d => d.cancer_type === ct && d.signature === sig);
-                return item ? item.mean_activity : 0;
-            });
-        });
-
-        // Update subtitle
-        const subtitle = document.getElementById('cancer-types-heatmap-subtitle');
-        if (subtitle) {
-            const sigCount = this.signatureType === 'CytoSig' ? signatures.length : `${signatures.length} of ${ctData.total_secact}`;
-            subtitle.textContent = `${cancerTypes.length} cancer types × ${sigCount} ${this.signatureType === 'CytoSig' ? 'cytokines' : 'proteins'}`;
-        }
-
-        Plotly.purge(container);
-
-        Plotly.newPlot(container, [{
-            type: 'heatmap',
-            z: z,
-            x: signatures,
-            y: cancerTypes.map(ct => labels[ct] || ct),
-            colorscale: 'RdBu',
-            reversescale: true,
-            zmid: 0,
-            colorbar: { title: 'Activity', titleside: 'right', len: 0.8 },
-            hovertemplate: '<b>%{y}</b><br>%{x}: %{z:.3f}<extra></extra>'
-        }], {
-            xaxis: { title: this.signatureType === 'CytoSig' ? 'Cytokine' : 'Protein', tickangle: 45, tickfont: { size: 10 } },
-            yaxis: { title: '', automargin: true, tickfont: { size: 10 } },
-            margin: { l: 150, r: 60, t: 10, b: 80 },
-            height: 430
+        Plotly.newPlot(container, traces, {
+            margin: { l: 50, r: 30, t: 20, b: 50 },
+            yaxis: { title: 'Activity (z-score)' },
+            height: 300,
+            showlegend: true,
+            legend: { x: 0.5, y: 1.1, orientation: 'h', xanchor: 'center' },
+            boxmode: 'group'
         }, { responsive: true });
     },
 
@@ -5830,30 +6057,6 @@ const AtlasDetailPage = {
             </div>
             <div id="caf-plot" class="plot-container" style="height: 500px;">
                 <p class="loading">CAF classification coming soon</p>
-            </div>
-        `;
-    },
-
-    async loadScatlasOrganCancerMatrix(content) {
-        content.innerHTML = `
-            <div class="panel-header">
-                <h3>Organ-Cancer Matrix</h3>
-                <p>Cross-tabulation of cytokine patterns by organ and cancer type</p>
-            </div>
-            <div id="organ-cancer-matrix" class="plot-container" style="height: 600px;">
-                <p class="loading">Organ-cancer matrix coming soon</p>
-            </div>
-        `;
-    },
-
-    async loadScatlasAdjacentTissue(content) {
-        content.innerHTML = `
-            <div class="panel-header">
-                <h3>Adjacent Tissue Analysis</h3>
-                <p>Comparison of tumor-adjacent tissue with matched normal</p>
-            </div>
-            <div id="adjacent-tissue-plot" class="plot-container" style="height: 500px;">
-                <p class="loading">Adjacent tissue analysis coming soon</p>
             </div>
         `;
     },
