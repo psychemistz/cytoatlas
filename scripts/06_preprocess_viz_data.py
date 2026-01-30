@@ -2472,7 +2472,7 @@ def create_embedded_data():
         'inflammation_celltype.json',
         'inflammation_correlations.json',
         'inflammation_celltype_correlations.json',  # Cell type-specific age/BMI correlations
-        'inflammation_disease.json',
+        ('inflammation_disease_filtered.json', 'inflammationdisease'),  # Use filtered version (56MB vs 275MB)
         'inflammation_differential.json',  # Disease vs healthy differential
         'inflammation_longitudinal.json',
         'inflammation_cell_drivers.json',
@@ -2486,11 +2486,17 @@ def create_embedded_data():
     ]
 
     embedded = {}
-    for json_file in json_files:
+    for item in json_files:
+        # Handle tuples (filename, key) for custom key names
+        if isinstance(item, tuple):
+            json_file, key = item
+        else:
+            json_file = item
+            key = json_file.replace('.json', '').replace('_', '')
+
         filepath = OUTPUT_DIR / json_file
         if filepath.exists():
             with open(filepath) as f:
-                key = json_file.replace('.json', '').replace('_', '')
                 embedded[key] = json.load(f)
                 size_kb = filepath.stat().st_size / 1024
                 print(f"  Embedded {json_file}: {size_kb:.1f} KB")
