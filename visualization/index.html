@@ -1298,7 +1298,6 @@
                 <button class="tab" data-tab="inflam-differential">Differential</button>
                 <button class="tab" data-tab="treatment-response">Treatment Response</button>
                 <button class="tab" data-tab="cohort-validation">Validation</button>
-                <button class="tab" data-tab="inflam-longitudinal">Longitudinal</button>
                 <button class="tab" data-tab="inflam-drivers">Cell Drivers</button>
             </div>
 
@@ -1614,58 +1613,6 @@
                         <div class="viz-title">Consistency Metrics</div>
                         <div class="viz-subtitle">Per-signature correlation coefficients</div>
                         <div id="cohort-consistency" class="loading">Loading data...</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Longitudinal Trends Tab -->
-            <div class="tab-content" id="tab-inflam-longitudinal">
-                <div class="controls">
-                    <div class="control-group">
-                        <label>Disease</label>
-                        <select id="long-disease">
-                            <option value="RA">Rheumatoid Arthritis</option>
-                            <option value="IBD">Inflammatory Bowel Disease</option>
-                            <option value="Psoriasis">Psoriasis</option>
-                            <option value="SLE">Systemic Lupus</option>
-                        </select>
-                    </div>
-                    <div class="control-group">
-                        <label>Cytokine</label>
-                        <select id="long-cytokine">
-                            <option value="IFNG">IFN-γ</option>
-                            <option value="TNF">TNF</option>
-                            <option value="IL6">IL-6</option>
-                            <option value="IL17A">IL-17A</option>
-                            <option value="IL1B">IL-1β</option>
-                            <option value="IL10">IL-10</option>
-                        </select>
-                    </div>
-                    <div class="control-group">
-                        <label>Response Group</label>
-                        <select id="long-response">
-                            <option value="all">All Patients</option>
-                            <option value="responder">Responders</option>
-                            <option value="non-responder">Non-Responders</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
-                    <strong>Longitudinal Analysis:</strong> Track cytokine activity changes over time in patients with serial samples. Identify early markers of treatment response or disease progression.
-                    <br><em style="color: #666;">Note: Requires longitudinal sample metadata (timepoints per patient).</em>
-                </div>
-
-                <div class="two-col">
-                    <div class="viz-container large">
-                        <div class="viz-title">Longitudinal Cytokine Trajectories</div>
-                        <div class="viz-subtitle">Activity changes over treatment timepoints</div>
-                        <div id="longitudinal-lines" class="loading">Loading...</div>
-                    </div>
-                    <div class="viz-container">
-                        <div class="viz-title">Change from Baseline</div>
-                        <div class="viz-subtitle">Distribution of activity changes by response group</div>
-                        <div id="longitudinal-delta" class="loading">Loading...</div>
                     </div>
                 </div>
             </div>
@@ -2582,7 +2529,6 @@
                 inflammationcelltypecorrelations: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.inflammationcelltypecorrelations : null,
                 inflammationdisease: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.inflammationdisease : null,
                 inflammationdifferential: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.inflammationdifferential : null,
-                inflammationlongitudinal: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.inflammationlongitudinal : null,
                 inflammationcelldrivers: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.inflammationcelldrivers : null,
                 inflammationseverity: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.inflammationseverity : null,
                 diseasesankey: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.diseasesankey : null,
@@ -2625,7 +2571,6 @@
                 updateDiseaseSankey();
                 updateCohortValidation();
                 // New Inflammation panels
-                updateLongitudinal();
                 initSeverityPanel();
                 updateSeverityCorrelation();
                 updateCellDrivers();
@@ -2762,7 +2707,6 @@
                 ['Treatment Response', 'Responder vs non-responder ML prediction (8 diseases)', '288'],
                 ['Disease Flow', 'Sankey diagram: 20 diseases × 6 disease groups × 3 cohorts', '136'],
                 ['Validation', 'Cross-cohort consistency (main, validation, external)', '23'],
-                ['Longitudinal', 'Time-course cytokine dynamics during treatment', 'Per disease'],
                 ['Severity', 'Disease severity correlation with cytokine activity', 'Per disease'],
                 ['Cell Drivers', 'Top driving cell types per disease-cytokine pair', 'Per disease']
             ];
@@ -7575,136 +7519,8 @@
         }
 
         // ========================================
-        // NEW INFLAMMATION PANELS: Longitudinal, Severity, Cell Drivers
+        // INFLAMMATION PANELS: Severity, Cell Drivers
         // ========================================
-
-        // Inflammation: Longitudinal Trends
-        function updateLongitudinal() {
-            const linesContainer = document.getElementById('longitudinal-lines');
-            const deltaContainer = document.getElementById('longitudinal-delta');
-
-            if (!linesContainer) return;
-
-            const data = state.data.inflammationlongitudinal;
-
-            // Check if we have real longitudinal data
-            if (!data || !data.patients || data.patients.length === 0) {
-                linesContainer.classList.remove('loading');
-                Plotly.purge(linesContainer);
-
-                // Show informative message about the data
-                let message = '<div style="text-align:center; padding:2rem; color:#666;">';
-                message += '<h4 style="margin-bottom:1rem;">No Longitudinal Data Available</h4>';
-
-                if (data && data.note) {
-                    message += `<p style="margin-bottom:1rem;">${data.note}</p>`;
-                }
-
-                if (data && data.timepoint_distribution) {
-                    message += '<p style="margin-bottom:0.5rem;"><strong>Timepoint distribution across different patients:</strong></p>';
-                    message += '<ul style="list-style:none; padding:0;">';
-                    for (const [tp, count] of Object.entries(data.timepoint_distribution)) {
-                        message += `<li>Timepoint ${tp}: ${count} samples</li>`;
-                    }
-                    message += '</ul>';
-                }
-
-                message += '<p style="margin-top:1rem; font-size:0.9em; color:#888;">The Inflammation Atlas contains samples from different timepoints, but individual patients were not sampled at multiple timepoints.</p>';
-                message += '</div>';
-
-                linesContainer.innerHTML = message;
-
-                if (deltaContainer) {
-                    deltaContainer.classList.remove('loading');
-                    deltaContainer.innerHTML = '';
-                }
-                return;
-            }
-
-            // If we have data, display it (future implementation)
-            const disease = document.getElementById('long-disease')?.value || 'RA';
-            const cytokine = document.getElementById('long-cytokine')?.value || 'IFNG';
-            const responseGroup = document.getElementById('long-response')?.value || 'all';
-
-            // Filter patients by disease and response
-            let patients = data.patients.filter(p => p.disease === disease);
-            if (responseGroup === 'responder') {
-                patients = patients.filter(p => p.response === 'R');
-            } else if (responseGroup === 'non-responder') {
-                patients = patients.filter(p => p.response === 'NR');
-            }
-
-            if (patients.length === 0) {
-                linesContainer.classList.remove('loading');
-                linesContainer.innerHTML = `<p style="text-align:center; color:#666; padding:2rem;">No longitudinal data for ${disease}</p>`;
-                return;
-            }
-
-            // Build traces
-            const traces = patients.map(p => {
-                const timepoints = p.timepoints.map(tp => `T${tp.timepoint}`);
-                const values = p.timepoints.map(tp => tp.activity[cytokine] || 0);
-                return {
-                    type: 'scatter',
-                    mode: 'lines+markers',
-                    name: p.patient_id,
-                    x: timepoints,
-                    y: values,
-                    line: {
-                        color: p.response === 'R' ? 'rgba(44, 160, 44, 0.5)' : 'rgba(214, 39, 40, 0.5)',
-                        width: 1
-                    },
-                    marker: { size: 4 },
-                    showlegend: false
-                };
-            });
-
-            linesContainer.classList.remove('loading');
-            Plotly.purge(linesContainer);
-            Plotly.newPlot(linesContainer, traces, {
-                xaxis: { title: 'Timepoint' },
-                yaxis: { title: `${cytokine} Activity (z-score)` },
-                margin: { l: 60, r: 30, t: 30, b: 50 },
-                legend: { orientation: 'h', y: -0.15 },
-                height: 450
-            }, { responsive: true });
-
-            // Delta boxplot
-            if (deltaContainer && patients.length > 0) {
-                deltaContainer.classList.remove('loading');
-                Plotly.purge(deltaContainer);
-
-                const responders = patients.filter(p => p.response === 'R');
-                const nonResponders = patients.filter(p => p.response === 'NR');
-
-                const getDeltas = (pats) => pats.map(p => {
-                    const tps = p.timepoints;
-                    if (tps.length < 2) return 0;
-                    return (tps[tps.length-1].activity[cytokine] || 0) - (tps[0].activity[cytokine] || 0);
-                });
-
-                Plotly.newPlot(deltaContainer, [
-                    {
-                        type: 'box',
-                        name: 'Responders',
-                        y: getDeltas(responders),
-                        marker: { color: '#2ca02c' },
-                        boxmean: true
-                    },
-                    {
-                        type: 'box',
-                        name: 'Non-Responders',
-                        y: nonResponderDeltas,
-                        marker: { color: '#d62728' },
-                        boxmean: true
-                    }
-                ], {
-                    yaxis: { title: 'Change from Baseline', zeroline: true },
-                    margin: { l: 60, r: 30, t: 30, b: 50 },
-                    height: 350
-                }, { responsive: true });
-            }
-        }
 
         // Inflammation: Severity Analysis
         let severitySignatures = { cytosig: [], secact: [] };
@@ -9751,11 +9567,6 @@
             // Inflammation Cohort Validation
             document.getElementById('validation-sig-type')?.addEventListener('change', updateCohortValidation);
             document.getElementById('validation-cohorts')?.addEventListener('change', updateCohortValidation);
-
-            // Inflammation Longitudinal
-            document.getElementById('long-disease')?.addEventListener('change', updateLongitudinal);
-            document.getElementById('long-cytokine')?.addEventListener('change', updateLongitudinal);
-            document.getElementById('long-response')?.addEventListener('change', updateLongitudinal);
 
             // Inflammation Severity
             document.getElementById('severity-disease')?.addEventListener('change', updateSeverityCorrelation);
