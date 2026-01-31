@@ -56,7 +56,7 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Analysis parameters
 TISSUE_COL = 'tissue'
-CELLTYPE_COARSE = 'cellType1'
+CELLTYPE_COARSE = 'subCluster'  # Changed from 'cellType1' - subCluster has standardized annotations
 CELLTYPE_FINE = 'cellType2'
 
 # Activity computation parameters
@@ -79,37 +79,56 @@ def aggregate_by_tissue_celltype(
     tissue_col: str,
     celltype_col: str,
     min_cells: int = 50,
-    extra_cols: List[str] = None
+    extra_cols: List[str] = None,
+    group_cols: List[str] = None,
+    chunk_size: int = 50000
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Aggregate expression by tissue and cell type for pseudo-bulk analysis.
 
+    Uses chunked reading for efficiency with backed mode (reads file once).
+
     Args:
-        adata: AnnData with raw counts
+        adata: AnnData with raw counts (can be backed)
         tissue_col: Column for tissue/organ
         celltype_col: Column for cell type
         min_cells: Minimum cells per group
-        extra_cols: Additional columns to include in metadata (e.g., ['cancerType', 'donorID'])
+        extra_cols: Additional columns to include in metadata (not used for grouping)
+        group_cols: Additional columns to use for grouping (e.g., ['cancerType'])
+        chunk_size: Number of cells to read at a time
 
     Returns:
         expr_df: DataFrame (genes x (tissue_celltype combinations))
         meta_df: DataFrame with tissue and cell type info for each column
     """
-    log(f"Aggregating by {tissue_col} and {celltype_col}...")
+    # Build grouping columns
+    grouping_cols = [tissue_col, celltype_col]
+    if group_cols:
+        grouping_cols.extend([c for c in group_cols if c in adata.obs.columns])
+    log(f"Aggregating by {grouping_cols}...")
 
     # Determine columns to extract
-    cols_to_use = [tissue_col, celltype_col]
+    cols_to_use = list(grouping_cols)
     if extra_cols:
-        cols_to_use.extend([c for c in extra_cols if c in adata.obs.columns])
+        cols_to_use.extend([c for c in extra_cols if c in adata.obs.columns and c not in cols_to_use])
 
-    # Get unique combinations
+    # Get obs data (this is fast even for backed mode)
     obs = adata.obs[cols_to_use].copy()
     obs = obs.reset_index(drop=True)
-    groups = obs.groupby([tissue_col, celltype_col], observed=True).groups
 
-    log(f"  Found {len(groups)} tissue-celltype combinations")
+    # Create group labels for each cell (include all grouping columns)
+    obs['_group'] = obs[tissue_col].astype(str) + '_' + obs[celltype_col].astype(str)
+    if group_cols:
+        for gc in group_cols:
+            if gc in obs.columns:
+                obs['_group'] = obs['_group'] + '_' + obs[gc].astype(str)
+    unique_groups = obs['_group'].unique()
+    group_to_idx = {g: i for i, g in enumerate(unique_groups)}
+    obs['_group_idx'] = obs['_group'].map(group_to_idx)
 
-    # Get raw counts
+    log(f"  Found {len(unique_groups)} tissue-celltype combinations")
+
+    # Get raw counts source
     if 'counts' in adata.layers:
         X = adata.layers['counts']
         log("  Using raw counts from layers['counts']")
@@ -118,51 +137,84 @@ def aggregate_by_tissue_celltype(
         log("  Using .X (may be log-normalized)")
 
     gene_names = list(adata.var_names)
+    n_genes = len(gene_names)
+    n_cells = adata.n_obs
+    n_groups = len(unique_groups)
 
+    # Initialize accumulators
+    group_sums = np.zeros((n_groups, n_genes), dtype=np.float64)
+    group_counts = np.zeros(n_groups, dtype=np.int64)
+
+    # Process in chunks (efficient for backed mode - reads sequentially)
+    log(f"  Processing {n_cells:,} cells in chunks of {chunk_size:,}...")
+    n_chunks = (n_cells + chunk_size - 1) // chunk_size
+
+    for chunk_i in range(n_chunks):
+        start_idx = chunk_i * chunk_size
+        end_idx = min((chunk_i + 1) * chunk_size, n_cells)
+
+        # Read chunk
+        chunk_X = X[start_idx:end_idx, :]
+        if sp.issparse(chunk_X):
+            chunk_X = chunk_X.toarray()
+        chunk_X = np.asarray(chunk_X, dtype=np.float64)
+
+        # Get group indices for this chunk
+        chunk_groups = obs['_group_idx'].iloc[start_idx:end_idx].values
+
+        # Accumulate sums for each group
+        for local_i in range(chunk_X.shape[0]):
+            g_idx = chunk_groups[local_i]
+            group_sums[g_idx, :] += chunk_X[local_i, :]
+            group_counts[g_idx] += 1
+
+        if (chunk_i + 1) % 10 == 0 or chunk_i == n_chunks - 1:
+            log(f"    Processed chunk {chunk_i + 1}/{n_chunks} ({end_idx:,} cells)")
+
+    # Build results, filtering by min_cells
     aggregated = {}
-    meta_dict = {}  # Use dict instead of list to avoid duplicates
+    meta_dict = {}
 
-    for i, ((tissue, celltype), indices) in enumerate(groups.items()):
-        if len(indices) < min_cells:
+    # Determine how to parse group names based on grouping columns
+    n_group_cols = len(grouping_cols)
+
+    for g_idx, group_name in enumerate(unique_groups):
+        if group_counts[g_idx] < min_cells:
             continue
 
-        col_name = f"{tissue}_{celltype}"
-        idx_array = np.array(indices, dtype=np.int64)
+        aggregated[group_name] = group_sums[g_idx, :]
 
-        # Sum counts for this group
-        if sp.issparse(X):
-            group_sum = np.asarray(X[idx_array, :].sum(axis=0)).ravel()
-        else:
-            group_sum = np.asarray(X[idx_array, :].sum(axis=0)).ravel()
+        # Parse group name based on structure
+        # Format: tissue_celltype or tissue_celltype_cancerType etc.
+        group_mask = obs['_group'] == group_name
+        sample_row = obs[group_mask].iloc[0]
 
-        # If duplicate, merge counts and cells
-        if col_name in aggregated:
-            aggregated[col_name] = aggregated[col_name] + group_sum
-            meta_dict[col_name]['n_cells'] += len(idx_array)
-        else:
-            aggregated[col_name] = group_sum
-            meta_entry = {
-                'tissue': tissue,
-                'cell_type': celltype,
-                'n_cells': len(idx_array)
-            }
-            # Add extra columns (use most common value for categorical)
-            if extra_cols:
-                for ec in extra_cols:
-                    if ec in obs.columns:
-                        ec_vals = obs.loc[idx_array, ec].dropna()
-                        if len(ec_vals) > 0:
-                            meta_entry[ec] = ec_vals.mode().iloc[0] if len(ec_vals.mode()) > 0 else ec_vals.iloc[0]
-            meta_dict[col_name] = meta_entry
+        meta_entry = {
+            'tissue': sample_row[tissue_col],
+            'cell_type': sample_row[celltype_col],
+            'n_cells': int(group_counts[g_idx])
+        }
 
-        if (i + 1) % 500 == 0:
-            log(f"    Processed {i + 1}/{len(groups)} groups...")
+        # Add grouping columns to metadata
+        if group_cols:
+            for gc in group_cols:
+                if gc in sample_row.index:
+                    meta_entry[gc] = sample_row[gc]
+
+        # Add extra columns (use most common value)
+        if extra_cols:
+            for ec in extra_cols:
+                if ec in obs.columns and ec not in meta_entry:
+                    ec_vals = obs.loc[group_mask, ec].dropna()
+                    if len(ec_vals) > 0:
+                        mode_vals = ec_vals.mode()
+                        meta_entry[ec] = mode_vals.iloc[0] if len(mode_vals) > 0 else ec_vals.iloc[0]
+
+        meta_dict[group_name] = meta_entry
 
     expr_df = pd.DataFrame(aggregated, index=gene_names)
-    # Create metadata from the same keys as aggregated dict to ensure consistency
     meta_rows = [{'column': k, **v} for k, v in meta_dict.items()]
     meta_df = pd.DataFrame(meta_rows).set_index('column')
-    # Ensure same order as expr_df columns
     meta_df = meta_df.loc[expr_df.columns]
 
     log(f"  Aggregated expression: {expr_df.shape}")
@@ -287,7 +339,8 @@ def compute_activities_from_counts(
     tissue_col: str,
     celltype_col: str,
     dataset_name: str,
-    extra_cols: List[str] = None
+    extra_cols: List[str] = None,
+    group_cols: List[str] = None
 ) -> Tuple[Dict[str, pd.DataFrame], Dict[str, pd.DataFrame], pd.DataFrame]:
     """
     Complete pipeline: load counts, aggregate, compute activities.
@@ -297,7 +350,8 @@ def compute_activities_from_counts(
         tissue_col: Column for tissue grouping
         celltype_col: Column for cell type
         dataset_name: Name for logging and output files
-        extra_cols: Additional columns to include in metadata
+        extra_cols: Additional columns to include in metadata (not used for grouping)
+        group_cols: Additional columns for grouping (e.g., ['cancerType'] for cancer data)
 
     Returns:
         cytosig_results: Dict with CytoSig activity matrices
@@ -314,9 +368,9 @@ def compute_activities_from_counts(
     log(f"  Shape: {adata.shape}")
     log(f"  Columns: {list(adata.obs.columns)}")
 
-    # Aggregate by tissue and cell type
+    # Aggregate by tissue and cell type (and optionally cancer type)
     expr_df, agg_meta = aggregate_by_tissue_celltype(
-        adata, tissue_col, celltype_col, extra_cols=extra_cols
+        adata, tissue_col, celltype_col, extra_cols=extra_cols, group_cols=group_cols
     )
 
     # Release memory
@@ -1338,14 +1392,15 @@ def analyze_cancer_atlas():
         raise FileNotFoundError(f"Cancer counts file not found: {CANCER_COUNTS}")
 
     # Compute activities from raw counts
-    # For cancer data, aggregate by tissue type (Tumor/Adjacent) and cell type
-    # Include cancerType and donorID in metadata for downstream analysis
+    # For cancer data, aggregate by tissue type (Tumor/Adjacent), cell type, AND cancer type
+    # This ensures each cancer type is analyzed separately
     cytosig_results, secact_results, agg_meta = compute_activities_from_counts(
         CANCER_COUNTS,
         TISSUE_COL,
         CELLTYPE_COARSE,
         'cancer',
-        extra_cols=['cancerType', 'donorID', 'subCluster']
+        extra_cols=['donorID', 'cellType1'],  # Additional metadata
+        group_cols=['cancerType']  # Group by cancer type to keep cancers separate
     )
 
     results = {}

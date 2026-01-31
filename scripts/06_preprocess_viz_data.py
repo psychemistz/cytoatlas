@@ -2813,7 +2813,7 @@ def preprocess_organ_cancer_matrix():
 
 
 def preprocess_adjacent_tissue():
-    """Preprocess adjacent tissue field effect data with boxplot statistics."""
+    """Preprocess adjacent tissue field effect data with boxplot statistics and cancer type breakdown."""
     print("Processing adjacent tissue data...")
 
     adjacent_path = SCATLAS_DIR / "cancer_adjacent_signatures.csv"
@@ -2831,8 +2831,16 @@ def preprocess_adjacent_tissue():
     # Load sample-level zscore data for boxplot statistics
     cytosig_zscore_path = SCATLAS_DIR / "cancer_cytosig_zscore.csv"
     secact_zscore_path = SCATLAS_DIR / "cancer_secact_zscore.csv"
+    meta_path = SCATLAS_DIR / "cancer_aggregation_meta.csv"
+
+    # Load metadata to get cancer type info
+    meta_df = None
+    if meta_path.exists():
+        meta_df = pd.read_csv(meta_path, index_col=0)
+        print(f"  Loaded metadata: {len(meta_df)} samples")
 
     boxplot_data = []
+    boxplot_by_cancer = []  # Cancer type-specific boxplots
 
     def compute_boxplot_stats(values, label):
         """Compute boxplot statistics from array of values."""
@@ -2850,19 +2858,56 @@ def preprocess_adjacent_tissue():
             'label': label
         }
 
+    def compute_differential(tumor_vals, adj_vals):
+        """Compute differential statistics between tumor and adjacent."""
+        tumor_vals = np.array([v for v in tumor_vals if not np.isnan(v)])
+        adj_vals = np.array([v for v in adj_vals if not np.isnan(v)])
+        if len(tumor_vals) < 2 or len(adj_vals) < 2:
+            return None
+        from scipy import stats
+        try:
+            stat, pval = stats.mannwhitneyu(tumor_vals, adj_vals, alternative='two-sided')
+        except:
+            pval = 1.0
+        mean_tumor = float(np.mean(tumor_vals))
+        mean_adj = float(np.mean(adj_vals))
+        log2fc = np.log2((mean_adj + 0.01) / (mean_tumor + 0.01)) if mean_tumor != 0 else 0
+        return {
+            'mean_tumor': round(mean_tumor, 4),
+            'mean_adjacent': round(mean_adj, 4),
+            'log2fc': round(log2fc, 4),
+            'pvalue': pval,
+            'neg_log10_pval': round(-np.log10(max(pval, 1e-100)), 4),
+            'n_tumor': len(tumor_vals),
+            'n_adjacent': len(adj_vals),
+            'direction': 'up_in_adjacent' if mean_adj > mean_tumor else 'up_in_tumor'
+        }
+
+    # Get cancer types from column names
+    def get_cancer_type_from_col(col, meta_df):
+        """Extract cancer type from column name using metadata."""
+        if meta_df is None:
+            return None
+        # Column format: Tissue_CellType or similar
+        if col in meta_df.index:
+            return meta_df.loc[col, 'cancerType'] if 'cancerType' in meta_df.columns else None
+        return None
+
     # Process CytoSig zscore data
+    cytosig_zscore_df = None
     if cytosig_zscore_path.exists():
         print("  Loading CytoSig zscore data for boxplots...")
-        zscore_df = pd.read_csv(cytosig_zscore_path, index_col=0)
+        cytosig_zscore_df = pd.read_csv(cytosig_zscore_path, index_col=0)
 
         # Identify Adjacent and Tumor columns
-        adjacent_cols = [c for c in zscore_df.columns if c.startswith('Adjacent_')]
-        tumor_cols = [c for c in zscore_df.columns if c.startswith('Tumor_')]
+        adjacent_cols = [c for c in cytosig_zscore_df.columns if c.startswith('Adjacent_')]
+        tumor_cols = [c for c in cytosig_zscore_df.columns if c.startswith('Tumor_')]
         print(f"    Adjacent columns: {len(adjacent_cols)}, Tumor columns: {len(tumor_cols)}")
 
-        for sig in zscore_df.index:
-            adjacent_values = zscore_df.loc[sig, adjacent_cols].values
-            tumor_values = zscore_df.loc[sig, tumor_cols].values
+        # Overall boxplots
+        for sig in cytosig_zscore_df.index:
+            adjacent_values = cytosig_zscore_df.loc[sig, adjacent_cols].values
+            tumor_values = cytosig_zscore_df.loc[sig, tumor_cols].values
 
             adj_stats = compute_boxplot_stats(adjacent_values, 'Adjacent')
             tumor_stats = compute_boxplot_stats(tumor_values, 'Tumor')
@@ -2871,23 +2916,54 @@ def preprocess_adjacent_tissue():
                 boxplot_data.append({
                     'signature': sig,
                     'signature_type': 'CytoSig',
+                    'cancer_type': 'all',
                     'adjacent': adj_stats,
                     'tumor': tumor_stats
                 })
 
+        # Cancer type-specific boxplots
+        if meta_df is not None:
+            cancer_types = meta_df[meta_df['tissue'].isin(['Tumor', 'Adjacent'])]['cancerType'].unique()
+            for cancer in cancer_types:
+                cancer_meta = meta_df[meta_df['cancerType'] == cancer]
+                cancer_adj_cols = [c for c in adjacent_cols if c in cancer_meta.index]
+                cancer_tumor_cols = [c for c in tumor_cols if c in cancer_meta.index]
+
+                if len(cancer_adj_cols) < 2 or len(cancer_tumor_cols) < 2:
+                    continue
+
+                for sig in cytosig_zscore_df.index:
+                    adj_vals = cytosig_zscore_df.loc[sig, cancer_adj_cols].values
+                    tumor_vals = cytosig_zscore_df.loc[sig, cancer_tumor_cols].values
+
+                    adj_stats = compute_boxplot_stats(adj_vals, 'Adjacent')
+                    tumor_stats = compute_boxplot_stats(tumor_vals, 'Tumor')
+                    diff_stats = compute_differential(tumor_vals, adj_vals)
+
+                    if adj_stats and tumor_stats and diff_stats:
+                        boxplot_by_cancer.append({
+                            'signature': sig,
+                            'signature_type': 'CytoSig',
+                            'cancer_type': cancer,
+                            'adjacent': adj_stats,
+                            'tumor': tumor_stats,
+                            **diff_stats
+                        })
+
     # Process SecAct zscore data
+    secact_zscore_df = None
     if secact_zscore_path.exists():
         print("  Loading SecAct zscore data for boxplots...")
-        zscore_df = pd.read_csv(secact_zscore_path, index_col=0)
+        secact_zscore_df = pd.read_csv(secact_zscore_path, index_col=0)
 
-        # Identify Adjacent and Tumor columns
-        adjacent_cols = [c for c in zscore_df.columns if c.startswith('Adjacent_')]
-        tumor_cols = [c for c in zscore_df.columns if c.startswith('Tumor_')]
+        adjacent_cols = [c for c in secact_zscore_df.columns if c.startswith('Adjacent_')]
+        tumor_cols = [c for c in secact_zscore_df.columns if c.startswith('Tumor_')]
         print(f"    Adjacent columns: {len(adjacent_cols)}, Tumor columns: {len(tumor_cols)}")
 
-        for sig in zscore_df.index:
-            adjacent_values = zscore_df.loc[sig, adjacent_cols].values
-            tumor_values = zscore_df.loc[sig, tumor_cols].values
+        # Overall boxplots
+        for sig in secact_zscore_df.index:
+            adjacent_values = secact_zscore_df.loc[sig, adjacent_cols].values
+            tumor_values = secact_zscore_df.loc[sig, tumor_cols].values
 
             adj_stats = compute_boxplot_stats(adjacent_values, 'Adjacent')
             tumor_stats = compute_boxplot_stats(tumor_values, 'Tumor')
@@ -2896,53 +2972,221 @@ def preprocess_adjacent_tissue():
                 boxplot_data.append({
                     'signature': sig,
                     'signature_type': 'SecAct',
+                    'cancer_type': 'all',
                     'adjacent': adj_stats,
                     'tumor': tumor_stats
                 })
 
-    # Compute tumor vs adjacent differential statistics for volcano plot
+        # Cancer type-specific boxplots for SecAct
+        if meta_df is not None:
+            cancer_types = meta_df[meta_df['tissue'].isin(['Tumor', 'Adjacent'])]['cancerType'].unique()
+            for cancer in cancer_types:
+                cancer_meta = meta_df[meta_df['cancerType'] == cancer]
+                cancer_adj_cols = [c for c in adjacent_cols if c in cancer_meta.index]
+                cancer_tumor_cols = [c for c in tumor_cols if c in cancer_meta.index]
+
+                if len(cancer_adj_cols) < 2 or len(cancer_tumor_cols) < 2:
+                    continue
+
+                for sig in secact_zscore_df.index:
+                    adj_vals = secact_zscore_df.loc[sig, cancer_adj_cols].values
+                    tumor_vals = secact_zscore_df.loc[sig, cancer_tumor_cols].values
+
+                    adj_stats = compute_boxplot_stats(adj_vals, 'Adjacent')
+                    tumor_stats = compute_boxplot_stats(tumor_vals, 'Tumor')
+                    diff_stats = compute_differential(tumor_vals, adj_vals)
+
+                    if adj_stats and tumor_stats and diff_stats:
+                        boxplot_by_cancer.append({
+                            'signature': sig,
+                            'signature_type': 'SecAct',
+                            'cancer_type': cancer,
+                            'adjacent': adj_stats,
+                            'tumor': tumor_stats,
+                            **diff_stats
+                        })
+
+    # Compute tumor vs adjacent differential statistics for volcano plot (overall)
     tumor_vs_adjacent = []
+
+    # Add CytoSig from CSV (has pre-computed qvalue) - only use 'All' (pan-cancer) entries
     for row in df.to_dict('records'):
+        # Skip non-pan-cancer entries (e.g., HCC-specific)
+        if row.get('cancer_type', 'All') != 'All':
+            continue
+
+        mean_tumor = row.get('mean_tumor', 0)
+        mean_adj = row.get('mean_adjacent', 0)
+        # Compute log2fc from means if not available (for z-scores, use difference)
+        if pd.notna(row.get('log2fc_adj_vs_tumor')):
+            log2fc = row['log2fc_adj_vs_tumor']
+        else:
+            log2fc = mean_adj - mean_tumor  # Difference for z-score data
+
         record = {
             'signature': row['signature'],
             'signature_type': row.get('signature_type', 'CytoSig'),
-            'mean_tumor': round(row.get('mean_tumor', 0), 4),
-            'mean_adjacent': round(row.get('mean_adjacent', 0), 4),
-            'median_tumor': round(row.get('median_tumor', 0) if pd.notna(row.get('median_tumor')) else 0, 4),
-            'median_adjacent': round(row.get('median_adjacent', 0) if pd.notna(row.get('median_adjacent')) else 0, 4),
-            'log2fc': round(row.get('log2fc_adj_vs_tumor', 0) if pd.notna(row.get('log2fc_adj_vs_tumor')) else 0, 4),
+            'cancer_type': 'all',
+            'mean_tumor': round(mean_tumor, 4),
+            'mean_adjacent': round(mean_adj, 4),
+            'log2fc': round(float(log2fc), 4),
             'pvalue': row.get('pvalue', 1),
             'qvalue': row.get('qvalue', 1),
             'neg_log10_pval': round(-np.log10(max(row.get('pvalue', 1), 1e-100)), 4),
             'n_tumor': row.get('n_tumor', 0),
             'n_adjacent': row.get('n_adjacent', 0),
-            'direction': 'up_in_adjacent' if row.get('mean_adjacent', 0) > row.get('mean_tumor', 0) else 'up_in_tumor'
+            'direction': 'up_in_adjacent' if mean_adj > mean_tumor else 'up_in_tumor'
         }
         tumor_vs_adjacent.append(record)
+
+    # Add SecAct from boxplot_data (compute differential stats from zscore data)
+    secact_boxplot = [d for d in boxplot_data if d['signature_type'] == 'SecAct' and d.get('cancer_type') == 'all']
+    if secact_zscore_df is not None and len(secact_boxplot) > 0:
+        print(f"  Computing SecAct differential statistics for {len(secact_boxplot)} signatures...")
+        adjacent_cols = [c for c in secact_zscore_df.columns if c.startswith('Adjacent_')]
+        tumor_cols = [c for c in secact_zscore_df.columns if c.startswith('Tumor_')]
+
+        secact_pvals = []
+        for entry in secact_boxplot:
+            sig = entry['signature']
+            if sig in secact_zscore_df.index:
+                adj_vals = secact_zscore_df.loc[sig, adjacent_cols].dropna().values
+                tumor_vals = secact_zscore_df.loc[sig, tumor_cols].dropna().values
+
+                # Compute Mann-Whitney U test
+                from scipy import stats
+                try:
+                    stat, pval = stats.mannwhitneyu(tumor_vals, adj_vals, alternative='two-sided')
+                except:
+                    pval = 1.0
+
+                mean_tumor = float(np.mean(tumor_vals))
+                mean_adj = float(np.mean(adj_vals))
+                # For z-scores, use difference as log2fc (already on log scale)
+                # Positive means higher in adjacent, negative means higher in tumor
+                log2fc = mean_adj - mean_tumor
+
+                secact_pvals.append(pval)
+                tumor_vs_adjacent.append({
+                    'signature': sig,
+                    'signature_type': 'SecAct',
+                    'cancer_type': 'all',
+                    'mean_tumor': round(mean_tumor, 4),
+                    'mean_adjacent': round(mean_adj, 4),
+                    'log2fc': round(float(log2fc), 4),
+                    'pvalue': pval,
+                    'qvalue': pval,  # Will be corrected below
+                    'neg_log10_pval': round(-np.log10(max(pval, 1e-100)), 4),
+                    'n_tumor': len(tumor_vals),
+                    'n_adjacent': len(adj_vals),
+                    'direction': 'up_in_adjacent' if mean_adj > mean_tumor else 'up_in_tumor'
+                })
+
+        # Apply FDR correction for SecAct
+        if secact_pvals:
+            from statsmodels.stats.multitest import multipletests
+            _, qvals, _, _ = multipletests(secact_pvals, method='fdr_bh')
+            secact_entries = [d for d in tumor_vs_adjacent if d['signature_type'] == 'SecAct']
+            for i, entry in enumerate(secact_entries):
+                entry['qvalue'] = float(qvals[i])
+
+        print(f"  Added {len(secact_boxplot)} SecAct signatures to tumor_vs_adjacent")
+
+    # Get cancer types list
+    cancer_types_list = sorted(list(set(d['cancer_type'] for d in boxplot_by_cancer if d['cancer_type'] != 'all')))
 
     # Extract signature lists for dropdown population
     cytosig_signatures = sorted([d['signature'] for d in boxplot_data if d['signature_type'] == 'CytoSig'])
     secact_signatures = sorted([d['signature'] for d in boxplot_data if d['signature_type'] == 'SecAct'])
 
+    # Cancer type to organ mapping for normal tissue reference
+    cancer_organ_map = {
+        'CRC': 'Colon',
+        'HCC': 'Liver',
+        'HNSC': 'Oral',
+        'ICC': 'Liver',
+        'KIRC': 'Kidney',
+        'LUAD': 'Lung',
+        'cSCC': 'Skin'
+    }
+
+    # Load scAtlas organs data for normal tissue reference
+    organs_json_path = OUTPUT_DIR / "scatlas_organs.json"
+    normal_tissue_data = {}
+    if organs_json_path.exists():
+        print("  Loading normal tissue data from scAtlas organs...")
+        with open(organs_json_path) as f:
+            organs_data = json.load(f)
+
+        # Build lookup by (organ, signature, signature_type)
+        for entry in organs_data:
+            key = (entry['organ'], entry['signature'], entry['signature_type'])
+            normal_tissue_data[key] = entry.get('mean_activity', 0)
+        print(f"    Loaded {len(normal_tissue_data)} normal tissue entries")
+
+    # Add normal tissue stats to boxplot_data (pan-cancer)
+    # We need to compute normal tissue stats from cell-level data for proper boxplots
+    # For now, use organ mean as a reference point
+    normal_zscore_path = SCATLAS_DIR / "normal_cytosig_zscore.csv"
+    secact_normal_zscore_path = SCATLAS_DIR / "normal_secact_zscore.csv"
+
+    # Try to load normal tissue z-score data if available
+    if normal_zscore_path.exists():
+        print("  Loading normal tissue CytoSig zscore data...")
+        normal_cytosig_df = pd.read_csv(normal_zscore_path, index_col=0)
+
+        # Add normal stats to boxplot_data entries
+        for entry in boxplot_data:
+            if entry['signature_type'] == 'CytoSig' and entry.get('cancer_type') == 'all':
+                sig = entry['signature']
+                if sig in normal_cytosig_df.index:
+                    normal_vals = normal_cytosig_df.loc[sig].dropna().values
+                    normal_stats = compute_boxplot_stats(normal_vals, 'Normal')
+                    if normal_stats:
+                        entry['normal'] = normal_stats
+
+    if secact_normal_zscore_path.exists():
+        print("  Loading normal tissue SecAct zscore data...")
+        normal_secact_df = pd.read_csv(secact_normal_zscore_path, index_col=0)
+
+        for entry in boxplot_data:
+            if entry['signature_type'] == 'SecAct' and entry.get('cancer_type') == 'all':
+                sig = entry['signature']
+                if sig in normal_secact_df.index:
+                    normal_vals = normal_secact_df.loc[sig].dropna().values
+                    normal_stats = compute_boxplot_stats(normal_vals, 'Normal')
+                    if normal_stats:
+                        entry['normal'] = normal_stats
+
+    # Count entries with normal data
+    n_with_normal = len([d for d in boxplot_data if 'normal' in d])
+    print(f"  Boxplot entries with normal tissue data: {n_with_normal}")
+
     adjacent_data = {
         'tumor_vs_adjacent': tumor_vs_adjacent,
+        'by_cancer_type': boxplot_by_cancer,  # Cancer type-specific differential & boxplots
         'boxplot_data': boxplot_data,
         'cytosig_signatures': cytosig_signatures,
         'secact_signatures': secact_signatures,
+        'cancer_types': cancer_types_list,
+        'cancer_organ_map': cancer_organ_map,
         'summary': {
-            'n_tumor_samples': len(tumor_cols) if 'tumor_cols' in dir() else 147,
-            'n_adjacent_samples': len(adjacent_cols) if 'adjacent_cols' in dir() else 105,
+            'n_tumor_samples': len([c for c in cytosig_zscore_df.columns if c.startswith('Tumor_')]) if cytosig_zscore_df is not None else 147,
+            'n_adjacent_samples': len([c for c in cytosig_zscore_df.columns if c.startswith('Adjacent_')]) if cytosig_zscore_df is not None else 105,
             'n_signatures_cytosig': len(cytosig_signatures),
             'n_signatures_secact': len(secact_signatures),
-            'n_significant_cytosig': len([r for r in tumor_vs_adjacent if r['signature_type'] == 'CytoSig' and r['qvalue'] < 0.05]),
-            'n_significant_secact': len([r for r in tumor_vs_adjacent if r['signature_type'] == 'SecAct' and r['qvalue'] < 0.05])
+            'n_cancer_types': len(cancer_types_list),
+            'n_significant_cytosig': len([r for r in tumor_vs_adjacent if r['signature_type'] == 'CytoSig' and r.get('qvalue', 1) < 0.05]),
+            'n_significant_secact': len([r for r in tumor_vs_adjacent if r['signature_type'] == 'SecAct' and r.get('qvalue', 1) < 0.05])
         }
     }
 
     with open(OUTPUT_DIR / "adjacent_tissue.json", 'w') as f:
         json.dump(adjacent_data, f)
 
-    print(f"  Boxplot records: {len(boxplot_data)}")
+    print(f"  Boxplot records (overall): {len(boxplot_data)}")
+    print(f"  Boxplot records (by cancer): {len(boxplot_by_cancer)}")
+    print(f"  Cancer types: {cancer_types_list}")
     print(f"  Tumor vs Adjacent records: {len(tumor_vs_adjacent)}")
     return adjacent_data
 

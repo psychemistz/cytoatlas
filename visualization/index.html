@@ -1894,6 +1894,12 @@
             <div class="tab-content" id="tab-differential-analysis">
                 <div class="controls">
                     <div class="control-group">
+                        <label>Cancer Type</label>
+                        <select id="diff-cancer-type" onchange="updateDifferentialAnalysis()">
+                            <option value="all">All Cancers (Pan-Cancer)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
                         <label>Signature Type</label>
                         <select id="diff-sig-type" onchange="updateDifferentialAnalysis()">
                             <option value="CytoSig">CytoSig (43 cytokines)</option>
@@ -1915,7 +1921,7 @@
                     </div>
                 </div>
 
-                <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
+                <div class="card" style="margin-bottom: 1rem; padding: 1rem;" id="diff-description-card">
                     <strong>Differential Analysis:</strong> Compare cytokine activity between tumor and tumor-matched normal tissue:
                     <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
                         <li><strong>Tumor:</strong> Cancer tissue (pan-cancer, 147 cell type samples)</li>
@@ -1966,23 +1972,36 @@
                 </div>
 
                 <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
-                    <strong>Immune Infiltration Analysis:</strong> Compare immune cell composition in tumor microenvironment.
+                    <strong>Tumor-Infiltrating Immune Cells (TILs):</strong> Immune composition in the tumor microenvironment.
+                    <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 0.5rem; margin: 0.5rem 0;">
+                        <strong>Data Source:</strong> Tumor tissue samples only (excludes PBMC/Blood, Adjacent, Metastasis)
+                    </div>
                     <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
-                        <li><strong>Cancer Type:</strong> Aggregated immune profiles across cancer types</li>
+                        <li><strong>Cancer Type:</strong> Aggregated TIL profiles across cancer types</li>
                         <li><strong>Study:</strong> Compare profiles across published studies (13 studies)</li>
                         <li><strong>Individual Donors:</strong> Patient-level composition (84 donors)</li>
                     </ul>
+                    <div style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">
+                        <strong>Clinical Ratios:</strong> CD8:Treg (immune activation) | T:Myeloid (TME polarization)
+                    </div>
+                </div>
+
+                <!-- TME Composition (full breakdown) -->
+                <div class="viz-container" style="min-height: 350px; margin-bottom: 1rem;">
+                    <div class="viz-title" id="tme-composition-title">Tumor Microenvironment Composition</div>
+                    <div class="viz-subtitle" id="tme-composition-subtitle">Breakdown: Malignant cells, Immune cells, Stromal cells, Other</div>
+                    <div id="tme-composition" class="loading">Loading data...</div>
                 </div>
 
                 <div class="two-col">
-                    <div class="viz-container" style="min-height: 480px;">
+                    <div class="viz-container" style="min-height: 400px;">
                         <div class="viz-title" id="infiltration-stacked-title">Immune Cell Composition</div>
-                        <div class="viz-subtitle" id="infiltration-stacked-subtitle">Tumor microenvironment immune cell proportions</div>
+                        <div class="viz-subtitle" id="infiltration-stacked-subtitle">Breakdown within tumor-infiltrating immune cells</div>
                         <div id="infiltration-stacked" class="loading">Loading data...</div>
                     </div>
-                    <div class="viz-container" style="min-height: 480px;">
-                        <div class="viz-title" id="infiltration-scatter-title">Immune Infiltration Summary</div>
-                        <div class="viz-subtitle" id="infiltration-scatter-subtitle">Total immune proportion comparison</div>
+                    <div class="viz-container" style="min-height: 400px;">
+                        <div class="viz-title" id="infiltration-scatter-title">Clinical Ratios</div>
+                        <div class="viz-subtitle" id="infiltration-scatter-subtitle">CD8:Treg and T:Myeloid ratios with data quality</div>
                         <div id="infiltration-scatter" class="loading">Loading data...</div>
                     </div>
                 </div>
@@ -4367,6 +4386,21 @@
             const organData = state.data.scatlasorgans;
             const cancerData = state.data.organcancermatrix;
 
+            // Populate cancer type dropdown
+            const cancerDropdown = document.getElementById('diff-cancer-type');
+            if (cancerDropdown && adjData?.cancer_types) {
+                const currentCancer = cancerDropdown.value;
+                const options = ['<option value="all">All Cancers (Pan-Cancer)</option>'];
+                adjData.cancer_types.forEach(ct => {
+                    options.push(`<option value="${ct}">${ct}</option>`);
+                });
+                cancerDropdown.innerHTML = options.join('');
+                if (currentCancer && (currentCancer === 'all' || adjData.cancer_types.includes(currentCancer))) {
+                    cancerDropdown.value = currentCancer;
+                }
+            }
+            const selectedCancer = cancerDropdown?.value || 'all';
+
             // Populate signature dropdown
             const sigType = document.getElementById('diff-sig-type')?.value || 'CytoSig';
             const sigDropdown = document.getElementById('diff-signature');
@@ -4391,9 +4425,41 @@
                 return;
             }
 
-            // Filter data by signature type
-            const filtered = adjData.tumor_vs_adjacent.filter(d => d.signature_type === sigType);
-            const boxplotFiltered = (adjData.boxplot_data || []).filter(d => d.signature_type === sigType);
+            // Update description card based on cancer selection
+            const descCard = document.getElementById('diff-description-card');
+            if (descCard) {
+                if (selectedCancer === 'all') {
+                    descCard.innerHTML = `<strong>Differential Analysis:</strong> Compare cytokine activity across tissue types (Pan-Cancer):
+                    <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
+                        <li><strong style="color:#d62728;">Tumor:</strong> Cancer tissue from pan-cancer scAtlas (${adjData.summary?.n_tumor_samples || 147} cell type samples)</li>
+                        <li><strong style="color:#ff7f0e;">Adjacent:</strong> Tumor-adjacent normal tissue - sample-matched controls from cancer patients (${adjData.summary?.n_adjacent_samples || 105} samples)</li>
+                        <li><strong style="color:#2ca02c;">Normal:</strong> Healthy tissue from scAtlas normal organs - independent healthy donors (not patient-matched)</li>
+                    </ul>`;
+                } else {
+                    const cancerStats = adjData.by_cancer_type?.find(d => d.cancer_type === selectedCancer && d.signature_type === sigType);
+                    const nTumor = cancerStats?.tumor?.n || 'N/A';
+                    const nAdj = cancerStats?.adjacent?.n || 'N/A';
+                    const organMap = adjData.cancer_organ_map || {};
+                    const matchedOrgan = organMap[selectedCancer] || 'matching organ';
+                    descCard.innerHTML = `<strong>Differential Analysis:</strong> Compare cytokine activity for <strong>${selectedCancer}</strong>:
+                    <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
+                        <li><strong style="color:#d62728;">Tumor:</strong> ${selectedCancer} tumor tissue (${nTumor} samples)</li>
+                        <li><strong style="color:#ff7f0e;">Adjacent:</strong> ${selectedCancer} tumor-adjacent normal tissue (${nAdj} samples)</li>
+                    </ul>
+                    <small style="color:#666;">Note: Normal tissue reference (${matchedOrgan}) available in Pan-Cancer view.</small>`;
+                }
+            }
+
+            // Filter data by signature type and cancer type
+            let filtered, boxplotFiltered;
+            if (selectedCancer === 'all') {
+                filtered = adjData.tumor_vs_adjacent.filter(d => d.signature_type === sigType);
+                boxplotFiltered = (adjData.boxplot_data || []).filter(d => d.signature_type === sigType);
+            } else {
+                // Use cancer-specific data
+                filtered = (adjData.by_cancer_type || []).filter(d => d.signature_type === sigType && d.cancer_type === selectedCancer);
+                boxplotFiltered = filtered; // by_cancer_type already has boxplot stats (tumor/adjacent objects)
+            }
 
             // 1. Side-by-side boxplot: Tumor vs Adjacent (tumor-matched normal)
             boxplotContainer.classList.remove('loading');
@@ -4405,14 +4471,26 @@
 
             // Update subtitle
             const boxSubtitle = document.getElementById('diff-boxplot-subtitle');
+            const boxTitle = document.getElementById('diff-boxplot-title');
+            const cancerLabel = selectedCancer === 'all' ? 'Pan-Cancer' : selectedCancer;
 
             if (sigBoxData && sigBoxData.tumor && sigBoxData.adjacent) {
                 // Use proper boxplot with quartile statistics
                 const tumorStats = sigBoxData.tumor;
                 const adjStats = sigBoxData.adjacent;
+                const normalStats = sigBoxData.normal; // May be undefined for cancer-specific views
 
+                const hasNormal = normalStats && selectedCancer === 'all';
+
+                if (boxTitle) {
+                    boxTitle.textContent = hasNormal
+                        ? `Activity Comparison: Tumor vs Adjacent vs Normal (${cancerLabel})`
+                        : `Activity Comparison: Tumor vs Adjacent Normal (${cancerLabel})`;
+                }
                 if (boxSubtitle) {
-                    boxSubtitle.textContent = `${selectedSig} activity: Tumor (n=${tumorStats.n}) vs Adjacent Normal (n=${adjStats.n})`;
+                    boxSubtitle.textContent = hasNormal
+                        ? `${selectedSig}: Tumor (n=${tumorStats.n}, cancer) | Adjacent (n=${adjStats.n}, tumor-matched) | Normal (n=${normalStats.n}, scAtlas healthy)`
+                        : `${selectedSig} activity: Tumor (n=${tumorStats.n}) vs Adjacent Normal (n=${adjStats.n})`;
                 }
 
                 // Create box traces using precomputed statistics (Plotly box with pre-computed values)
@@ -4432,7 +4510,7 @@
                     fillcolor: 'rgba(214, 39, 40, 0.5)',
                     line: { color: '#d62728', width: 2 },
                     hoverinfo: 'text',
-                    hovertext: `<b>Tumor</b><br>` +
+                    hovertext: `<b>Tumor (Cancer tissue)</b><br>` +
                         `Max: ${tumorStats.max.toFixed(3)}<br>` +
                         `Q3: ${tumorStats.q3.toFixed(3)}<br>` +
                         `Median: ${tumorStats.median.toFixed(3)}<br>` +
@@ -4444,8 +4522,8 @@
 
                 const adjTrace = {
                     type: 'box',
-                    name: 'Adjacent Normal',
-                    x: ['Adjacent Normal'],
+                    name: 'Adjacent',
+                    x: ['Adjacent'],
                     lowerfence: [adjStats.min],
                     q1: [adjStats.q1],
                     median: [adjStats.median],
@@ -4454,11 +4532,11 @@
                     mean: [adjStats.mean],
                     boxpoints: false,
                     boxmean: true,
-                    marker: { color: '#2ca02c' },
-                    fillcolor: 'rgba(44, 160, 44, 0.5)',
-                    line: { color: '#2ca02c', width: 2 },
+                    marker: { color: '#ff7f0e' },
+                    fillcolor: 'rgba(255, 127, 14, 0.5)',
+                    line: { color: '#ff7f0e', width: 2 },
                     hoverinfo: 'text',
-                    hovertext: `<b>Adjacent Normal</b><br>` +
+                    hovertext: `<b>Adjacent (Tumor-matched normal)</b><br>` +
                         `Max: ${adjStats.max.toFixed(3)}<br>` +
                         `Q3: ${adjStats.q3.toFixed(3)}<br>` +
                         `Median: ${adjStats.median.toFixed(3)}<br>` +
@@ -4468,13 +4546,45 @@
                         `n=${adjStats.n}`
                 };
 
+                const traces = [tumorTrace, adjTrace];
+
+                // Add Normal tissue trace if available (only for pan-cancer view)
+                if (hasNormal) {
+                    const normalTrace = {
+                        type: 'box',
+                        name: 'Normal',
+                        x: ['Normal'],
+                        lowerfence: [normalStats.min],
+                        q1: [normalStats.q1],
+                        median: [normalStats.median],
+                        q3: [normalStats.q3],
+                        upperfence: [normalStats.max],
+                        mean: [normalStats.mean],
+                        boxpoints: false,
+                        boxmean: true,
+                        marker: { color: '#2ca02c' },
+                        fillcolor: 'rgba(44, 160, 44, 0.5)',
+                        line: { color: '#2ca02c', width: 2 },
+                        hoverinfo: 'text',
+                        hovertext: `<b>Normal (scAtlas healthy tissue)</b><br>` +
+                            `Max: ${normalStats.max.toFixed(3)}<br>` +
+                            `Q3: ${normalStats.q3.toFixed(3)}<br>` +
+                            `Median: ${normalStats.median.toFixed(3)}<br>` +
+                            `Q1: ${normalStats.q1.toFixed(3)}<br>` +
+                            `Min: ${normalStats.min.toFixed(3)}<br>` +
+                            `Mean: ${normalStats.mean.toFixed(3)}<br>` +
+                            `n=${normalStats.n}`
+                    };
+                    traces.push(normalTrace);
+                }
+
                 // Add p-value annotation if available
                 const pval = sigEntry?.pvalue || 1;
                 const pvalText = pval < 0.001 ? 'p < 0.001' : `p = ${pval.toFixed(3)}`;
                 const direction = sigEntry?.direction === 'up_in_tumor' ? 'Higher in Tumor' : 'Higher in Adjacent';
 
-                Plotly.newPlot(boxplotContainer, [tumorTrace, adjTrace], {
-                    title: { text: `${selectedSig}: Tumor vs Adjacent Normal`, font: { size: 14 } },
+                Plotly.newPlot(boxplotContainer, traces, {
+                    title: { text: `${selectedSig}: Tissue Comparison (${cancerLabel})`, font: { size: 14 } },
                     yaxis: { title: 'Activity (z-score)', zeroline: true },
                     xaxis: { title: '' },
                     annotations: [{
@@ -4482,7 +4592,7 @@
                         y: 1.08,
                         xref: 'paper',
                         yref: 'paper',
-                        text: `${pvalText} | ${direction}`,
+                        text: `Tumor vs Adjacent: ${pvalText} | ${direction}`,
                         showarrow: false,
                         font: { size: 11, color: pval < 0.05 ? '#d62728' : '#666' }
                     }],
@@ -4495,6 +4605,9 @@
                 const tumorMean = sigEntry?.mean_tumor || 0;
                 const adjacentMean = sigEntry?.mean_adjacent || 0;
 
+                if (boxTitle) {
+                    boxTitle.textContent = `Activity Comparison: Tumor vs Adjacent Normal (${cancerLabel})`;
+                }
                 if (boxSubtitle) {
                     boxSubtitle.textContent = `${selectedSig} activity: Tumor vs Adjacent Normal (mean values)`;
                 }
@@ -4508,7 +4621,7 @@
                     textposition: 'outside',
                     hovertemplate: '<b>%{x}</b><br>Mean activity: %{y:.3f}<extra></extra>'
                 }], {
-                    title: { text: `${selectedSig} Activity: Tumor vs Adjacent`, font: { size: 14 } },
+                    title: { text: `${selectedSig} Activity: Tumor vs Adjacent (${cancerLabel})`, font: { size: 14 } },
                     yaxis: { title: 'Mean Activity (z-score)', zeroline: true },
                     margin: { l: 60, r: 30, t: 50, b: 50 },
                     height: 300
@@ -4534,8 +4647,16 @@
                 // Update subtitle
                 const volcanoSubtitle = document.getElementById('diff-volcano-subtitle');
                 if (volcanoSubtitle) {
-                    const nSig = sigType === 'CytoSig' ? adjData.summary?.n_significant_cytosig : adjData.summary?.n_significant_secact;
-                    volcanoSubtitle.textContent = `${nSig || 0} significant signatures (q<0.05) | ${adjData.summary?.n_tumor_samples || 0} tumor vs ${adjData.summary?.n_adjacent_samples || 0} adjacent samples`;
+                    const nSigUp = significantUp.length;
+                    const nSigDown = significantDown.length;
+                    if (selectedCancer === 'all') {
+                        volcanoSubtitle.textContent = `${nSigUp + nSigDown} significant signatures (p<0.05) | Pan-Cancer: ${adjData.summary?.n_tumor_samples || 0} tumor vs ${adjData.summary?.n_adjacent_samples || 0} adjacent samples`;
+                    } else {
+                        const sampleEntry = filtered[0];
+                        const nTumor = sampleEntry?.tumor?.n || 'N/A';
+                        const nAdj = sampleEntry?.adjacent?.n || 'N/A';
+                        volcanoSubtitle.textContent = `${nSigUp + nSigDown} significant signatures (p<0.05) | ${selectedCancer}: ${nTumor} tumor vs ${nAdj} adjacent samples`;
+                    }
                 }
 
                 Plotly.newPlot(volcanoContainer, [
@@ -8742,25 +8863,22 @@
 
             // Get controls
             const viewMode = document.getElementById('infiltration-view')?.value || 'cancer';
-            const selectedCancer = document.getElementById('infiltration-cancer')?.value || 'all';
             const selectedStudy = document.getElementById('infiltration-study')?.value || 'all';
 
-            // Populate dropdowns dynamically
-            const cancerDropdown = document.getElementById('infiltration-cancer');
+            // Populate study dropdown dynamically
             const studyDropdown = document.getElementById('infiltration-study');
-
-            if (cancerDropdown && data.cancer_types) {
-                const current = cancerDropdown.value;
-                cancerDropdown.innerHTML = '<option value="all">All Cancers</option>' +
-                    data.cancer_types.map(c => `<option value="${c}">${c}</option>`).join('');
-                if (data.cancer_types.includes(current)) cancerDropdown.value = current;
-            }
+            const studyGroup = document.getElementById('infiltration-study-group');
 
             if (studyDropdown && data.studies) {
                 const current = studyDropdown.value;
                 studyDropdown.innerHTML = '<option value="all">All Studies</option>' +
                     data.studies.map(s => `<option value="${s.study}">${s.study} (${s.cancer_types.join(', ')})</option>`).join('');
                 if (data.studies.map(s => s.study).includes(current)) studyDropdown.value = current;
+            }
+
+            // Show/hide study filter based on view mode
+            if (studyGroup) {
+                studyGroup.style.display = (viewMode === 'cancer') ? 'none' : 'block';
             }
 
             // Common colors
@@ -8774,89 +8892,208 @@
 
             // === VIEW MODE: Cancer Type ===
             if (viewMode === 'cancer') {
-                if (title1) title1.textContent = 'Immune Composition by Cancer Type';
-                if (subtitle1) subtitle1.textContent = 'Stacked proportions of immune cell types';
-                if (title2) title2.textContent = 'Immune Proportion vs Cytokine Enrichment';
-                if (subtitle2) subtitle2.textContent = 'Association between infiltration and cytokine activity';
+                if (title1) title1.textContent = 'Immune Cell Composition (within TILs)';
+                if (subtitle1) subtitle1.textContent = 'Breakdown of immune cell types among tumor-infiltrating immune cells';
+                if (title2) title2.textContent = 'TIL Proportion & Clinical Ratios';
+                if (subtitle2) subtitle2.textContent = 'Total immune infiltration with data quality indicators';
 
-                // Filter by cancer type if selected
-                let composition = data.composition || [];
-                if (selectedCancer !== 'all') {
-                    composition = composition.filter(d => d.cancer_type === selectedCancer);
-                }
-                const cancerTypes = [...new Set(composition.map(d => d.cancer_type))];
+                // Show TME composition panel in cancer view
+                const tmePanel = document.getElementById('tme-composition')?.closest('.viz-container');
+                if (tmePanel) tmePanel.style.display = '';
 
-                // Stacked bar by cancer type
-                if (container1 && composition.length) {
+                const composition = data.composition || [];
+                const tmeSummary = data.tme_summary || [];
+                const cancerTypes = tmeSummary.length
+                    ? tmeSummary.map(d => d.cancer_type).sort((a, b) => {
+                        const aData = tmeSummary.find(t => t.cancer_type === a);
+                        const bData = tmeSummary.find(t => t.cancer_type === b);
+                        return (bData?.immune_proportion || 0) - (aData?.immune_proportion || 0);
+                    })
+                    : [...new Set(composition.map(d => d.cancer_type))];
+
+                // Stacked bar showing immune composition WITHIN immune cells
+                if (container1 && (composition.length || tmeSummary.length)) {
                     container1.classList.remove('loading');
                     Plotly.purge(container1);
 
+                    // Use proportion_of_immune from composition, or immune_* from tme_summary
                     const traces = categories.map(cat => ({
                         type: 'bar',
                         name: cat.replace(/_/g, ' '),
                         x: cancerTypes,
                         y: cancerTypes.map(ct => {
+                            // Try composition first (more detailed)
                             const entry = composition.find(d => d.cancer_type === ct && d.cell_category === cat);
+                            if (entry && entry.proportion_of_immune !== undefined) {
+                                return entry.proportion_of_immune;
+                            }
+                            // Fall back to tme_summary
+                            const tmeEntry = tmeSummary.find(d => d.cancer_type === ct);
+                            if (tmeEntry && tmeEntry[`immune_${cat}`] !== undefined) {
+                                return tmeEntry[`immune_${cat}`];
+                            }
                             return entry ? entry.proportion : 0;
                         }),
                         marker: { color: categoryColors[cat] || '#666' },
-                        hovertemplate: `<b>${cat.replace(/_/g, ' ')}</b><br>%{x}: %{y:.1%}<extra></extra>`
+                        hovertemplate: `<b>${cat.replace(/_/g, ' ')}</b><br>%{x}: %{y:.1%} of immune cells<extra></extra>`
                     }));
 
                     Plotly.newPlot(container1, traces, {
                         barmode: 'stack',
                         xaxis: { title: 'Cancer Type', tickangle: 45 },
-                        yaxis: { title: 'Cell Proportion', tickformat: '.0%' },
+                        yaxis: { title: 'Proportion within Immune Cells', tickformat: '.0%', range: [0, 1.05] },
                         margin: { l: 60, r: 30, t: 30, b: 100 },
                         legend: { orientation: 'h', y: 1.15, font: { size: 9 } },
                         height: 450
                     }, { responsive: true });
                 }
 
-                // Scatter by cancer type
-                if (container2 && data.data?.length) {
+                // Bar chart with clinical ratios using TME summary
+                if (container2) {
                     container2.classList.remove('loading');
                     Plotly.purge(container2);
 
-                    let filteredData = data.data;
-                    if (selectedCancer !== 'all') {
-                        filteredData = filteredData.filter(d => d.cancer_type === selectedCancer);
+                    // Use TME summary if available, fall back to data
+                    const tmeSummary = data.tme_summary || [];
+
+                    if (tmeSummary.length) {
+                        if (title2) title2.textContent = 'TME Summary & Clinical Ratios';
+                        if (subtitle2) subtitle2.textContent = 'Immune proportion with data quality indicators';
+
+                        const sorted = [...tmeSummary].sort((a, b) => b.immune_proportion - a.immune_proportion);
+
+                        // Color by data quality
+                        const qualityColors = {
+                            'high': '#2ca02c',
+                            'medium': '#ff7f0e',
+                            'low': '#d62728',
+                            'very_low': '#7f7f7f'
+                        };
+
+                        Plotly.newPlot(container2, [{
+                            type: 'bar',
+                            x: sorted.map(d => d.cancer_type),
+                            y: sorted.map(d => d.immune_proportion),
+                            text: sorted.map(d => {
+                                const pct = (d.immune_proportion * 100).toFixed(1);
+                                const cd8treg = d.cd8_treg_ratio ? `CD8:Treg=${d.cd8_treg_ratio.toFixed(1)}` : '';
+                                return `${pct}%${cd8treg ? '<br>' + cd8treg : ''}`;
+                            }),
+                            textposition: 'outside',
+                            marker: {
+                                color: sorted.map(d => qualityColors[d.data_quality] || '#666')
+                            },
+                            hovertemplate: sorted.map(d => {
+                                const cd8treg = d.cd8_treg_ratio ? d.cd8_treg_ratio.toFixed(1) : 'N/A';
+                                const tmyeloid = d.t_myeloid_ratio ? d.t_myeloid_ratio.toFixed(1) : 'N/A';
+                                return `<b>${d.cancer_type}</b><br>` +
+                                    `Immune: ${(d.immune_proportion * 100).toFixed(1)}%<br>` +
+                                    `CD8:Treg ratio: ${cd8treg}<br>` +
+                                    `T:Myeloid ratio: ${tmyeloid}<br>` +
+                                    `Samples: ${d.n_samples} | Donors: ${d.n_donors}<br>` +
+                                    `Data quality: ${d.data_quality}<br>` +
+                                    `Total cells: ${d.total_cells.toLocaleString()}<extra></extra>`;
+                            })
+                        }], {
+                            xaxis: { title: 'Cancer Type', tickangle: 45 },
+                            yaxis: { title: 'TIL Proportion', tickformat: '.0%', range: [0, 1.1] },
+                            margin: { l: 60, r: 30, t: 30, b: 100 },
+                            annotations: [{
+                                x: 0.5, y: 1.08, xref: 'paper', yref: 'paper',
+                                text: '<span style="color:#2ca02c">●</span> High <span style="color:#ff7f0e">●</span> Medium <span style="color:#d62728">●</span> Low quality',
+                                showarrow: false, font: { size: 10 }
+                            }],
+                            height: 450
+                        }, { responsive: true });
+                    } else if (data.data?.length) {
+                        // Fallback to original logic
+                        const byType = {};
+                        data.data.forEach(d => {
+                            if (!byType[d.cancer_type]) {
+                                byType[d.cancer_type] = {
+                                    immune_proportion: d.immune_proportion,
+                                    total_cells: d.total_cells,
+                                    immune_cells: d.immune_cells
+                                };
+                            }
+                        });
+
+                        const sorted = Object.entries(byType)
+                            .sort((a, b) => b[1].immune_proportion - a[1].immune_proportion);
+
+                        Plotly.newPlot(container2, [{
+                            type: 'bar',
+                            x: sorted.map(d => d[0]),
+                            y: sorted.map(d => d[1].immune_proportion),
+                            text: sorted.map(d => `${(d[1].immune_proportion * 100).toFixed(1)}%`),
+                            textposition: 'auto',
+                            marker: { color: sorted.map(d => d[1].immune_proportion), colorscale: 'Blues' },
+                            hovertemplate: '<b>%{x}</b><br>Immune: %{y:.1%}<br>Immune cells: %{customdata[0]:,}<br>Total cells: %{customdata[1]:,}<extra></extra>',
+                            customdata: sorted.map(d => [d[1].immune_cells, d[1].total_cells])
+                        }], {
+                            xaxis: { title: 'Cancer Type', tickangle: 45 },
+                            yaxis: { title: 'Immune Cell Proportion', tickformat: '.0%' },
+                            margin: { l: 60, r: 30, t: 30, b: 100 }
+                        }, { responsive: true });
                     }
+                }
 
-                    const byType = {};
-                    [...new Set(filteredData.map(d => d.cancer_type))].forEach(ct => {
-                        const ctData = filteredData.filter(d => d.cancer_type === ct);
-                        if (ctData.length > 0) {
-                            byType[ct] = {
-                                immune_proportion: ctData[0].immune_proportion,
-                                total_cells: ctData[0].total_cells,
-                                enrichment: ctData.reduce((acc, d) => acc + (d.immune_enrichment || 0), 0) / ctData.length
-                            };
-                        }
-                    });
+                // TME Composition stacked bar (Malignant, Immune, Stromal, Other)
+                const tmeContainer = document.getElementById('tme-composition');
+                const tmeTitle = document.getElementById('tme-composition-title');
+                const tmeSubtitle = document.getElementById('tme-composition-subtitle');
 
-                    const scatterData = Object.entries(byType).filter(([_, d]) => d.immune_proportion > 0);
+                if (tmeContainer && tmeSummary.length) {
+                    tmeContainer.classList.remove('loading');
+                    Plotly.purge(tmeContainer);
 
-                    Plotly.newPlot(container2, [{
-                        type: 'scatter',
-                        mode: 'markers+text',
-                        x: scatterData.map(d => d[1].immune_proportion),
-                        y: scatterData.map(d => d[1].enrichment),
-                        text: scatterData.map(d => d[0]),
-                        textposition: 'top center',
-                        marker: {
-                            size: scatterData.map(d => Math.min(Math.log10(d[1].total_cells + 1) * 5, 30)),
-                            color: scatterData.map(d => d[1].immune_proportion),
-                            colorscale: 'Viridis',
-                            colorbar: { title: 'Infiltration' }
+                    if (tmeTitle) tmeTitle.textContent = 'Tumor Microenvironment Composition';
+                    if (tmeSubtitle) tmeSubtitle.textContent = 'Full TME breakdown: Malignant, Immune, Stromal, and Other cells';
+
+                    // Sort by immune proportion for consistent ordering
+                    const sortedTME = [...tmeSummary].sort((a, b) => b.immune_proportion - a.immune_proportion);
+
+                    const tmeColors = {
+                        'Malignant': '#d62728',   // Red for tumor cells
+                        'Immune': '#1f77b4',       // Blue for immune cells
+                        'Stromal': '#ff7f0e',      // Orange for stromal
+                        'Other': '#c7c7c7'         // Gray for other
+                    };
+
+                    const tmeCategories = ['Malignant', 'Immune', 'Stromal', 'Other'];
+
+                    const tmeTraces = tmeCategories.map(cat => ({
+                        type: 'bar',
+                        name: cat,
+                        x: sortedTME.map(d => d.cancer_type),
+                        y: sortedTME.map(d => d[`${cat.toLowerCase()}_proportion`] || 0),
+                        marker: { color: tmeColors[cat] },
+                        hovertemplate: sortedTME.map(d => {
+                            const prop = d[`${cat.toLowerCase()}_proportion`] || 0;
+                            const count = d[`${cat.toLowerCase()}_cells`] || 0;
+                            return `<b>${cat}</b><br>` +
+                                `${d.cancer_type}: ${(prop * 100).toFixed(1)}%<br>` +
+                                `Cells: ${count.toLocaleString()}<extra></extra>`;
+                        })
+                    }));
+
+                    Plotly.newPlot(tmeContainer, tmeTraces, {
+                        barmode: 'stack',
+                        xaxis: { title: 'Cancer Type', tickangle: 45 },
+                        yaxis: { title: 'Proportion of TME', tickformat: '.0%', range: [0, 1.05] },
+                        margin: { l: 60, r: 30, t: 40, b: 100 },
+                        legend: {
+                            orientation: 'h',
+                            y: 1.12,
+                            x: 0.5,
+                            xanchor: 'center',
+                            font: { size: 11 }
                         },
-                        hovertemplate: '<b>%{text}</b><br>Immune: %{x:.1%}<br>Enrichment: %{y:.3f}<br>Cells: %{customdata:,}<extra></extra>',
-                        customdata: scatterData.map(d => d[1].total_cells)
-                    }], {
-                        xaxis: { title: 'Immune Cell Proportion' },
-                        yaxis: { title: 'Mean Cytokine Enrichment' },
-                        margin: { l: 70, r: 30, t: 30, b: 50 }
+                        height: 400
                     }, { responsive: true });
+                } else if (tmeContainer) {
+                    tmeContainer.classList.remove('loading');
+                    tmeContainer.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">TME composition data not available. Run scAtlas immune analysis to generate.</p>';
                 }
             }
 
@@ -8867,10 +9104,11 @@
                 if (title2) title2.textContent = 'Study-Level Immune Infiltration';
                 if (subtitle2) subtitle2.textContent = 'Total immune proportion per study';
 
+                // Hide TME composition in study view
+                const tmePanel = document.getElementById('tme-composition')?.closest('.viz-container');
+                if (tmePanel) tmePanel.style.display = 'none';
+
                 let studyData = data.by_study || [];
-                if (selectedCancer !== 'all') {
-                    studyData = studyData.filter(d => d.cancer_type === selectedCancer);
-                }
                 if (selectedStudy !== 'all') {
                     studyData = studyData.filter(d => d.study === selectedStudy);
                 }
@@ -8934,14 +9172,15 @@
             // === VIEW MODE: Donor ===
             else if (viewMode === 'donor') {
                 if (title1) title1.textContent = 'Immune Composition by Individual Donor';
-                if (subtitle1) subtitle1.textContent = 'Patient-level immune cell profiles';
+                if (subtitle1) subtitle1.textContent = 'Patient-level immune cell profiles (top 30 by infiltration)';
                 if (title2) title2.textContent = 'Donor Immune Infiltration Distribution';
                 if (subtitle2) subtitle2.textContent = 'Box plot of immune proportions by cancer type';
 
+                // Hide TME composition in donor view
+                const tmePanel = document.getElementById('tme-composition')?.closest('.viz-container');
+                if (tmePanel) tmePanel.style.display = 'none';
+
                 let donorData = data.by_donor || [];
-                if (selectedCancer !== 'all') {
-                    donorData = donorData.filter(d => d.cancer_type === selectedCancer);
-                }
                 if (selectedStudy !== 'all') {
                     donorData = donorData.filter(d => d.study === selectedStudy);
                 }
@@ -10397,7 +10636,7 @@
                 const cancerTypes = [...allCancerTypes].sort();
 
                 // Populate dropdowns
-                const dropdowns = ['infiltration-cancer', 'exhaustion-cancer', 'caf-cancer-type'];
+                const dropdowns = ['exhaustion-cancer', 'caf-cancer-type'];
                 dropdowns.forEach(id => {
                     const dropdown = document.getElementById(id);
                     if (dropdown && cancerTypes.length > 0) {
@@ -10411,8 +10650,7 @@
             populateScatlasCancerDropdowns();
 
             // scAtlas Immune Infiltration
-            document.getElementById('infiltration-cancer')?.addEventListener('change', updateImmuneInfiltration);
-            document.getElementById('infiltration-celltype')?.addEventListener('change', updateImmuneInfiltration);
+            // Immune infiltration uses onchange in HTML
 
             // scAtlas Exhaustion
             document.getElementById('exhaustion-cancer')?.addEventListener('change', updateExhaustion);
