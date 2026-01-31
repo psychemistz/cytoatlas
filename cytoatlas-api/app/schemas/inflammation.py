@@ -127,6 +127,7 @@ class InflammationCohortValidationSignature(BaseModel):
     signature_type: str
     main_validation_r: float
     main_external_r: float
+    validation_external_r: float
     pvalue: float
 
 
