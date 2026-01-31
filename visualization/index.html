@@ -1950,35 +1950,39 @@
             <div class="tab-content" id="tab-immune-infiltration">
                 <div class="controls">
                     <div class="control-group">
-                        <label>Cancer Type</label>
-                        <select id="infiltration-cancer">
-                            <option value="all">All Cancers</option>
-                            <option value="BRCA">Breast</option>
-                            <option value="LUAD">Lung</option>
-                            <option value="COAD">Colon</option>
+                        <label>View By</label>
+                        <select id="infiltration-view" onchange="updateImmuneInfiltration()">
+                            <option value="cancer">Cancer Type</option>
+                            <option value="study">Study</option>
+                            <option value="donor">Individual Donors</option>
                         </select>
                     </div>
-                    <div class="control-group">
-                        <label>Immune Cell Type</label>
-                        <select id="infiltration-celltype">
-                            <option value="all">All Immune Cells</option>
-                            <option value="T_cell">T Cells</option>
-                            <option value="Macrophage">Macrophages</option>
-                            <option value="DC">Dendritic Cells</option>
-                            <option value="NK">NK Cells</option>
+                    <div class="control-group" id="infiltration-study-group">
+                        <label>Filter by Study</label>
+                        <select id="infiltration-study" onchange="updateImmuneInfiltration()">
+                            <option value="all">All Studies</option>
                         </select>
                     </div>
                 </div>
 
+                <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
+                    <strong>Immune Infiltration Analysis:</strong> Compare immune cell composition in tumor microenvironment.
+                    <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
+                        <li><strong>Cancer Type:</strong> Aggregated immune profiles across cancer types</li>
+                        <li><strong>Study:</strong> Compare profiles across published studies (13 studies)</li>
+                        <li><strong>Individual Donors:</strong> Patient-level composition (84 donors)</li>
+                    </ul>
+                </div>
+
                 <div class="two-col">
-                    <div class="viz-container" style="min-height: 450px;">
-                        <div class="viz-title">Immune Cell Composition</div>
-                        <div class="viz-subtitle">Tumor microenvironment immune cell proportions</div>
+                    <div class="viz-container" style="min-height: 480px;">
+                        <div class="viz-title" id="infiltration-stacked-title">Immune Cell Composition</div>
+                        <div class="viz-subtitle" id="infiltration-stacked-subtitle">Tumor microenvironment immune cell proportions</div>
                         <div id="infiltration-stacked" class="loading">Loading data...</div>
                     </div>
-                    <div class="viz-container" style="min-height: 450px;">
-                        <div class="viz-title">Immune-Cytokine Correlation</div>
-                        <div class="viz-subtitle">Association between infiltration and cytokine activity</div>
+                    <div class="viz-container" style="min-height: 480px;">
+                        <div class="viz-title" id="infiltration-scatter-title">Immune Infiltration Summary</div>
+                        <div class="viz-subtitle" id="infiltration-scatter-subtitle">Total immune proportion comparison</div>
                         <div id="infiltration-scatter" class="loading">Loading data...</div>
                     </div>
                 </div>
@@ -8718,12 +8722,15 @@
         function updateImmuneInfiltration() {
             const container1 = document.getElementById('infiltration-stacked');
             const container2 = document.getElementById('infiltration-scatter');
+            const title1 = document.getElementById('infiltration-stacked-title');
+            const subtitle1 = document.getElementById('infiltration-stacked-subtitle');
+            const title2 = document.getElementById('infiltration-scatter-title');
+            const subtitle2 = document.getElementById('infiltration-scatter-subtitle');
 
             // Use real infiltration data if available
             const data = state.data.immuneinfiltration;
 
             if (!data || (!data.data?.length && !data.composition?.length)) {
-                // Fallback message
                 [container1, container2].forEach(c => {
                     if (c) {
                         c.classList.remove('loading');
@@ -8733,89 +8740,270 @@
                 return;
             }
 
-            // Get unique cancer types
-            const cancerTypes = data.cancer_types || [...new Set((data.composition || []).map(d => d.cancer_type))];
+            // Get controls
+            const viewMode = document.getElementById('infiltration-view')?.value || 'cancer';
+            const selectedCancer = document.getElementById('infiltration-cancer')?.value || 'all';
+            const selectedStudy = document.getElementById('infiltration-study')?.value || 'all';
 
-            // 1. Stacked bar chart of immune cell composition
-            if (container1 && data.composition?.length) {
-                container1.classList.remove('loading');
-                Plotly.purge(container1);
+            // Populate dropdowns dynamically
+            const cancerDropdown = document.getElementById('infiltration-cancer');
+            const studyDropdown = document.getElementById('infiltration-study');
 
-                // Get immune categories
-                const categories = [...new Set(data.composition.map(d => d.cell_category))].filter(c => c !== 'Other');
-                const categoryColors = {
-                    'T_cell': '#1f77b4', 'CD8_T': '#2ca02c', 'CD4_T': '#98df8a',
-                    'Treg': '#d62728', 'NK': '#ff7f0e', 'B_cell': '#9467bd',
-                    'Macrophage': '#8c564b', 'Monocyte': '#e377c2', 'DC': '#bcbd22',
-                    'Neutrophil': '#17becf', 'Mast': '#7f7f7f', 'Other': '#c7c7c7'
-                };
+            if (cancerDropdown && data.cancer_types) {
+                const current = cancerDropdown.value;
+                cancerDropdown.innerHTML = '<option value="all">All Cancers</option>' +
+                    data.cancer_types.map(c => `<option value="${c}">${c}</option>`).join('');
+                if (data.cancer_types.includes(current)) cancerDropdown.value = current;
+            }
 
-                // Create stacked traces
-                const traces = categories.map(cat => {
-                    const catData = data.composition.filter(d => d.cell_category === cat);
-                    return {
+            if (studyDropdown && data.studies) {
+                const current = studyDropdown.value;
+                studyDropdown.innerHTML = '<option value="all">All Studies</option>' +
+                    data.studies.map(s => `<option value="${s.study}">${s.study} (${s.cancer_types.join(', ')})</option>`).join('');
+                if (data.studies.map(s => s.study).includes(current)) studyDropdown.value = current;
+            }
+
+            // Common colors
+            const categoryColors = {
+                'T_cell': '#1f77b4', 'CD8_T': '#2ca02c', 'CD4_T': '#98df8a',
+                'Treg': '#d62728', 'NK': '#ff7f0e', 'B_cell': '#9467bd',
+                'Macrophage': '#8c564b', 'Monocyte': '#e377c2', 'DC': '#bcbd22',
+                'Neutrophil': '#17becf', 'Mast': '#7f7f7f', 'Other': '#c7c7c7'
+            };
+            const categories = data.immune_categories || ['T_cell', 'NK', 'B_cell', 'Macrophage', 'Monocyte', 'DC', 'Mast'];
+
+            // === VIEW MODE: Cancer Type ===
+            if (viewMode === 'cancer') {
+                if (title1) title1.textContent = 'Immune Composition by Cancer Type';
+                if (subtitle1) subtitle1.textContent = 'Stacked proportions of immune cell types';
+                if (title2) title2.textContent = 'Immune Proportion vs Cytokine Enrichment';
+                if (subtitle2) subtitle2.textContent = 'Association between infiltration and cytokine activity';
+
+                // Filter by cancer type if selected
+                let composition = data.composition || [];
+                if (selectedCancer !== 'all') {
+                    composition = composition.filter(d => d.cancer_type === selectedCancer);
+                }
+                const cancerTypes = [...new Set(composition.map(d => d.cancer_type))];
+
+                // Stacked bar by cancer type
+                if (container1 && composition.length) {
+                    container1.classList.remove('loading');
+                    Plotly.purge(container1);
+
+                    const traces = categories.map(cat => ({
                         type: 'bar',
-                        name: cat.replace('_', ' '),
+                        name: cat.replace(/_/g, ' '),
                         x: cancerTypes,
                         y: cancerTypes.map(ct => {
-                            const entry = catData.find(d => d.cancer_type === ct);
+                            const entry = composition.find(d => d.cancer_type === ct && d.cell_category === cat);
                             return entry ? entry.proportion : 0;
                         }),
                         marker: { color: categoryColors[cat] || '#666' },
-                        hovertemplate: `<b>${cat.replace('_', ' ')}</b><br>%{x}: %{y:.1%}<extra></extra>`
-                    };
-                });
+                        hovertemplate: `<b>${cat.replace(/_/g, ' ')}</b><br>%{x}: %{y:.1%}<extra></extra>`
+                    }));
 
-                Plotly.newPlot(container1, traces, {
-                    barmode: 'stack',
-                    xaxis: { title: 'Cancer Type', tickangle: 45 },
-                    yaxis: { title: 'Cell Proportion', tickformat: '.0%' },
-                    margin: { l: 60, r: 30, t: 30, b: 100 },
-                    legend: { orientation: 'h', y: 1.12, font: { size: 10 } },
-                    height: 450
-                }, { responsive: true });
+                    Plotly.newPlot(container1, traces, {
+                        barmode: 'stack',
+                        xaxis: { title: 'Cancer Type', tickangle: 45 },
+                        yaxis: { title: 'Cell Proportion', tickformat: '.0%' },
+                        margin: { l: 60, r: 30, t: 30, b: 100 },
+                        legend: { orientation: 'h', y: 1.15, font: { size: 9 } },
+                        height: 450
+                    }, { responsive: true });
+                }
+
+                // Scatter by cancer type
+                if (container2 && data.data?.length) {
+                    container2.classList.remove('loading');
+                    Plotly.purge(container2);
+
+                    let filteredData = data.data;
+                    if (selectedCancer !== 'all') {
+                        filteredData = filteredData.filter(d => d.cancer_type === selectedCancer);
+                    }
+
+                    const byType = {};
+                    [...new Set(filteredData.map(d => d.cancer_type))].forEach(ct => {
+                        const ctData = filteredData.filter(d => d.cancer_type === ct);
+                        if (ctData.length > 0) {
+                            byType[ct] = {
+                                immune_proportion: ctData[0].immune_proportion,
+                                total_cells: ctData[0].total_cells,
+                                enrichment: ctData.reduce((acc, d) => acc + (d.immune_enrichment || 0), 0) / ctData.length
+                            };
+                        }
+                    });
+
+                    const scatterData = Object.entries(byType).filter(([_, d]) => d.immune_proportion > 0);
+
+                    Plotly.newPlot(container2, [{
+                        type: 'scatter',
+                        mode: 'markers+text',
+                        x: scatterData.map(d => d[1].immune_proportion),
+                        y: scatterData.map(d => d[1].enrichment),
+                        text: scatterData.map(d => d[0]),
+                        textposition: 'top center',
+                        marker: {
+                            size: scatterData.map(d => Math.min(Math.log10(d[1].total_cells + 1) * 5, 30)),
+                            color: scatterData.map(d => d[1].immune_proportion),
+                            colorscale: 'Viridis',
+                            colorbar: { title: 'Infiltration' }
+                        },
+                        hovertemplate: '<b>%{text}</b><br>Immune: %{x:.1%}<br>Enrichment: %{y:.3f}<br>Cells: %{customdata:,}<extra></extra>',
+                        customdata: scatterData.map(d => d[1].total_cells)
+                    }], {
+                        xaxis: { title: 'Immune Cell Proportion' },
+                        yaxis: { title: 'Mean Cytokine Enrichment' },
+                        margin: { l: 70, r: 30, t: 30, b: 50 }
+                    }, { responsive: true });
+                }
             }
 
-            // 2. Scatter: immune proportion vs mean enrichment
-            if (container2 && data.data?.length) {
-                container2.classList.remove('loading');
-                Plotly.purge(container2);
+            // === VIEW MODE: Study ===
+            else if (viewMode === 'study') {
+                if (title1) title1.textContent = 'Immune Composition by Study';
+                if (subtitle1) subtitle1.textContent = 'Compare immune profiles across published studies';
+                if (title2) title2.textContent = 'Study-Level Immune Infiltration';
+                if (subtitle2) subtitle2.textContent = 'Total immune proportion per study';
 
-                // Aggregate by cancer type
-                const byType = {};
-                cancerTypes.forEach(ct => {
-                    const ctData = data.data.filter(d => d.cancer_type === ct);
-                    if (ctData.length > 0) {
-                        byType[ct] = {
-                            immune_proportion: ctData[0].immune_proportion,
-                            total_cells: ctData[0].total_cells,
-                            enrichment: ctData.reduce((acc, d) => acc + (d.immune_enrichment || 0), 0) / ctData.length
+                let studyData = data.by_study || [];
+                if (selectedCancer !== 'all') {
+                    studyData = studyData.filter(d => d.cancer_type === selectedCancer);
+                }
+                if (selectedStudy !== 'all') {
+                    studyData = studyData.filter(d => d.study === selectedStudy);
+                }
+
+                // Stacked bar by study
+                if (container1 && studyData.length) {
+                    container1.classList.remove('loading');
+                    Plotly.purge(container1);
+
+                    const studies = studyData.map(d => `${d.study} (${d.cancer_type})`);
+
+                    const traces = categories.map(cat => ({
+                        type: 'bar',
+                        name: cat.replace(/_/g, ' '),
+                        x: studies,
+                        y: studyData.map(d => d[`prop_${cat}`] || 0),
+                        marker: { color: categoryColors[cat] || '#666' },
+                        hovertemplate: `<b>${cat.replace(/_/g, ' ')}</b><br>%{x}: %{y:.1%}<extra></extra>`
+                    }));
+
+                    Plotly.newPlot(container1, traces, {
+                        barmode: 'stack',
+                        xaxis: { title: 'Study', tickangle: 45 },
+                        yaxis: { title: 'Cell Proportion', tickformat: '.0%' },
+                        margin: { l: 60, r: 30, t: 30, b: 120 },
+                        legend: { orientation: 'h', y: 1.15, font: { size: 9 } },
+                        height: 450
+                    }, { responsive: true });
+                } else if (container1) {
+                    container1.classList.remove('loading');
+                    container1.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No study data available for selection.</p>';
+                }
+
+                // Bar chart of immune proportion by study
+                if (container2 && studyData.length) {
+                    container2.classList.remove('loading');
+                    Plotly.purge(container2);
+
+                    const sorted = [...studyData].sort((a, b) => b.immune_proportion - a.immune_proportion);
+
+                    Plotly.newPlot(container2, [{
+                        type: 'bar',
+                        x: sorted.map(d => `${d.study} (${d.cancer_type})`),
+                        y: sorted.map(d => d.immune_proportion),
+                        text: sorted.map(d => `${(d.immune_proportion * 100).toFixed(1)}%`),
+                        textposition: 'auto',
+                        marker: {
+                            color: sorted.map(d => d.immune_proportion),
+                            colorscale: 'Blues'
+                        },
+                        hovertemplate: '<b>%{x}</b><br>Immune: %{y:.1%}<br>Donors: %{customdata[0]}<br>Cells: %{customdata[1]:,}<extra></extra>',
+                        customdata: sorted.map(d => [d.n_donors, d.total_cells])
+                    }], {
+                        xaxis: { title: 'Study', tickangle: 45 },
+                        yaxis: { title: 'Immune Cell Proportion', tickformat: '.0%' },
+                        margin: { l: 60, r: 30, t: 30, b: 120 }
+                    }, { responsive: true });
+                }
+            }
+
+            // === VIEW MODE: Donor ===
+            else if (viewMode === 'donor') {
+                if (title1) title1.textContent = 'Immune Composition by Individual Donor';
+                if (subtitle1) subtitle1.textContent = 'Patient-level immune cell profiles';
+                if (title2) title2.textContent = 'Donor Immune Infiltration Distribution';
+                if (subtitle2) subtitle2.textContent = 'Box plot of immune proportions by cancer type';
+
+                let donorData = data.by_donor || [];
+                if (selectedCancer !== 'all') {
+                    donorData = donorData.filter(d => d.cancer_type === selectedCancer);
+                }
+                if (selectedStudy !== 'all') {
+                    donorData = donorData.filter(d => d.study === selectedStudy);
+                }
+
+                // Stacked bar by donor (limit to 30)
+                if (container1 && donorData.length) {
+                    container1.classList.remove('loading');
+                    Plotly.purge(container1);
+
+                    const sortedDonors = [...donorData]
+                        .sort((a, b) => b.immune_proportion - a.immune_proportion)
+                        .slice(0, 30);
+
+                    const traces = categories.map(cat => ({
+                        type: 'bar',
+                        name: cat.replace(/_/g, ' '),
+                        x: sortedDonors.map(d => d.donor_id),
+                        y: sortedDonors.map(d => d[`prop_${cat}`] || 0),
+                        marker: { color: categoryColors[cat] || '#666' },
+                        hovertemplate: `<b>${cat.replace(/_/g, ' ')}</b><br>%{x}: %{y:.1%}<extra></extra>`
+                    }));
+
+                    Plotly.newPlot(container1, traces, {
+                        barmode: 'stack',
+                        xaxis: { title: 'Donor', tickangle: 90, tickfont: { size: 8 } },
+                        yaxis: { title: 'Cell Proportion', tickformat: '.0%' },
+                        margin: { l: 60, r: 30, t: 30, b: 150 },
+                        legend: { orientation: 'h', y: 1.15, font: { size: 9 } },
+                        height: 450
+                    }, { responsive: true });
+                } else if (container1) {
+                    container1.classList.remove('loading');
+                    container1.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No donor data available for selection.</p>';
+                }
+
+                // Box plot of immune proportion by cancer type
+                if (container2 && donorData.length) {
+                    container2.classList.remove('loading');
+                    Plotly.purge(container2);
+
+                    const cancerTypes = [...new Set(donorData.map(d => d.cancer_type))];
+                    const traces = cancerTypes.map((ct, idx) => {
+                        const ctDonors = donorData.filter(d => d.cancer_type === ct);
+                        return {
+                            type: 'box',
+                            name: ct,
+                            y: ctDonors.map(d => d.immune_proportion),
+                            boxpoints: 'all',
+                            jitter: 0.3,
+                            pointpos: -1.8,
+                            marker: { size: 4 },
+                            hovertemplate: '<b>%{x}</b><br>Immune: %{y:.1%}<extra></extra>'
                         };
-                    }
-                });
+                    });
 
-                const scatterData = Object.entries(byType).filter(([_, d]) => d.immune_proportion > 0);
-
-                Plotly.newPlot(container2, [{
-                    type: 'scatter',
-                    mode: 'markers+text',
-                    x: scatterData.map(d => d[1].immune_proportion),
-                    y: scatterData.map(d => d[1].enrichment),
-                    text: scatterData.map(d => d[0]),
-                    textposition: 'top center',
-                    marker: {
-                        size: scatterData.map(d => Math.min(Math.log10(d[1].total_cells + 1) * 5, 30)),
-                        color: scatterData.map(d => d[1].immune_proportion),
-                        colorscale: 'Viridis',
-                        colorbar: { title: 'Infiltration' }
-                    },
-                    hovertemplate: '<b>%{text}</b><br>Immune: %{x:.1%}<br>Enrichment: %{y:.3f}<br>Cells: %{customdata}<extra></extra>',
-                    customdata: scatterData.map(d => d[1].total_cells)
-                }], {
-                    xaxis: { title: 'Immune Cell Proportion' },
-                    yaxis: { title: 'Mean Cytokine Enrichment (Immune - Non-immune)' },
-                    margin: { l: 70, r: 30, t: 30, b: 50 }
-                }, { responsive: true });
+                    Plotly.newPlot(container2, traces, {
+                        xaxis: { title: 'Cancer Type' },
+                        yaxis: { title: 'Immune Cell Proportion', tickformat: '.0%' },
+                        margin: { l: 60, r: 30, t: 30, b: 50 },
+                        showlegend: false
+                    }, { responsive: true });
+                }
             }
         }
 

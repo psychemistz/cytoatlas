@@ -329,6 +329,123 @@ def generate_immune_composition_summary(meta_df):
     return results
 
 
+def compute_study_level_infiltration(meta_df, cytosig_df):
+    """
+    Compute immune cell infiltration at study/donor level for detailed comparison.
+    """
+    log("Computing study-level immune infiltration...")
+
+    meta_df = meta_df.copy()
+    meta_df['is_immune'] = meta_df['cell_type'].apply(is_immune_cell)
+    meta_df['immune_category'] = meta_df['cell_type'].apply(
+        lambda x: classify_cell_type(x)[0] if classify_cell_type(x) else 'Other'
+    )
+
+    # Extract study from donorID
+    meta_df['study'] = meta_df['donorID'].str.extract(r'^([A-Za-z0-9]+)')[0]
+
+    # Filter to tumor samples only
+    if 'tissue' in meta_df.columns:
+        tumor_meta = meta_df[meta_df['tissue'] == 'Tumor'].copy()
+    else:
+        tumor_meta = meta_df.copy()
+
+    if len(tumor_meta) == 0:
+        return [], [], []
+
+    log(f"  Tumor samples: {len(tumor_meta)}")
+    log(f"  Unique studies: {tumor_meta['study'].nunique()}")
+    log(f"  Unique donors: {tumor_meta['donorID'].nunique()}")
+
+    # === 1. Study-level summary ===
+    study_results = []
+    studies = tumor_meta['study'].dropna().unique()
+
+    for study in studies:
+        study_meta = tumor_meta[tumor_meta['study'] == study]
+        cancer_types = study_meta['cancerType'].unique()
+
+        for cancer in cancer_types:
+            ct_meta = study_meta[study_meta['cancerType'] == cancer]
+            total_cells = ct_meta['n_cells'].sum()
+            n_donors = ct_meta['donorID'].nunique()
+
+            if total_cells < 100:
+                continue
+
+            immune_cells = ct_meta[ct_meta['is_immune']]['n_cells'].sum()
+
+            # Composition by category
+            composition = {}
+            for cat in list(IMMUNE_PATTERNS.keys()):
+                cat_cells = ct_meta[ct_meta['immune_category'] == cat]['n_cells'].sum()
+                composition[cat] = round(cat_cells / total_cells, 4) if total_cells > 0 else 0
+
+            study_results.append({
+                'study': study,
+                'cancer_type': cancer,
+                'n_donors': int(n_donors),
+                'total_cells': int(total_cells),
+                'immune_cells': int(immune_cells),
+                'immune_proportion': round(immune_cells / total_cells, 4) if total_cells > 0 else 0,
+                **{f'prop_{k}': v for k, v in composition.items()}
+            })
+
+    log(f"  Study-level records: {len(study_results)}")
+
+    # === 2. Donor-level profiles ===
+    donor_results = []
+    donors = tumor_meta['donorID'].dropna().unique()
+
+    for donor in donors:
+        donor_meta = tumor_meta[tumor_meta['donorID'] == donor]
+        study = donor_meta['study'].iloc[0] if len(donor_meta) > 0 else None
+        cancer = donor_meta['cancerType'].iloc[0] if 'cancerType' in donor_meta.columns else None
+        total_cells = donor_meta['n_cells'].sum()
+
+        if total_cells < 50:
+            continue
+
+        immune_cells = donor_meta[donor_meta['is_immune']]['n_cells'].sum()
+
+        # Composition by category
+        composition = {}
+        for cat in list(IMMUNE_PATTERNS.keys()):
+            cat_cells = donor_meta[donor_meta['immune_category'] == cat]['n_cells'].sum()
+            composition[cat] = round(cat_cells / total_cells, 4) if total_cells > 0 else 0
+
+        donor_results.append({
+            'donor_id': donor,
+            'study': study,
+            'cancer_type': cancer,
+            'total_cells': int(total_cells),
+            'immune_cells': int(immune_cells),
+            'immune_proportion': round(immune_cells / total_cells, 4) if total_cells > 0 else 0,
+            **{f'prop_{k}': v for k, v in composition.items()}
+        })
+
+    log(f"  Donor-level records: {len(donor_results)}")
+
+    # === 3. Study metadata ===
+    study_meta_list = []
+    for study in studies:
+        study_data = tumor_meta[tumor_meta['study'] == study]
+        cancers = study_data['cancerType'].unique().tolist()
+        n_donors = study_data['donorID'].nunique()
+        total_cells = study_data['n_cells'].sum()
+
+        study_meta_list.append({
+            'study': study,
+            'cancer_types': cancers,
+            'n_donors': int(n_donors),
+            'total_cells': int(total_cells)
+        })
+
+    log(f"  Study metadata records: {len(study_meta_list)}")
+
+    return study_results, donor_results, study_meta_list
+
+
 # ==============================================================================
 # T Cell Exhaustion Analysis
 # ==============================================================================
@@ -682,12 +799,17 @@ def main():
     log("\n--- Immune Infiltration ---")
     infiltration_data = compute_immune_infiltration(meta_df, cytosig_df)
     composition_data = generate_immune_composition_summary(meta_df)
+    study_data, donor_data, study_meta = compute_study_level_infiltration(meta_df, cytosig_df)
 
     save_json({
         'data': infiltration_data,
         'composition': composition_data,
+        'by_study': study_data,
+        'by_donor': donor_data,
+        'studies': study_meta,
         'signatures': list(cytosig_df.index),
-        'cancer_types': list(meta_df['cancerType'].dropna().unique()) if 'cancerType' in meta_df.columns else []
+        'cancer_types': list(meta_df['cancerType'].dropna().unique()) if 'cancerType' in meta_df.columns else [],
+        'immune_categories': list(IMMUNE_PATTERNS.keys())
     }, 'immune_infiltration.json')
 
     # T Cell Exhaustion Analysis
