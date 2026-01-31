@@ -5931,20 +5931,50 @@ const AtlasDetailPage = {
     },
 
     populateDiffDropdowns() {
-        // Get cancer types
-        const cancerTypes = this.diffBoxplotData?.cancer_types || this.diffCancerTypesData?.cancer_types || [];
+        // Get cancer types from adjacent tissue data (only those with tumor-adjacent comparison)
+        const cancerTypes = this.diffBoxplotData?.cancer_types || [];
         const cancerDropdown = document.getElementById('diff-cancer-dropdown');
+
+        // Cancer type labels
+        const cancerLabels = this.diffCancerTypesData?.cancer_labels || {
+            'BRCA': 'Breast Cancer', 'CRC': 'Colorectal Cancer', 'ESCA': 'Esophageal Cancer',
+            'HCC': 'Hepatocellular Carcinoma', 'HNSC': 'Head & Neck Cancer',
+            'ICC': 'Intrahepatic Cholangiocarcinoma', 'KIRC': 'Kidney Clear Cell Cancer',
+            'LUAD': 'Lung Adenocarcinoma', 'LYM': 'Lymphoma', 'PAAD': 'Pancreatic Cancer',
+            'STAD': 'Gastric Cancer', 'THCA': 'Thyroid Cancer', 'cSCC': 'Cutaneous SCC'
+        };
+
+        // Get sample counts for each cancer type
+        const sigType = document.getElementById('diff-sig-type')?.value || 'CytoSig';
+        const byCancerType = this.diffBoxplotData?.by_cancer_type || [];
+
         if (cancerDropdown && cancerTypes.length > 0) {
             const currentVal = cancerDropdown.value;
-            cancerDropdown.innerHTML = '<option value="all">All Cancers (Pan-Cancer)</option>' +
-                cancerTypes.map(ct => `<option value="${ct}">${ct}</option>`).join('');
-            if (currentVal && (currentVal === 'all' || cancerTypes.includes(currentVal))) {
+
+            // Filter to cancer types with sufficient data (at least 3 adjacent samples)
+            const validCancerTypes = cancerTypes.filter(ct => {
+                const record = byCancerType.find(d => d.cancer_type === ct && d.signature_type === sigType);
+                const nAdj = record?.adjacent?.n || 0;
+                return nAdj >= 3;
+            });
+
+            // Build dropdown options with sample counts
+            const options = ['<option value="all">All Cancers (Pan-Cancer)</option>'];
+            validCancerTypes.forEach(ct => {
+                const record = byCancerType.find(d => d.cancer_type === ct && d.signature_type === sigType);
+                const nTumor = record?.tumor?.n || '?';
+                const nAdj = record?.adjacent?.n || '?';
+                const label = cancerLabels[ct] || ct;
+                options.push(`<option value="${ct}">${label} (${nTumor}T/${nAdj}A)</option>`);
+            });
+
+            cancerDropdown.innerHTML = options.join('');
+            if (currentVal && (currentVal === 'all' || validCancerTypes.includes(currentVal))) {
                 cancerDropdown.value = currentVal;
             }
         }
 
         // Get signatures from boxplot data
-        const sigType = document.getElementById('diff-sig-type')?.value || 'CytoSig';
         let signatures = [];
         if (this.diffBoxplotData?.tumor_vs_adjacent?.length > 0) {
             signatures = [...new Set(this.diffBoxplotData.tumor_vs_adjacent
@@ -5994,9 +6024,19 @@ const AtlasDetailPage = {
         const selectedCancer = document.getElementById('diff-cancer-dropdown')?.value || 'all';
         const sigType = document.getElementById('diff-sig-type')?.value || 'CytoSig';
 
+        // Cancer type labels
+        const cancerLabels = this.diffCancerTypesData?.cancer_labels || {
+            'BRCA': 'Breast Cancer', 'CRC': 'Colorectal Cancer', 'ESCA': 'Esophageal Cancer',
+            'HCC': 'Hepatocellular Carcinoma', 'HNSC': 'Head & Neck Cancer',
+            'ICC': 'Intrahepatic Cholangiocarcinoma', 'KIRC': 'Kidney Clear Cell Cancer',
+            'LUAD': 'Lung Adenocarcinoma', 'LYM': 'Lymphoma', 'PAAD': 'Pancreatic Cancer',
+            'STAD': 'Gastric Cancer', 'THCA': 'Thyroid Cancer', 'cSCC': 'Cutaneous SCC'
+        };
+
         if (selectedCancer === 'all') {
             const summary = this.diffBoxplotData?.summary || {};
-            descCard.innerHTML = `<strong>Differential Analysis:</strong> Compare cytokine activity across tissue types (Pan-Cancer):
+            const nCancerTypes = this.diffBoxplotData?.cancer_types?.length || 7;
+            descCard.innerHTML = `<strong>Differential Analysis:</strong> Compare cytokine activity across tissue types (Pan-Cancer, ${nCancerTypes} cancer types):
             <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
                 <li><strong style="color:#d62728;">Tumor:</strong> Cancer tissue from pan-cancer scAtlas (${summary.n_tumor_samples || 147} cell type samples)</li>
                 <li><strong style="color:#ff7f0e;">Adjacent:</strong> Tumor-adjacent normal tissue - sample-matched controls (${summary.n_adjacent_samples || 105} samples)</li>
@@ -6011,13 +6051,14 @@ const AtlasDetailPage = {
             const nAdj = cancerStats?.adjacent?.n || 'N/A';
             const organMap = this.diffCancerTypesData?.cancer_to_organ || {};
             const matchedOrgan = organMap[selectedCancer] || 'matching organ';
+            const cancerLabel = cancerLabels[selectedCancer] || selectedCancer;
 
-            descCard.innerHTML = `<strong>Differential Analysis:</strong> Compare cytokine activity for <strong>${selectedCancer}</strong>:
+            descCard.innerHTML = `<strong>Differential Analysis:</strong> Compare cytokine activity for <strong>${cancerLabel}</strong>:
             <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
-                <li><strong style="color:#d62728;">Tumor:</strong> ${selectedCancer} tumor tissue (${nTumor} samples)</li>
-                <li><strong style="color:#ff7f0e;">Adjacent:</strong> ${selectedCancer} tumor-adjacent normal tissue (${nAdj} samples)</li>
+                <li><strong style="color:#d62728;">Tumor:</strong> ${cancerLabel} tissue (${nTumor} samples)</li>
+                <li><strong style="color:#ff7f0e;">Adjacent:</strong> ${cancerLabel} tumor-adjacent normal tissue (${nAdj} samples)</li>
             </ul>
-            <small style="color:#666;">Note: Normal tissue reference (${matchedOrgan}) available in Pan-Cancer view.</small>`;
+            <small style="color:#666;">Note: Normal tissue reference from ${matchedOrgan} available in Pan-Cancer view.</small>`;
         }
     },
 
