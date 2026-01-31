@@ -362,37 +362,89 @@ class ChatService:
                                     message_id=message_id,
                                 )
 
-                    # Continue with tool results (non-streaming for simplicity)
-                    messages.append({"role": "assistant", "content": response.content})
-                    messages.append({
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "tool_result",
-                                "tool_use_id": tr.tool_call_id,
-                                "content": tr.content,
-                            }
-                            for tr in tool_results
-                        ],
-                    })
+                    # Continue with tool results - loop until no more tool use
+                    current_tool_results = [tr for tr in tool_results]  # Copy current results
 
-                    # Get final response
-                    final_response = self.anthropic_client.messages.create(
-                        model=self.settings.chat_model,
-                        max_tokens=self.settings.chat_max_tokens,
-                        system=system_prompt,
-                        tools=CYTOATLAS_TOOLS,
-                        messages=messages,
-                    )
+                    while response.stop_reason == "tool_use":
+                        messages.append({"role": "assistant", "content": response.content})
+                        messages.append({
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": tr.tool_call_id,
+                                    "content": tr.content,
+                                }
+                                for tr in current_tool_results
+                            ],
+                        })
+                        current_tool_results = []  # Reset for next round
 
-                    for block in final_response.content:
-                        if block.type == "text":
-                            full_response += block.text
-                            yield StreamChunk(
-                                type="text",
-                                content=block.text,
-                                message_id=message_id,
-                            )
+                        # Get next response
+                        response = self.anthropic_client.messages.create(
+                            model=self.settings.chat_model,
+                            max_tokens=self.settings.chat_max_tokens,
+                            system=system_prompt,
+                            tools=CYTOATLAS_TOOLS,
+                            messages=messages,
+                        )
+
+                        # Process response - could be more text or more tool calls
+                        for block in response.content:
+                            if block.type == "text":
+                                full_response += block.text
+                                yield StreamChunk(
+                                    type="text",
+                                    content=block.text,
+                                    message_id=message_id,
+                                )
+                            elif block.type == "tool_use":
+                                tool_call = ToolCall(
+                                    id=block.id,
+                                    name=block.name,
+                                    arguments=block.input,
+                                )
+                                tool_calls.append(tool_call)
+
+                                yield StreamChunk(
+                                    type="tool_call",
+                                    tool_call=tool_call,
+                                    message_id=message_id,
+                                )
+
+                                # Execute tool
+                                result = await tool_executor.execute_tool(block.name, block.input)
+
+                                tool_result = ToolResult(
+                                    tool_call_id=block.id,
+                                    content=json.dumps(result) if isinstance(result, dict) else str(result),
+                                    is_error="error" in result if isinstance(result, dict) else False,
+                                )
+                                tool_results.append(tool_result)
+                                current_tool_results.append(tool_result)
+
+                                yield StreamChunk(
+                                    type="tool_result",
+                                    tool_result=tool_result,
+                                    message_id=message_id,
+                                )
+
+                                # Check for visualization
+                                if "visualization" in result:
+                                    viz_data = result["visualization"]
+                                    viz = VisualizationConfig(
+                                        type=VisualizationType(viz_data["type"]),
+                                        title=viz_data.get("title"),
+                                        data=viz_data["data"],
+                                        config=viz_data.get("config", {}),
+                                        container_id=viz_data.get("container_id"),
+                                    )
+                                    visualizations.append(viz)
+                                    yield StreamChunk(
+                                        type="visualization",
+                                        visualization=viz,
+                                        message_id=message_id,
+                                    )
 
         except Exception as e:
             logger.exception("Streaming chat failed")
