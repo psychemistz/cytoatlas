@@ -534,6 +534,22 @@ def generate_tme_summary(meta_df):
         has_detailed_annotation = cd8_cells > 0 or treg_cells > 0
         has_malignant_annotation = malignant_cells > 0
 
+        # Check for unusual TME compositions and add study-specific notes
+        sample_note = None
+        # Map cancer types with unusual compositions to their study IDs
+        study_notes = {
+            'KIRP': ('GSE152938', 'no malignant cells in primary tumor samples'),
+            'TGCT': ('GSE197778', 'no malignant cells in primary tumor samples'),
+            'NET': ('GSE140312', 'no immune cells (single donor)')
+        }
+        if cancer in study_notes:
+            study_id, note = study_notes[cancer]
+            # Only add note if the condition matches
+            if cancer in ['KIRP', 'TGCT'] and malignant_cells == 0:
+                sample_note = f'{study_id}: {note}'
+            elif cancer == 'NET' and immune_cells == 0:
+                sample_note = f'{study_id}: {note}'
+
         if n_samples >= 20 and has_detailed_annotation:
             data_quality = 'high'
         elif n_samples >= 10:
@@ -569,7 +585,8 @@ def generate_tme_summary(meta_df):
             # Data quality
             'data_quality': data_quality,
             'has_detailed_tcell_annotation': has_detailed_annotation,
-            'has_malignant_annotation': has_malignant_annotation
+            'has_malignant_annotation': has_malignant_annotation,
+            'sample_note': sample_note
         })
 
     log(f"  Generated {len(results)} TME summary records")

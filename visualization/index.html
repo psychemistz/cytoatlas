@@ -1787,7 +1787,8 @@
                 <button class="tab" data-tab="tissue-atlas">Tissue Atlas</button>
                 <button class="tab" data-tab="differential-analysis">Differential Analysis</button>
                 <button class="tab" data-tab="immune-infiltration">Immune Infiltration</button>
-                <button class="tab" data-tab="exhaustion">T Cell Exhaustion</button>
+                <button class="tab" data-tab="tcell-function">T Cell Function</button>
+                <button class="tab" data-tab="exhaustion">Exhaustion Signatures</button>
                 <button class="tab" data-tab="caf-classification">CAF Types</button>
             </div>
 
@@ -1954,35 +1955,10 @@
 
             <!-- Immune Infiltration Tab -->
             <div class="tab-content" id="tab-immune-infiltration">
-                <div class="controls">
-                    <div class="control-group">
-                        <label>View By</label>
-                        <select id="infiltration-view" onchange="updateImmuneInfiltration()">
-                            <option value="cancer">Cancer Type</option>
-                            <option value="study">Study</option>
-                            <option value="donor">Individual Donors</option>
-                        </select>
-                    </div>
-                    <div class="control-group" id="infiltration-study-group">
-                        <label>Filter by Study</label>
-                        <select id="infiltration-study" onchange="updateImmuneInfiltration()">
-                            <option value="all">All Studies</option>
-                        </select>
-                    </div>
-                </div>
-
                 <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
-                    <strong>Tumor-Infiltrating Immune Cells (TILs):</strong> Immune composition in the tumor microenvironment.
+                    <strong>Tumor Microenvironment Composition:</strong> Immune, malignant, and stromal cell proportions across cancer types.
                     <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 0.5rem; margin: 0.5rem 0;">
-                        <strong>Data Source:</strong> Tumor tissue samples only (excludes PBMC/Blood, Adjacent, Metastasis)
-                    </div>
-                    <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
-                        <li><strong>Cancer Type:</strong> Aggregated TIL profiles across cancer types</li>
-                        <li><strong>Study:</strong> Compare profiles across published studies (13 studies)</li>
-                        <li><strong>Individual Donors:</strong> Patient-level composition (84 donors)</li>
-                    </ul>
-                    <div style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">
-                        <strong>Clinical Ratios:</strong> CD8:Treg (immune activation) | T:Myeloid (TME polarization)
+                        <strong>Data Source:</strong> Primary tumor tissue samples only (excludes PBMC/Blood, Adjacent, Metastasis)
                     </div>
                 </div>
 
@@ -2007,21 +1983,19 @@
                 </div>
             </div>
 
-            <!-- T Cell Exhaustion Tab -->
-            <div class="tab-content" id="tab-exhaustion">
+            <!-- T Cell Function Tab -->
+            <div class="tab-content" id="tab-tcell-function">
                 <div class="controls">
                     <div class="control-group">
                         <label>Cancer Type</label>
-                        <select id="exhaustion-cancer">
+                        <select id="tcell-cancer" onchange="updateTcellFunction()">
                             <option value="all">All Cancers</option>
-                            <option value="BRCA">Breast</option>
-                            <option value="LUAD">Lung</option>
-                            <option value="COAD">Colon</option>
                         </select>
                     </div>
                     <div class="control-group">
                         <label>T Cell Subset</label>
-                        <select id="exhaustion-subset">
+                        <select id="tcell-subset" onchange="updateTcellFunction()">
+                            <option value="all">All T Cells</option>
                             <option value="CD8">CD8+ T Cells</option>
                             <option value="CD4">CD4+ T Cells</option>
                             <option value="Treg">Regulatory T Cells</option>
@@ -2030,19 +2004,53 @@
                 </div>
 
                 <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
-                    <strong>Exhaustion Markers:</strong> PD-1, CTLA-4, TIM-3, LAG-3, TIGIT<br>
-                    <strong>Cytotoxicity Markers:</strong> GZMB, PRF1, IFNG
+                    <strong>T Cell Functional States:</strong> Based on cell type annotations containing marker genes.
+                    <ul style="margin: 0.5rem 0; padding-left: 1.5rem; font-size: 0.9rem;">
+                        <li><strong>Exhausted (Tex):</strong> PD-1, CTLA-4, TIM-3, LAG-3, TIGIT, CXCL13</li>
+                        <li><strong>Cytotoxic:</strong> GZMB, GZMK, PRF1, GNLY</li>
+                        <li><strong>Memory (Tm/Tem/Tcm):</strong> Memory phenotype markers</li>
+                        <li><strong>Naive (Tn):</strong> CCR7, naive markers</li>
+                    </ul>
                 </div>
 
                 <div class="two-col">
                     <div class="viz-container" style="min-height: 450px;">
-                        <div class="viz-title">Exhaustion Marker Expression</div>
-                        <div class="viz-subtitle">Expression levels of exhaustion markers in T cells</div>
+                        <div class="viz-title" id="tcell-heatmap-title">Cytokine Activity by T Cell State</div>
+                        <div class="viz-subtitle" id="tcell-heatmap-subtitle">Mean activity of top cytokines across functional states</div>
+                        <div id="tcell-state-heatmap" class="loading">Loading data...</div>
+                    </div>
+                    <div class="viz-container" style="min-height: 450px;">
+                        <div class="viz-title" id="tcell-bar-title">State Distribution</div>
+                        <div class="viz-subtitle" id="tcell-bar-subtitle">Cell counts by functional state</div>
+                        <div id="tcell-state-bar" class="loading">Loading data...</div>
+                    </div>
+                </div>
+
+                <div class="viz-container" style="min-height: 400px; margin-top: 1rem;">
+                    <div class="viz-title">Cytokine Activity Comparison Across States</div>
+                    <div class="viz-subtitle">Grouped bar chart showing top differential cytokines by T cell state</div>
+                    <div id="tcell-state-comparison" class="loading">Loading data...</div>
+                </div>
+            </div>
+
+            <!-- Exhaustion Signatures Tab -->
+            <div class="tab-content" id="tab-exhaustion">
+                <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
+                    <strong>Exhausted vs Non-exhausted T cells:</strong> Comparing cytokine activity signatures between dysfunctional and functional T cells.
+                    <div style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">
+                        Non-exhausted = cytotoxic + memory + other T cells
+                    </div>
+                </div>
+
+                <div class="two-col">
+                    <div class="viz-container" style="min-height: 450px;">
+                        <div class="viz-title">Differential Cytokine Activity</div>
+                        <div class="viz-subtitle">Log2 fold change: Exhausted vs Non-exhausted T cells</div>
                         <div id="exhaustion-heatmap" class="loading">Loading data...</div>
                     </div>
                     <div class="viz-container" style="min-height: 450px;">
-                        <div class="viz-title">Exhaustion vs Cytokine Activity</div>
-                        <div class="viz-subtitle">Correlation between exhaustion score and cytokine signatures</div>
+                        <div class="viz-title">Activity Correlation</div>
+                        <div class="viz-subtitle">Mean activity in exhausted vs non-exhausted T cells</div>
                         <div id="exhaustion-scatter" class="loading">Loading data...</div>
                     </div>
                 </div>
@@ -2611,6 +2619,7 @@
                 // Differential Analysis tab (consolidated tumor/adjacent/normal)
                 updateDifferentialAnalysis();
                 updateImmuneInfiltration();
+                updateTcellFunction();
                 updateExhaustion();
                 // New scAtlas panels
                 updateCafClassification();
@@ -2748,7 +2757,8 @@
                 ['Tumor vs Adjacent', 'Differential activity between tumor and adjacent tissue', stats.scatlas.n_cell_types_cancer + ' cell types'],
                 ['Normal vs Cancer', 'Matched organ-cancer type comparisons', '13 organ-cancer pairs'],
                 ['Immune Infiltration', 'Immune cell proportions and activity per cancer type', 'Per cancer type'],
-                ['T Cell Exhaustion', 'Exhausted vs non-exhausted T cell signatures', 'Tex vs non-Tex'],
+                ['T Cell Function', 'Cytokine activity across T cell functional states', 'Exhausted/Cytotoxic/Memory/Naive'],
+                ['Exhaustion Signatures', 'Exhausted vs non-exhausted T cell signatures', 'Tex vs non-Tex'],
                 ['CAF Signatures', 'Cancer-associated fibroblast subtype activities', 'Per cancer type'],
                 ['Adjacent Tissue', 'Field effect analysis in tumor-adjacent tissue', 'Per cancer type'],
                 ['Pan-Cancer Signatures', 'Signatures consistent across multiple cancers', 'Cross-cancer']
@@ -8861,45 +8871,20 @@
                 return;
             }
 
-            // Get controls
-            const viewMode = document.getElementById('infiltration-view')?.value || 'cancer';
-            const selectedStudy = document.getElementById('infiltration-study')?.value || 'all';
-
-            // Populate study dropdown dynamically
-            const studyDropdown = document.getElementById('infiltration-study');
-            const studyGroup = document.getElementById('infiltration-study-group');
-
-            if (studyDropdown && data.studies) {
-                const current = studyDropdown.value;
-                studyDropdown.innerHTML = '<option value="all">All Studies</option>' +
-                    data.studies.map(s => `<option value="${s.study}">${s.study} (${s.cancer_types.join(', ')})</option>`).join('');
-                if (data.studies.map(s => s.study).includes(current)) studyDropdown.value = current;
-            }
-
-            // Show/hide study filter based on view mode
-            if (studyGroup) {
-                studyGroup.style.display = (viewMode === 'cancer') ? 'none' : 'block';
-            }
-
-            // Common colors
+            // Common colors for immune cell categories
             const categoryColors = {
                 'T_cell': '#1f77b4', 'CD8_T': '#2ca02c', 'CD4_T': '#98df8a',
                 'Treg': '#d62728', 'NK': '#ff7f0e', 'B_cell': '#9467bd',
                 'Macrophage': '#8c564b', 'Monocyte': '#e377c2', 'DC': '#bcbd22',
-                'Neutrophil': '#17becf', 'Mast': '#7f7f7f', 'Other': '#c7c7c7'
+                'Neutrophil': '#17becf', 'Mast': '#7f7f7f', 'ILC': '#aec7e8'
             };
-            const categories = data.immune_categories || ['T_cell', 'NK', 'B_cell', 'Macrophage', 'Monocyte', 'DC', 'Mast'];
+            const categories = data.immune_categories || ['T_cell', 'NK', 'ILC', 'B_cell', 'Macrophage', 'Monocyte', 'DC', 'Mast'];
 
-            // === VIEW MODE: Cancer Type ===
-            if (viewMode === 'cancer') {
-                if (title1) title1.textContent = 'Immune Cell Composition (within TILs)';
-                if (subtitle1) subtitle1.textContent = 'Breakdown of immune cell types among tumor-infiltrating immune cells';
-                if (title2) title2.textContent = 'TIL Proportion & Clinical Ratios';
-                if (subtitle2) subtitle2.textContent = 'Total immune infiltration with data quality indicators';
-
-                // Show TME composition panel in cancer view
-                const tmePanel = document.getElementById('tme-composition')?.closest('.viz-container');
-                if (tmePanel) tmePanel.style.display = '';
+            // Set titles
+            if (title1) title1.textContent = 'Immune Cell Composition within TME';
+            if (subtitle1) subtitle1.textContent = 'Breakdown of immune cell types in the tumor microenvironment';
+            if (title2) title2.textContent = 'Tumor-Infiltrating Lymphocytes (TIL)';
+            if (subtitle2) subtitle2.textContent = 'Lymphocyte proportion (T, B, NK, ILC cells) of TME';
 
                 const composition = data.composition || [];
                 const tmeSummary = data.tme_summary || [];
@@ -8941,10 +8926,10 @@
                     Plotly.newPlot(container1, traces, {
                         barmode: 'stack',
                         xaxis: { title: 'Cancer Type', tickangle: 45 },
-                        yaxis: { title: 'Proportion within Immune Cells', tickformat: '.0%', range: [0, 1.05] },
-                        margin: { l: 60, r: 30, t: 30, b: 100 },
-                        legend: { orientation: 'h', y: 1.15, font: { size: 9 } },
-                        height: 450
+                        yaxis: { title: 'Immune Cell Composition', tickformat: '.0%', range: [0, 1.05] },
+                        margin: { l: 60, r: 30, t: 60, b: 100 },
+                        legend: { orientation: 'h', y: 1.18, x: 0.5, xanchor: 'center', font: { size: 9 } },
+                        height: 480
                     }, { responsive: true });
                 }
 
@@ -8957,52 +8942,40 @@
                     const tmeSummary = data.tme_summary || [];
 
                     if (tmeSummary.length) {
-                        if (title2) title2.textContent = 'TME Summary & Clinical Ratios';
-                        if (subtitle2) subtitle2.textContent = 'Immune proportion with data quality indicators';
+                        if (title2) title2.textContent = 'Tumor-Infiltrating Lymphocytes (TIL)';
+                        if (subtitle2) subtitle2.textContent = 'Lymphocyte proportion (T, B, NK, ILC) of TME';
 
-                        const sorted = [...tmeSummary].sort((a, b) => b.immune_proportion - a.immune_proportion);
+                        // Compute lymphocyte proportion (T + B + NK + ILC) from immune_* fields
+                        const withTIL = tmeSummary.map(d => {
+                            const lymphocyteCategories = ['T_cell', 'B_cell', 'NK', 'ILC'];
+                            const lymphPropWithinImmune = lymphocyteCategories.reduce((sum, cat) =>
+                                sum + (d[`immune_${cat}`] || 0), 0);
+                            // TIL proportion of TME = lymphocyte proportion within immune * immune proportion
+                            const tilProportion = lymphPropWithinImmune * d.immune_proportion;
+                            return { ...d, til_proportion: tilProportion, lymph_within_immune: lymphPropWithinImmune };
+                        });
 
-                        // Color by data quality
-                        const qualityColors = {
-                            'high': '#2ca02c',
-                            'medium': '#ff7f0e',
-                            'low': '#d62728',
-                            'very_low': '#7f7f7f'
-                        };
+                        const sorted = [...withTIL].sort((a, b) => b.til_proportion - a.til_proportion);
 
                         Plotly.newPlot(container2, [{
                             type: 'bar',
                             x: sorted.map(d => d.cancer_type),
-                            y: sorted.map(d => d.immune_proportion),
-                            text: sorted.map(d => {
-                                const pct = (d.immune_proportion * 100).toFixed(1);
-                                const cd8treg = d.cd8_treg_ratio ? `CD8:Treg=${d.cd8_treg_ratio.toFixed(1)}` : '';
-                                return `${pct}%${cd8treg ? '<br>' + cd8treg : ''}`;
-                            }),
-                            textposition: 'outside',
-                            marker: {
-                                color: sorted.map(d => qualityColors[d.data_quality] || '#666')
-                            },
+                            y: sorted.map(d => d.til_proportion),
+                            marker: { color: '#1f77b4' },
                             hovertemplate: sorted.map(d => {
                                 const cd8treg = d.cd8_treg_ratio ? d.cd8_treg_ratio.toFixed(1) : 'N/A';
-                                const tmyeloid = d.t_myeloid_ratio ? d.t_myeloid_ratio.toFixed(1) : 'N/A';
+                                const lymphPct = (d.lymph_within_immune * 100).toFixed(1);
                                 return `<b>${d.cancer_type}</b><br>` +
-                                    `Immune: ${(d.immune_proportion * 100).toFixed(1)}%<br>` +
+                                    `TIL: ${(d.til_proportion * 100).toFixed(1)}% of TME<br>` +
+                                    `Lymphocytes: ${lymphPct}% of immune<br>` +
+                                    `Total immune: ${(d.immune_proportion * 100).toFixed(1)}%<br>` +
                                     `CD8:Treg ratio: ${cd8treg}<br>` +
-                                    `T:Myeloid ratio: ${tmyeloid}<br>` +
-                                    `Samples: ${d.n_samples} | Donors: ${d.n_donors}<br>` +
-                                    `Data quality: ${d.data_quality}<br>` +
-                                    `Total cells: ${d.total_cells.toLocaleString()}<extra></extra>`;
+                                    `Samples: ${d.n_samples} | Donors: ${d.n_donors}<extra></extra>`;
                             })
                         }], {
                             xaxis: { title: 'Cancer Type', tickangle: 45 },
-                            yaxis: { title: 'TIL Proportion', tickformat: '.0%', range: [0, 1.1] },
+                            yaxis: { title: 'TIL Proportion of TME', tickformat: '.0%' },
                             margin: { l: 60, r: 30, t: 30, b: 100 },
-                            annotations: [{
-                                x: 0.5, y: 1.08, xref: 'paper', yref: 'paper',
-                                text: '<span style="color:#2ca02c">●</span> High <span style="color:#ff7f0e">●</span> Medium <span style="color:#d62728">●</span> Low quality',
-                                showarrow: false, font: { size: 10 }
-                            }],
                             height: 450
                         }, { responsive: true });
                     } else if (data.data?.length) {
@@ -9056,11 +9029,10 @@
                     const tmeColors = {
                         'Malignant': '#d62728',   // Red for tumor cells
                         'Immune': '#1f77b4',       // Blue for immune cells
-                        'Stromal': '#ff7f0e',      // Orange for stromal
-                        'Other': '#c7c7c7'         // Gray for other
+                        'Stromal': '#ff7f0e'       // Orange for stromal
                     };
 
-                    const tmeCategories = ['Malignant', 'Immune', 'Stromal', 'Other'];
+                    const tmeCategories = ['Malignant', 'Immune', 'Stromal'];
 
                     const tmeTraces = tmeCategories.map(cat => ({
                         type: 'bar',
@@ -9077,176 +9049,203 @@
                         })
                     }));
 
+                    // Check for sample_notes (cancer types without malignant cells)
+                    const notedCancers = sortedTME.filter(d => d.sample_note);
+                    const noteLines = notedCancers.map(d => `* ${d.cancer_type}: ${d.sample_note}`);
+                    const hasNotes = noteLines.length > 0;
+
                     Plotly.newPlot(tmeContainer, tmeTraces, {
                         barmode: 'stack',
                         xaxis: { title: 'Cancer Type', tickangle: 45 },
                         yaxis: { title: 'Proportion of TME', tickformat: '.0%', range: [0, 1.05] },
-                        margin: { l: 60, r: 30, t: 40, b: 100 },
+                        margin: { l: 60, r: 30, t: 50, b: hasNotes ? 160 : 100 },
                         legend: {
                             orientation: 'h',
-                            y: 1.12,
+                            y: 1.15,
                             x: 0.5,
                             xanchor: 'center',
                             font: { size: 11 }
                         },
-                        height: 400
+                        annotations: hasNotes ? [{
+                            x: 0.5, y: -0.48, xref: 'paper', yref: 'paper',
+                            text: noteLines.join('  |  '),
+                            showarrow: false,
+                            font: { size: 8, color: '#888' },
+                            xanchor: 'center'
+                        }] : [],
+                        height: hasNotes ? 480 : 400
                     }, { responsive: true });
                 } else if (tmeContainer) {
                     tmeContainer.classList.remove('loading');
                     tmeContainer.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">TME composition data not available. Run scAtlas immune analysis to generate.</p>';
                 }
+        }
+
+        // scAtlas: T Cell Function
+        function updateTcellFunction() {
+            const heatmapContainer = document.getElementById('tcell-state-heatmap');
+            const barContainer = document.getElementById('tcell-state-bar');
+            const comparisonContainer = document.getElementById('tcell-state-comparison');
+
+            const data = state.data.exhaustion;
+
+            if (!data || !data.data?.length) {
+                [heatmapContainer, barContainer, comparisonContainer].forEach(c => {
+                    if (c) {
+                        c.classList.remove('loading');
+                        c.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">T cell function data not available. Run scAtlas immune analysis to generate.</p>';
+                    }
+                });
+                return;
             }
 
-            // === VIEW MODE: Study ===
-            else if (viewMode === 'study') {
-                if (title1) title1.textContent = 'Immune Composition by Study';
-                if (subtitle1) subtitle1.textContent = 'Compare immune profiles across published studies';
-                if (title2) title2.textContent = 'Study-Level Immune Infiltration';
-                if (subtitle2) subtitle2.textContent = 'Total immune proportion per study';
+            // Get filter values
+            const selectedCancer = document.getElementById('tcell-cancer')?.value || 'all';
+            const selectedSubset = document.getElementById('tcell-subset')?.value || 'all';
 
-                // Hide TME composition in study view
-                const tmePanel = document.getElementById('tme-composition')?.closest('.viz-container');
-                if (tmePanel) tmePanel.style.display = 'none';
-
-                let studyData = data.by_study || [];
-                if (selectedStudy !== 'all') {
-                    studyData = studyData.filter(d => d.study === selectedStudy);
-                }
-
-                // Stacked bar by study
-                if (container1 && studyData.length) {
-                    container1.classList.remove('loading');
-                    Plotly.purge(container1);
-
-                    const studies = studyData.map(d => `${d.study} (${d.cancer_type})`);
-
-                    const traces = categories.map(cat => ({
-                        type: 'bar',
-                        name: cat.replace(/_/g, ' '),
-                        x: studies,
-                        y: studyData.map(d => d[`prop_${cat}`] || 0),
-                        marker: { color: categoryColors[cat] || '#666' },
-                        hovertemplate: `<b>${cat.replace(/_/g, ' ')}</b><br>%{x}: %{y:.1%}<extra></extra>`
-                    }));
-
-                    Plotly.newPlot(container1, traces, {
-                        barmode: 'stack',
-                        xaxis: { title: 'Study', tickangle: 45 },
-                        yaxis: { title: 'Cell Proportion', tickformat: '.0%' },
-                        margin: { l: 60, r: 30, t: 30, b: 120 },
-                        legend: { orientation: 'h', y: 1.15, font: { size: 9 } },
-                        height: 450
-                    }, { responsive: true });
-                } else if (container1) {
-                    container1.classList.remove('loading');
-                    container1.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No study data available for selection.</p>';
-                }
-
-                // Bar chart of immune proportion by study
-                if (container2 && studyData.length) {
-                    container2.classList.remove('loading');
-                    Plotly.purge(container2);
-
-                    const sorted = [...studyData].sort((a, b) => b.immune_proportion - a.immune_proportion);
-
-                    Plotly.newPlot(container2, [{
-                        type: 'bar',
-                        x: sorted.map(d => `${d.study} (${d.cancer_type})`),
-                        y: sorted.map(d => d.immune_proportion),
-                        text: sorted.map(d => `${(d.immune_proportion * 100).toFixed(1)}%`),
-                        textposition: 'auto',
-                        marker: {
-                            color: sorted.map(d => d.immune_proportion),
-                            colorscale: 'Blues'
-                        },
-                        hovertemplate: '<b>%{x}</b><br>Immune: %{y:.1%}<br>Donors: %{customdata[0]}<br>Cells: %{customdata[1]:,}<extra></extra>',
-                        customdata: sorted.map(d => [d.n_donors, d.total_cells])
-                    }], {
-                        xaxis: { title: 'Study', tickangle: 45 },
-                        yaxis: { title: 'Immune Cell Proportion', tickformat: '.0%' },
-                        margin: { l: 60, r: 30, t: 30, b: 120 }
-                    }, { responsive: true });
-                }
+            // Populate cancer dropdown
+            const cancerDropdown = document.getElementById('tcell-cancer');
+            if (cancerDropdown && cancerDropdown.options.length <= 1) {
+                const cancerTypes = [...new Set(data.data.map(d => d.cancer_type))].sort();
+                cancerTypes.forEach(ct => {
+                    const opt = document.createElement('option');
+                    opt.value = ct;
+                    opt.textContent = ct;
+                    cancerDropdown.appendChild(opt);
+                });
             }
 
-            // === VIEW MODE: Donor ===
-            else if (viewMode === 'donor') {
-                if (title1) title1.textContent = 'Immune Composition by Individual Donor';
-                if (subtitle1) subtitle1.textContent = 'Patient-level immune cell profiles (top 30 by infiltration)';
-                if (title2) title2.textContent = 'Donor Immune Infiltration Distribution';
-                if (subtitle2) subtitle2.textContent = 'Box plot of immune proportions by cancer type';
+            // Filter data
+            let stateData = data.data;
+            if (selectedCancer !== 'all') {
+                stateData = stateData.filter(d => d.cancer_type === selectedCancer);
+            }
 
-                // Hide TME composition in donor view
-                const tmePanel = document.getElementById('tme-composition')?.closest('.viz-container');
-                if (tmePanel) tmePanel.style.display = 'none';
+            // Aggregate by state and signature
+            const stateColors = {
+                'exhausted': '#d62728',
+                'cytotoxic': '#2ca02c',
+                'memory': '#1f77b4',
+                'naive': '#ff7f0e',
+                'other_tcell': '#7f7f7f'
+            };
+            const stateLabels = {
+                'exhausted': 'Exhausted',
+                'cytotoxic': 'Cytotoxic',
+                'memory': 'Memory',
+                'naive': 'Naive',
+                'other_tcell': 'Other'
+            };
+            const states = ['exhausted', 'cytotoxic', 'memory', 'naive'];
 
-                let donorData = data.by_donor || [];
-                if (selectedStudy !== 'all') {
-                    donorData = donorData.filter(d => d.study === selectedStudy);
+            // Aggregate activity by state
+            const stateActivity = {};
+            const stateCells = {};
+            states.forEach(s => { stateActivity[s] = {}; stateCells[s] = 0; });
+
+            stateData.forEach(d => {
+                if (!states.includes(d.exhaustion_state)) return;
+                if (!stateActivity[d.exhaustion_state][d.signature]) {
+                    stateActivity[d.exhaustion_state][d.signature] = [];
                 }
+                stateActivity[d.exhaustion_state][d.signature].push(d.mean_activity);
+                stateCells[d.exhaustion_state] += d.n_cells;
+            });
 
-                // Stacked bar by donor (limit to 30)
-                if (container1 && donorData.length) {
-                    container1.classList.remove('loading');
-                    Plotly.purge(container1);
+            // Calculate mean per state per signature
+            const signatures = data.signatures || [];
+            const heatmapData = {};
+            states.forEach(s => {
+                heatmapData[s] = {};
+                signatures.forEach(sig => {
+                    const vals = stateActivity[s][sig] || [];
+                    heatmapData[s][sig] = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+                });
+            });
 
-                    const sortedDonors = [...donorData]
-                        .sort((a, b) => b.immune_proportion - a.immune_proportion)
-                        .slice(0, 30);
+            // Find top variable signatures
+            const sigVariance = signatures.map(sig => {
+                const vals = states.map(s => heatmapData[s][sig]);
+                const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+                const variance = vals.reduce((a, b) => a + (b - mean) ** 2, 0) / vals.length;
+                return { signature: sig, variance };
+            }).sort((a, b) => b.variance - a.variance);
 
-                    const traces = categories.map(cat => ({
-                        type: 'bar',
-                        name: cat.replace(/_/g, ' '),
-                        x: sortedDonors.map(d => d.donor_id),
-                        y: sortedDonors.map(d => d[`prop_${cat}`] || 0),
-                        marker: { color: categoryColors[cat] || '#666' },
-                        hovertemplate: `<b>${cat.replace(/_/g, ' ')}</b><br>%{x}: %{y:.1%}<extra></extra>`
-                    }));
+            const topSigs = sigVariance.slice(0, 15).map(d => d.signature);
 
-                    Plotly.newPlot(container1, traces, {
-                        barmode: 'stack',
-                        xaxis: { title: 'Donor', tickangle: 90, tickfont: { size: 8 } },
-                        yaxis: { title: 'Cell Proportion', tickformat: '.0%' },
-                        margin: { l: 60, r: 30, t: 30, b: 150 },
-                        legend: { orientation: 'h', y: 1.15, font: { size: 9 } },
-                        height: 450
-                    }, { responsive: true });
-                } else if (container1) {
-                    container1.classList.remove('loading');
-                    container1.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No donor data available for selection.</p>';
-                }
+            // 1. Heatmap of cytokine activity by state
+            if (heatmapContainer) {
+                heatmapContainer.classList.remove('loading');
+                Plotly.purge(heatmapContainer);
 
-                // Box plot of immune proportion by cancer type
-                if (container2 && donorData.length) {
-                    container2.classList.remove('loading');
-                    Plotly.purge(container2);
+                const zData = states.map(s => topSigs.map(sig => heatmapData[s][sig]));
 
-                    const cancerTypes = [...new Set(donorData.map(d => d.cancer_type))];
-                    const traces = cancerTypes.map((ct, idx) => {
-                        const ctDonors = donorData.filter(d => d.cancer_type === ct);
-                        return {
-                            type: 'box',
-                            name: ct,
-                            y: ctDonors.map(d => d.immune_proportion),
-                            boxpoints: 'all',
-                            jitter: 0.3,
-                            pointpos: -1.8,
-                            marker: { size: 4 },
-                            hovertemplate: '<b>%{x}</b><br>Immune: %{y:.1%}<extra></extra>'
-                        };
-                    });
+                Plotly.newPlot(heatmapContainer, [{
+                    type: 'heatmap',
+                    z: zData,
+                    x: topSigs,
+                    y: states.map(s => stateLabels[s]),
+                    colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
+                    zmid: 0,
+                    colorbar: { title: 'Activity (z-score)', titleside: 'right' },
+                    hovertemplate: '<b>%{y}</b><br>%{x}: %{z:.2f}<extra></extra>'
+                }], {
+                    xaxis: { tickangle: 45 },
+                    yaxis: { automargin: true },
+                    margin: { l: 80, r: 50, t: 30, b: 120 },
+                    height: 400
+                }, { responsive: true });
+            }
 
-                    Plotly.newPlot(container2, traces, {
-                        xaxis: { title: 'Cancer Type' },
-                        yaxis: { title: 'Immune Cell Proportion', tickformat: '.0%' },
-                        margin: { l: 60, r: 30, t: 30, b: 50 },
-                        showlegend: false
-                    }, { responsive: true });
-                }
+            // 2. Bar chart of cell counts by state
+            if (barContainer) {
+                barContainer.classList.remove('loading');
+                Plotly.purge(barContainer);
+
+                const stateOrder = states.filter(s => stateCells[s] > 0);
+                Plotly.newPlot(barContainer, [{
+                    type: 'bar',
+                    x: stateOrder.map(s => stateLabels[s]),
+                    y: stateOrder.map(s => stateCells[s]),
+                    marker: { color: stateOrder.map(s => stateColors[s]) },
+                    text: stateOrder.map(s => (stateCells[s] / 1e6).toFixed(1) + 'M'),
+                    textposition: 'outside',
+                    hovertemplate: '<b>%{x}</b><br>Cells: %{y:,.0f}<extra></extra>'
+                }], {
+                    xaxis: { title: 'T Cell State' },
+                    yaxis: { title: 'Cell Count' },
+                    margin: { l: 70, r: 30, t: 30, b: 50 },
+                    height: 400
+                }, { responsive: true });
+            }
+
+            // 3. Grouped bar chart - top cytokines by state
+            if (comparisonContainer) {
+                comparisonContainer.classList.remove('loading');
+                Plotly.purge(comparisonContainer);
+
+                const top10Sigs = topSigs.slice(0, 10);
+                const traces = states.map(s => ({
+                    type: 'bar',
+                    name: stateLabels[s],
+                    x: top10Sigs,
+                    y: top10Sigs.map(sig => heatmapData[s][sig]),
+                    marker: { color: stateColors[s] },
+                    hovertemplate: `<b>${stateLabels[s]}</b><br>%{x}: %{y:.2f}<extra></extra>`
+                }));
+
+                Plotly.newPlot(comparisonContainer, traces, {
+                    barmode: 'group',
+                    xaxis: { title: 'Cytokine/Secreted Protein', tickangle: 45 },
+                    yaxis: { title: 'Mean Activity (z-score)' },
+                    margin: { l: 60, r: 30, t: 30, b: 100 },
+                    legend: { orientation: 'h', y: 1.1 },
+                    height: 380
+                }, { responsive: true });
             }
         }
 
-        // scAtlas: T Cell Exhaustion
+        // scAtlas: Exhaustion Signatures (Exhausted vs Non-exhausted)
         function updateExhaustion() {
             const container1 = document.getElementById('exhaustion-heatmap');
             const container2 = document.getElementById('exhaustion-scatter');
@@ -10636,7 +10635,7 @@
                 const cancerTypes = [...allCancerTypes].sort();
 
                 // Populate dropdowns
-                const dropdowns = ['exhaustion-cancer', 'caf-cancer-type'];
+                const dropdowns = ['caf-cancer-type'];
                 dropdowns.forEach(id => {
                     const dropdown = document.getElementById(id);
                     if (dropdown && cancerTypes.length > 0) {
@@ -10653,8 +10652,6 @@
             // Immune infiltration uses onchange in HTML
 
             // scAtlas Exhaustion
-            document.getElementById('exhaustion-cancer')?.addEventListener('change', updateExhaustion);
-            document.getElementById('exhaustion-subset')?.addEventListener('change', updateExhaustion);
 
             // scAtlas CAF Classification
             document.getElementById('caf-cancer-type')?.addEventListener('change', updateCafClassification);
