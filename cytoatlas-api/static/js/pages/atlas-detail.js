@@ -6245,7 +6245,7 @@ const AtlasDetailPage = {
 
         // Sort by absolute log2FC
         const sorted = [...filtered].sort((a, b) => Math.abs(b.log2fc || 0) - Math.abs(a.log2fc || 0));
-        const top15 = sorted.slice(0, 15);
+        const top15 = sorted.slice(0, 15).reverse();  // Reverse for horizontal bar (most significant at top)
 
         Plotly.purge(container);
         Plotly.newPlot(container, [{
