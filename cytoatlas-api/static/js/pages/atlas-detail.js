@@ -6152,37 +6152,17 @@ const AtlasDetailPage = {
         const titleEl = document.getElementById('diff-boxplot-title');
         if (titleEl) titleEl.textContent = `${signature} Activity: Tumor vs Adjacent vs Normal`;
 
-        // Get data for each condition
+        // Get data for each condition - Order: Tumor, Adjacent, Normal
         const traces = [];
 
-        // 1. Normal tissues (from organ data)
-        if (this.diffOrganData && this.diffOrganData.length > 0) {
-            const normalData = this.diffOrganData.filter(d => d.signature === signature);
-            if (normalData.length > 0) {
-                traces.push({
-                    type: 'box',
-                    name: 'Normal',
-                    y: normalData.map(d => d.mean_activity),
-                    boxpoints: 'all',
-                    jitter: 0.3,
-                    pointpos: -1.8,
-                    marker: { color: '#2166ac', size: 5 },
-                    line: { color: '#2166ac' },
-                    fillcolor: 'rgba(33, 102, 172, 0.3)',
-                    hovertemplate: '<b>%{text}</b><br>Activity: %{y:.3f}<extra>Normal</extra>',
-                    text: normalData.map(d => d.organ)
-                });
-            }
-        }
-
-        // 2. Tumor data (from cancer types data)
+        // 1. Tumor data (from cancer types data)
         if (this.diffCancerTypesData?.data?.length > 0) {
             const cancerData = this.diffCancerTypesData.data.filter(d => d.signature === signature);
             const labels = this.diffCancerTypesData.cancer_labels || {};
             if (cancerData.length > 0) {
                 traces.push({
                     type: 'box',
-                    name: 'Tumor',
+                    name: `Tumor (n=${cancerData.length})`,
                     y: cancerData.map(d => d.mean_activity),
                     boxpoints: 'all',
                     jitter: 0.3,
@@ -6196,7 +6176,7 @@ const AtlasDetailPage = {
             }
         }
 
-        // 3. Adjacent data - use mean_adjacent from comparison data
+        // 2. Adjacent data - use mean_adjacent from comparison data
         if (this.diffAnalysisData?.data?.length > 0) {
             const sigData = this.diffAnalysisData.data.filter(d => d.signature === signature);
             if (sigData.length > 0) {
@@ -6204,7 +6184,7 @@ const AtlasDetailPage = {
                 // Use these values directly (they are aggregate means)
                 traces.push({
                     type: 'box',
-                    name: 'Adjacent',
+                    name: `Adjacent (n=${sigData.length})`,
                     y: sigData.map(d => d.mean_adjacent),
                     boxpoints: 'all',
                     jitter: 0.3,
@@ -6215,6 +6195,26 @@ const AtlasDetailPage = {
                     hovertemplate: '<b>Adjacent Tissue</b><br>Activity: %{y:.3f}<br>n_pairs: %{customdata}<extra>Adjacent</extra>',
                     customdata: sigData.map(d => d.n_pairs),
                     text: sigData.map(d => `Cell type: ${d.cell_type}`)
+                });
+            }
+        }
+
+        // 3. Normal tissues (from organ data)
+        if (this.diffOrganData && this.diffOrganData.length > 0) {
+            const normalData = this.diffOrganData.filter(d => d.signature === signature);
+            if (normalData.length > 0) {
+                traces.push({
+                    type: 'box',
+                    name: `Normal (n=${normalData.length})`,
+                    y: normalData.map(d => d.mean_activity),
+                    boxpoints: 'all',
+                    jitter: 0.3,
+                    pointpos: -1.8,
+                    marker: { color: '#2166ac', size: 5 },
+                    line: { color: '#2166ac' },
+                    fillcolor: 'rgba(33, 102, 172, 0.3)',
+                    hovertemplate: '<b>%{text}</b><br>Activity: %{y:.3f}<extra>Normal</extra>',
+                    text: normalData.map(d => d.organ)
                 });
             }
         }
