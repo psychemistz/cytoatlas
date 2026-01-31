@@ -306,12 +306,49 @@ class ScAtlasService(BaseService):
         """
         data = await self.load_json("adjacent_tissue.json")
 
-        results = self.filter_by_signature_type(data, signature_type)
+        # Handle new JSON structure with tumor_vs_adjacent key
+        if isinstance(data, dict) and "tumor_vs_adjacent" in data:
+            results = data["tumor_vs_adjacent"]
+        else:
+            results = data
+
+        results = self.filter_by_signature_type(results, signature_type)
 
         if organ:
             results = [r for r in results if r.get("organ") == organ]
 
         return [ScAtlasAdjacentTissue(**r) for r in results]
+
+    @cached(prefix="scatlas", ttl=3600)
+    async def get_adjacent_tissue_boxplots(
+        self,
+        signature_type: str = "CytoSig",
+    ) -> dict:
+        """
+        Get tumor vs adjacent boxplot data with statistics.
+
+        Args:
+            signature_type: 'CytoSig' or 'SecAct'
+
+        Returns:
+            Dict with boxplot_data, tumor_vs_adjacent, signatures, summary
+        """
+        data = await self.load_json("adjacent_tissue.json")
+
+        # Filter boxplot_data by signature type
+        boxplot_data = data.get("boxplot_data", [])
+        filtered_boxplots = self.filter_by_signature_type(boxplot_data, signature_type)
+
+        # Filter tumor_vs_adjacent by signature type
+        tumor_vs_adj = data.get("tumor_vs_adjacent", [])
+        filtered_tva = self.filter_by_signature_type(tumor_vs_adj, signature_type)
+
+        return {
+            "boxplot_data": filtered_boxplots,
+            "tumor_vs_adjacent": filtered_tva,
+            "signatures": data.get("cytosig_signatures", []) if signature_type == "CytoSig" else data.get("secact_signatures", []),
+            "summary": data.get("summary", {}),
+        }
 
     @cached(prefix="scatlas", ttl=3600)
     async def get_organ_cancer_matrix(

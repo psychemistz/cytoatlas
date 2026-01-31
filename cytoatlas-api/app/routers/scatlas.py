@@ -293,6 +293,20 @@ async def get_adjacent_by_organ(
     return await service.get_adjacent_tissue(signature_type, organ)
 
 
+@router.get("/adjacent-tissue-boxplots")
+async def get_adjacent_tissue_boxplots(
+    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
+    service: ScAtlasService = Depends(get_scatlas_service),
+) -> dict:
+    """
+    Get tumor vs adjacent boxplot data with statistics.
+
+    Returns boxplot statistics (min, q1, median, q3, max) for each signature,
+    comparing Tumor and Adjacent tissue samples.
+    """
+    return await service.get_adjacent_tissue_boxplots(signature_type)
+
+
 # Heatmaps
 @router.get("/heatmap/organ")
 async def get_organ_heatmap(
