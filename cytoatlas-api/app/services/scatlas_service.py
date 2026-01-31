@@ -207,6 +207,7 @@ class ScAtlasService(BaseService):
             data=[ScAtlasCancerType(**r) for r in filtered_data],
             cancer_types=raw_data.get("cancer_types", []),
             cancer_labels=raw_data.get("cancer_labels", {}),
+            cancer_to_organ=raw_data.get("cancer_to_organ", {}),
             cytosig_signatures=raw_data.get("cytosig_signatures", []),
             secact_signatures=raw_data.get("secact_signatures", []),
             total_secact=raw_data.get("total_secact", 0),

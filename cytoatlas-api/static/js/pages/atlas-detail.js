@@ -1612,13 +1612,21 @@ const AtlasDetailPage = {
     async loadCimaDifferential(content) {
         content.innerHTML = `
             <div class="panel-header">
-                <h3>Population Stratification</h3>
+                <h3>Population Differential Analysis</h3>
                 <p>Compare cytokine activity across demographic groups in healthy donors</p>
             </div>
 
-            <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+            <!-- Explanation card matching Inflammation style -->
+            <div class="card" style="margin-bottom: 1rem; padding: 1rem; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
+                <strong>Population Comparison:</strong> Wilcoxon rank-sum test comparing cytokine activity between demographic groups.
+                <br><em style="color: #666;">
+                Positive effect = higher in Group 1 (e.g., Male, Older, Obese). Negative effect = higher in Group 2 (e.g., Female, Young, Normal).
+                </em>
+            </div>
+
+            <div class="controls" style="margin-bottom: 16px; display: flex; gap: 16px; flex-wrap: wrap;">
                 <div class="control-group">
-                    <label>Stratification Variable</label>
+                    <label>Comparison</label>
                     <select id="pop-stratify" class="filter-select" onchange="AtlasDetailPage.updatePopulationStratification()">
                         <option value="sex">Sex (Male vs Female)</option>
                         <option value="age">Age Group (Older vs Young)</option>
@@ -1631,203 +1639,201 @@ const AtlasDetailPage = {
 
             <div class="viz-grid">
                 <div class="sub-panel">
-                    <div class="panel-header">
-                        <h4>Population Distribution</h4>
-                        <p>Sample distribution across stratification groups (N=421)</p>
-                    </div>
-                    <div id="pop-distribution" class="plot-container" style="height: 350px;"></div>
+                    <h4 id="cima-diff-volcano-title">Volcano Plot: Male vs Female</h4>
+                    <p id="cima-diff-volcano-subtitle" style="color: #666; font-size: 0.9rem;">Effect size (activity difference) vs significance (-log10 p-value)</p>
+                    <div id="cima-volcano" class="plot-container" style="height: 500px; max-height: 500px; overflow: hidden;"></div>
                 </div>
                 <div class="sub-panel">
-                    <div class="panel-header">
-                        <h4>Top & Bottom Effect Sizes</h4>
-                        <p>Top 10 + Bottom 10 + IFNG/TNF. Red = positive, Blue = negative.</p>
-                    </div>
-                    <div id="pop-effect-sizes" class="plot-container" style="height: 450px;"></div>
+                    <h4 id="cima-diff-bar-title">Top Differential Signatures</h4>
+                    <p id="cima-diff-bar-subtitle" style="color: #666; font-size: 0.9rem;">Sorted by significance (|effect| × -log10 p)</p>
+                    <div id="cima-diff-bar" class="plot-container" style="height: 500px; max-height: 500px; overflow: hidden;"></div>
                 </div>
-            </div>
-
-            <div class="sub-panel" style="margin-top: 16px;">
-                <div class="panel-header">
-                    <h4>Population-Stratified Heatmap</h4>
-                    <p>Mean activity across demographic groups. Red = high, Blue = low.</p>
-                </div>
-                <div id="pop-heatmap" class="plot-container" style="height: 400px;"></div>
             </div>
         `;
 
-        // Load population stratification data (same format as index.html)
+        // Load population stratification data
         this.populationStratificationData = await API.get('/cima/population-stratification', { signature_type: this.signatureType });
         this.updatePopulationStratification();
     },
 
     updatePopulationStratification() {
-        const distContainer = document.getElementById('pop-distribution');
-        const effectContainer = document.getElementById('pop-effect-sizes');
-        const heatmapContainer = document.getElementById('pop-heatmap');
+        const volcanoContainer = document.getElementById('cima-volcano');
+        const barContainer = document.getElementById('cima-diff-bar');
 
-        if (!distContainer) return;
+        if (!volcanoContainer) return;
 
         const stratifyBy = document.getElementById('pop-stratify')?.value || 'sex';
         const popData = this.populationStratificationData;
 
+        // Define comparison labels
+        const compLabels = {
+            'sex': { label: 'Male vs Female', g1: 'Male', g2: 'Female' },
+            'age': { label: 'Older vs Young', g1: 'Older (≥50)', g2: 'Young (<50)' },
+            'bmi': { label: 'Obese vs Normal', g1: 'Obese (≥30)', g2: 'Normal (<25)' },
+            'blood_type': { label: 'O vs A', g1: 'Type O', g2: 'Type A' },
+            'smoking': { label: 'Smoker vs Never', g1: 'Current/Former', g2: 'Never' }
+        };
+        const comp = compLabels[stratifyBy] || { label: stratifyBy, g1: 'Group 1', g2: 'Group 2' };
+
+        // Update titles
+        const volcanoTitle = document.getElementById('cima-diff-volcano-title');
+        const volcanoSubtitle = document.getElementById('cima-diff-volcano-subtitle');
+        const barTitle = document.getElementById('cima-diff-bar-title');
+        const barSubtitle = document.getElementById('cima-diff-bar-subtitle');
+
+        if (volcanoTitle) volcanoTitle.textContent = `Volcano Plot: ${comp.label}`;
+        if (volcanoSubtitle) volcanoSubtitle.innerHTML = `Positive = higher in ${comp.g1}, Negative = higher in ${comp.g2}`;
+        if (barTitle) barTitle.textContent = `Top Differential Signatures`;
+        if (barSubtitle) barSubtitle.textContent = `Sorted by significance (|effect| × -log10 p)`;
+
         if (!popData || !popData.effect_sizes || !popData.effect_sizes[stratifyBy]) {
-            const noDataMsg = '<p style="text-align:center; padding:2rem; color:#666;">No data available for this stratification.</p>';
-            distContainer.innerHTML = noDataMsg;
-            if (effectContainer) effectContainer.innerHTML = '';
-            if (heatmapContainer) heatmapContainer.innerHTML = '';
+            const noDataMsg = '<p style="text-align:center; padding:2rem; color:#666;">No data available for this comparison.</p>';
+            volcanoContainer.innerHTML = noDataMsg;
+            if (barContainer) barContainer.innerHTML = noDataMsg;
             return;
         }
 
         // Get effect sizes array for selected stratification
         const effects = popData.effect_sizes[stratifyBy];
-        const groupMeans = popData.groups[stratifyBy];
-        const groups = Object.keys(groupMeans || {});
 
-        if (!effects || effects.length === 0 || groups.length === 0) {
+        if (!effects || effects.length === 0) {
             const noDataMsg = '<p style="text-align:center; padding:2rem; color:#666;">No effect data for this comparison.</p>';
-            distContainer.innerHTML = noDataMsg;
-            if (effectContainer) effectContainer.innerHTML = '';
-            if (heatmapContainer) heatmapContainer.innerHTML = '';
+            volcanoContainer.innerHTML = noDataMsg;
+            if (barContainer) barContainer.innerHTML = noDataMsg;
             return;
         }
 
-        // Get sample counts from first effect record
-        const firstEffect = effects[0];
-        const n1 = firstEffect.n_male || firstEffect.n_young || firstEffect.n_normal || 100;
-        const n2 = firstEffect.n_female || firstEffect.n_older || firstEffect.n_obese || 100;
+        // Transform effects to volcano-style data
+        const volcanoData = effects.map(d => ({
+            cytokine: d.cytokine,
+            effect: d.effect || 0,
+            pvalue: d.pvalue || 1,
+            neg_log10_pval: -Math.log10(Math.max(d.pvalue || 1, 1e-300)),
+            qvalue: d.qvalue || d.pvalue || 1
+        }));
 
-        // Define stratification labels and colors
-        const stratLabels = {
-            'sex': 'Sex', 'age': 'Age Group', 'bmi': 'BMI Category',
-            'blood_type': 'Blood Type', 'smoking': 'Smoking Status'
-        };
-        const pieColors = {
-            'sex': ['#e377c2', '#1f77b4'],
-            'age': ['#2ca02c', '#ff7f0e', '#9467bd'],
-            'bmi': ['#2ca02c', '#ff7f0e', '#d62728', '#9467bd'],
-            'blood_type': ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728'],
-            'smoking': ['#2ca02c', '#ff7f0e', '#d62728']
-        };
-        const compLabels = {
-            'sex': 'Male vs Female', 'age': 'Older vs Young', 'bmi': 'Obese vs Normal',
-            'blood_type': 'Blood Type Comparison', 'smoking': 'Smoker vs Non-Smoker'
-        };
-
-        // Estimate group counts based on first effect
-        const groupCounts = groups.map((g, i) => {
-            if (i === 0) return n1;
-            if (i === 1) return n2;
-            return Math.round((n1 + n2) / 2);
-        });
-
-        // 1. Distribution pie chart
-        Plotly.purge(distContainer);
-        Plotly.newPlot(distContainer, [{
-            type: 'pie',
-            labels: groups,
-            values: groupCounts,
-            textinfo: 'label+percent',
-            marker: { colors: pieColors[stratifyBy] || ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728'] },
-            hovertemplate: '<b>%{label}</b><br>N ≈ %{value}<br>%{percent}<extra></extra>'
-        }], {
-            margin: { l: 30, r: 30, t: 40, b: 30 },
-            height: 350,
-            title: { text: `Sample Distribution by ${stratLabels[stratifyBy] || stratifyBy}`, font: { size: 14 } },
-            font: { family: 'Inter, sans-serif' }
-        }, { responsive: true });
-
-        // 2. Effect sizes - Top 10 + Bottom 10 + always IFNG/TNFA
-        if (effectContainer) {
-            Plotly.purge(effectContainer);
-
-            // Sort by effect size (positive to negative)
-            const sortedByEffect = [...effects].sort((a, b) => b.effect - a.effect);
-
-            // Get top 10 (most positive) and bottom 10 (most negative)
-            const top10 = sortedByEffect.slice(0, 10);
-            const bottom10 = sortedByEffect.slice(-10);
-
-            // Always include IFNG and TNF/TNFA
-            const alwaysInclude = ['IFNG', 'TNFA', 'TNF'];
-            const mustHave = effects.filter(d => alwaysInclude.includes((d.cytokine || '').toUpperCase()));
-
-            // Combine and deduplicate
-            const combined = new Map();
-            [...top10, ...bottom10, ...mustHave].forEach(d => combined.set(d.cytokine, d));
-
-            // Sort final list by effect size
-            const selectedEffects = Array.from(combined.values()).sort((a, b) => b.effect - a.effect);
-
-            const effectSigs = selectedEffects.map(d => d.cytokine);
-            const effectVals = selectedEffects.map(d => d.effect);
-            const pvals = selectedEffects.map(d => d.pvalue);
-
-            Plotly.newPlot(effectContainer, [{
-                type: 'bar',
-                orientation: 'h',
-                y: effectSigs,
-                x: effectVals,
-                marker: {
-                    color: effectVals.map((e, i) => pvals[i] < 0.05 ? (e > 0 ? '#f4a6a6' : '#a8d4e6') : '#ccc')
-                },
-                text: pvals.map(p => p < 0.001 ? '***' : p < 0.01 ? '**' : p < 0.05 ? '*' : ''),
-                textposition: 'outside',
-                hovertemplate: '<b>%{y}</b><br>Effect: %{x:.3f}<br>p = %{customdata:.2e}<extra></extra>',
-                customdata: pvals
-            }], {
-                xaxis: { title: `Effect Size (${compLabels[stratifyBy] || stratifyBy})`, zeroline: true },
-                yaxis: { automargin: true },
-                margin: { l: 120, r: 60, t: 40, b: 50 },
-                height: Math.max(400, selectedEffects.length * 18),
-                title: { text: `Cytokine Variance by ${stratLabels[stratifyBy] || stratifyBy}`, font: { size: 14 } },
-                font: { family: 'Inter, sans-serif' },
-                annotations: [{
-                    x: 0.95, y: 1.02, xref: 'paper', yref: 'paper',
-                    text: '* p<0.05, ** p<0.01, *** p<0.001', showarrow: false, font: { size: 10 }
-                }]
-            }, { responsive: true });
+        // For SecAct (many proteins), limit to top 200 by significance score
+        let filteredData = volcanoData;
+        if (this.signatureType === 'SecAct' && filteredData.length > 200) {
+            filteredData = [...filteredData].sort((a, b) => {
+                const scoreA = a.neg_log10_pval * Math.abs(a.effect);
+                const scoreB = b.neg_log10_pval * Math.abs(b.effect);
+                return scoreB - scoreA;
+            }).slice(0, 200);
         }
 
-        // 3. Population heatmap - use selected signatures
-        if (heatmapContainer) {
-            Plotly.purge(heatmapContainer);
+        // 1. Volcano plot
+        Plotly.purge(volcanoContainer);
 
-            // Use same signatures from effect chart for heatmap
-            const sortedByEffect = [...effects].sort((a, b) => b.effect - a.effect);
-            const top10 = sortedByEffect.slice(0, 10);
-            const bottom10 = sortedByEffect.slice(-10);
-            const alwaysInclude = ['IFNG', 'TNFA', 'TNF'];
-            const mustHave = effects.filter(d => alwaysInclude.includes((d.cytokine || '').toUpperCase()));
-            const combined = new Map();
-            [...top10, ...bottom10, ...mustHave].forEach(d => combined.set(d.cytokine, d));
-            const heatmapSigs = Array.from(combined.values()).sort((a, b) => b.effect - a.effect).map(d => d.cytokine);
+        // Color by significance (matching Inflammation style)
+        const pThreshold = 0.05;
+        const effectThreshold = 0.3;
+        const colors = filteredData.map(d => {
+            if (d.pvalue < pThreshold && Math.abs(d.effect) > effectThreshold) {
+                return d.effect > 0 ? '#f4a6a6' : '#a8d4e6';
+            }
+            return '#cccccc';
+        });
 
-            // Build z-matrix from group means
-            const zData = groups.map(group => {
-                return heatmapSigs.map(sig => groupMeans[group]?.[sig] ?? 0);
-            });
+        // Only show text labels for significant points
+        const textLabels = filteredData.map(d => {
+            if (d.pvalue < pThreshold && Math.abs(d.effect) > effectThreshold) {
+                return d.cytokine;
+            }
+            return '';
+        });
 
-            // Calculate z-score range for colorscale
-            const allValues = zData.flat();
-            const maxAbs = Math.max(...allValues.map(Math.abs), 1);
+        // Dynamic axis range
+        const maxAbsEffect = Math.max(1, Math.ceil(Math.max(...filteredData.map(d => Math.abs(d.effect)))));
+        const maxY = Math.max(4, Math.ceil(Math.max(...filteredData.map(d => d.neg_log10_pval))));
 
-            Plotly.newPlot(heatmapContainer, [{
-                type: 'heatmap',
-                z: zData,
-                x: heatmapSigs,
-                y: groups,
-                colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
-                zmid: 0,
-                zmin: -maxAbs,
-                zmax: maxAbs,
-                colorbar: { title: 'Mean Activity<br>(z-score)' },
-                hovertemplate: '<b>%{y}</b><br>%{x}: %{z:.3f}<extra></extra>'
+        Plotly.newPlot(volcanoContainer, [{
+            x: filteredData.map(d => d.effect),
+            y: filteredData.map(d => d.neg_log10_pval),
+            text: textLabels,
+            customdata: filteredData.map(d => d.cytokine),
+            mode: 'markers+text',
+            type: 'scatter',
+            marker: {
+                color: colors,
+                size: 10,
+                opacity: 0.7
+            },
+            textposition: 'top center',
+            textfont: { size: 10 },
+            hovertemplate: '<b>%{customdata}</b><br>Effect: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
+        }], {
+            xaxis: {
+                title: `Effect Size (${comp.g1} - ${comp.g2})`,
+                zeroline: true,
+                zerolinecolor: '#ccc',
+                range: [-maxAbsEffect, maxAbsEffect]
+            },
+            yaxis: {
+                title: '-log10(p-value)',
+                range: [0, maxY * 1.1]
+            },
+            shapes: [
+                // Horizontal line at p=0.05
+                { type: 'line', x0: -maxAbsEffect, x1: maxAbsEffect, y0: -Math.log10(pThreshold), y1: -Math.log10(pThreshold), line: { color: '#999', dash: 'dash', width: 1 } },
+                // Vertical lines at effect thresholds
+                { type: 'line', x0: -effectThreshold, x1: -effectThreshold, y0: 0, y1: maxY * 1.1, line: { color: '#999', dash: 'dash', width: 1 } },
+                { type: 'line', x0: effectThreshold, x1: effectThreshold, y0: 0, y1: maxY * 1.1, line: { color: '#999', dash: 'dash', width: 1 } }
+            ],
+            margin: { l: 60, r: 30, t: 30, b: 60 },
+            height: 450,
+            font: { family: 'Inter, sans-serif' },
+            annotations: [{
+                x: -maxAbsEffect * 0.8,
+                y: -0.08,
+                xref: 'x',
+                yref: 'paper',
+                text: `← Higher in ${comp.g2}`,
+                showarrow: false,
+                font: { size: 11, color: '#a8d4e6' }
+            }, {
+                x: maxAbsEffect * 0.8,
+                y: -0.08,
+                xref: 'x',
+                yref: 'paper',
+                text: `Higher in ${comp.g1} →`,
+                showarrow: false,
+                font: { size: 11, color: '#f4a6a6' }
+            }]
+        }, { responsive: true });
+
+        // 2. Top differential bar chart - sorted by significance score
+        if (barContainer) {
+            Plotly.purge(barContainer);
+
+            // Calculate significance score and sort
+            const scoredData = filteredData.map(d => ({
+                ...d,
+                score: Math.abs(d.effect) * d.neg_log10_pval
+            }));
+
+            // Sort by score descending and take top 20
+            const sorted = [...scoredData].sort((a, b) => b.score - a.score);
+            const top20 = sorted.slice(0, 20).reverse();  // Reverse for horizontal bar (top at top)
+
+            Plotly.newPlot(barContainer, [{
+                type: 'bar',
+                orientation: 'h',
+                y: top20.map(d => d.cytokine),
+                x: top20.map(d => d.effect),
+                marker: {
+                    color: top20.map(d => d.effect > 0 ? '#f4a6a6' : '#a8d4e6')
+                },
+                text: top20.map(d => d.effect.toFixed(3)),
+                textposition: 'outside',
+                textfont: { size: 9 },
+                hovertemplate: '<b>%{y}</b><br>Effect: %{x:.3f}<br>p = %{customdata}<extra></extra>',
+                customdata: top20.map(d => d.pvalue?.toExponential(2) || 'N/A')
             }], {
-                margin: { l: 120, r: 50, t: 40, b: 120 },
-                xaxis: { tickangle: 45, title: 'Cytokine' },
-                yaxis: { title: stratLabels[stratifyBy] || stratifyBy },
-                height: 400,
-                title: { text: `Activity by ${stratLabels[stratifyBy] || stratifyBy}`, font: { size: 14 } },
+                xaxis: { title: 'Effect Size', zeroline: true, zerolinecolor: '#ccc' },
+                yaxis: { automargin: true, tickfont: { size: 10 } },
+                margin: { l: 120, r: 50, t: 30, b: 50 },
+                height: 500,
                 font: { family: 'Inter, sans-serif' }
             }, { responsive: true });
         }
@@ -5248,7 +5254,7 @@ const AtlasDetailPage = {
             }, { responsive: true });
 
         } else {
-            // Comparison mode: grouped bar chart
+            // Comparison mode: organ-matched grouped bar chart (side by side)
             if (!this.scatlasOrganData || !this.cancerTypesData?.data) {
                 container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Data not available for comparison.</p>';
                 return;
@@ -5262,45 +5268,68 @@ const AtlasDetailPage = {
                 return;
             }
 
-            if (titleEl) titleEl.textContent = `${signature} Activity: Cancer vs Normal`;
-            if (subtitleEl) subtitleEl.textContent = 'Comparing cancer types with normal tissues';
+            if (titleEl) titleEl.textContent = `${signature} Activity: Cancer vs Matched Normal Tissue`;
+            if (subtitleEl) subtitleEl.textContent = 'Paired comparison of cancer types with corresponding normal organs';
 
-            // Create grouped traces
-            const normalSorted = [...normalData].sort((a, b) => b.mean_activity - a.mean_activity).slice(0, 15);
-            const cancerSorted = [...cancerData].sort((a, b) => b.mean_activity - a.mean_activity).slice(0, 15);
+            // Cancer to organ mapping
+            const cancerToOrgan = this.cancerTypesData.cancer_to_organ || {
+                'BRCA': 'Breast', 'CRC': 'Colon', 'ESCA': 'Esophagus', 'HCC': 'Liver',
+                'HNSC': 'Oral', 'ICC': 'Liver', 'KIRC': 'Kidney', 'LUAD': 'Lung',
+                'LYM': 'LymphNode', 'PAAD': 'Pancreas', 'STAD': 'Stomach', 'cSCC': 'Skin'
+            };
             const labels = this.cancerTypesData.cancer_labels || {};
+
+            // Build paired data: cancer type + matched normal organ
+            const pairedData = [];
+            for (const cancer of cancerData) {
+                const matchedOrgan = cancerToOrgan[cancer.cancer_type];
+                const normalMatch = normalData.find(d => d.organ === matchedOrgan);
+                pairedData.push({
+                    cancer_type: cancer.cancer_type,
+                    cancer_label: labels[cancer.cancer_type] || cancer.cancer_type,
+                    organ: matchedOrgan,
+                    cancer_activity: cancer.mean_activity,
+                    normal_activity: normalMatch ? normalMatch.mean_activity : null
+                });
+            }
+
+            // Sort by cancer activity (descending)
+            pairedData.sort((a, b) => b.cancer_activity - a.cancer_activity);
+
+            // Create grouped bar chart
+            const categories = pairedData.map(d => d.cancer_label);
+            const cancerValues = pairedData.map(d => d.cancer_activity);
+            const normalValues = pairedData.map(d => d.normal_activity);
+            const organLabels = pairedData.map(d => d.organ || 'N/A');
 
             Plotly.purge(container);
             Plotly.newPlot(container, [
                 {
-                    name: 'Normal Tissues',
-                    y: normalSorted.map(d => d.organ),
-                    x: normalSorted.map(d => d.mean_activity),
+                    name: 'Cancer',
+                    x: categories,
+                    y: cancerValues,
                     type: 'bar',
-                    orientation: 'h',
-                    marker: { color: '#2166ac' },
-                    hovertemplate: '<b>%{y}</b><br>Activity: %{x:.3f}<extra>Normal</extra>'
+                    marker: { color: '#b2182b' },
+                    hovertemplate: '<b>%{x}</b><br>Cancer: %{y:.3f}<extra></extra>'
                 },
                 {
-                    name: 'Cancer Types',
-                    y: cancerSorted.map(d => labels[d.cancer_type] || d.cancer_type),
-                    x: cancerSorted.map(d => d.mean_activity),
+                    name: 'Normal',
+                    x: categories,
+                    y: normalValues,
                     type: 'bar',
-                    orientation: 'h',
-                    marker: { color: '#b2182b' },
-                    hovertemplate: '<b>%{y}</b><br>Activity: %{x:.3f}<extra>Cancer</extra>',
-                    xaxis: 'x2',
-                    yaxis: 'y2'
+                    marker: { color: '#2166ac' },
+                    text: organLabels,
+                    hovertemplate: '<b>%{x}</b><br>Normal (%{text}): %{y:.3f}<extra></extra>'
                 }
             ], {
-                margin: { l: 120, r: 120, t: 30, b: 40 },
-                xaxis: { title: 'Normal Activity', domain: [0, 0.45] },
-                yaxis: { automargin: true },
-                xaxis2: { title: 'Cancer Activity', domain: [0.55, 1], anchor: 'y2' },
-                yaxis2: { anchor: 'x2', automargin: true },
+                margin: { l: 60, r: 30, t: 30, b: 100 },
+                xaxis: { title: '', tickangle: -45, tickfont: { size: 10 } },
+                yaxis: { title: 'Activity (z-score)' },
                 height: 360,
+                barmode: 'group',
                 showlegend: true,
-                legend: { x: 0.5, y: 1.1, orientation: 'h', xanchor: 'center' }
+                legend: { x: 0.5, y: 1.08, orientation: 'h', xanchor: 'center' },
+                font: { family: 'Inter, sans-serif' }
             }, { responsive: true });
         }
     },
@@ -5416,8 +5445,80 @@ const AtlasDetailPage = {
             });
 
         } else {
-            // Comparison mode: side-by-side heatmaps
-            container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Comparison heatmap: select a signature above to compare individual values.</p>';
+            // Comparison mode: difference heatmap (Cancer - Normal)
+            if (!this.scatlasOrganData || !this.cancerTypesData?.data) {
+                container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Data not available for comparison.</p>';
+                return;
+            }
+
+            const labels = this.cancerTypesData.cancer_labels || {};
+            const cancerToOrgan = this.cancerTypesData.cancer_to_organ || {
+                'BRCA': 'Breast', 'CRC': 'Colon', 'ESCA': 'Esophagus', 'HCC': 'Liver',
+                'HNSC': 'Oral', 'ICC': 'Liver', 'KIRC': 'Kidney', 'LUAD': 'Lung',
+                'LYM': 'LymphNode', 'PAAD': 'Pancreas', 'STAD': 'Stomach', 'cSCC': 'Skin'
+            };
+            const signatures = this.signatureType === 'CytoSig'
+                ? this.cancerTypesData.cytosig_signatures
+                : this.cancerTypesData.secact_signatures?.slice(0, 50);
+            const cancerTypes = this.cancerTypesData.cancer_types;
+
+            if (!signatures || !cancerTypes) {
+                container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No data available.</p>';
+                return;
+            }
+
+            // Build normal lookup map
+            const normalMap = {};
+            this.scatlasOrganData.forEach(d => {
+                normalMap[`${d.organ}|${d.signature}`] = d.mean_activity;
+            });
+
+            // Build cancer lookup map
+            const cancerMap = {};
+            this.cancerTypesData.data.forEach(d => {
+                cancerMap[`${d.cancer_type}|${d.signature}`] = d.mean_activity;
+            });
+
+            // Calculate difference: Cancer - Normal (for matched organ)
+            const z = cancerTypes.map(ct => {
+                const matchedOrgan = cancerToOrgan[ct];
+                return signatures.map(sig => {
+                    const cancerVal = cancerMap[`${ct}|${sig}`] || 0;
+                    const normalVal = matchedOrgan ? (normalMap[`${matchedOrgan}|${sig}`] || 0) : 0;
+                    return cancerVal - normalVal;
+                });
+            });
+
+            if (titleEl) titleEl.textContent = 'Cancer vs Normal Difference Heatmap';
+            if (subtitleEl) subtitleEl.textContent = `Activity difference (Cancer - matched Normal) for ${cancerTypes.length} cancer types`;
+
+            Plotly.purge(container);
+            Plotly.newPlot(container, [{
+                z: z,
+                x: signatures,
+                y: cancerTypes.map(ct => `${labels[ct] || ct} (vs ${cancerToOrgan[ct] || 'N/A'})`),
+                type: 'heatmap',
+                colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
+                zmid: 0,
+                colorbar: { title: 'Δ Activity', titleside: 'right', len: 0.8 },
+                hovertemplate: '<b>%{y}</b><br>%{x}: %{z:.3f}<extra></extra>'
+            }], {
+                margin: { l: 200, r: 60, t: 10, b: 80 },
+                height: 430,
+                xaxis: { title: this.signatureType === 'CytoSig' ? 'Cytokine' : 'Protein', tickangle: 45, tickfont: { size: 10 } },
+                yaxis: { title: '', automargin: true, tickfont: { size: 9 } },
+                font: { family: 'Inter, sans-serif' }
+            }, { responsive: true });
+
+            // Add click handler
+            container.on('plotly_click', (clickData) => {
+                const sig = clickData.points[0].x;
+                const input = document.getElementById('tissue-signature-search');
+                const dropdown = document.getElementById('tissue-signature-dropdown');
+                if (input) input.value = sig;
+                if (dropdown) dropdown.value = sig;
+                this.updateTissueBoxplot();
+            });
         }
     },
 
@@ -5455,15 +5556,15 @@ const AtlasDetailPage = {
             </div>
 
             <div class="two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                <div class="viz-container" style="min-height: 500px;">
+                <div class="viz-container" style="max-height: 520px; overflow: hidden;">
                     <div class="viz-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Cell Type Activity Profile</div>
                     <div class="viz-subtitle" id="scatlas-celltype-bar-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Mean activity across cell types</div>
-                    <div id="scatlas-celltype-bar" class="plot-container" style="height: 450px;">Loading...</div>
+                    <div id="scatlas-celltype-bar" class="plot-container" style="height: 460px; max-height: 460px; overflow: hidden;">Loading...</div>
                 </div>
-                <div class="viz-container" style="min-height: 500px;">
+                <div class="viz-container" style="max-height: 520px; overflow: hidden;">
                     <div class="viz-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Activity Heatmap</div>
                     <div class="viz-subtitle" id="scatlas-celltype-heatmap-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Top variable cell types × signatures</div>
-                    <div id="scatlas-celltype-heatmap" class="plot-container" style="height: 450px;">Loading...</div>
+                    <div id="scatlas-celltype-heatmap" class="plot-container" style="height: 460px; max-height: 460px; overflow: hidden;">Loading...</div>
                 </div>
             </div>
         `;
@@ -5612,9 +5713,10 @@ const AtlasDetailPage = {
             hovertemplate: '<b>%{y}</b><br>Activity: %{x:.3f}<extra></extra>'
         }], {
             xaxis: { title: `${signature} Activity (z-score)`, zeroline: true },
-            yaxis: { automargin: true },
+            yaxis: { automargin: true, tickfont: { size: 10 } },
             margin: { l: 150, r: 30, t: 20, b: 50 },
-            height: Math.max(400, barData.length * 20)
+            height: 460,
+            font: { family: 'Inter, sans-serif' }
         }, { responsive: true });
     },
 
@@ -5689,24 +5791,37 @@ const AtlasDetailPage = {
             zmid: 0,
             colorbar: {
                 title: 'Activity',
-                titleside: 'right'
+                titleside: 'right',
+                len: 0.8
             },
             hovertemplate: '<b>%{y}</b><br>%{x}: %{z:.2f}<extra></extra>'
         }], {
-            margin: { l: 200, r: 50, t: 30, b: 100 },
-            xaxis: { tickangle: 45 },
-            height: 500
+            margin: { l: 180, r: 50, t: 20, b: 80 },
+            xaxis: { tickangle: 45, tickfont: { size: 9 } },
+            yaxis: { tickfont: { size: 9 } },
+            height: 460,
+            font: { family: 'Inter, sans-serif' }
         }, { responsive: true });
     },
 
     // Differential Analysis state
-    diffAnalysisData: null,
+    diffAnalysisData: null,        // Raw comparison data from /scatlas/cancer-comparison
+    diffOrganData: null,           // Normal organ data
+    diffCancerTypesData: null,     // Cancer type-specific data
 
     async loadScatlasDifferentialAnalysis(content) {
         content.innerHTML = `
             <div class="panel-header">
                 <h3>Differential Analysis</h3>
-                <p>Compare cytokine activity across Tumor, Adjacent, and Normal tissue conditions.</p>
+                <p>Compare cytokine activity between Tumor and Adjacent tissue (paired samples from cancer patients).</p>
+            </div>
+
+            <!-- Explanation card -->
+            <div class="card" style="margin-bottom: 1rem; padding: 1rem; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
+                <strong>Tumor vs Adjacent Comparison:</strong> Wilcoxon rank-sum test comparing cytokine activity between paired tumor and adjacent tissue samples.
+                <br><em style="color: #666;">
+                Positive = higher in Tumor, Negative = higher in Adjacent. Based on 105 paired samples from 13 cancer types.
+                </em>
             </div>
 
             <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
@@ -5727,72 +5842,62 @@ const AtlasDetailPage = {
                 </div>
             </div>
 
-            <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
-                <strong>Tissue Comparison:</strong> Compare cytokine activity across three tissue conditions:
-                <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
-                    <li><strong>Tumor:</strong> Cancer tissue (pan-cancer)</li>
-                    <li><strong>Adjacent:</strong> Tumor-adjacent normal tissue (sample-matched)</li>
-                    <li><strong>Normal:</strong> Healthy organ tissue (35 organs from scAtlas)</li>
-                </ul>
-            </div>
-
             <div class="two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                 <!-- Volcano plot -->
-                <div class="viz-container" style="max-height: 420px; overflow: hidden;">
-                    <div class="viz-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Differential Volcano Plot</div>
-                    <div class="viz-subtitle" id="diff-volcano-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Tumor vs Adjacent: log2FC vs significance</div>
-                    <div id="diff-volcano" class="plot-container" style="height: 360px; max-height: 360px; overflow: hidden;">Loading...</div>
+                <div class="viz-container" style="max-height: 520px; overflow: hidden;">
+                    <div class="viz-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Volcano Plot: Tumor vs Adjacent</div>
+                    <div class="viz-subtitle" id="diff-volcano-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Activity difference vs significance (-log10 p-value)</div>
+                    <div id="diff-volcano" class="plot-container" style="height: 460px; max-height: 460px; overflow: hidden;">Loading...</div>
                 </div>
                 <!-- Top differential signatures -->
-                <div class="viz-container" style="max-height: 420px; overflow: hidden;">
+                <div class="viz-container" style="max-height: 520px; overflow: hidden;">
                     <div class="viz-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Top Differential Signatures</div>
-                    <div class="viz-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Ranked by absolute log2 fold change</div>
-                    <div id="diff-top-bar" class="plot-container" style="height: 360px; max-height: 360px; overflow: hidden;">Loading...</div>
+                    <div class="viz-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Sorted by significance (|effect| × -log10 p)</div>
+                    <div id="diff-top-bar" class="plot-container" style="height: 460px; max-height: 460px; overflow: hidden;">Loading...</div>
                 </div>
             </div>
 
             <!-- Boxplot at bottom for 3 conditions -->
-            <div class="viz-container" style="margin-top: 1rem; max-height: 360px; overflow: hidden;">
+            <div class="viz-container" style="margin-top: 1rem; max-height: 400px; overflow: hidden;">
                 <div class="viz-title" id="diff-boxplot-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Activity Comparison: Tumor vs Adjacent vs Normal</div>
-                <div class="viz-subtitle" id="diff-boxplot-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Cell-type agnostic mean activity for selected signature</div>
-                <div id="diff-boxplot" class="plot-container" style="height: 300px; max-height: 300px; overflow: hidden;">Loading...</div>
+                <div class="viz-subtitle" id="diff-boxplot-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Mean activity across tissues for selected signature</div>
+                <div id="diff-boxplot" class="plot-container" style="height: 340px; max-height: 340px; overflow: hidden;">Loading...</div>
             </div>
         `;
 
-        // Load comparison data with error handling
+        // Load comparison data (raw data with p-values) for volcano/bar plots
         try {
-            this.diffAnalysisData = await API.get('/scatlas/heatmap/cancer-comparison', { signature_type: this.signatureType });
+            this.diffAnalysisData = await API.get('/scatlas/cancer-comparison', { signature_type: this.signatureType });
+            console.log('Loaded cancer comparison data:', this.diffAnalysisData?.data?.length || 0, 'records');
         } catch (e) {
             console.warn('Failed to load cancer comparison data:', e);
             this.diffAnalysisData = null;
         }
 
-        // Also need organ data for normal comparison
-        if (!this.scatlasOrganData) {
-            try {
-                this.scatlasOrganData = await API.get('/scatlas/organ-signatures', { signature_type: this.signatureType });
-            } catch (e) {
-                console.warn('Failed to load organ signatures:', e);
-                this.scatlasOrganData = null;
-            }
-        }
-        if (!this.cancerTypesData) {
-            try {
-                this.cancerTypesData = await API.get('/scatlas/cancer-types-signatures', { signature_type: this.signatureType });
-            } catch (e) {
-                console.warn('Failed to load cancer types signatures:', e);
-                this.cancerTypesData = null;
-            }
+        // Load organ data for normal comparison (for boxplot)
+        try {
+            this.diffOrganData = await API.get('/scatlas/organ-signatures', { signature_type: this.signatureType });
+            console.log('Loaded organ data:', this.diffOrganData?.length || 0, 'records');
+        } catch (e) {
+            console.warn('Failed to load organ signatures:', e);
+            this.diffOrganData = null;
         }
 
-        // Get signatures from available data
+        // Load cancer types data (for boxplot tumor values by cancer type)
+        try {
+            this.diffCancerTypesData = await API.get('/scatlas/cancer-types-signatures', { signature_type: this.signatureType });
+            console.log('Loaded cancer types data:', this.diffCancerTypesData?.data?.length || 0, 'records');
+        } catch (e) {
+            console.warn('Failed to load cancer types signatures:', e);
+            this.diffCancerTypesData = null;
+        }
+
+        // Get signatures from comparison data
         let signatures = [];
-        if (this.scatlasOrganData && this.scatlasOrganData.length > 0) {
-            signatures = [...new Set(this.scatlasOrganData.map(d => d.signature))].sort();
-        } else if (this.cancerTypesData?.cytosig_signatures || this.cancerTypesData?.secact_signatures) {
-            signatures = (this.signatureType === 'CytoSig'
-                ? this.cancerTypesData.cytosig_signatures
-                : this.cancerTypesData.secact_signatures) || [];
+        if (this.diffAnalysisData?.data?.length > 0) {
+            signatures = [...new Set(this.diffAnalysisData.data.map(d => d.signature))].sort();
+        } else if (this.diffOrganData?.length > 0) {
+            signatures = [...new Set(this.diffOrganData.map(d => d.signature))].sort();
         }
         this.diffSignatures = signatures;
 
@@ -5866,49 +5971,108 @@ const AtlasDetailPage = {
         if (!container) return;
 
         const data = this.diffAnalysisData;
-        if (!data?.values || !data?.columns || !data?.rows) {
-            container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Comparison data not available.</p>';
+        if (!data?.data || data.data.length === 0) {
+            container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Comparison data not available. Run scAtlas analysis pipeline to generate data.</p>';
             return;
         }
 
-        // Calculate log2FC and significance for each signature (average across cell types)
-        const sigStats = data.columns.map((sig, colIdx) => {
-            const values = data.rows.map((_, rowIdx) => data.values[rowIdx][colIdx]).filter(v => v !== null);
-            const meanDiff = values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
-            // Use absolute mean as pseudo-significance (higher difference = more significant)
-            const pseudoPVal = Math.max(0.001, 1 / (1 + Math.abs(meanDiff) * 2));
-            return { signature: sig, log2fc: meanDiff, pvalue: pseudoPVal, negLogP: -Math.log10(pseudoPVal) };
+        // Use the raw comparison data which has actual p-values
+        const volcanoData = data.data.map(d => ({
+            signature: d.signature,
+            diff: d.mean_difference || 0,
+            pvalue: Math.max(d.p_value || 1, 1e-300),
+            negLogP: -Math.log10(Math.max(d.p_value || 1, 1e-300)),
+            mean_tumor: d.mean_tumor,
+            mean_adjacent: d.mean_adjacent,
+            n_pairs: d.n_pairs
+        }));
+
+        // For SecAct (many proteins), limit to top 200 by significance score
+        let filteredData = volcanoData;
+        if (this.signatureType === 'SecAct' && filteredData.length > 200) {
+            filteredData = [...filteredData].sort((a, b) => {
+                const scoreA = a.negLogP * Math.abs(a.diff);
+                const scoreB = b.negLogP * Math.abs(b.diff);
+                return scoreB - scoreA;
+            }).slice(0, 200);
+        }
+
+        // Color by significance (p < 0.05 and |diff| > 0.5)
+        const pThreshold = 0.05;
+        const diffThreshold = 0.5;
+        const colors = filteredData.map(d => {
+            if (d.pvalue < pThreshold && Math.abs(d.diff) > diffThreshold) {
+                return d.diff > 0 ? '#f4a6a6' : '#a8d4e6';
+            }
+            return '#cccccc';
         });
 
-        // Color by significance
-        const colors = sigStats.map(s =>
-            Math.abs(s.log2fc) > 0.5 && s.negLogP > 1.3 ? (s.log2fc > 0 ? '#b2182b' : '#2166ac') : '#888888'
-        );
+        // Label significant points
+        const textLabels = filteredData.map(d => {
+            if (d.pvalue < pThreshold && Math.abs(d.diff) > diffThreshold) {
+                return d.signature;
+            }
+            return '';
+        });
+
+        // Dynamic axis ranges
+        const maxAbsDiff = Math.max(2, Math.ceil(Math.max(...filteredData.map(d => Math.abs(d.diff)))));
+        const maxY = Math.max(4, Math.ceil(Math.max(...filteredData.map(d => d.negLogP))));
 
         Plotly.purge(container);
         Plotly.newPlot(container, [{
             type: 'scatter',
             mode: 'markers+text',
-            x: sigStats.map(s => s.log2fc),
-            y: sigStats.map(s => s.negLogP),
-            text: sigStats.map(s => s.signature),
+            x: filteredData.map(d => d.diff),
+            y: filteredData.map(d => d.negLogP),
+            text: textLabels,
+            customdata: filteredData.map(d => d.signature),
             textposition: 'top center',
-            textfont: { size: 8 },
+            textfont: { size: 9 },
             marker: {
                 color: colors,
-                size: 8
+                size: 10,
+                opacity: 0.7
             },
-            hovertemplate: '<b>%{text}</b><br>log2FC: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
+            hovertemplate: '<b>%{customdata}</b><br>Difference: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
         }], {
-            margin: { l: 50, r: 20, t: 20, b: 50 },
-            xaxis: { title: 'log2 Fold Change (Tumor vs Adjacent)', zeroline: true },
-            yaxis: { title: '-log10(p-value)' },
-            height: 360,
+            margin: { l: 60, r: 30, t: 30, b: 70 },
+            xaxis: {
+                title: 'Activity Difference (Tumor - Adjacent)',
+                zeroline: true,
+                zerolinecolor: '#ccc',
+                range: [-maxAbsDiff, maxAbsDiff]
+            },
+            yaxis: {
+                title: '-log10(p-value)',
+                range: [0, maxY * 1.1]
+            },
+            height: 460,
             shapes: [
-                { type: 'line', x0: -0.5, x1: -0.5, y0: 0, y1: 3, line: { dash: 'dot', color: '#aaa' } },
-                { type: 'line', x0: 0.5, x1: 0.5, y0: 0, y1: 3, line: { dash: 'dot', color: '#aaa' } },
-                { type: 'line', x0: -3, x1: 3, y0: 1.3, y1: 1.3, line: { dash: 'dot', color: '#aaa' } }
-            ]
+                // Horizontal line at p=0.05
+                { type: 'line', x0: -maxAbsDiff, x1: maxAbsDiff, y0: -Math.log10(pThreshold), y1: -Math.log10(pThreshold), line: { dash: 'dash', color: '#999', width: 1 } },
+                // Vertical lines at effect thresholds
+                { type: 'line', x0: -diffThreshold, x1: -diffThreshold, y0: 0, y1: maxY * 1.1, line: { dash: 'dash', color: '#999', width: 1 } },
+                { type: 'line', x0: diffThreshold, x1: diffThreshold, y0: 0, y1: maxY * 1.1, line: { dash: 'dash', color: '#999', width: 1 } }
+            ],
+            annotations: [{
+                x: -maxAbsDiff * 0.7,
+                y: -0.08,
+                xref: 'x',
+                yref: 'paper',
+                text: '← Higher in Adjacent',
+                showarrow: false,
+                font: { size: 11, color: '#a8d4e6' }
+            }, {
+                x: maxAbsDiff * 0.7,
+                y: -0.08,
+                xref: 'x',
+                yref: 'paper',
+                text: 'Higher in Tumor →',
+                showarrow: false,
+                font: { size: 11, color: '#f4a6a6' }
+            }],
+            font: { family: 'Inter, sans-serif' }
         }, { responsive: true });
     },
 
@@ -5917,39 +6081,47 @@ const AtlasDetailPage = {
         if (!container) return;
 
         const data = this.diffAnalysisData;
-        if (!data?.values || !data?.columns || !data?.rows) {
+        if (!data?.data || data.data.length === 0) {
             container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Comparison data not available.</p>';
             return;
         }
 
-        // Calculate mean difference for each signature
-        const sigDiffs = data.columns.map((sig, colIdx) => {
-            const values = data.rows.map((_, rowIdx) => data.values[rowIdx][colIdx]).filter(v => v !== null);
-            const meanDiff = values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
-            return { signature: sig, diff: meanDiff };
-        });
+        // Calculate significance score and sort
+        const scoredData = data.data.map(d => ({
+            signature: d.signature,
+            diff: d.mean_difference || 0,
+            pvalue: d.p_value || 1,
+            negLogP: -Math.log10(Math.max(d.p_value || 1, 1e-300)),
+            score: Math.abs(d.mean_difference || 0) * (-Math.log10(Math.max(d.p_value || 1, 1e-300)))
+        }));
 
-        // Sort by absolute difference and take top 20
-        sigDiffs.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
-        const top = sigDiffs.slice(0, 20);
+        // Sort by score descending and take top 20
+        const sorted = [...scoredData].sort((a, b) => b.score - a.score);
+        const top20 = sorted.slice(0, 20).reverse();  // Reverse for horizontal bar
 
         Plotly.purge(container);
         Plotly.newPlot(container, [{
             type: 'bar',
             orientation: 'h',
-            y: top.map(d => d.signature),
-            x: top.map(d => d.diff),
+            y: top20.map(d => d.signature),
+            x: top20.map(d => d.diff),
             marker: {
-                color: top.map(d => d.diff >= 0 ? '#b2182b' : '#2166ac')
+                color: top20.map(d => d.diff >= 0 ? '#f4a6a6' : '#a8d4e6')
             },
-            hovertemplate: '<b>%{y}</b><br>Mean Diff: %{x:.3f}<extra></extra>'
+            text: top20.map(d => d.diff.toFixed(2)),
+            textposition: 'outside',
+            textfont: { size: 9 },
+            hovertemplate: '<b>%{y}</b><br>Difference: %{x:.3f}<br>p = %{customdata}<extra></extra>',
+            customdata: top20.map(d => d.pvalue?.toExponential(2) || 'N/A')
         }], {
-            margin: { l: 80, r: 20, t: 10, b: 50 },
-            xaxis: { title: 'Mean Difference (Tumor - Adjacent)', zeroline: true },
-            height: 360
+            margin: { l: 100, r: 50, t: 30, b: 50 },
+            xaxis: { title: 'Activity Difference (Tumor - Adjacent)', zeroline: true, zerolinecolor: '#ccc' },
+            yaxis: { automargin: true, tickfont: { size: 10 } },
+            height: 460,
+            font: { family: 'Inter, sans-serif' }
         }, { responsive: true });
 
-        // Add click handler
+        // Add click handler to update boxplot
         container.on('plotly_click', (clickData) => {
             const sig = clickData.points[0].y;
             const input = document.getElementById('diff-signature-search');
@@ -5974,9 +6146,9 @@ const AtlasDetailPage = {
         // Get data for each condition
         const traces = [];
 
-        // Normal tissues (from organ data)
-        if (this.scatlasOrganData) {
-            const normalData = this.scatlasOrganData.filter(d => d.signature === signature);
+        // 1. Normal tissues (from organ data)
+        if (this.diffOrganData && this.diffOrganData.length > 0) {
+            const normalData = this.diffOrganData.filter(d => d.signature === signature);
             if (normalData.length > 0) {
                 traces.push({
                     type: 'box',
@@ -5985,18 +6157,19 @@ const AtlasDetailPage = {
                     boxpoints: 'all',
                     jitter: 0.3,
                     pointpos: -1.8,
-                    marker: { color: '#2166ac' },
+                    marker: { color: '#2166ac', size: 5 },
                     line: { color: '#2166ac' },
+                    fillcolor: 'rgba(33, 102, 172, 0.3)',
                     hovertemplate: '<b>%{text}</b><br>Activity: %{y:.3f}<extra>Normal</extra>',
                     text: normalData.map(d => d.organ)
                 });
             }
         }
 
-        // Cancer tissues (from cancer types data)
-        if (this.cancerTypesData?.data) {
-            const cancerData = this.cancerTypesData.data.filter(d => d.signature === signature);
-            const labels = this.cancerTypesData.cancer_labels || {};
+        // 2. Tumor data (from cancer types data)
+        if (this.diffCancerTypesData?.data?.length > 0) {
+            const cancerData = this.diffCancerTypesData.data.filter(d => d.signature === signature);
+            const labels = this.diffCancerTypesData.cancer_labels || {};
             if (cancerData.length > 0) {
                 traces.push({
                     type: 'box',
@@ -6005,52 +6178,52 @@ const AtlasDetailPage = {
                     boxpoints: 'all',
                     jitter: 0.3,
                     pointpos: -1.8,
-                    marker: { color: '#b2182b' },
+                    marker: { color: '#b2182b', size: 5 },
                     line: { color: '#b2182b' },
+                    fillcolor: 'rgba(178, 24, 43, 0.3)',
                     hovertemplate: '<b>%{text}</b><br>Activity: %{y:.3f}<extra>Tumor</extra>',
                     text: cancerData.map(d => labels[d.cancer_type] || d.cancer_type)
                 });
             }
         }
 
-        // Adjacent data (simulated from differential - use mean of difference data)
-        if (this.diffAnalysisData?.columns && this.diffAnalysisData?.values) {
-            const sigIdx = this.diffAnalysisData.columns.indexOf(signature);
-            if (sigIdx >= 0) {
-                const adjValues = this.diffAnalysisData.rows.map((ct, rowIdx) => {
-                    const diff = this.diffAnalysisData.values[rowIdx][sigIdx];
-                    // Adjacent = Tumor - diff (approximately)
-                    const tumorMean = this.cancerTypesData?.data?.find(d => d.signature === signature)?.mean_activity || 0;
-                    return tumorMean - (diff || 0);
-                });
+        // 3. Adjacent data - use mean_adjacent from comparison data
+        if (this.diffAnalysisData?.data?.length > 0) {
+            const sigData = this.diffAnalysisData.data.filter(d => d.signature === signature);
+            if (sigData.length > 0) {
+                // The comparison data has mean_tumor and mean_adjacent for each signature
+                // Use these values directly (they are aggregate means)
                 traces.push({
                     type: 'box',
                     name: 'Adjacent',
-                    y: adjValues,
+                    y: sigData.map(d => d.mean_adjacent),
                     boxpoints: 'all',
                     jitter: 0.3,
                     pointpos: -1.8,
-                    marker: { color: '#fdb863' },
+                    marker: { color: '#fdb863', size: 5 },
                     line: { color: '#fdb863' },
-                    hovertemplate: '<b>%{text}</b><br>Activity: %{y:.3f}<extra>Adjacent</extra>',
-                    text: this.diffAnalysisData.rows
+                    fillcolor: 'rgba(253, 184, 99, 0.3)',
+                    hovertemplate: '<b>Adjacent Tissue</b><br>Activity: %{y:.3f}<br>n_pairs: %{customdata}<extra>Adjacent</extra>',
+                    customdata: sigData.map(d => d.n_pairs),
+                    text: sigData.map(d => `Cell type: ${d.cell_type}`)
                 });
             }
         }
 
         if (traces.length === 0) {
-            container.innerHTML = `<p style="text-align:center; color:#666; padding:2rem;">No data for ${signature}.</p>`;
+            container.innerHTML = `<p style="text-align:center; color:#666; padding:2rem;">No data available for ${signature}.</p>`;
             return;
         }
 
         Plotly.purge(container);
         Plotly.newPlot(container, traces, {
-            margin: { l: 50, r: 30, t: 20, b: 50 },
+            margin: { l: 60, r: 30, t: 30, b: 50 },
             yaxis: { title: 'Activity (z-score)' },
-            height: 300,
+            height: 340,
             showlegend: true,
-            legend: { x: 0.5, y: 1.1, orientation: 'h', xanchor: 'center' },
-            boxmode: 'group'
+            legend: { x: 0.5, y: 1.05, orientation: 'h', xanchor: 'center' },
+            boxmode: 'group',
+            font: { family: 'Inter, sans-serif' }
         }, { responsive: true });
     },
 

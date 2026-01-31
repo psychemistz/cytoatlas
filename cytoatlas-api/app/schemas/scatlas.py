@@ -93,6 +93,7 @@ class ScAtlasCancerTypeData(BaseModel):
     data: list[ScAtlasCancerType]
     cancer_types: list[str]
     cancer_labels: dict[str, str]
+    cancer_to_organ: dict[str, str | None] = {}  # Mapping cancer type to matched normal organ
     cytosig_signatures: list[str]
     secact_signatures: list[str]
     total_secact: int
