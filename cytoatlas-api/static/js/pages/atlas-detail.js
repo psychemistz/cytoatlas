@@ -5014,9 +5014,9 @@ const AtlasDetailPage = {
                 <div class="control-group">
                     <label>View Mode</label>
                     <select id="tissue-mode" class="filter-select" onchange="AtlasDetailPage.updateTissueAtlas()">
-                        <option value="normal">Normal Tissues (35 organs)</option>
-                        <option value="cancer">Cancer Tissues (13 types)</option>
-                        <option value="comparison">Cancer vs Normal (grouped)</option>
+                        <option value="normal">Normal Tissues</option>
+                        <option value="cancer">Cancer Tissues</option>
+                        <option value="comparison">Cancer vs Normal (matched)</option>
                     </select>
                 </div>
                 <div class="control-group">
@@ -5042,10 +5042,10 @@ const AtlasDetailPage = {
             </div>
 
             <!-- Activity Boxplot (Top) -->
-            <div class="viz-container" style="max-height: 420px; overflow: hidden;">
+            <div class="viz-container" style="max-height: 650px; overflow-y: auto;">
                 <div class="viz-title" id="tissue-boxplot-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Activity Distribution by Tissue</div>
                 <div class="viz-subtitle" id="tissue-boxplot-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Cell-type agnostic mean activity per tissue</div>
-                <div id="tissue-boxplot" class="plot-container" style="height: 380px; max-height: 380px; overflow: hidden;">Loading...</div>
+                <div id="tissue-boxplot" class="plot-container" style="min-height: 360px;">Loading...</div>
             </div>
 
             <!-- Heatmap (Bottom) -->
@@ -5150,15 +5150,19 @@ const AtlasDetailPage = {
         const mode = document.getElementById('tissue-mode')?.value || 'normal';
         this.tissueViewMode = mode;
 
-        // Update description text
+        // Count actual data available
+        const organCount = this.scatlasOrganData ? [...new Set(this.scatlasOrganData.map(d => d.organ))].length : 0;
+        const cancerCount = this.cancerTypesData?.cancer_types?.length || 0;
+
+        // Update description text with actual counts
         const descText = document.getElementById('tissue-atlas-desc-text');
         if (descText) {
             if (mode === 'normal') {
-                descText.textContent = 'Compare cytokine activity across 35 normal human organs from scAtlas.';
+                descText.textContent = `Compare cytokine activity across ${organCount} normal human organs from scAtlas.`;
             } else if (mode === 'cancer') {
-                descText.textContent = 'Compare cytokine activity across 13 cancer types from pan-cancer scAtlas.';
+                descText.innerHTML = `Compare cytokine activity across ${cancerCount} cancer types. <em style="color:#666;font-size:0.9em;">(Cancer types with sufficient sample size for reliable analysis)</em>`;
             } else {
-                descText.textContent = 'Compare cytokine activity between cancer tissues and matched normal organs.';
+                descText.textContent = 'Compare cytokine activity between cancer types and their matched normal organs.';
             }
         }
 
@@ -5197,6 +5201,9 @@ const AtlasDetailPage = {
             if (titleEl) titleEl.textContent = `${signature} Activity Across Normal Organs`;
             if (subtitleEl) subtitleEl.textContent = `${this.signatureType} activity z-scores (${organs.length} organs)`;
 
+            // Dynamic height based on number of organs (min 15px per bar)
+            const barHeight = Math.max(360, organs.length * 15 + 50);
+
             Plotly.purge(container);
             Plotly.newPlot(container, [{
                 y: organs,
@@ -5212,7 +5219,9 @@ const AtlasDetailPage = {
             }], {
                 margin: { l: 120, r: 30, t: 10, b: 40 },
                 xaxis: { title: 'Mean Activity (z-score)' },
-                height: 360
+                yaxis: { tickfont: { size: 10 } },
+                height: barHeight,
+                font: { family: 'Inter, sans-serif' }
             }, { responsive: true });
 
         } else if (mode === 'cancer') {
