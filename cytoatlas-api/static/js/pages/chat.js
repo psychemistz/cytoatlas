@@ -407,12 +407,12 @@ const ChatPage = {
         const streamingDiv = document.createElement('div');
         streamingDiv.className = 'message assistant streaming';
         streamingDiv.innerHTML = `
-            <div class="thinking-indicator" id="thinking-indicator">
+            <div class="thinking-indicator">
                 <div class="thinking-spinner"></div>
                 <span class="thinking-text">Thinking...</span>
             </div>
-            <div class="tool-status" id="tool-status" style="display: none;"></div>
-            <div class="message-content" id="streaming-content"></div>
+            <div class="tool-status" style="display: none;"></div>
+            <div class="message-content"></div>
         `;
         container.appendChild(streamingDiv);
         container.scrollTop = container.scrollHeight;
@@ -455,9 +455,10 @@ const ChatPage = {
                     if (line.startsWith('data: ')) {
                         try {
                             const data = JSON.parse(line.slice(6));
-                            const thinkingIndicator = document.getElementById('thinking-indicator');
-                            const toolStatus = document.getElementById('tool-status');
-                            const streamingContent = document.getElementById('streaming-content');
+                            // Use streamingDiv reference instead of IDs to avoid conflicts
+                            const thinkingIndicator = streamingDiv.querySelector('.thinking-indicator');
+                            const toolStatus = streamingDiv.querySelector('.tool-status');
+                            const streamingContent = streamingDiv.querySelector('.message-content');
 
                             if (data.type === 'text') {
                                 // Hide thinking indicator once we get text
@@ -506,7 +507,11 @@ const ChatPage = {
 
                             container.scrollTop = container.scrollHeight;
                         } catch (e) {
-                            // Ignore parse errors for incomplete chunks
+                            // Re-throw real errors, only ignore JSON parse errors
+                            if (e.name !== 'SyntaxError') {
+                                throw e;
+                            }
+                            // Ignore JSON parse errors for incomplete chunks
                         }
                     }
                 }
