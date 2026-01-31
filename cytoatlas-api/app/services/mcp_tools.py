@@ -1,0 +1,652 @@
+"""MCP-style tool definitions for CytoAtlas chat.
+
+These tools allow the LLM to query CytoAtlas data and create visualizations.
+"""
+
+import json
+import logging
+from typing import Any, Callable
+
+from app.config import get_settings
+from app.services.search_service import get_search_service
+from app.schemas.search import SearchType
+
+logger = logging.getLogger(__name__)
+settings = get_settings()
+
+
+# Tool definitions for Claude API
+CYTOATLAS_TOOLS = [
+    {
+        "name": "search_entity",
+        "description": "Search for genes, cytokines, secreted proteins, cell types, diseases, or organs across all CytoAtlas atlases. Use this to find specific entities or explore what's available.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search query (e.g., 'IFNG', 'CD8 T cell', 'liver')"
+                },
+                "entity_type": {
+                    "type": "string",
+                    "enum": ["all", "cytokine", "protein", "cell_type", "disease", "organ"],
+                    "description": "Filter by entity type (default: all)"
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum results to return (default: 10)"
+                }
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "get_atlas_summary",
+        "description": "Get summary statistics for an atlas including number of cells, samples, cell types, and available data types.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "atlas_name": {
+                    "type": "string",
+                    "enum": ["CIMA", "Inflammation", "scAtlas"],
+                    "description": "Name of the atlas"
+                }
+            },
+            "required": ["atlas_name"]
+        }
+    },
+    {
+        "name": "list_cell_types",
+        "description": "List all available cell types in an atlas.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "atlas_name": {
+                    "type": "string",
+                    "enum": ["CIMA", "Inflammation", "scAtlas"],
+                    "description": "Name of the atlas"
+                }
+            },
+            "required": ["atlas_name"]
+        }
+    },
+    {
+        "name": "list_signatures",
+        "description": "List available CytoSig cytokines or SecAct secreted proteins.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "signature_type": {
+                    "type": "string",
+                    "enum": ["CytoSig", "SecAct"],
+                    "description": "Type of signatures to list"
+                }
+            },
+            "required": ["signature_type"]
+        }
+    },
+    {
+        "name": "get_activity_data",
+        "description": "Get cytokine or protein activity values for specific signatures across cell types in an atlas.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "atlas_name": {
+                    "type": "string",
+                    "enum": ["CIMA", "Inflammation", "scAtlas"],
+                    "description": "Name of the atlas"
+                },
+                "signature_type": {
+                    "type": "string",
+                    "enum": ["CytoSig", "SecAct"],
+                    "description": "Type of signature"
+                },
+                "signatures": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of signature names (e.g., ['IFNG', 'TNF'])"
+                },
+                "cell_types": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional: filter to specific cell types"
+                }
+            },
+            "required": ["atlas_name", "signature_type", "signatures"]
+        }
+    },
+    {
+        "name": "get_correlations",
+        "description": "Get correlations between signature activity and clinical/biochemistry variables. Only available for CIMA atlas.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "signature": {
+                    "type": "string",
+                    "description": "Signature name (e.g., 'IFNG')"
+                },
+                "signature_type": {
+                    "type": "string",
+                    "enum": ["CytoSig", "SecAct"],
+                    "description": "Type of signature"
+                },
+                "correlation_type": {
+                    "type": "string",
+                    "enum": ["age", "bmi", "biochemistry"],
+                    "description": "Type of correlation"
+                },
+                "cell_type": {
+                    "type": "string",
+                    "description": "Optional: specific cell type"
+                }
+            },
+            "required": ["signature", "signature_type", "correlation_type"]
+        }
+    },
+    {
+        "name": "get_disease_activity",
+        "description": "Get disease-specific activity differences from the Inflammation Atlas. Compare disease vs healthy.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "disease": {
+                    "type": "string",
+                    "description": "Disease name (e.g., 'COVID-19', 'Rheumatoid Arthritis')"
+                },
+                "signature_type": {
+                    "type": "string",
+                    "enum": ["CytoSig", "SecAct"],
+                    "description": "Type of signature"
+                },
+                "top_n": {
+                    "type": "integer",
+                    "description": "Number of top differentially active signatures to return (default: 20)"
+                }
+            },
+            "required": ["disease", "signature_type"]
+        }
+    },
+    {
+        "name": "compare_atlases",
+        "description": "Compare signature activity patterns across multiple atlases for the same cell types.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "signature": {
+                    "type": "string",
+                    "description": "Signature to compare"
+                },
+                "signature_type": {
+                    "type": "string",
+                    "enum": ["CytoSig", "SecAct"],
+                    "description": "Type of signature"
+                },
+                "atlases": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Atlases to compare (default: all)"
+                }
+            },
+            "required": ["signature", "signature_type"]
+        }
+    },
+    {
+        "name": "get_validation_metrics",
+        "description": "Get validation metrics for CytoSig/SecAct predictions including marker overlap, biological coherence, and cross-validation scores.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "atlas_name": {
+                    "type": "string",
+                    "enum": ["CIMA", "Inflammation", "scAtlas"],
+                    "description": "Name of the atlas"
+                },
+                "validation_type": {
+                    "type": "string",
+                    "enum": ["marker_overlap", "biological_coherence", "cross_validation", "reproducibility", "all"],
+                    "description": "Type of validation to retrieve"
+                }
+            },
+            "required": ["atlas_name"]
+        }
+    },
+    {
+        "name": "export_data",
+        "description": "Prepare data for download as CSV or JSON. Returns a reference that can be used to generate a download link.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "data_type": {
+                    "type": "string",
+                    "enum": ["activity", "correlations", "differential", "comparison"],
+                    "description": "Type of data to export"
+                },
+                "format": {
+                    "type": "string",
+                    "enum": ["csv", "json"],
+                    "description": "Export format"
+                },
+                "parameters": {
+                    "type": "object",
+                    "description": "Parameters specific to the data type"
+                }
+            },
+            "required": ["data_type", "format", "parameters"]
+        }
+    },
+    {
+        "name": "create_visualization",
+        "description": "Generate a visualization configuration that will be rendered inline in the chat. Use this to show data visually.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "viz_type": {
+                    "type": "string",
+                    "enum": ["heatmap", "bar_chart", "scatter", "box_plot", "line_chart", "table"],
+                    "description": "Type of visualization"
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Title for the visualization"
+                },
+                "data": {
+                    "type": "object",
+                    "description": "Data for the visualization (format depends on viz_type)"
+                },
+                "config": {
+                    "type": "object",
+                    "description": "Additional configuration options"
+                }
+            },
+            "required": ["viz_type", "title", "data"]
+        }
+    },
+]
+
+
+class ToolExecutor:
+    """Executes MCP tools against CytoAtlas data."""
+
+    def __init__(self):
+        self.settings = get_settings()
+        self._data_cache: dict[str, Any] = {}
+
+    async def execute_tool(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        """Execute a tool and return the result."""
+        handler = getattr(self, f"_execute_{tool_name}", None)
+        if handler is None:
+            return {"error": f"Unknown tool: {tool_name}"}
+
+        try:
+            return await handler(arguments)
+        except Exception as e:
+            logger.exception(f"Tool execution error: {tool_name}")
+            return {"error": str(e)}
+
+    async def _execute_search_entity(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Execute search_entity tool."""
+        search_service = get_search_service()
+
+        entity_type = SearchType(args.get("entity_type", "all"))
+        limit = args.get("limit", 10)
+
+        result = await search_service.search(
+            query=args["query"],
+            type_filter=entity_type,
+            offset=0,
+            limit=limit,
+        )
+
+        return {
+            "total_results": result.total_results,
+            "results": [
+                {
+                    "id": r.id,
+                    "name": r.name,
+                    "type": r.type.value,
+                    "atlases": r.atlases,
+                    "description": r.description,
+                }
+                for r in result.results
+            ]
+        }
+
+    async def _execute_get_atlas_summary(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Execute get_atlas_summary tool."""
+        atlas_name = args["atlas_name"]
+
+        # Map to file prefix
+        prefix_map = {"CIMA": "cima", "Inflammation": "inflam", "scAtlas": "scatlas"}
+        prefix = prefix_map.get(atlas_name)
+
+        if not prefix:
+            return {"error": f"Unknown atlas: {atlas_name}"}
+
+        # Load summary data
+        summary_path = self.settings.viz_data_path / f"{prefix}_summary.json"
+        if summary_path.exists():
+            with open(summary_path) as f:
+                return json.load(f)
+
+        # Fallback to activity data for basic stats
+        activity_path = self.settings.viz_data_path / f"{prefix}_cytosig_activity.json"
+        if activity_path.exists():
+            with open(activity_path) as f:
+                data = json.load(f)
+                return {
+                    "atlas_name": atlas_name,
+                    "n_cell_types": len(data.get("cell_types", [])),
+                    "n_signatures_cytosig": len(data.get("signatures", [])),
+                    "cell_types": data.get("cell_types", [])[:20],
+                }
+
+        return {"error": "Summary data not available"}
+
+    async def _execute_list_cell_types(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Execute list_cell_types tool."""
+        atlas_name = args["atlas_name"]
+        prefix_map = {"CIMA": "cima", "Inflammation": "inflam", "scAtlas": "scatlas"}
+        prefix = prefix_map.get(atlas_name)
+
+        if not prefix:
+            return {"error": f"Unknown atlas: {atlas_name}"}
+
+        activity_path = self.settings.viz_data_path / f"{prefix}_cytosig_activity.json"
+        if activity_path.exists():
+            with open(activity_path) as f:
+                data = json.load(f)
+                return {
+                    "atlas_name": atlas_name,
+                    "cell_types": data.get("cell_types", []),
+                    "count": len(data.get("cell_types", []))
+                }
+
+        return {"error": "Cell type data not available"}
+
+    async def _execute_list_signatures(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Execute list_signatures tool."""
+        sig_type = args["signature_type"]
+        filename = "cytosig_signatures.json" if sig_type == "CytoSig" else "secact_signatures.json"
+
+        sig_path = self.settings.viz_data_path / filename
+        if sig_path.exists():
+            with open(sig_path) as f:
+                data = json.load(f)
+                return {
+                    "signature_type": sig_type,
+                    "signatures": data.get("signatures", []),
+                    "count": len(data.get("signatures", []))
+                }
+
+        return {"error": f"{sig_type} signature data not available"}
+
+    async def _execute_get_activity_data(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Execute get_activity_data tool."""
+        atlas_name = args["atlas_name"]
+        sig_type = args["signature_type"]
+        signatures = args["signatures"]
+        cell_types = args.get("cell_types")
+
+        prefix_map = {"CIMA": "cima", "Inflammation": "inflam", "scAtlas": "scatlas"}
+        prefix = prefix_map.get(atlas_name)
+        sig_prefix = "cytosig" if sig_type == "CytoSig" else "secact"
+
+        if not prefix:
+            return {"error": f"Unknown atlas: {atlas_name}"}
+
+        activity_path = self.settings.viz_data_path / f"{prefix}_{sig_prefix}_activity.json"
+        if not activity_path.exists():
+            return {"error": f"Activity data not available for {atlas_name} {sig_type}"}
+
+        with open(activity_path) as f:
+            data = json.load(f)
+
+        all_signatures = data.get("signatures", [])
+        all_cell_types = data.get("cell_types", [])
+        values = data.get("values", [])
+
+        # Filter signatures
+        sig_indices = [i for i, s in enumerate(all_signatures) if s in signatures]
+        if not sig_indices:
+            return {"error": f"Signatures not found: {signatures}"}
+
+        # Filter cell types
+        if cell_types:
+            ct_indices = [i for i, ct in enumerate(all_cell_types) if ct in cell_types]
+        else:
+            ct_indices = list(range(len(all_cell_types)))
+
+        # Extract values
+        result = {
+            "atlas_name": atlas_name,
+            "signature_type": sig_type,
+            "cell_types": [all_cell_types[i] for i in ct_indices],
+            "signatures": [all_signatures[i] for i in sig_indices],
+            "activity": {}
+        }
+
+        for sig_idx in sig_indices:
+            sig_name = all_signatures[sig_idx]
+            result["activity"][sig_name] = {
+                all_cell_types[ct_idx]: values[ct_idx][sig_idx]
+                for ct_idx in ct_indices
+                if ct_idx < len(values) and sig_idx < len(values[ct_idx])
+            }
+
+        return result
+
+    async def _execute_get_correlations(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Execute get_correlations tool."""
+        signature = args["signature"]
+        sig_type = args["signature_type"]
+        corr_type = args["correlation_type"]
+        cell_type = args.get("cell_type")
+
+        sig_prefix = "cytosig" if sig_type == "CytoSig" else "secact"
+        corr_path = self.settings.viz_data_path / f"cima_{sig_prefix}_{corr_type}_correlations.json"
+
+        if not corr_path.exists():
+            return {"error": f"Correlation data not available for {corr_type}"}
+
+        with open(corr_path) as f:
+            data = json.load(f)
+
+        if signature not in data:
+            return {"error": f"Signature {signature} not found in correlation data"}
+
+        correlations = data[signature]
+
+        if cell_type:
+            correlations = [c for c in correlations if c.get("cell_type") == cell_type]
+
+        return {
+            "signature": signature,
+            "signature_type": sig_type,
+            "correlation_type": corr_type,
+            "correlations": correlations[:50]  # Limit for readability
+        }
+
+    async def _execute_get_disease_activity(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Execute get_disease_activity tool."""
+        disease = args["disease"]
+        sig_type = args["signature_type"]
+        top_n = args.get("top_n", 20)
+
+        sig_prefix = "cytosig" if sig_type == "CytoSig" else "secact"
+        diff_path = self.settings.viz_data_path / f"inflam_{sig_prefix}_differential.json"
+
+        if not diff_path.exists():
+            return {"error": "Differential activity data not available"}
+
+        with open(diff_path) as f:
+            data = json.load(f)
+
+        # Find disease in data
+        disease_data = None
+        for d in data.get("diseases", []):
+            if d.lower() == disease.lower() or disease.lower() in d.lower():
+                disease_data = data.get(d)
+                break
+
+        if not disease_data:
+            return {
+                "error": f"Disease not found: {disease}",
+                "available_diseases": data.get("diseases", [])[:20]
+            }
+
+        # Sort by effect size and take top N
+        sorted_data = sorted(
+            disease_data,
+            key=lambda x: abs(x.get("effect_size", 0)),
+            reverse=True
+        )[:top_n]
+
+        return {
+            "disease": disease,
+            "signature_type": sig_type,
+            "differential_signatures": sorted_data
+        }
+
+    async def _execute_compare_atlases(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Execute compare_atlases tool."""
+        signature = args["signature"]
+        sig_type = args["signature_type"]
+        atlases = args.get("atlases", ["CIMA", "Inflammation", "scAtlas"])
+
+        sig_prefix = "cytosig" if sig_type == "CytoSig" else "secact"
+        prefix_map = {"CIMA": "cima", "Inflammation": "inflam", "scAtlas": "scatlas"}
+
+        result = {
+            "signature": signature,
+            "signature_type": sig_type,
+            "comparison": {}
+        }
+
+        for atlas_name in atlases:
+            prefix = prefix_map.get(atlas_name)
+            if not prefix:
+                continue
+
+            activity_path = self.settings.viz_data_path / f"{prefix}_{sig_prefix}_activity.json"
+            if not activity_path.exists():
+                continue
+
+            with open(activity_path) as f:
+                data = json.load(f)
+
+            signatures = data.get("signatures", [])
+            if signature not in signatures:
+                continue
+
+            sig_idx = signatures.index(signature)
+            cell_types = data.get("cell_types", [])
+            values = data.get("values", [])
+
+            atlas_data = {}
+            for ct_idx, ct_name in enumerate(cell_types):
+                if ct_idx < len(values) and sig_idx < len(values[ct_idx]):
+                    atlas_data[ct_name] = values[ct_idx][sig_idx]
+
+            result["comparison"][atlas_name] = atlas_data
+
+        return result
+
+    async def _execute_get_validation_metrics(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Execute get_validation_metrics tool."""
+        atlas_name = args["atlas_name"]
+        validation_type = args.get("validation_type", "all")
+
+        prefix_map = {"CIMA": "cima", "Inflammation": "inflam", "scAtlas": "scatlas"}
+        prefix = prefix_map.get(atlas_name)
+
+        if not prefix:
+            return {"error": f"Unknown atlas: {atlas_name}"}
+
+        validation_path = self.settings.viz_data_path / f"{prefix}_validation.json"
+        if not validation_path.exists():
+            return {"error": "Validation data not available"}
+
+        with open(validation_path) as f:
+            data = json.load(f)
+
+        if validation_type == "all":
+            return data
+
+        if validation_type in data:
+            return {validation_type: data[validation_type]}
+
+        return {"error": f"Validation type not found: {validation_type}"}
+
+    async def _execute_export_data(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Execute export_data tool."""
+        data_type = args["data_type"]
+        format = args["format"]
+        parameters = args.get("parameters", {})
+
+        # Generate a unique export ID
+        import uuid
+        export_id = str(uuid.uuid4())[:8]
+
+        # Store parameters for later download
+        self._data_cache[export_id] = {
+            "data_type": data_type,
+            "format": format,
+            "parameters": parameters,
+        }
+
+        return {
+            "export_id": export_id,
+            "download_available": True,
+            "format": format,
+            "description": f"Export {data_type} data in {format} format"
+        }
+
+    async def _execute_create_visualization(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Execute create_visualization tool."""
+        viz_type = args["viz_type"]
+        title = args["title"]
+        data = args["data"]
+        config = args.get("config", {})
+
+        # Validate data structure based on viz type
+        if viz_type == "heatmap":
+            required = ["x_labels", "y_labels", "values"]
+        elif viz_type == "bar_chart":
+            required = ["labels", "values"]
+        elif viz_type == "scatter":
+            required = ["x", "y"]
+        elif viz_type == "box_plot":
+            required = ["labels", "values"]
+        elif viz_type == "table":
+            required = ["headers", "rows"]
+        else:
+            required = []
+
+        missing = [r for r in required if r not in data]
+        if missing:
+            return {"error": f"Missing required data fields for {viz_type}: {missing}"}
+
+        import uuid
+        container_id = f"viz-{uuid.uuid4().hex[:8]}"
+
+        return {
+            "visualization": {
+                "type": viz_type,
+                "title": title,
+                "data": data,
+                "config": config,
+                "container_id": container_id,
+            }
+        }
+
+
+# Singleton instance
+_tool_executor: ToolExecutor | None = None
+
+
+def get_tool_executor() -> ToolExecutor:
+    """Get or create the tool executor singleton."""
+    global _tool_executor
+    if _tool_executor is None:
+        _tool_executor = ToolExecutor()
+    return _tool_executor

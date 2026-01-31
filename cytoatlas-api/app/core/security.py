@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.core.database import get_db
+from app.core.database import get_db, get_db_optional
 
 settings = get_settings()
 
@@ -193,3 +193,46 @@ def require_admin(
             detail="Admin access required",
         )
     return user
+
+
+# Optional OAuth2 scheme that doesn't raise errors
+oauth2_scheme_optional = OAuth2PasswordBearer(
+    tokenUrl=f"{settings.api_v1_prefix}/auth/token",
+    auto_error=False,
+)
+
+
+async def get_current_user_optional(
+    token: Annotated[str | None, Depends(oauth2_scheme_optional)],
+    api_key: Annotated[str | None, Depends(api_key_header)],
+    db: Annotated[AsyncSession | None, Depends(get_db_optional)],
+) -> "User | None":  # type: ignore[name-defined]
+    """Get current user if authenticated, None otherwise.
+
+    This dependency allows endpoints to work for both authenticated
+    and anonymous users. Also works when database is not configured.
+    """
+    # If database is not configured, return None (anonymous user)
+    if db is None:
+        return None
+
+    from app.models.user import User
+
+    # Try API key first
+    if api_key:
+        user = await verify_api_key(api_key, db)
+        if user:
+            return user
+
+    # Try JWT token
+    if token:
+        try:
+            payload = decode_token(token)
+            result = await db.execute(select(User).where(User.email == payload.sub))
+            user = result.scalar_one_or_none()
+            if user and user.is_active:
+                return user
+        except HTTPException:
+            pass  # Invalid token, treat as anonymous
+
+    return None

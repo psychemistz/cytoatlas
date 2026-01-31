@@ -161,6 +161,24 @@ class Settings(BaseSettings):
     celery_broker_url: str = Field(default="redis://localhost:6379/1")
     celery_result_backend: str = Field(default="redis://localhost:6379/2")
 
+    # File Upload
+    max_upload_size_gb: int = Field(default=50)
+    upload_dir: Path = Field(default=Path("/data/cytoatlas/uploads"))
+
+    @property
+    def max_upload_size_bytes(self) -> int:
+        """Get max upload size in bytes."""
+        return self.max_upload_size_gb * 1024 * 1024 * 1024
+
+    # Claude API for Chat
+    anthropic_api_key: str | None = Field(default=None)
+    chat_model: str = Field(default="claude-opus-4-5-20251101")
+    chat_max_tokens: int = Field(default=4096)
+
+    # Chat Rate Limiting
+    anon_chat_limit_per_day: int = Field(default=5)
+    auth_chat_limit_per_day: int = Field(default=1000)
+
     @property
     def cima_results_dir(self) -> Path:
         return self.results_base_path / "cima"

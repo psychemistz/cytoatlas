@@ -6,6 +6,8 @@ This file provides guidance to Claude Code when working with this repository.
 
 **Git commits:** Do not include "Co-Authored-By" lines in commit messages.
 
+**Sensitive data:** Never commit personally sensitive information to git. This includes API keys (Claude/Anthropic, OpenAI, etc.), passwords, tokens, and credentials. Keep such values in `.env` files that are gitignored or use environment variables.
+
 **Data handling:** Always ask the user for data paths. Never use mock data for validation. When implementing services, sample from real datasets for development.
 
 ## Project Overview

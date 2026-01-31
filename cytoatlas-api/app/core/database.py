@@ -88,3 +88,28 @@ async def get_db_context() -> AsyncGenerator[AsyncSession, None]:
             raise
         finally:
             await session.close()
+
+
+async def get_db_optional() -> AsyncGenerator[AsyncSession | None, None]:
+    """FastAPI dependency for optional database sessions.
+
+    Returns None if database is not configured, allowing endpoints
+    to work without a database.
+    """
+    if async_session_factory is None:
+        yield None
+        return
+    async with async_session_factory() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
+
+
+def is_database_configured() -> bool:
+    """Check if database is configured."""
+    return async_session_factory is not None

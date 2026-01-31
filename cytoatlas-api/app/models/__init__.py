@@ -3,6 +3,8 @@
 from app.models.atlas import Atlas
 from app.models.cell_type import CellType
 from app.models.computed_stat import ComputedStat
+from app.models.conversation import Conversation, Message
+from app.models.job import Job
 from app.models.sample import Sample
 from app.models.signature import Signature
 from app.models.user import User
@@ -12,6 +14,9 @@ __all__ = [
     "Atlas",
     "CellType",
     "ComputedStat",
+    "Conversation",
+    "Job",
+    "Message",
     "Sample",
     "Signature",
     "User",

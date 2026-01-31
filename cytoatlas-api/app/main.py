@@ -19,13 +19,17 @@ from app.core.database import close_db, init_db
 from app.routers import (
     atlases_router,
     auth_router,
+    chat_router,
     cima_router,
     cross_atlas_router,
     export_router,
     health_router,
     inflammation_router,
     scatlas_router,
+    search_router,
+    submit_router,
     validation_router,
+    websocket_router,
 )
 
 settings = get_settings()
@@ -128,6 +132,12 @@ def create_app() -> FastAPI:
     app.include_router(cross_atlas_router, prefix=api_prefix)
     app.include_router(validation_router, prefix=api_prefix)
     app.include_router(export_router, prefix=api_prefix)
+
+    # New modules
+    app.include_router(search_router, prefix=api_prefix)
+    app.include_router(submit_router, prefix=api_prefix)
+    app.include_router(chat_router, prefix=api_prefix)
+    app.include_router(websocket_router, prefix=api_prefix)
 
     # Mount static files (CSS, JS, assets)
     if STATIC_DIR.exists():
