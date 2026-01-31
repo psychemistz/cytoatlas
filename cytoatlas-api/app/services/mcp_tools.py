@@ -316,7 +316,7 @@ class ToolExecutor:
         atlas_name = args["atlas_name"]
 
         # Map to file prefix
-        prefix_map = {"CIMA": "cima", "Inflammation": "inflam", "scAtlas": "scatlas"}
+        prefix_map = {"CIMA": "cima", "Inflammation": "inflammation", "scAtlas": "scatlas"}
         prefix = prefix_map.get(atlas_name)
 
         if not prefix:
@@ -328,16 +328,26 @@ class ToolExecutor:
             with open(summary_path) as f:
                 return json.load(f)
 
-        # Fallback to activity data for basic stats
-        activity_path = self.settings.viz_data_path / f"{prefix}_cytosig_activity.json"
-        if activity_path.exists():
-            with open(activity_path) as f:
+        # Fallback to celltype data for basic stats
+        celltype_path = self.settings.viz_data_path / f"{prefix}_celltype.json"
+        if celltype_path.exists():
+            with open(celltype_path) as f:
                 data = json.load(f)
+                cell_types = sorted(set(r.get("cell_type") for r in data if r.get("cell_type")))
+                cytosig_sigs = sorted(set(
+                    r.get("signature") for r in data
+                    if r.get("signature_type") == "CytoSig" and r.get("signature")
+                ))
+                secact_sigs = sorted(set(
+                    r.get("signature") for r in data
+                    if r.get("signature_type") == "SecAct" and r.get("signature")
+                ))
                 return {
                     "atlas_name": atlas_name,
-                    "n_cell_types": len(data.get("cell_types", [])),
-                    "n_signatures_cytosig": len(data.get("signatures", [])),
-                    "cell_types": data.get("cell_types", [])[:20],
+                    "n_cell_types": len(cell_types),
+                    "n_signatures_cytosig": len(cytosig_sigs),
+                    "n_signatures_secact": len(secact_sigs),
+                    "cell_types": cell_types[:20],
                 }
 
         return {"error": "Summary data not available"}
@@ -345,20 +355,23 @@ class ToolExecutor:
     async def _execute_list_cell_types(self, args: dict[str, Any]) -> dict[str, Any]:
         """Execute list_cell_types tool."""
         atlas_name = args["atlas_name"]
-        prefix_map = {"CIMA": "cima", "Inflammation": "inflam", "scAtlas": "scatlas"}
+        prefix_map = {"CIMA": "cima", "Inflammation": "inflammation", "scAtlas": "scatlas"}
         prefix = prefix_map.get(atlas_name)
 
         if not prefix:
             return {"error": f"Unknown atlas: {atlas_name}"}
 
-        activity_path = self.settings.viz_data_path / f"{prefix}_cytosig_activity.json"
+        # Use the celltype.json file which has the actual data
+        activity_path = self.settings.viz_data_path / f"{prefix}_celltype.json"
         if activity_path.exists():
             with open(activity_path) as f:
                 data = json.load(f)
+                # Extract unique cell types from the list of records
+                cell_types = sorted(set(r.get("cell_type") for r in data if r.get("cell_type")))
                 return {
                     "atlas_name": atlas_name,
-                    "cell_types": data.get("cell_types", []),
-                    "count": len(data.get("cell_types", []))
+                    "cell_types": cell_types,
+                    "count": len(cell_types)
                 }
 
         return {"error": "Cell type data not available"}
@@ -366,16 +379,21 @@ class ToolExecutor:
     async def _execute_list_signatures(self, args: dict[str, Any]) -> dict[str, Any]:
         """Execute list_signatures tool."""
         sig_type = args["signature_type"]
-        filename = "cytosig_signatures.json" if sig_type == "CytoSig" else "secact_signatures.json"
 
-        sig_path = self.settings.viz_data_path / filename
-        if sig_path.exists():
-            with open(sig_path) as f:
+        # Extract signatures from cima_celltype.json which has all signatures
+        celltype_path = self.settings.viz_data_path / "cima_celltype.json"
+        if celltype_path.exists():
+            with open(celltype_path) as f:
                 data = json.load(f)
+                # Extract unique signatures of the specified type
+                signatures = sorted(set(
+                    r.get("signature") for r in data
+                    if r.get("signature_type") == sig_type and r.get("signature")
+                ))
                 return {
                     "signature_type": sig_type,
-                    "signatures": data.get("signatures", []),
-                    "count": len(data.get("signatures", []))
+                    "signatures": signatures,
+                    "count": len(signatures)
                 }
 
         return {"error": f"{sig_type} signature data not available"}
@@ -385,53 +403,89 @@ class ToolExecutor:
         atlas_name = args["atlas_name"]
         sig_type = args["signature_type"]
         signatures = args["signatures"]
-        cell_types = args.get("cell_types")
+        cell_types_filter = args.get("cell_types")
 
-        prefix_map = {"CIMA": "cima", "Inflammation": "inflam", "scAtlas": "scatlas"}
+        prefix_map = {"CIMA": "cima", "Inflammation": "inflammation", "scAtlas": "scatlas"}
         prefix = prefix_map.get(atlas_name)
-        sig_prefix = "cytosig" if sig_type == "CytoSig" else "secact"
 
         if not prefix:
             return {"error": f"Unknown atlas: {atlas_name}"}
 
-        activity_path = self.settings.viz_data_path / f"{prefix}_{sig_prefix}_activity.json"
+        # The actual data files are named {prefix}_celltype.json and contain
+        # a list of records with cell_type, signature, signature_type, mean_activity
+        activity_path = self.settings.viz_data_path / f"{prefix}_celltype.json"
         if not activity_path.exists():
-            return {"error": f"Activity data not available for {atlas_name} {sig_type}"}
+            return {"error": f"Activity data not available for {atlas_name}"}
 
         with open(activity_path) as f:
             data = json.load(f)
 
-        all_signatures = data.get("signatures", [])
-        all_cell_types = data.get("cell_types", [])
-        values = data.get("values", [])
+        # Data is a list of records
+        # Filter by signature type and requested signatures
+        filtered = [
+            r for r in data
+            if r.get("signature_type") == sig_type
+            and r.get("signature") in signatures
+        ]
 
-        # Filter signatures
-        sig_indices = [i for i, s in enumerate(all_signatures) if s in signatures]
-        if not sig_indices:
-            return {"error": f"Signatures not found: {signatures}"}
+        if not filtered:
+            # Try case-insensitive match
+            sig_lower = {s.lower(): s for s in signatures}
+            filtered = [
+                r for r in data
+                if r.get("signature_type") == sig_type
+                and r.get("signature", "").lower() in sig_lower
+            ]
 
-        # Filter cell types
-        if cell_types:
-            ct_indices = [i for i, ct in enumerate(all_cell_types) if ct in cell_types]
-        else:
-            ct_indices = list(range(len(all_cell_types)))
+        if not filtered:
+            available_sigs = sorted(set(
+                r.get("signature") for r in data
+                if r.get("signature_type") == sig_type
+            ))[:20]
+            return {
+                "error": f"Signatures not found: {signatures}",
+                "available_signatures": available_sigs
+            }
 
-        # Extract values
+        # Filter by cell types if specified
+        if cell_types_filter:
+            ct_lower = {ct.lower(): ct for ct in cell_types_filter}
+            filtered = [
+                r for r in filtered
+                if r.get("cell_type", "").lower() in ct_lower
+                or r.get("cell_type") in cell_types_filter
+            ]
+
+        # Build result organized by signature
         result = {
             "atlas_name": atlas_name,
             "signature_type": sig_type,
-            "cell_types": [all_cell_types[i] for i in ct_indices],
-            "signatures": [all_signatures[i] for i in sig_indices],
+            "signatures": list(set(r.get("signature") for r in filtered)),
+            "cell_types": sorted(set(r.get("cell_type") for r in filtered)),
             "activity": {}
         }
 
-        for sig_idx in sig_indices:
-            sig_name = all_signatures[sig_idx]
-            result["activity"][sig_name] = {
-                all_cell_types[ct_idx]: values[ct_idx][sig_idx]
-                for ct_idx in ct_indices
-                if ct_idx < len(values) and sig_idx < len(values[ct_idx])
-            }
+        for record in filtered:
+            sig_name = record.get("signature")
+            ct_name = record.get("cell_type")
+            activity = record.get("mean_activity")
+
+            if sig_name not in result["activity"]:
+                result["activity"][sig_name] = {}
+            result["activity"][sig_name][ct_name] = activity
+
+        # Sort cell types by activity for the first signature
+        if result["activity"]:
+            first_sig = list(result["activity"].keys())[0]
+            sorted_cts = sorted(
+                result["activity"][first_sig].items(),
+                key=lambda x: x[1] if x[1] is not None else 0,
+                reverse=True
+            )
+            result["cell_types_ranked"] = [
+                {"cell_type": ct, "activity": act}
+                for ct, act in sorted_cts
+            ]
 
         return result
 
@@ -513,8 +567,7 @@ class ToolExecutor:
         sig_type = args["signature_type"]
         atlases = args.get("atlases", ["CIMA", "Inflammation", "scAtlas"])
 
-        sig_prefix = "cytosig" if sig_type == "CytoSig" else "secact"
-        prefix_map = {"CIMA": "cima", "Inflammation": "inflam", "scAtlas": "scatlas"}
+        prefix_map = {"CIMA": "cima", "Inflammation": "inflammation", "scAtlas": "scatlas"}
 
         result = {
             "signature": signature,
@@ -527,25 +580,30 @@ class ToolExecutor:
             if not prefix:
                 continue
 
-            activity_path = self.settings.viz_data_path / f"{prefix}_{sig_prefix}_activity.json"
-            if not activity_path.exists():
+            celltype_path = self.settings.viz_data_path / f"{prefix}_celltype.json"
+            if not celltype_path.exists():
                 continue
 
-            with open(activity_path) as f:
+            with open(celltype_path) as f:
                 data = json.load(f)
 
-            signatures = data.get("signatures", [])
-            if signature not in signatures:
+            # Filter for the signature
+            sig_lower = signature.lower()
+            filtered = [
+                r for r in data
+                if r.get("signature_type") == sig_type
+                and (r.get("signature") == signature or r.get("signature", "").lower() == sig_lower)
+            ]
+
+            if not filtered:
                 continue
 
-            sig_idx = signatures.index(signature)
-            cell_types = data.get("cell_types", [])
-            values = data.get("values", [])
-
             atlas_data = {}
-            for ct_idx, ct_name in enumerate(cell_types):
-                if ct_idx < len(values) and sig_idx < len(values[ct_idx]):
-                    atlas_data[ct_name] = values[ct_idx][sig_idx]
+            for record in filtered:
+                ct_name = record.get("cell_type")
+                activity = record.get("mean_activity")
+                if ct_name and activity is not None:
+                    atlas_data[ct_name] = activity
 
             result["comparison"][atlas_name] = atlas_data
 
