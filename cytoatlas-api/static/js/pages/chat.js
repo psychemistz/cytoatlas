@@ -403,10 +403,17 @@ const ChatPage = {
         const container = document.getElementById('chat-messages');
         container.appendChild(this.createMessageElement(userMsg));
 
-        // Add streaming placeholder
+        // Add streaming placeholder with thinking indicator
         const streamingDiv = document.createElement('div');
         streamingDiv.className = 'message assistant streaming';
-        streamingDiv.innerHTML = '<div class="message-content"><span class="typing-indicator">...</span></div>';
+        streamingDiv.innerHTML = `
+            <div class="thinking-indicator" id="thinking-indicator">
+                <div class="thinking-spinner"></div>
+                <span class="thinking-text">Thinking...</span>
+            </div>
+            <div class="tool-status" id="tool-status" style="display: none;"></div>
+            <div class="message-content" id="streaming-content"></div>
+        `;
         container.appendChild(streamingDiv);
         container.scrollTop = container.scrollHeight;
 
@@ -448,15 +455,51 @@ const ChatPage = {
                     if (line.startsWith('data: ')) {
                         try {
                             const data = JSON.parse(line.slice(6));
+                            const thinkingIndicator = document.getElementById('thinking-indicator');
+                            const toolStatus = document.getElementById('tool-status');
+                            const streamingContent = document.getElementById('streaming-content');
 
                             if (data.type === 'text') {
+                                // Hide thinking indicator once we get text
+                                if (thinkingIndicator) thinkingIndicator.style.display = 'none';
                                 assistantContent += data.content;
-                                streamingDiv.querySelector('.message-content').innerHTML =
-                                    this.formatContent(assistantContent);
+                                if (streamingContent) {
+                                    streamingContent.innerHTML = this.formatContent(assistantContent);
+                                }
+                            } else if (data.type === 'tool_call') {
+                                // Show which tool is being called
+                                const toolName = data.tool_call?.name || 'tool';
+                                const toolLabels = {
+                                    'search_entity': '🔍 Searching...',
+                                    'get_activity_data': '📊 Fetching activity data...',
+                                    'list_cell_types': '🧬 Getting cell types...',
+                                    'list_signatures': '📋 Loading signatures...',
+                                    'get_correlations': '📈 Analyzing correlations...',
+                                    'get_disease_activity': '🏥 Getting disease data...',
+                                    'compare_atlases': '⚖️ Comparing atlases...',
+                                    'get_atlas_summary': '📑 Loading atlas summary...',
+                                    'create_visualization': '📉 Creating visualization...',
+                                    'export_data': '💾 Preparing export...',
+                                };
+                                const statusText = toolLabels[toolName] || `⚙️ Using ${toolName}...`;
+                                if (toolStatus) {
+                                    toolStatus.style.display = 'block';
+                                    toolStatus.innerHTML = `<div class="tool-item">${statusText}</div>` + toolStatus.innerHTML;
+                                }
+                                if (thinkingIndicator) {
+                                    thinkingIndicator.querySelector('.thinking-text').textContent = statusText;
+                                }
+                            } else if (data.type === 'tool_result') {
+                                // Tool completed - could show checkmark
+                                if (toolStatus && toolStatus.firstChild) {
+                                    toolStatus.firstChild.innerHTML = toolStatus.firstChild.innerHTML.replace('...', ' ✓');
+                                }
                             } else if (data.type === 'visualization') {
                                 visualizations.push(data.visualization);
                             } else if (data.type === 'done') {
                                 messageId = data.message_id;
+                                if (thinkingIndicator) thinkingIndicator.style.display = 'none';
+                                if (toolStatus) toolStatus.style.display = 'none';
                             } else if (data.type === 'error') {
                                 throw new Error(data.content);
                             }
