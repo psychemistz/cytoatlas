@@ -323,19 +323,21 @@ class ScAtlasService(BaseService):
     async def get_adjacent_tissue_boxplots(
         self,
         signature_type: str = "CytoSig",
+        cancer_type: str | None = None,
     ) -> dict:
         """
         Get tumor vs adjacent boxplot data with statistics.
 
         Args:
             signature_type: 'CytoSig' or 'SecAct'
+            cancer_type: Optional cancer type filter (e.g., 'CRC', 'BRCA')
 
         Returns:
-            Dict with boxplot_data, tumor_vs_adjacent, signatures, summary
+            Dict with boxplot_data, by_cancer_type, tumor_vs_adjacent, signatures, summary
         """
         data = await self.load_json("adjacent_tissue.json")
 
-        # Filter boxplot_data by signature type
+        # Filter boxplot_data by signature type (aggregated across all cancer types)
         boxplot_data = data.get("boxplot_data", [])
         filtered_boxplots = self.filter_by_signature_type(boxplot_data, signature_type)
 
@@ -343,10 +345,18 @@ class ScAtlasService(BaseService):
         tumor_vs_adj = data.get("tumor_vs_adjacent", [])
         filtered_tva = self.filter_by_signature_type(tumor_vs_adj, signature_type)
 
+        # Filter by_cancer_type data (per-cancer-type boxplot stats)
+        by_cancer = data.get("by_cancer_type", [])
+        filtered_by_cancer = self.filter_by_signature_type(by_cancer, signature_type)
+        if cancer_type:
+            filtered_by_cancer = [r for r in filtered_by_cancer if r.get("cancer_type") == cancer_type]
+
         return {
             "boxplot_data": filtered_boxplots,
+            "by_cancer_type": filtered_by_cancer,
             "tumor_vs_adjacent": filtered_tva,
             "signatures": data.get("cytosig_signatures", []) if signature_type == "CytoSig" else data.get("secact_signatures", []),
+            "cancer_types": data.get("cancer_types", []),
             "summary": data.get("summary", {}),
         }
 

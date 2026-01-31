@@ -6223,86 +6223,109 @@ const AtlasDetailPage = {
         }
 
         const traces = [];
-        const categories = ['Tumor', 'Adjacent', 'Normal'];
         const colors = {
             'Tumor': '#b2182b',
             'Adjacent': '#fdb863',
             'Normal': '#2166ac'
         };
 
-        if (showMultiple && signatures.length > 0) {
-            // ===== MULTI-SIGNATURE GROUPED BAR CHART =====
-            // Build grouped bar data: one trace per condition (Tumor, Adjacent, Normal)
+        // Helper to get boxplot data - uses by_cancer_type when cancer selected, otherwise aggregated data
+        const getBoxplotStats = (sig) => {
+            if (selectedCancer !== 'all' && this.diffBoxplotData?.by_cancer_type) {
+                // Use cancer-type-specific data
+                const record = this.diffBoxplotData.by_cancer_type.find(
+                    d => d.signature === sig && d.cancer_type === selectedCancer
+                );
+                return record;
+            } else {
+                // Use aggregated data
+                return this.diffBoxplotData?.boxplot_data?.find(d => d.signature === sig);
+            }
+        };
 
-            categories.forEach((condition, condIdx) => {
-                const yValues = [];
-                const hoverTexts = [];
+        if (showMultiple && signatures.length > 0) {
+            // ===== MULTI-SIGNATURE BOXPLOTS =====
+            // For each condition (Tumor, Adjacent, Normal), create one trace with all signatures
+            const conditions = ['Tumor', 'Adjacent', 'Normal'];
+
+            conditions.forEach(condition => {
+                const xLabels = [];
+                const lowerFences = [];
+                const q1s = [];
+                const medians = [];
+                const q3s = [];
+                const upperFences = [];
+                const means = [];
+                const sampleCounts = [];
 
                 signatures.forEach(sig => {
-                    let value = null;
-                    let hoverText = '';
+                    const boxplotRecord = getBoxplotStats(sig);
+                    let stats = null;
 
-                    if (condition === 'Tumor') {
-                        // Get tumor data from boxplot data or cancer types data
-                        const boxplotRecord = this.diffBoxplotData?.boxplot_data?.find(d => d.signature === sig);
-                        if (boxplotRecord?.tumor) {
-                            value = boxplotRecord.tumor.median;
-                            hoverText = `n=${boxplotRecord.tumor.n}`;
-                        } else if (this.diffCancerTypesData?.data) {
-                            let cancerData = this.diffCancerTypesData.data.filter(d => d.signature === sig);
-                            if (selectedCancer !== 'all') {
-                                cancerData = cancerData.filter(d => d.cancer_type === selectedCancer);
-                            }
-                            if (cancerData.length > 0) {
-                                value = cancerData.reduce((sum, d) => sum + (d.mean_activity || 0), 0) / cancerData.length;
-                                hoverText = `n=${cancerData.length} cancer types`;
-                            }
-                        }
-                    } else if (condition === 'Adjacent') {
-                        const boxplotRecord = this.diffBoxplotData?.boxplot_data?.find(d => d.signature === sig);
-                        if (boxplotRecord?.adjacent) {
-                            value = boxplotRecord.adjacent.median;
-                            hoverText = `n=${boxplotRecord.adjacent.n}`;
-                        } else if (this.diffAnalysisData?.data) {
-                            const sigData = this.diffAnalysisData.data.find(d => d.signature === sig);
-                            if (sigData) {
-                                value = sigData.mean_adjacent;
-                                hoverText = `n=${sigData.n_pairs || 1}`;
-                            }
-                        }
+                    if (condition === 'Tumor' && boxplotRecord?.tumor) {
+                        stats = boxplotRecord.tumor;
+                    } else if (condition === 'Adjacent' && boxplotRecord?.adjacent) {
+                        stats = boxplotRecord.adjacent;
                     } else if (condition === 'Normal') {
-                        if (this.diffOrganData) {
-                            let normalData = this.diffOrganData.filter(d => d.signature === sig);
-                            if (selectedCancer !== 'all' && this.diffCancerTypesData?.cancer_to_organ) {
-                                const matchedOrgan = this.diffCancerTypesData.cancer_to_organ[selectedCancer];
-                                if (matchedOrgan) {
-                                    const matched = normalData.filter(d => d.organ === matchedOrgan);
-                                    if (matched.length > 0) normalData = matched;
-                                }
+                        // For Normal, use organ data (aggregated across organs)
+                        let normalData = this.diffOrganData?.filter(d => d.signature === sig) || [];
+                        if (selectedCancer !== 'all' && this.diffCancerTypesData?.cancer_to_organ) {
+                            const matchedOrgan = this.diffCancerTypesData.cancer_to_organ[selectedCancer];
+                            if (matchedOrgan) {
+                                const matched = normalData.filter(d => d.organ === matchedOrgan);
+                                if (matched.length > 0) normalData = matched;
                             }
-                            if (normalData.length > 0) {
-                                value = normalData.reduce((sum, d) => sum + (d.mean_activity || 0), 0) / normalData.length;
-                                hoverText = `n=${normalData.length} organs`;
-                            }
+                        }
+                        if (normalData.length > 0) {
+                            const values = normalData.map(d => d.mean_activity).sort((a, b) => a - b);
+                            const n = values.length;
+                            stats = {
+                                min: values[0],
+                                q1: values[Math.floor(n * 0.25)] || values[0],
+                                median: values[Math.floor(n * 0.5)] || values[0],
+                                q3: values[Math.floor(n * 0.75)] || values[n - 1],
+                                max: values[n - 1],
+                                mean: values.reduce((a, b) => a + b, 0) / n,
+                                n: n
+                            };
                         }
                     }
 
-                    yValues.push(value);
-                    hoverTexts.push(hoverText);
+                    if (stats) {
+                        xLabels.push(sig);
+                        lowerFences.push(stats.min);
+                        q1s.push(stats.q1);
+                        medians.push(stats.median);
+                        q3s.push(stats.q3);
+                        upperFences.push(stats.max);
+                        means.push(stats.mean);
+                        sampleCounts.push(stats.n);
+                    }
                 });
 
-                traces.push({
-                    type: 'bar',
-                    name: condition,
-                    x: signatures,
-                    y: yValues,
-                    marker: { color: colors[condition], opacity: 0.8 },
-                    hovertemplate: `<b>%{x}</b><br>${condition}: %{y:.3f}<br>%{customdata}<extra></extra>`,
-                    customdata: hoverTexts
-                });
+                if (xLabels.length > 0) {
+                    traces.push({
+                        type: 'box',
+                        name: condition,
+                        x: xLabels,
+                        lowerfence: lowerFences,
+                        q1: q1s,
+                        median: medians,
+                        q3: q3s,
+                        upperfence: upperFences,
+                        mean: means,
+                        marker: { color: colors[condition] },
+                        line: { color: colors[condition] },
+                        fillcolor: condition === 'Tumor' ? 'rgba(178, 24, 43, 0.3)' :
+                                   condition === 'Adjacent' ? 'rgba(253, 184, 99, 0.3)' :
+                                   'rgba(33, 102, 172, 0.3)',
+                        hovertemplate: `<b>%{x}</b><br>${condition}<br>Median: %{median:.3f}<br>Q1: %{q1:.3f}<br>Q3: %{q3:.3f}<br>n=%{customdata}<extra></extra>`,
+                        customdata: sampleCounts
+                    });
+                }
             });
 
-            if (traces.every(t => t.y.every(v => v === null))) {
+            if (traces.length === 0) {
                 container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No differential data available.</p>';
                 return;
             }
@@ -6319,9 +6342,9 @@ const AtlasDetailPage = {
                 height: 340,
                 showlegend: true,
                 legend: { x: 0.5, y: 1.05, orientation: 'h', xanchor: 'center' },
-                barmode: 'group',
-                bargap: 0.15,
-                bargroupgap: 0.1,
+                boxmode: 'group',
+                boxgap: 0.1,
+                boxgroupgap: 0.05,
                 font: { family: 'Inter, sans-serif' }
             }, { responsive: true });
 
@@ -6329,11 +6352,11 @@ const AtlasDetailPage = {
             // ===== SINGLE SIGNATURE BOXPLOT =====
             const signature = signatures[0];
 
-            // Check if we have boxplot statistics data
-            const boxplotRecord = this.diffBoxplotData?.boxplot_data?.find(d => d.signature === signature);
+            // Get boxplot statistics (cancer-specific or aggregated)
+            const boxplotRecord = getBoxplotStats(signature);
 
             if (boxplotRecord) {
-                // Use proper boxplot statistics from adjacent_tissue.json
+                // Use proper boxplot statistics
                 const tumorStats = boxplotRecord.tumor;
                 const adjStats = boxplotRecord.adjacent;
 
@@ -6423,7 +6446,7 @@ const AtlasDetailPage = {
                 }
             }
 
-            // 3. Normal tissues (from organ data) - always use scatter plot style
+            // 3. Normal tissues (from organ data)
             if (this.diffOrganData && this.diffOrganData.length > 0) {
                 let normalData = this.diffOrganData.filter(d => d.signature === signature);
                 // Filter to matched organ if specific cancer type selected
@@ -6439,7 +6462,7 @@ const AtlasDetailPage = {
                 if (normalData.length > 0) {
                     traces.push({
                         type: 'box',
-                        name: `Normal (n=${normalData.length})`,
+                        name: `Normal (n=${normalData.length} organs)`,
                         x: normalData.map(() => 'Normal'),
                         y: normalData.map(d => d.mean_activity),
                         boxpoints: 'all',
