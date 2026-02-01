@@ -7080,20 +7080,23 @@ const AtlasDetailPage = {
                 <strong>Cancer-Associated Fibroblast (CAF) Subtypes:</strong>
                 <div style="margin-top: 0.5rem; font-size: 0.9rem;">
                     <div style="margin-bottom: 0.4rem;">
-                        <span style="color: #1f77b4; font-weight: bold;">● myCAF</span> (myofibroblastic) - ECM remodeling, contractile markers (ACTA2, COL1A1)
+                        <span style="color: #1f77b4; font-weight: bold;">● myCAF</span> (myofibroblastic) - ECM remodeling, contractile markers (ACTA2, COL1A1)<br>
+                        <small style="color: #666; margin-left: 1rem;">Cell types: S23_myCAF_ACTA2</small>
                     </div>
                     <div style="margin-bottom: 0.4rem;">
-                        <span style="color: #ff7f0e; font-weight: bold;">● iCAF</span> (inflammatory) - Cytokine secretion, immune modulation (IL6, CXCL12)
+                        <span style="color: #ff7f0e; font-weight: bold;">● iCAF</span> (inflammatory) - Cytokine secretion, immune modulation (IL6, CXCL12)<br>
+                        <small style="color: #666; margin-left: 1rem;">Cell types: S22_iCAF_IL6</small>
                     </div>
                     <div style="margin-bottom: 0.4rem;">
-                        <span style="color: #2ca02c; font-weight: bold;">● apCAF</span> (antigen-presenting) - MHC-II expression (HLA-DR, CD74)
+                        <span style="color: #2ca02c; font-weight: bold;">● apCAF</span> (antigen-presenting) - MHC-II expression (HLA-DR, CD74)<br>
+                        <small style="color: #666; margin-left: 1rem;">Cell types: S24_apCAF_CD74</small>
                     </div>
                     <div>
                         <span style="color: #999; font-weight: bold;">● Other</span> - General fibroblast populations (S01-S12)
                     </div>
                 </div>
                 <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #666;">
-                    <strong>Note:</strong> CAF subtypes are classified based on scAtlas cell type annotations (S22-S24 prefixes).
+                    <strong>Note:</strong> CAF subtypes are classified based on scAtlas cell type annotations (S22-S24 prefixes). Other fibroblasts (S01-S12) represent diverse stromal populations not classified into canonical CAF subtypes.
                 </div>
             </div>
 
@@ -7206,30 +7209,59 @@ const AtlasDetailPage = {
 
         // === Proportions Bar ===
         const propContainer = document.getElementById('caf-proportions');
-        const proportions = this.cafData.proportions || [];
-        if (propContainer && proportions.length > 0) {
-            // Get unique cancer types
-            const cancerTypes = [...new Set(proportions.map(d => d.cancer_type))];
+        if (propContainer && subtypes.length > 0) {
+            // Aggregate cell counts by cancer_type and caf_class
+            // Each subtype record has n_cells, but we need to dedupe by (cancer, class, subtype)
+            const cellsByCancerClass = {};
+            const seenSubtypes = new Set();
 
-            const traces = cafTypes.map(caf => ({
-                type: 'bar',
-                name: caf,
-                x: cancerTypes,
-                y: cancerTypes.map(ct => {
-                    const entry = proportions.find(d => d.cancer_type === ct && d.caf_subtype === caf);
-                    return entry ? entry.proportion : 0;
-                }),
-                marker: { color: cafColors[caf] }
-            }));
+            subtypes.forEach(d => {
+                const key = `${d.cancer_type}|${d.caf_class}|${d.caf_subtype}`;
+                if (!seenSubtypes.has(key)) {
+                    seenSubtypes.add(key);
+                    if (!cellsByCancerClass[d.cancer_type]) {
+                        cellsByCancerClass[d.cancer_type] = { myCAF: 0, iCAF: 0, apCAF: 0, Other: 0, total: 0 };
+                    }
+                    const cls = d.caf_class || 'Other';
+                    cellsByCancerClass[d.cancer_type][cls] += d.n_cells || 0;
+                    cellsByCancerClass[d.cancer_type].total += d.n_cells || 0;
+                }
+            });
 
-            Plotly.newPlot(propContainer, traces, {
-                barmode: 'stack',
-                margin: { l: 60, r: 30, t: 30, b: 100 },
-                xaxis: { title: 'Cancer Type', tickangle: -45 },
-                yaxis: { title: 'Proportion', tickformat: '.0%' },
-                legend: { orientation: 'h', y: 1.1, x: 0.5, xanchor: 'center' },
-                height: 350
-            }, { responsive: true });
+            // Sort cancer types by total CAF cells, filter out low-count
+            const sortedCancers = Object.keys(cellsByCancerClass)
+                .filter(c => cellsByCancerClass[c].total > 100)
+                .sort((a, b) => cellsByCancerClass[b].total - cellsByCancerClass[a].total);
+
+            if (sortedCancers.length > 0) {
+                // Create stacked bar traces for each CAF class
+                const traces = cafTypes.map(caf => ({
+                    type: 'bar',
+                    name: caf,
+                    x: sortedCancers,
+                    y: sortedCancers.map(cancer => {
+                        const total = cellsByCancerClass[cancer].total;
+                        return total > 0 ? cellsByCancerClass[cancer][caf] / total : 0;
+                    }),
+                    text: sortedCancers.map(cancer => {
+                        const cells = cellsByCancerClass[cancer][caf];
+                        return cells > 0 ? cells.toLocaleString() : '';
+                    }),
+                    hovertemplate: `<b>%{x}</b><br>${caf}: %{y:.1%} (%{text} cells)<extra></extra>`,
+                    marker: { color: cafColors[caf] }
+                }));
+
+                Plotly.newPlot(propContainer, traces, {
+                    barmode: 'stack',
+                    margin: { l: 60, r: 30, t: 30, b: 100 },
+                    xaxis: { title: 'Cancer Type', tickangle: 45 },
+                    yaxis: { title: 'Proportion of CAF Cells', tickformat: '.0%' },
+                    legend: { orientation: 'h', y: 1.15, x: 0.5, xanchor: 'center' },
+                    height: 350
+                }, { responsive: true });
+            } else {
+                propContainer.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Limited CAF data available in current selection.</p>';
+            }
         } else if (propContainer) {
             propContainer.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Proportion data not available.</p>';
         }
