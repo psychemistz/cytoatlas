@@ -202,19 +202,19 @@ def main():
     output_df.to_csv(output_csv, index=False)
     log(f"\nSaved: {output_csv}")
 
-    # Create summary JSON
+    # Create summary JSON (convert numpy types to native Python types)
     summary = {
         'stage': 2,
         'description': 'Format variants for AlphaGenome API',
         'input': {
-            'stage1_eqtls': len(pd.read_csv(input_csv)),
+            'stage1_eqtls': int(len(pd.read_csv(input_csv))),
         },
         'output': {
-            'unique_variants': len(output_df),
-            'parse_failures': parse_failures,
+            'unique_variants': int(len(output_df)),
+            'parse_failures': int(parse_failures),
         },
-        'variant_types': type_counts.to_dict(),
-        'chromosomes': chrom_counts.to_dict(),
+        'variant_types': {k: int(v) for k, v in type_counts.to_dict().items()},
+        'chromosomes': {k: int(v) for k, v in chrom_counts.to_dict().items()},
         'genome_build': 'hg38',
         'notes': [
             'Variants deduplicated across cell types (best p-value kept)',
