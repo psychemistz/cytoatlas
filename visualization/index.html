@@ -9978,9 +9978,9 @@
             if (container1) {
                 container1.classList.remove('loading');
                 Plotly.purge(container1);
-                let plotData, xLabel, yLabel, correlation;
+                let plotData, xLabel, yLabel, correlation, pvalue, nSamples, dataSource;
 
-                // Map select value to comparison key
+                // Map select value to comparison key and display names
                 const compKeyMap = {
                     'cima-inflam': 'cima_vs_inflammation',
                     'cima-scatlas': 'cima_vs_scatlas',
@@ -9988,23 +9988,29 @@
                 };
                 const compKey = compKeyMap[atlasSelect] || 'cima_vs_inflammation';
 
+                // Atlas name maps for labels
+                const atlasLabels = {
+                    'cima-inflam': { x: 'CIMA', y: 'Inflammation Atlas' },
+                    'cima-scatlas': { x: 'CIMA', y: 'scAtlas' },
+                    'inflam-scatlas': { x: 'Inflammation Atlas', y: 'scAtlas' }
+                };
+
                 if (comparisonData && comparisonData[compKey]) {
                     const realData = comparisonData[compKey];
                     plotData = realData.data;
                     correlation = realData.correlation;
+                    pvalue = realData.pvalue;
+                    nSamples = realData.n;
+                    dataSource = 'real';
 
-                    if (atlasSelect === 'cima-inflam') {
-                        xLabel = 'CIMA Activity (z-score)';
-                        yLabel = 'Inflammation Activity (z-score)';
-                    } else if (atlasSelect === 'cima-scatlas') {
-                        xLabel = 'CIMA Activity (z-score)';
-                        yLabel = 'scAtlas Activity (z-score)';
-                    } else {
-                        xLabel = 'Inflammation Activity (z-score)';
-                        yLabel = 'scAtlas Activity (z-score)';
-                    }
+                    const labels = atlasLabels[atlasSelect];
+                    xLabel = `${labels.x} Activity (z-score)`;
+                    yLabel = `${labels.y} Activity (z-score)`;
+
+                    console.log(`Cross-Atlas Comparison: ${compKey}, r=${correlation.toFixed(3)}, n=${nSamples}, data points=${plotData.length}`);
                 } else {
                     // Fallback to mock data
+                    console.warn('Cross-atlas comparison data not available, using mock data');
                     const signatures = ['IFNG', 'TNF', 'IL6', 'IL10', 'IL17A', 'IL1B', 'IL4', 'IL13', 'TGFB1', 'CCL2'];
                     plotData = signatures.map(sig => {
                         const x = (Math.random() - 0.5) * 2;
@@ -10013,6 +10019,9 @@
                     xLabel = 'Atlas 1';
                     yLabel = 'Atlas 2';
                     correlation = 0.75;
+                    pvalue = null;
+                    nSamples = 10;
+                    dataSource = 'mock';
                 }
 
                 const xData = plotData.map(d => d.x);
@@ -10036,6 +10045,10 @@
                 const xRange = [xMin - padding, xMax + padding];
                 const yRange = [yMin - padding, yMax + padding];
 
+                // Build title with correlation stats
+                const pvalText = pvalue !== null ? `, p=${pvalue < 0.001 ? '<0.001' : pvalue.toFixed(3)}` : '';
+                const titleText = `Spearman r = ${r.toFixed(3)}${pvalText} (n=${nSamples || plotData.length} cell type × signature pairs)`;
+
                 Plotly.newPlot(container1, [{
                     type: 'scatter',
                     mode: 'markers',
@@ -10048,7 +10061,6 @@
                         size: 8,
                         color: plotData.map(d => Math.abs(d.x - d.y)),
                         colorscale: 'Viridis',
-                        
                         colorbar: { title: '|Diff|', len: 0.5 }
                     },
                     hovertemplate: '<b>%{text}</b><br>' + xLabel + ': %{x:.2f}<br>' + yLabel + ': %{y:.2f}<extra></extra>'
@@ -10063,8 +10075,8 @@
                 }], {
                     xaxis: { title: xLabel, zeroline: true, range: xRange },
                     yaxis: { title: yLabel, zeroline: true, range: yRange },
-                    margin: { l: 60, r: 30, t: 40, b: 60 },
-                    title: { text: `Spearman r = ${r.toFixed(3)} (n=${plotData.length})`, font: { size: 12 } },
+                    margin: { l: 60, r: 30, t: 50, b: 60 },
+                    title: { text: titleText, font: { size: 12 } },
                     height: 450
                 }, { responsive: true });
             }
@@ -10093,6 +10105,14 @@
                 const bottom10 = uniqueDiffs.slice(-10).reverse();
                 const display = [...top10, ...bottom10];
 
+                // Get atlas labels for annotation
+                const atlasLabels = {
+                    'cima-inflam': { x: 'CIMA', y: 'Inflammation' },
+                    'cima-scatlas': { x: 'CIMA', y: 'scAtlas' },
+                    'inflam-scatlas': { x: 'Inflammation', y: 'scAtlas' }
+                };
+                const labels = atlasLabels[atlasSelect] || { x: 'X-axis', y: 'Y-axis' };
+
                 Plotly.newPlot(container2, [{
                     type: 'bar',
                     orientation: 'h',
@@ -10103,15 +10123,15 @@
                     },
                     text: display.map(d => d.diff.toFixed(2)),
                     textposition: 'auto',
-                    hovertemplate: '<b>%{y}</b><br>Difference: %{x:.3f}<extra></extra>'
+                    hovertemplate: '<b>%{y}</b><br>Δ Activity: %{x:.3f}<extra></extra>'
                 }], {
-                    xaxis: { title: 'Activity Difference', zeroline: true },
+                    xaxis: { title: `Δ Activity (${labels.y} − ${labels.x})`, zeroline: true },
                     yaxis: { automargin: true },
-                    margin: { l: 80, r: 30, t: 30, b: 50 },
+                    margin: { l: 80, r: 30, t: 40, b: 50 },
                     height: 450,
                     annotations: [{
-                        x: 0.5, y: 1.05, xref: 'paper', yref: 'paper',
-                        text: '<span style="color:#d62728">↑ Higher in Y-axis</span> | <span style="color:#2ca02c">↓ Higher in X-axis</span>',
+                        x: 0.5, y: 1.08, xref: 'paper', yref: 'paper',
+                        text: `<span style="color:#d62728">↑ Higher in ${labels.y}</span> | <span style="color:#2ca02c">↓ Higher in ${labels.x}</span>`,
                         showarrow: false, font: { size: 10 }
                     }]
                 }, { responsive: true });
