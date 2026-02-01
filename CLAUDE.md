@@ -26,6 +26,7 @@ Comprehensive documentation is available in the `docs/` directory:
 | [docs/pipelines/](docs/pipelines/) | Analysis pipeline documentation |
 | [docs/outputs/](docs/outputs/) | Output file catalog and API mapping |
 | [docs/registry.json](docs/registry.json) | Machine-readable documentation registry |
+| [docs/EMBEDDED_DATA_CHECKLIST.md](docs/EMBEDDED_DATA_CHECKLIST.md) | **IMPORTANT**: Checklist of JSON files required in embedded_data.js |
 
 ### MCP Documentation Tools
 

@@ -2661,9 +2661,30 @@
             selectedOrgan: null,
             currentSignature: 'IFNG',
             // Track loaded signature types for boxplot data
-            boxplotLoaded: { cytosig: true, secact: false },
-            secactBoxplotData: null  // Lazy loaded SecAct data
+            boxplotLoaded: { cytosig: false, secact: false },
+            secactBoxplotData: null,  // Lazy loaded SecAct data
+            fullBoxplotData: null     // Lazy loaded full boxplot data (fallback when embedded not available)
         };
+
+        // Lazy load full boxplot data (CytoSig) when embedded data not available
+        let boxplotDataLoading = false;
+        async function loadBoxplotDataIfNeeded() {
+            if (state.data.agebmiboxplots || state.fullBoxplotData || boxplotDataLoading) return;
+            boxplotDataLoading = true;
+            console.log('Loading boxplot data from JSON...');
+            try {
+                const response = await fetch('data/age_bmi_boxplots.json');
+                if (response.ok) {
+                    state.fullBoxplotData = await response.json();
+                    state.data.agebmiboxplots = state.fullBoxplotData;
+                    state.boxplotLoaded.cytosig = true;
+                    console.log('Boxplot data loaded from JSON');
+                }
+            } catch (e) {
+                console.warn('Could not load boxplot data:', e);
+            }
+            boxplotDataLoading = false;
+        }
 
         // Lazy load SecAct boxplot data when needed
         async function loadSecActBoxplotData() {
@@ -2691,7 +2712,10 @@
 
         // Get boxplot data for a specific signature type (handles lazy loading)
         async function getBoxplotData(atlas, sigType) {
-            // For CytoSig, use embedded data
+            // Lazy load boxplot data if not embedded
+            await loadBoxplotDataIfNeeded();
+
+            // For CytoSig, use embedded data (or lazy loaded data)
             if (sigType === 'CytoSig') {
                 return state.data.agebmiboxplots?.[atlas];
             }
@@ -2734,17 +2758,17 @@
                 updateBiochemScatter();
                 populateProteinDropdown('biochem-scatter-protein-dropdown', 'biochem-scatter-sig-type');
                 updateMultiomicsViz();
-                updatePopulationStratification();
-                updateEqtlBrowser();
+                await updatePopulationStratification();
+                await updateEqtlBrowser();
             } else if (section === 'inflammation') {
                 updateInflammationViz();
                 populateProteinDropdown('inflam-signature-dropdown', 'inflam-sig-type');
                 updateInflamCorrelations();
                 updateInflamCelltypeCorrelationHeatmap();
-                initInflamBoxplotSignatures();
+                await initInflamBoxplotSignatures();
                 populateProteinDropdown('inflam-boxplot-dropdown', 'inflam-boxplot-sig-type');
-                updateInflamStratifiedBoxplot();
-                updateInflamCelltypeStratifiedHeatmap();
+                await updateInflamStratifiedBoxplot();
+                await updateInflamCelltypeStratifiedHeatmap();
                 updateInflamDisease();
                 populateProteinDropdown('inflam-disease-dropdown', 'inflam-disease-sig-type');
                 initInflamDifferentialDiseases();
@@ -5613,18 +5637,40 @@
         }
 
         // CIMA: Population Stratification
-        function updatePopulationStratification() {
+        let populationDataLoading = false;
+        async function loadPopulationDataIfNeeded() {
+            if (state.data.cimapopulationstratification || populationDataLoading) return;
+            populationDataLoading = true;
+            try {
+                const response = await fetch('data/cima_population_stratification.json');
+                if (response.ok) {
+                    state.data.cimapopulationstratification = await response.json();
+                    console.log('Population stratification data loaded from JSON');
+                }
+            } catch (e) {
+                console.error('Failed to load population data:', e);
+            }
+            populationDataLoading = false;
+        }
+
+        async function updatePopulationStratification() {
             const distContainer = document.getElementById('pop-distribution');
             const effectContainer = document.getElementById('pop-effect-sizes');
             const heatmapContainer = document.getElementById('pop-heatmap');
 
             if (!distContainer) return;
 
+            // Load data from JSON if not embedded
+            await loadPopulationDataIfNeeded();
+
             const stratifyBy = document.getElementById('pop-stratify')?.value || 'sex';
             const sigType = document.getElementById('pop-sig-type')?.value || 'CytoSig';
 
-            // Load population stratification data - structure: {cytokines, groups, effect_sizes}
-            const popData = state.data.cimapopulationstratification;
+            // Load population stratification data - structure: {CytoSig: {cytokines, groups, effect_sizes}, SecAct: {...}}
+            const rawPopData = state.data.cimapopulationstratification;
+
+            // Access data for selected signature type (CytoSig or SecAct)
+            const popData = rawPopData?.[sigType] || rawPopData;
 
             if (!popData || !popData.effect_sizes || !popData.effect_sizes[stratifyBy]) {
                 distContainer.classList.remove('loading');
@@ -5634,7 +5680,7 @@
                 return;
             }
 
-            // Get effect sizes array for selected stratification (currently only CytoSig data)
+            // Get effect sizes array for selected stratification
             const effects = popData.effect_sizes[stratifyBy];
             const groupMeans = popData.groups[stratifyBy];
             const groups = Object.keys(groupMeans || {});
@@ -5822,16 +5868,22 @@
             }
         }
 
-        function updateEqtlBrowser() {
+        async function updateEqtlBrowser() {
             const manhattanContainer = document.getElementById('eqtl-manhattan');
             const tableContainer = document.getElementById('eqtl-table');
             const effectContainer = document.getElementById('eqtl-effect-plot');
 
             if (!manhattanContainer) return;
 
+            // Auto-load eQTL data if not embedded
+            if (!state.data.cimaeqtl && !eqtlFullDataLoaded) {
+                manhattanContainer.innerHTML = '<p style="text-align:center; padding:2rem;">Loading eQTL data...</p>';
+                await loadFullEqtlData();
+            }
+
             // Check if eQTL data is available (embedded top 10K or full)
             if (!state.data.cimaeqtl) {
-                manhattanContainer.innerHTML = '<p style="text-align:center; color:#d62728; padding:2rem;">eQTL data not available.<br><small>Embedded data may not have loaded correctly.</small></p>';
+                manhattanContainer.innerHTML = '<p style="text-align:center; color:#d62728; padding:2rem;">eQTL data not available.<br><small>Make sure to serve via HTTP server (python -m http.server)</small></p>';
                 return;
             }
 
@@ -6219,7 +6271,8 @@
         // Inflammation Atlas Age/BMI Stratified functions
         let inflamBoxplotSignatures = { cytosig: [], secact: [] };
 
-        function initInflamBoxplotSignatures() {
+        async function initInflamBoxplotSignatures() {
+            await loadBoxplotDataIfNeeded();
             const data = state.data.agebmiboxplots?.inflammation;
             if (!data) return;
             inflamBoxplotSignatures.cytosig = data.cytosig_signatures || [];
