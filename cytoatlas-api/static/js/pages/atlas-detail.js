@@ -6905,21 +6905,36 @@ const AtlasDetailPage = {
                 </div>
             </div>
 
-            <div class="two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                <div class="viz-container" style="min-height: 450px;">
-                    <div class="viz-title">Top Differential Signatures</div>
-                    <div class="viz-subtitle">Δ Activity: Exhausted − Non-exhausted T cells (top 20)</div>
-                    <div id="exhaustion-heatmap" class="plot-container" style="height: 420px;">Loading...</div>
+            <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
+                <strong>Exhausted vs Non-exhausted T cells:</strong> Differential activity analysis between dysfunctional and functional T cells.
+                <div style="margin-top: 0.5rem; font-size: 0.9rem;">
+                    <div style="margin-bottom: 0.3rem;">
+                        <span style="color: #d62728; font-weight: bold;">● Exhausted:</span> T cells with inhibitory receptors (PDCD1+, LAG3+, TIGIT+, Tex)
+                    </div>
+                    <div>
+                        <span style="color: #2166ac; font-weight: bold;">● Non-exhausted:</span> Functional T cells (cytotoxic GZMB+/GZMK+ + memory Tem/Tcm + other T cells)
+                    </div>
                 </div>
-                <div class="viz-container" style="min-height: 450px;">
-                    <div class="viz-title">Exhausted vs Non-exhausted Activity</div>
-                    <div class="viz-subtitle">Scatter plot of mean activity by exhaustion state</div>
-                    <div id="exhaustion-scatter" class="plot-container" style="height: 420px;">Loading...</div>
+                <div style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">
+                    <strong>Interpretation:</strong> Positive Δ Activity = higher in exhausted; Negative = higher in non-exhausted (functional) T cells.
+                </div>
+            </div>
+
+            <div class="two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="viz-container" style="min-height: 500px;">
+                    <div class="viz-title" id="exhaustion-bar-title">Differential Activity</div>
+                    <div class="viz-subtitle" id="exhaustion-bar-subtitle">Activity difference: Exhausted vs Non-exhausted T cells</div>
+                    <div id="exhaustion-heatmap" class="plot-container" style="height: 480px;">Loading...</div>
+                </div>
+                <div class="viz-container" style="min-height: 500px;">
+                    <div class="viz-title" id="exhaustion-scatter-title">Activity Correlation</div>
+                    <div class="viz-subtitle" id="exhaustion-scatter-subtitle">Mean activity comparison</div>
+                    <div id="exhaustion-scatter" class="plot-container" style="height: 480px;">Loading...</div>
                 </div>
             </div>
         `;
 
-        // Load exhaustion data
+        // Load exhaustion data (use lowercase signature type for API)
         try {
             this.exhaustionData = await API.get('/scatlas/exhaustion-comparison', { signature_type: this.signatureType });
         } catch (e) {
@@ -6947,53 +6962,84 @@ const AtlasDetailPage = {
         if (!this.exhaustionData?.comparison) return;
 
         const cancerFilter = document.getElementById('exhaustion-cancer')?.value || 'all';
+        const sigLabel = this.signatureType === 'CytoSig' ? 'CytoSig' : 'SecAct';
+        const cancerLabel = cancerFilter === 'all' ? 'All Cancers' : cancerFilter;
 
-        // Filter data
+        // Update titles
+        const barTitle = document.getElementById('exhaustion-bar-title');
+        const barSubtitle = document.getElementById('exhaustion-bar-subtitle');
+        const scatterTitle = document.getElementById('exhaustion-scatter-title');
+        const scatterSubtitle = document.getElementById('exhaustion-scatter-subtitle');
+
+        if (barTitle) barTitle.textContent = `Differential ${sigLabel} Activity`;
+        if (barSubtitle) barSubtitle.textContent = `Δ Activity (Exhausted vs Non-exhausted) - ${cancerLabel}`;
+        if (scatterTitle) scatterTitle.textContent = `${sigLabel} Activity Correlation`;
+        if (scatterSubtitle) scatterSubtitle.textContent = `Mean activity comparison - ${cancerLabel}`;
+
+        // Filter data by cancer type
         let data = this.exhaustionData.comparison;
         if (cancerFilter !== 'all') {
             data = data.filter(d => d.cancer_type === cancerFilter);
         }
 
         // Aggregate by signature (average across cancer types if "all")
+        // IMPORTANT: Compute activity_diff from means, don't use stored value (may be incorrect)
         const sigAgg = {};
         data.forEach(d => {
             if (!sigAgg[d.signature]) {
-                sigAgg[d.signature] = { exhausted: [], nonexhausted: [], diff: [] };
+                sigAgg[d.signature] = { exhausted: [], nonexhausted: [], pvalue: [] };
             }
             sigAgg[d.signature].exhausted.push(d.mean_exhausted);
             sigAgg[d.signature].nonexhausted.push(d.mean_nonexhausted);
-            sigAgg[d.signature].diff.push(d.activity_diff);
+            if (d.pvalue) sigAgg[d.signature].pvalue.push(d.pvalue);
         });
 
-        const sigData = Object.entries(sigAgg).map(([sig, vals]) => ({
-            signature: sig,
-            mean_exhausted: vals.exhausted.reduce((a, b) => a + b, 0) / vals.exhausted.length,
-            mean_nonexhausted: vals.nonexhausted.reduce((a, b) => a + b, 0) / vals.nonexhausted.length,
-            activity_diff: vals.diff.reduce((a, b) => a + b, 0) / vals.diff.length
-        }));
+        const sigData = Object.entries(sigAgg).map(([sig, vals]) => {
+            const meanExhausted = vals.exhausted.reduce((a, b) => a + b, 0) / vals.exhausted.length;
+            const meanNonexhausted = vals.nonexhausted.reduce((a, b) => a + b, 0) / vals.nonexhausted.length;
+            // Compute activity_diff from means (z-score difference, not stored value)
+            const activityDiff = meanExhausted - meanNonexhausted;
+            return {
+                signature: sig,
+                mean_exhausted: meanExhausted,
+                mean_nonexhausted: meanNonexhausted,
+                activity_diff: activityDiff,
+                pvalue: vals.pvalue.length > 0 ? vals.pvalue.reduce((a, b) => a + b, 0) / vals.pvalue.length : 1
+            };
+        });
 
-        // === Heatmap: top 20 by absolute activity_diff ===
+        // Sort by absolute activity_diff
+        const sorted = [...sigData].sort((a, b) => Math.abs(b.activity_diff) - Math.abs(a.activity_diff));
+
+        // === Bar chart: top 20 by absolute activity_diff ===
         const heatmapContainer = document.getElementById('exhaustion-heatmap');
         if (heatmapContainer && sigData.length > 0) {
-            const sorted = [...sigData].sort((a, b) => Math.abs(b.activity_diff) - Math.abs(a.activity_diff)).slice(0, 20);
+            const top20 = sorted.slice(0, 20);
 
             Plotly.newPlot(heatmapContainer, [{
                 type: 'bar',
-                y: sorted.map(d => d.signature),
-                x: sorted.map(d => d.activity_diff),
                 orientation: 'h',
+                y: top20.map(d => d.signature),
+                x: top20.map(d => d.activity_diff),
                 marker: {
-                    color: sorted.map(d => d.activity_diff > 0 ? '#d62728' : '#2166ac')
+                    color: top20.map(d => d.activity_diff > 0 ? '#d62728' : '#2166ac')
                 },
-                hovertemplate: '<b>%{y}</b><br>Δ Activity: %{x:.2f}<extra></extra>'
+                text: top20.map(d => d.activity_diff.toFixed(2)),
+                textposition: 'auto',
+                textfont: { size: 10 },
+                hovertemplate: top20.map(d => {
+                    const direction = d.activity_diff > 0 ? 'High in Exhausted' : 'High in Non-exhausted';
+                    return `<b>${d.signature}</b><br>Δ Activity: ${d.activity_diff.toFixed(3)}<br>${direction}<br>P-value: ${d.pvalue.toExponential(2)}<extra></extra>`;
+                })
             }], {
-                margin: { l: 100, r: 30, t: 30, b: 60 },
-                xaxis: { title: 'Δ Activity (Exhausted − Non-exhausted)', zeroline: true },
+                xaxis: { title: '← High in Non-exhausted    Δ Activity    High in Exhausted →', zeroline: true, zerolinewidth: 2 },
                 yaxis: { automargin: true },
-                height: 420,
-                shapes: [{
-                    type: 'line', x0: 0, x1: 0, y0: -0.5, y1: sorted.length - 0.5,
-                    line: { color: 'gray', width: 1, dash: 'dash' }
+                margin: { l: 100, r: 30, t: 50, b: 60 },
+                height: 480,
+                annotations: [{
+                    x: 0, y: 1.02, xref: 'paper', yref: 'paper',
+                    text: '<span style="color:#2166ac">■</span> Non-exhausted  |  <span style="color:#d62728">■</span> Exhausted',
+                    showarrow: false, font: { size: 10 }, xanchor: 'center'
                 }]
             }, { responsive: true });
         }
@@ -7004,35 +7050,44 @@ const AtlasDetailPage = {
             const minVal = Math.min(...sigData.map(d => Math.min(d.mean_exhausted, d.mean_nonexhausted)));
             const maxVal = Math.max(...sigData.map(d => Math.max(d.mean_exhausted, d.mean_nonexhausted)));
 
+            // For SecAct (many signatures), only show labels for top differential
+            const showLabels = this.signatureType === 'CytoSig' || sigData.length <= 50;
+            const topLabeled = sorted.slice(0, 10).map(d => d.signature);
+
             Plotly.newPlot(scatterContainer, [
                 {
                     type: 'scatter',
-                    mode: 'markers',
+                    mode: showLabels ? 'markers+text' : 'markers',
                     x: sigData.map(d => d.mean_nonexhausted),
                     y: sigData.map(d => d.mean_exhausted),
                     text: sigData.map(d => d.signature),
+                    textposition: 'top center',
+                    textfont: { size: 8 },
                     marker: {
                         color: sigData.map(d => d.activity_diff),
                         colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#d62728']],
-                        size: 8,
-                        colorbar: { title: 'Δ Activity' }
+                        size: showLabels ? 10 : 6,
+                        colorbar: { title: 'Δ Activity', len: 0.6 }
                     },
-                    hovertemplate: '<b>%{text}</b><br>Non-exhausted: %{x:.2f}<br>Exhausted: %{y:.2f}<extra></extra>'
+                    hovertemplate: sigData.map(d => {
+                        const direction = d.activity_diff > 0 ? 'Higher in Exhausted' : 'Higher in Non-exhausted';
+                        return `<b>${d.signature}</b><br>Non-exhausted: ${d.mean_nonexhausted.toFixed(2)}<br>Exhausted: ${d.mean_exhausted.toFixed(2)}<br>Δ: ${d.activity_diff.toFixed(3)} (${direction})<extra></extra>`;
+                    })
                 },
                 {
                     type: 'scatter',
                     mode: 'lines',
-                    x: [minVal, maxVal],
-                    y: [minVal, maxVal],
+                    x: [minVal - 0.5, maxVal + 0.5],
+                    y: [minVal - 0.5, maxVal + 0.5],
                     line: { color: 'gray', dash: 'dash', width: 1 },
                     showlegend: false,
                     hoverinfo: 'skip'
                 }
             ], {
-                margin: { l: 60, r: 30, t: 30, b: 60 },
-                xaxis: { title: 'Non-exhausted Mean Activity' },
-                yaxis: { title: 'Exhausted Mean Activity' },
-                height: 420
+                margin: { l: 60, r: 80, t: 30, b: 60 },
+                xaxis: { title: 'Non-exhausted Mean Activity (z-score)' },
+                yaxis: { title: 'Exhausted Mean Activity (z-score)' },
+                height: 480
             }, { responsive: true });
         }
     },
