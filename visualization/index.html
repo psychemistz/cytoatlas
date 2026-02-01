@@ -1901,13 +1901,6 @@
                         </select>
                     </div>
                     <div class="control-group">
-                        <label>Signature Type</label>
-                        <select id="diff-sig-type" onchange="updateDifferentialAnalysis()">
-                            <option value="CytoSig">CytoSig (43 cytokines)</option>
-                            <option value="SecAct">SecAct (1,170 proteins)</option>
-                        </select>
-                    </div>
-                    <div class="control-group">
                         <label>Select Signature</label>
                         <select id="diff-signature" onchange="syncDiffSearch(); updateDifferentialAnalysis()" style="width: 150px;">
                             <option value="IFNG">IFNG</option>
@@ -2591,8 +2584,62 @@
                 crossatlas: (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.crossatlas : null
             },
             selectedOrgan: null,
-            currentSignature: 'IFNG'
+            currentSignature: 'IFNG',
+            // Track loaded signature types for boxplot data
+            boxplotLoaded: { cytosig: true, secact: false },
+            secactBoxplotData: null  // Lazy loaded SecAct data
         };
+
+        // Lazy load SecAct boxplot data when needed
+        async function loadSecActBoxplotData() {
+            if (state.secactBoxplotData) return state.secactBoxplotData;
+            if (state.boxplotLoaded.secact) return state.secactBoxplotData;
+
+            console.log('Loading SecAct boxplot data...');
+            try {
+                const response = await fetch('data/age_bmi_boxplots_secact.json');
+                if (response.ok) {
+                    state.secactBoxplotData = await response.json();
+                    state.boxplotLoaded.secact = true;
+                    console.log('SecAct boxplot data loaded');
+                    // Update signature lists for autocomplete
+                    if (typeof updateSecActSignatures === 'function') {
+                        updateSecActSignatures();
+                    }
+                    return state.secactBoxplotData;
+                }
+            } catch (e) {
+                console.warn('Could not load SecAct boxplot data:', e);
+            }
+            return null;
+        }
+
+        // Get boxplot data for a specific signature type (handles lazy loading)
+        async function getBoxplotData(atlas, sigType) {
+            // For CytoSig, use embedded data
+            if (sigType === 'CytoSig') {
+                return state.data.agebmiboxplots?.[atlas];
+            }
+            // For SecAct, lazy load if needed
+            if (sigType === 'SecAct') {
+                const secactData = await loadSecActBoxplotData();
+                return secactData?.[atlas];
+            }
+            // For 'both', combine CytoSig (embedded) and SecAct (lazy loaded)
+            const cytosigData = state.data.agebmiboxplots?.[atlas];
+            const secactData = await loadSecActBoxplotData();
+            if (!cytosigData && !secactData) return null;
+
+            // Merge data from both sources
+            return {
+                age: [...(cytosigData?.age || []), ...(secactData?.[atlas]?.age || [])],
+                bmi: [...(cytosigData?.bmi || []), ...(secactData?.[atlas]?.bmi || [])],
+                signatures: [...(cytosigData?.signatures || []), ...(secactData?.[atlas]?.signatures || [])],
+                cell_types: cytosigData?.cell_types || secactData?.[atlas]?.cell_types || [],
+                age_bins: cytosigData?.age_bins || secactData?.[atlas]?.age_bins || [],
+                bmi_bins: cytosigData?.bmi_bins || secactData?.[atlas]?.bmi_bins || []
+            };
+        }
 
         // Initialize section (no loading needed with embedded data)
         async function initSection(section) {
@@ -3458,98 +3505,63 @@
                 return;
             }
 
-            // Update subtitle with comparison info
+            // Split data into three groups for consistent volcano style
+            const significantUp = data.filter(d => d.activity_diff > 0.3 && (d.qvalue || d.pvalue || 1) < 0.05);
+            const significantDown = data.filter(d => d.activity_diff < -0.3 && (d.qvalue || d.pvalue || 1) < 0.05);
+            const notSig = data.filter(d => Math.abs(d.activity_diff) <= 0.3 || (d.qvalue || d.pvalue || 1) >= 0.05);
+
+            // Dynamic axis ranges
+            const maxAbsFC = Math.max(3, Math.ceil(Math.max(...data.map(d => Math.abs(d.activity_diff)))));
+            const maxY = Math.max(4, Math.ceil(Math.max(...data.map(d => d.neg_log10_pval))));
+
+            // Update subtitle with counts
             const subtitleEl = container.closest('.viz-container').querySelector('.viz-subtitle');
             if (subtitleEl) {
-                subtitleEl.textContent = `Positive Δ = higher in ${group1}, Negative = higher in ${group2}`;
+                const nSigUp = significantUp.length;
+                const nSigDown = significantDown.length;
+                subtitleEl.textContent = `${nSigUp + nSigDown} significant (|Δ|>0.3, q<0.05): ${nSigUp} higher in ${group1}, ${nSigDown} higher in ${group2}`;
             }
 
-            // Color by significance
-            const colors = data.map(d => {
-                if (d.qvalue < 0.05 && Math.abs(d.activity_diff) > 0.5) {
-                    return d.activity_diff > 0 ? '#f4a6a6' : '#a8d4e6';
-                }
-                return '#cccccc';
-            });
-
-            // Only show text for significant points
-            const textLabels = data.map(d => {
-                if (d.qvalue < 0.05 && Math.abs(d.activity_diff) > 0.5) {
-                    return d.protein;
-                }
-                return '';
-            });
-
-            // Dynamic x-axis range based on data
-            const maxAbsFC = Math.max(3, Math.ceil(Math.max(...data.map(d => Math.abs(d.activity_diff)))));
-
-            Plotly.newPlot(container, [{
-                x: data.map(d => d.activity_diff),
-                y: data.map(d => d.neg_log10_pval),
-                text: textLabels,
-                customdata: data.map(d => d.protein),
-                mode: 'markers+text',
-                type: 'scatter',
-                marker: {
-                    color: colors,
-                    size: 10,
-                    opacity: 0.7
+            Plotly.newPlot(container, [
+                {
+                    type: 'scatter', mode: 'markers+text', name: `Higher in ${group1}`,
+                    x: significantUp.map(d => d.activity_diff), y: significantUp.map(d => d.neg_log10_pval),
+                    text: significantUp.map(d => d.protein), textposition: 'top center', textfont: { size: 9 },
+                    marker: { color: '#d62728', size: 10 },
+                    hovertemplate: '<b>%{text}</b><br>Δ Activity: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
                 },
-                textposition: 'top center',
-                textfont: {size: 10},
-                hovertemplate: '<b>%{customdata}</b><br>Δ Activity: %{x:.2f}<br>-log10(p): %{y:.2f}<extra></extra>'
-            }], {
+                {
+                    type: 'scatter', mode: 'markers+text', name: `Higher in ${group2}`,
+                    x: significantDown.map(d => d.activity_diff), y: significantDown.map(d => d.neg_log10_pval),
+                    text: significantDown.map(d => d.protein), textposition: 'top center', textfont: { size: 9 },
+                    marker: { color: '#2ca02c', size: 10 },
+                    hovertemplate: '<b>%{text}</b><br>Δ Activity: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
+                },
+                {
+                    type: 'scatter', mode: 'markers', name: 'Not significant',
+                    x: notSig.map(d => d.activity_diff), y: notSig.map(d => d.neg_log10_pval),
+                    text: notSig.map(d => d.protein), marker: { color: '#ccc', size: 6 },
+                    hovertemplate: '<b>%{text}</b><br>Δ Activity: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
+                }
+            ], {
                 xaxis: {
                     title: `Δ Activity (${group1} - ${group2})`,
                     zeroline: true,
-                    zerolinecolor: '#ccc',
                     range: [-maxAbsFC, maxAbsFC]
                 },
                 yaxis: {
-                    title: '-log10(p-value)'
+                    title: '-log10(p-value)',
+                    range: [0, maxY * 1.1]
                 },
                 shapes: [
-                    // Horizontal line at p=0.05
-                    {
-                        type: 'line',
-                        x0: -maxAbsFC, x1: maxAbsFC,
-                        y0: -Math.log10(0.05), y1: -Math.log10(0.05),
-                        line: {color: '#999', dash: 'dash', width: 1}
-                    },
-                    // Vertical lines at FC thresholds
-                    {
-                        type: 'line',
-                        x0: -0.5, x1: -0.5,
-                        y0: 0, y1: Math.max(10, ...data.map(d => d.neg_log10_pval)) * 1.1,
-                        line: {color: '#999', dash: 'dash', width: 1}
-                    },
-                    {
-                        type: 'line',
-                        x0: 0.5, x1: 0.5,
-                        y0: 0, y1: Math.max(10, ...data.map(d => d.neg_log10_pval)) * 1.1,
-                        line: {color: '#999', dash: 'dash', width: 1}
-                    }
+                    { type: 'line', x0: 0.3, y0: 0, x1: 0.3, y1: maxY * 1.1, line: { dash: 'dot', color: '#999' } },
+                    { type: 'line', x0: -0.3, y0: 0, x1: -0.3, y1: maxY * 1.1, line: { dash: 'dot', color: '#999' } },
+                    { type: 'line', x0: -maxAbsFC, y0: -Math.log10(0.05), x1: maxAbsFC, y1: -Math.log10(0.05), line: { dash: 'dot', color: '#999' } }
                 ],
-                margin: {l: 60, r: 30, t: 30, b: 60},
-                height: 450,
-                annotations: [{
-                    x: -maxAbsFC * 0.8,
-                    y: -0.08,
-                    xref: 'x',
-                    yref: 'paper',
-                    text: `← Higher in ${group2}`,
-                    showarrow: false,
-                    font: {size: 11, color: '#a8d4e6'}
-                }, {
-                    x: maxAbsFC * 0.8,
-                    y: -0.08,
-                    xref: 'x',
-                    yref: 'paper',
-                    text: `Higher in ${group1} →`,
-                    showarrow: false,
-                    font: {size: 11, color: '#f4a6a6'}
-                }]
-            }, {responsive: true});
+                margin: { l: 60, r: 30, t: 30, b: 50 },
+                legend: { orientation: 'h', y: -0.15 },
+                height: 400
+            }, { responsive: true });
 
             // Update the bar chart for top differential signatures
             updateCimaDiffBar(data, group1, group2);
@@ -3578,13 +3590,14 @@
             const sorted = [...scoredData].sort((a, b) => b.score - a.score);
             const top20 = sorted.slice(0, 20).reverse();  // Reverse for horizontal bar (top at top)
 
+            // Color to match volcano: red for group1, green for group2
             Plotly.newPlot(container, [{
                 type: 'bar',
                 orientation: 'h',
                 y: top20.map(d => d.protein),
                 x: top20.map(d => d.activity_diff),
                 marker: {
-                    color: top20.map(d => d.activity_diff > 0 ? '#f4a6a6' : '#a8d4e6')
+                    color: top20.map(d => d.activity_diff > 0 ? '#d62728' : '#2ca02c')
                 },
                 text: top20.map(d => d.activity_diff.toFixed(2)),
                 textposition: 'outside',
@@ -3592,10 +3605,10 @@
                 hovertemplate: '<b>%{y}</b><br>Δ Activity: %{x:.3f}<br>q = %{customdata}<extra></extra>',
                 customdata: top20.map(d => d.qvalue?.toExponential(2) || 'N/A')
             }], {
-                xaxis: { title: 'Δ Activity', zeroline: true, zerolinecolor: '#ccc' },
+                xaxis: { title: `Δ Activity (${group1} - ${group2})`, zeroline: true, zerolinecolor: '#ccc' },
                 yaxis: { automargin: true, tickfont: { size: 10 } },
                 margin: { l: 120, r: 50, t: 30, b: 50 },
-                height: 500
+                height: 400
             }, { responsive: true });
         }
 
@@ -4348,8 +4361,9 @@
         }
 
         // Differential Analysis (Unified Tissue Comparison)
+        // Note: Only CytoSig is shown (signature type selector removed for simplicity)
         function getDiffSignatures() {
-            const sigType = document.getElementById('diff-sig-type')?.value || 'CytoSig';
+            const sigType = 'CytoSig';  // Fixed to CytoSig (SecAct dropdown removed)
             const adjData = state.data.adjacenttissue;
             if (!adjData) return [];
             // Use pre-built signature lists if available (faster)
@@ -4437,8 +4451,8 @@
             }
             const selectedCancer = cancerDropdown?.value || 'all';
 
-            // Populate signature dropdown
-            const sigType = document.getElementById('diff-sig-type')?.value || 'CytoSig';
+            // Populate signature dropdown (fixed to CytoSig - dropdown removed)
+            const sigType = 'CytoSig';
             const sigDropdown = document.getElementById('diff-signature');
             const sigs = getDiffSignatures();
             if (sigDropdown && sigs.length > 0) {
@@ -6244,10 +6258,9 @@
             updateInflamCelltypeStratifiedHeatmap();
         }
 
-        function updateInflamStratifiedBoxplot() {
+        async function updateInflamStratifiedBoxplot() {
             const container = document.getElementById('inflam-stratified-boxplot');
             if (!container) return;
-            container.classList.remove('loading');
 
             const stratifyBy = document.getElementById('inflam-stratify-by')?.value || 'age';
             const sigType = document.getElementById('inflam-boxplot-sig-type')?.value || 'CytoSig';
@@ -6263,7 +6276,15 @@
                 ? `CytoSig vs SecAct activity across ${stratifyBy === 'age' ? 'age decades' : 'BMI categories'}${cellTypeLabel}`
                 : `${sigType} activity distribution across ${stratifyBy === 'age' ? 'age decades' : 'BMI categories'}${cellTypeLabel}`;
 
-            const boxplotData = state.data.agebmiboxplots?.inflammation;
+            // Show loading for SecAct (lazy loaded)
+            if (sigType === 'SecAct' && !state.boxplotLoaded.secact) {
+                container.innerHTML = '<div class="loading">Loading SecAct data...</div>';
+            }
+
+            // Get boxplot data (async for SecAct)
+            const boxplotData = await getBoxplotData('inflammation', sigType);
+            container.classList.remove('loading');
+
             if (!boxplotData || !boxplotData[stratifyBy]) {
                 container.innerHTML = '<p style="text-align:center;color:#666;padding:2rem;">No data available for this signature</p>';
                 return;
@@ -6377,10 +6398,9 @@
             }, { responsive: true });
         }
 
-        function updateInflamCelltypeStratifiedHeatmap() {
+        async function updateInflamCelltypeStratifiedHeatmap() {
             const container = document.getElementById('inflam-celltype-stratified-heatmap');
             if (!container) return;
-            container.classList.remove('loading');
 
             const stratifyBy = document.getElementById('inflam-stratify-by')?.value || 'age';
             const sigType = document.getElementById('inflam-boxplot-sig-type')?.value || 'CytoSig';
@@ -6392,7 +6412,10 @@
             if (titleEl) titleEl.textContent = `Cell Type-Specific ${signature} Activity`;
             if (subtitleEl) subtitleEl.textContent = `Median activity across cell types and ${stratifyBy === 'age' ? 'age groups' : 'BMI categories'}`;
 
-            const boxplotData = state.data.agebmiboxplots?.inflammation;
+            // Get boxplot data (async for SecAct)
+            const boxplotData = await getBoxplotData('inflammation', sigType);
+            container.classList.remove('loading');
+
             if (!boxplotData || !boxplotData[stratifyBy]) {
                 container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Data not available</p>';
                 return;
@@ -6732,9 +6755,15 @@
             }
 
             // Filter by signature type and disease
+            // When 'all' is selected, use the pooled "All Diseases" data (one entry per signature)
+            // When a specific disease is selected, use that disease's data
             let filteredData = diffData.filter(d => d.signature === sigType);
 
-            if (diseaseFilter !== 'all') {
+            if (diseaseFilter === 'all') {
+                // Use the pooled "All Diseases" differential (clean, one entry per signature)
+                filteredData = filteredData.filter(d => d.disease === 'All Diseases');
+            } else {
+                // Use the specific disease differential
                 filteredData = filteredData.filter(d => d.disease === diseaseFilter);
             }
 
@@ -6754,16 +6783,21 @@
             const barTitle = document.getElementById('inflam-diff-bar-title');
             const barSubtitle = document.getElementById('inflam-diff-bar-subtitle');
 
-            // Get comparison type for this disease
+            // Get comparison type info
             let comparisonNote = '';
-            if (diseaseFilter !== 'all' && filteredData.length > 0) {
+            if (filteredData.length > 0) {
                 const compType = filteredData[0].comparison;
                 const healthyNote = filteredData[0].healthy_note;
                 const nHealthy = filteredData[0].n_g2;
-                if (compType === 'study_matched') {
-                    comparisonNote = ` (study-matched healthy, n=${nHealthy})`;
+                const nDisease = filteredData[0].n_g1;
+
+                if (diseaseFilter === 'all') {
+                    // Pooled all diseases vs healthy
+                    comparisonNote = `All diseases pooled (n=${nDisease}) vs healthy (n=${nHealthy})`;
+                } else if (compType === 'study_matched') {
+                    comparisonNote = `Study-matched healthy (n=${nHealthy})`;
                 } else {
-                    comparisonNote = ` ⚠️ (pooled healthy - no matched controls, n=${nHealthy})`;
+                    comparisonNote = `⚠️ Pooled healthy - no matched controls (n=${nHealthy})`;
                 }
             }
 
@@ -6785,51 +6819,52 @@
                 return;
             }
 
-            // 1. Volcano plot
+            // 1. Volcano plot (consistent style with scAtlas)
             if (container1) {
                 container1.classList.remove('loading');
                 Plotly.purge(container1);
 
-                // Color by significance (matching CIMA style)
-                const colors = filteredData.map(d => {
-                    if (d.qvalue < 0.05 && Math.abs(d.activity_diff) > 0.5) {
-                        return d.activity_diff > 0 ? '#f4a6a6' : '#a8d4e6';
-                    }
-                    return '#cccccc';
-                });
+                // Split data into three groups for consistent volcano style
+                const significantUp = filteredData.filter(d => d.activity_diff > 0.3 && (d.qvalue || d.pvalue || 1) < 0.05);
+                const significantDown = filteredData.filter(d => d.activity_diff < -0.3 && (d.qvalue || d.pvalue || 1) < 0.05);
+                const notSig = filteredData.filter(d => Math.abs(d.activity_diff) <= 0.3 || (d.qvalue || d.pvalue || 1) >= 0.05);
 
-                // Only show text for significant points
-                const textLabels = filteredData.map(d => {
-                    if (d.qvalue < 0.05 && Math.abs(d.activity_diff) > 0.5) {
-                        return d.protein;
-                    }
-                    return '';
-                });
-
-                // Dynamic x-axis range based on data
+                // Dynamic axis ranges
                 const maxAbsFC = Math.max(3, Math.ceil(Math.max(...filteredData.map(d => Math.abs(d.activity_diff)))));
                 const maxY = Math.max(4, Math.ceil(Math.max(...filteredData.map(d => d.neg_log10_pval))));
 
-                Plotly.newPlot(container1, [{
-                    x: filteredData.map(d => d.activity_diff),
-                    y: filteredData.map(d => d.neg_log10_pval),
-                    text: textLabels,
-                    customdata: filteredData.map(d => d.protein),
-                    mode: 'markers+text',
-                    type: 'scatter',
-                    marker: {
-                        color: colors,
-                        size: 10,
-                        opacity: 0.7
+                // Update subtitle with counts
+                if (volcanoSubtitle) {
+                    const nSigUp = significantUp.length;
+                    const nSigDown = significantDown.length;
+                    volcanoSubtitle.innerHTML = `${nSigUp + nSigDown} significant (|Δ|>0.3, q<0.05): ${nSigUp} up, ${nSigDown} down<br><span style="font-size: 0.85em; color: ${comparisonNote.includes('⚠️') ? '#d62728' : '#666'};">${comparisonNote}</span>`;
+                }
+
+                Plotly.newPlot(container1, [
+                    {
+                        type: 'scatter', mode: 'markers+text', name: `Higher in ${diseaseLabel}`,
+                        x: significantUp.map(d => d.activity_diff), y: significantUp.map(d => d.neg_log10_pval),
+                        text: significantUp.map(d => d.protein), textposition: 'top center', textfont: { size: 9 },
+                        marker: { color: '#d62728', size: 10 },
+                        hovertemplate: '<b>%{text}</b><br>Δ Activity: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
                     },
-                    textposition: 'top center',
-                    textfont: {size: 10},
-                    hovertemplate: '<b>%{customdata}</b><br>Effect: %{x:.2f}<br>-log10(p): %{y:.2f}<extra></extra>'
-                }], {
+                    {
+                        type: 'scatter', mode: 'markers+text', name: 'Higher in Healthy',
+                        x: significantDown.map(d => d.activity_diff), y: significantDown.map(d => d.neg_log10_pval),
+                        text: significantDown.map(d => d.protein), textposition: 'top center', textfont: { size: 9 },
+                        marker: { color: '#2ca02c', size: 10 },
+                        hovertemplate: '<b>%{text}</b><br>Δ Activity: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
+                    },
+                    {
+                        type: 'scatter', mode: 'markers', name: 'Not significant',
+                        x: notSig.map(d => d.activity_diff), y: notSig.map(d => d.neg_log10_pval),
+                        text: notSig.map(d => d.protein), marker: { color: '#ccc', size: 6 },
+                        hovertemplate: '<b>%{text}</b><br>Δ Activity: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
+                    }
+                ], {
                     xaxis: {
-                        title: `Activity Difference (${diseaseLabel} - Healthy)`,
+                        title: `Δ Activity (${diseaseLabel} - Healthy)`,
                         zeroline: true,
-                        zerolinecolor: '#ccc',
                         range: [-maxAbsFC, maxAbsFC]
                     },
                     yaxis: {
@@ -6837,47 +6872,14 @@
                         range: [0, maxY * 1.1]
                     },
                     shapes: [
-                        // Horizontal line at p=0.05
-                        {
-                            type: 'line',
-                            x0: -maxAbsFC, x1: maxAbsFC,
-                            y0: -Math.log10(0.05), y1: -Math.log10(0.05),
-                            line: {color: '#999', dash: 'dash', width: 1}
-                        },
-                        // Vertical lines at effect thresholds
-                        {
-                            type: 'line',
-                            x0: -0.5, x1: -0.5,
-                            y0: 0, y1: maxY * 1.1,
-                            line: {color: '#999', dash: 'dash', width: 1}
-                        },
-                        {
-                            type: 'line',
-                            x0: 0.5, x1: 0.5,
-                            y0: 0, y1: maxY * 1.1,
-                            line: {color: '#999', dash: 'dash', width: 1}
-                        }
+                        { type: 'line', x0: 0.3, y0: 0, x1: 0.3, y1: maxY * 1.1, line: { dash: 'dot', color: '#999' } },
+                        { type: 'line', x0: -0.3, y0: 0, x1: -0.3, y1: maxY * 1.1, line: { dash: 'dot', color: '#999' } },
+                        { type: 'line', x0: -maxAbsFC, y0: -Math.log10(0.05), x1: maxAbsFC, y1: -Math.log10(0.05), line: { dash: 'dot', color: '#999' } }
                     ],
-                    margin: {l: 60, r: 30, t: 30, b: 60},
-                    height: 450,
-                    annotations: [{
-                        x: -maxAbsFC * 0.8,
-                        y: -0.08,
-                        xref: 'x',
-                        yref: 'paper',
-                        text: `← Higher in Healthy`,
-                        showarrow: false,
-                        font: {size: 11, color: '#a8d4e6'}
-                    }, {
-                        x: maxAbsFC * 0.8,
-                        y: -0.08,
-                        xref: 'x',
-                        yref: 'paper',
-                        text: `Higher in ${diseaseLabel} →`,
-                        showarrow: false,
-                        font: {size: 11, color: '#f4a6a6'}
-                    }]
-                }, {responsive: true});
+                    margin: { l: 60, r: 30, t: 30, b: 50 },
+                    legend: { orientation: 'h', y: -0.15 },
+                    height: 400
+                }, { responsive: true });
             }
 
             // 2. Top differential bar chart - sorted by significance score (matching CIMA style)
@@ -6895,24 +6897,25 @@
                 const sorted = [...scoredData].sort((a, b) => b.score - a.score);
                 const top20 = sorted.slice(0, 20).reverse();  // Reverse for horizontal bar (top at top)
 
+                // Color to match volcano: red for higher in disease, green for higher in healthy
                 Plotly.newPlot(container2, [{
                     type: 'bar',
                     orientation: 'h',
                     y: top20.map(d => d.protein),
                     x: top20.map(d => d.activity_diff),
                     marker: {
-                        color: top20.map(d => d.activity_diff > 0 ? '#f4a6a6' : '#a8d4e6')
+                        color: top20.map(d => d.activity_diff > 0 ? '#d62728' : '#2ca02c')
                     },
                     text: top20.map(d => d.activity_diff.toFixed(2)),
                     textposition: 'outside',
                     textfont: { size: 9 },
-                    hovertemplate: '<b>%{y}</b><br>Effect: %{x:.3f}<br>q = %{customdata}<extra></extra>',
+                    hovertemplate: '<b>%{y}</b><br>Δ Activity: %{x:.3f}<br>q = %{customdata}<extra></extra>',
                     customdata: top20.map(d => d.qvalue?.toExponential(2) || 'N/A')
                 }], {
-                    xaxis: { title: 'Activity Difference', zeroline: true, zerolinecolor: '#ccc' },
+                    xaxis: { title: 'Δ Activity (Disease - Healthy)', zeroline: true, zerolinecolor: '#ccc' },
                     yaxis: { automargin: true, tickfont: { size: 10 } },
                     margin: { l: 120, r: 50, t: 30, b: 50 },
-                    height: 500
+                    height: 400
                 }, { responsive: true });
             }
         }
@@ -7323,10 +7326,9 @@
         }
 
         // CIMA: Age/BMI Stratified Boxplots
-        function updateStratifiedBoxplot() {
+        async function updateStratifiedBoxplot() {
             const container = document.getElementById('stratified-boxplot');
             if (!container) return;
-            container.classList.remove('loading');
 
             const stratifyBy = document.getElementById('stratify-by')?.value || 'age';
             const sigType = document.getElementById('boxplot-sig-type')?.value || 'CytoSig';
@@ -7348,8 +7350,15 @@
                 ? `Activity distribution across ${stratifyBy === 'age' ? 'age decades' : 'BMI categories'} (CytoSig and/or SecAct)${cellTypeLabel}`
                 : `${sigType} activity distribution across ${stratifyBy === 'age' ? 'age decades' : 'BMI categories'}${cellTypeLabel}`;
 
-            // Try to get real data
-            const boxplotData = state.data.agebmiboxplots?.cima;
+            // Show loading for SecAct (lazy loaded)
+            if (sigType === 'SecAct' && !state.boxplotLoaded.secact) {
+                container.innerHTML = '<div class="loading">Loading SecAct data...</div>';
+            }
+
+            // Get boxplot data (async for SecAct)
+            const boxplotData = await getBoxplotData('cima', sigType);
+            container.classList.remove('loading');
+
             if (boxplotData && boxplotData[stratifyBy]) {
                 // Handle "both" - show CytoSig and SecAct side by side
                 if (sigType === 'both') {
@@ -7485,10 +7494,9 @@
         }
 
         // Cell Type-Specific Heatmap for Age/BMI Stratified Panel
-        function updateCelltypeStratifiedHeatmap() {
+        async function updateCelltypeStratifiedHeatmap() {
             const container = document.getElementById('celltype-stratified-heatmap');
             if (!container) return;
-            container.classList.remove('loading');
 
             const stratifyBy = document.getElementById('stratify-by')?.value || 'age';
             const sigType = document.getElementById('boxplot-sig-type')?.value || 'CytoSig';
@@ -7500,7 +7508,10 @@
             if (titleEl) titleEl.textContent = `Cell Type-Specific ${signature} Activity`;
             if (subtitleEl) subtitleEl.textContent = `Median activity across cell types and ${stratifyBy === 'age' ? 'age groups' : 'BMI categories'}`;
 
-            const boxplotData = state.data.agebmiboxplots?.cima;
+            // Get boxplot data (async for SecAct)
+            const boxplotData = await getBoxplotData('cima', sigType);
+            container.classList.remove('loading');
+
             if (!boxplotData || !boxplotData[stratifyBy]) {
                 container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Data not available</p>';
                 return;
@@ -7582,7 +7593,9 @@
         function initBoxplotSignatures() {
             const boxplotData = state.data.agebmiboxplots?.cima;
             if (boxplotData) {
-                boxplotAllSignatures.cytosig = boxplotData.cytosig_signatures || [];
+                // Handle both old format (cytosig_signatures) and new split format (signatures)
+                boxplotAllSignatures.cytosig = boxplotData.cytosig_signatures || boxplotData.signatures || [];
+                // SecAct signatures will be loaded lazily when user switches
                 boxplotAllSignatures.secact = boxplotData.secact_signatures || [];
                 boxplotAllSignatures.shared = boxplotData.shared_signatures || [];
                 boxplotAllSignatures.all = boxplotData.all_signatures || [...boxplotAllSignatures.cytosig, ...boxplotAllSignatures.secact];
@@ -7604,6 +7617,14 @@
             }
             // Populate cell type dropdown
             populateBoxplotCellTypes();
+        }
+
+        // Update SecAct signatures when lazy-loaded data is available
+        function updateSecActSignatures() {
+            if (state.secactBoxplotData?.cima?.signatures) {
+                boxplotAllSignatures.secact = state.secactBoxplotData.cima.signatures;
+                boxplotAllSignatures.all = [...new Set([...boxplotAllSignatures.cytosig, ...boxplotAllSignatures.secact])];
+            }
         }
 
         function populateBoxplotCellTypes() {
@@ -9458,7 +9479,7 @@
                 pvalue: vals.pvalue.length > 0 ? vals.pvalue.reduce((a, b) => a + b, 0) / vals.pvalue.length : 1
             }));
 
-            // Sort by absolute log2fc
+            // Sort by absolute activity_diff
             const sorted = aggregatedList.sort((a, b) => Math.abs(b.activity_diff) - Math.abs(a.activity_diff));
 
             // Update titles based on selection

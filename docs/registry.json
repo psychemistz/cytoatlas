@@ -1,0 +1,297 @@
+{
+  "version": "1.0.0",
+  "generated": "2026-01-31",
+  "description": "Machine-readable documentation registry for CytoAtlas project",
+
+  "atlases": {
+    "cima": {
+      "name": "CIMA",
+      "full_name": "Chinese Immune Multi-omics Atlas",
+      "cells": 6484974,
+      "samples": 428,
+      "genes": 36326,
+      "h5ad_path": "/data/Jiang_Lab/Data/Seongyong/CIMA/Cell_Atlas/CIMA_RNA_6484974cells_36326genes_compressed.h5ad",
+      "analysis_script": "scripts/01_cima_activity.py",
+      "cell_type_column": "cell_type_l2",
+      "sample_column": "sample"
+    },
+    "inflammation": {
+      "name": "Inflammation",
+      "full_name": "Inflammation Atlas",
+      "cells": 6340934,
+      "samples": 1047,
+      "genes": 22826,
+      "h5ad_path": "/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_ATLAS_main_afterQC.h5ad",
+      "analysis_script": "scripts/02_inflam_activity.py",
+      "cell_type_column": "Level2",
+      "sample_column": "sampleID"
+    },
+    "scatlas": {
+      "name": "scAtlas",
+      "full_name": "Single-Cell Atlas",
+      "cells": 6440926,
+      "samples": null,
+      "genes": 19000,
+      "h5ad_path": "/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/igt_s9_fine_counts.h5ad",
+      "analysis_script": "scripts/03_scatlas_analysis.py",
+      "cell_type_column": "subCluster",
+      "sample_column": "donorID"
+    }
+  },
+
+  "signatures": {
+    "cytosig": {
+      "name": "CytoSig",
+      "proteins": 44,
+      "description": "Cytokine response signatures",
+      "load_function": "secactpy.load_cytosig"
+    },
+    "secact": {
+      "name": "SecAct",
+      "proteins": 1249,
+      "description": "Secreted protein signatures",
+      "load_function": "secactpy.load_secact"
+    }
+  },
+
+  "files": {
+    "cima_correlations.json": {
+      "type": "visualization",
+      "atlas": "CIMA",
+      "description": "Age/BMI/biochemistry correlations",
+      "panels": ["age-correlation", "bmi-correlation", "biochemistry"],
+      "source_script": "scripts/06_preprocess_viz_data.py",
+      "source_function": "preprocess_cima_correlations",
+      "upstream": [
+        "results/cima/CIMA_correlation_age.csv",
+        "results/cima/CIMA_correlation_bmi.csv",
+        "results/cima/CIMA_correlation_biochemistry.csv"
+      ],
+      "api_endpoints": [
+        "/api/v1/cima/correlations",
+        "/api/v1/cima/correlations/age",
+        "/api/v1/cima/correlations/bmi"
+      ],
+      "ui_components": ["updateCimaAgeCorrelation()", "updateCimaBmiCorrelation()"],
+      "schema": {
+        "cell_type": "string",
+        "signature": "string",
+        "signature_type": "string",
+        "rho": "number",
+        "pvalue": "number",
+        "fdr": "number"
+      }
+    },
+
+    "cima_differential.json": {
+      "type": "visualization",
+      "atlas": "CIMA",
+      "description": "Sex/smoking differential analysis",
+      "panels": ["sex-differential", "smoking-differential"],
+      "source_script": "scripts/06_preprocess_viz_data.py",
+      "source_function": "preprocess_cima_differential",
+      "upstream": ["results/cima/CIMA_differential_demographics.csv"],
+      "api_endpoints": ["/api/v1/cima/differential"],
+      "ui_components": ["updateCimaDifferential()"],
+      "schema": {
+        "cell_type": "string",
+        "signature": "string",
+        "comparison": "string",
+        "median_g1": "number",
+        "median_g2": "number",
+        "activity_diff": "number",
+        "pvalue": "number",
+        "neg_log10_pval": "number"
+      }
+    },
+
+    "cima_metabolites_top.json": {
+      "type": "visualization",
+      "atlas": "CIMA",
+      "description": "Top 500 metabolite correlations",
+      "panels": ["metabolites"],
+      "source_script": "scripts/06_preprocess_viz_data.py",
+      "source_function": "preprocess_cima_metabolites",
+      "upstream": ["results/cima/CIMA_correlation_metabolites.csv"],
+      "api_endpoints": ["/api/v1/cima/metabolites"],
+      "ui_components": ["updateCimaMetabolites()"]
+    },
+
+    "inflammation_celltype.json": {
+      "type": "visualization",
+      "atlas": "Inflammation",
+      "description": "Cell type activities across diseases",
+      "panels": ["celltype-activity"],
+      "source_script": "scripts/06_preprocess_viz_data.py",
+      "source_function": "preprocess_inflammation",
+      "upstream": [
+        "results/inflammation/main_CytoSig_pseudobulk.h5ad",
+        "results/inflammation/main_SecAct_pseudobulk.h5ad"
+      ],
+      "api_endpoints": ["/api/v1/inflammation/celltypes"],
+      "ui_components": ["updateInflamCelltype()"]
+    },
+
+    "inflammation_disease_filtered.json": {
+      "type": "visualization",
+      "atlas": "Inflammation",
+      "description": "Disease vs healthy differential (filtered)",
+      "panels": ["disease-overview", "disease-detail"],
+      "source_script": "scripts/06_preprocess_viz_data.py",
+      "source_function": "preprocess_inflammation_disease",
+      "upstream": ["results/inflammation/disease_differential.csv"],
+      "api_endpoints": ["/api/v1/inflammation/disease"],
+      "ui_components": ["updateInflamDisease()", "updateInflamDiseaseDetail()"]
+    },
+
+    "treatment_response.json": {
+      "type": "visualization",
+      "atlas": "Inflammation",
+      "description": "Treatment response prediction",
+      "panels": ["treatment-response"],
+      "source_script": "scripts/06_preprocess_viz_data.py",
+      "source_function": "preprocess_treatment_response",
+      "upstream": ["results/inflammation/response_prediction_results.csv"],
+      "api_endpoints": ["/api/v1/inflammation/treatment"],
+      "ui_components": ["updateTreatmentResponse()"]
+    },
+
+    "scatlas_organs.json": {
+      "type": "visualization",
+      "atlas": "scAtlas",
+      "description": "Organ signature activities",
+      "panels": ["organ-signatures"],
+      "source_script": "scripts/06_preprocess_viz_data.py",
+      "source_function": "preprocess_scatlas_organs",
+      "upstream": ["results/scatlas/normal_organ_signatures.csv"],
+      "api_endpoints": ["/api/v1/scatlas/organs"],
+      "ui_components": ["updateScatlasOrgans()"]
+    },
+
+    "cancer_comparison.json": {
+      "type": "visualization",
+      "atlas": "scAtlas",
+      "description": "Tumor vs Adjacent paired comparison",
+      "panels": ["cancer-comparison"],
+      "source_script": "scripts/06_preprocess_viz_data.py",
+      "source_function": "preprocess_cancer_comparison",
+      "upstream": [
+        "results/scatlas/scatlas_cancer_CytoSig_singlecell.h5ad",
+        "results/scatlas/scatlas_cancer_SecAct_singlecell.h5ad"
+      ],
+      "api_endpoints": ["/api/v1/scatlas/cancer/comparison"],
+      "ui_components": ["updateCancerComparison()"]
+    },
+
+    "exhaustion.json": {
+      "type": "visualization",
+      "atlas": "scAtlas",
+      "description": "T cell exhaustion signatures",
+      "panels": ["exhaustion"],
+      "source_script": "scripts/06_preprocess_viz_data.py",
+      "source_function": "preprocess_exhaustion",
+      "upstream": ["results/scatlas/exhaustion_signatures.csv"],
+      "api_endpoints": ["/api/v1/scatlas/exhaustion"],
+      "ui_components": ["updateExhaustion()"]
+    },
+
+    "cross_atlas.json": {
+      "type": "visualization",
+      "atlas": "Cross-Atlas",
+      "description": "Cross-atlas signature comparison",
+      "panels": ["atlas-comparison"],
+      "source_script": "scripts/06_preprocess_viz_data.py",
+      "source_function": "preprocess_cross_atlas",
+      "upstream": [
+        "results/cima/CIMA_CytoSig_pseudobulk.h5ad",
+        "results/inflammation/main_CytoSig_pseudobulk.h5ad",
+        "results/scatlas/normal_organ_signatures.csv"
+      ],
+      "api_endpoints": ["/api/v1/cross-atlas/comparison"],
+      "ui_components": ["updateCrossAtlas()"]
+    },
+
+    "search_index.json": {
+      "type": "search",
+      "atlas": "All",
+      "description": "Global search index",
+      "panels": ["search"],
+      "source_script": "scripts/06_preprocess_viz_data.py",
+      "source_function": "build_search_index",
+      "api_endpoints": ["/api/v1/search"],
+      "ui_components": ["handleSearch()"]
+    }
+  },
+
+  "panels": {
+    "age-correlation": {
+      "tab": "CIMA",
+      "title": "Age Correlation",
+      "json_files": ["cima_correlations.json"],
+      "chart_type": "heatmap"
+    },
+    "bmi-correlation": {
+      "tab": "CIMA",
+      "title": "BMI Correlation",
+      "json_files": ["cima_correlations.json"],
+      "chart_type": "heatmap"
+    },
+    "disease-overview": {
+      "tab": "Inflammation",
+      "title": "Disease Overview",
+      "json_files": ["inflammation_disease_filtered.json"],
+      "chart_type": "heatmap"
+    },
+    "treatment-response": {
+      "tab": "Inflammation",
+      "title": "Treatment Response",
+      "json_files": ["treatment_response.json"],
+      "chart_type": "bar"
+    },
+    "organ-signatures": {
+      "tab": "scAtlas",
+      "title": "Organ Signatures",
+      "json_files": ["scatlas_organs.json", "scatlas_organs_top.json"],
+      "chart_type": "heatmap"
+    },
+    "cancer-comparison": {
+      "tab": "scAtlas",
+      "title": "Tumor vs Adjacent",
+      "json_files": ["cancer_comparison.json"],
+      "chart_type": "volcano"
+    }
+  },
+
+  "scripts": {
+    "00_pilot_analysis.py": {
+      "phase": 0,
+      "description": "Pilot validation on 100K cell subsets",
+      "input_atlases": ["cima", "inflammation", "scatlas"],
+      "output_dir": "results/pilot"
+    },
+    "01_cima_activity.py": {
+      "phase": 1,
+      "description": "CIMA activity + correlations",
+      "input_atlases": ["cima"],
+      "output_dir": "results/cima"
+    },
+    "02_inflam_activity.py": {
+      "phase": 2,
+      "description": "Inflammation activity + disease analysis",
+      "input_atlases": ["inflammation"],
+      "output_dir": "results/inflammation"
+    },
+    "03_scatlas_analysis.py": {
+      "phase": 3,
+      "description": "scAtlas organs + cancer comparison",
+      "input_atlases": ["scatlas"],
+      "output_dir": "results/scatlas"
+    },
+    "06_preprocess_viz_data.py": {
+      "phase": 5,
+      "description": "JSON preprocessing for web dashboard",
+      "input_dirs": ["results/cima", "results/inflammation", "results/scatlas"],
+      "output_dir": "visualization/data"
+    }
+  }
+}

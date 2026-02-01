@@ -14,6 +14,32 @@ This file provides guidance to Claude Code when working with this repository.
 
 Pan-Disease Single-Cell Cytokine Activity Atlas - computes cytokine and secreted protein activity signatures across 12+ million human immune cells from three major single-cell atlases (CIMA, Inflammation Atlas, scAtlas) to identify disease-specific and conserved signaling patterns.
 
+## Documentation
+
+Comprehensive documentation is available in the `docs/` directory:
+
+| Document | Description |
+|----------|-------------|
+| [docs/README.md](docs/README.md) | Documentation index |
+| [docs/OVERVIEW.md](docs/OVERVIEW.md) | High-level project architecture |
+| [docs/datasets/](docs/datasets/) | Dataset specifications (CIMA, Inflammation, scAtlas) |
+| [docs/pipelines/](docs/pipelines/) | Analysis pipeline documentation |
+| [docs/outputs/](docs/outputs/) | Output file catalog and API mapping |
+| [docs/registry.json](docs/registry.json) | Machine-readable documentation registry |
+
+### MCP Documentation Tools
+
+The API includes MCP tools for programmatic documentation access:
+
+```python
+# Available tools in cytoatlas-api/app/services/mcp_tools.py
+get_data_lineage(file_name)      # Trace file generation
+get_column_definition(file, col)  # Get column descriptions
+find_source_script(output_file)   # Find generating script
+list_panel_outputs(panel_name)    # List panel outputs
+get_dataset_info(dataset_name)    # Get dataset details
+```
+
 ## Development Environment
 
 ```bash

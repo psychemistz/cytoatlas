@@ -261,6 +261,82 @@ CYTOATLAS_TOOLS = [
             "required": ["viz_type", "title", "data"]
         }
     },
+    # Documentation MCP Tools
+    {
+        "name": "get_data_lineage",
+        "description": "Trace how any output file was generated. Returns the source script, function, and upstream data files.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "file_name": {
+                    "type": "string",
+                    "description": "Name of the output file (e.g., 'cima_correlations.json')"
+                }
+            },
+            "required": ["file_name"]
+        }
+    },
+    {
+        "name": "get_column_definition",
+        "description": "Get the description and type of a column in a data file.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "file_name": {
+                    "type": "string",
+                    "description": "Name of the file containing the column"
+                },
+                "column_name": {
+                    "type": "string",
+                    "description": "Name of the column to describe"
+                }
+            },
+            "required": ["file_name", "column_name"]
+        }
+    },
+    {
+        "name": "find_source_script",
+        "description": "Find which script generates a specific output file.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "output_file": {
+                    "type": "string",
+                    "description": "Name or partial name of the output file"
+                }
+            },
+            "required": ["output_file"]
+        }
+    },
+    {
+        "name": "list_panel_outputs",
+        "description": "List all output files associated with an analysis panel or tab.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "panel_name": {
+                    "type": "string",
+                    "description": "Name of the panel (e.g., 'age-correlation', 'disease-overview', 'organ-signatures')"
+                }
+            },
+            "required": ["panel_name"]
+        }
+    },
+    {
+        "name": "get_dataset_info",
+        "description": "Get detailed information about a dataset including columns, cell counts, and file paths.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "dataset_name": {
+                    "type": "string",
+                    "enum": ["cima", "inflammation", "scatlas", "cytosig", "secact"],
+                    "description": "Name of the dataset or signature matrix"
+                }
+            },
+            "required": ["dataset_name"]
+        }
+    },
 ]
 
 
@@ -696,6 +772,218 @@ class ToolExecutor:
                 "container_id": container_id,
             }
         }
+
+    async def _execute_get_data_lineage(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Execute get_data_lineage tool - trace file generation."""
+        file_name = args["file_name"]
+
+        registry = self._load_registry()
+        if not registry:
+            return {"error": "Documentation registry not available"}
+
+        files = registry.get("files", {})
+
+        # Find file in registry
+        if file_name in files:
+            file_info = files[file_name]
+            return {
+                "file": file_name,
+                "source_script": file_info.get("source_script"),
+                "source_function": file_info.get("source_function"),
+                "upstream": file_info.get("upstream", []),
+                "description": file_info.get("description"),
+                "atlas": file_info.get("atlas"),
+            }
+
+        # Try partial match
+        matches = [f for f in files if file_name.lower() in f.lower()]
+        if matches:
+            return {
+                "error": f"Exact match not found for '{file_name}'",
+                "similar_files": matches[:5]
+            }
+
+        return {"error": f"File not found: {file_name}"}
+
+    async def _execute_get_column_definition(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Execute get_column_definition tool."""
+        file_name = args["file_name"]
+        column_name = args["column_name"]
+
+        registry = self._load_registry()
+        if not registry:
+            return {"error": "Documentation registry not available"}
+
+        files = registry.get("files", {})
+
+        if file_name in files:
+            schema = files[file_name].get("schema", {})
+            if column_name in schema:
+                return {
+                    "file": file_name,
+                    "column": column_name,
+                    "type": schema[column_name],
+                }
+
+        # Common column definitions
+        common_columns = {
+            "cell_type": {"type": "string", "description": "Cell type annotation (e.g., CD4+ T, Monocyte)"},
+            "signature": {"type": "string", "description": "Cytokine or protein name (e.g., IL6, TGFB1)"},
+            "signature_type": {"type": "string", "description": "CytoSig (44 cytokines) or SecAct (1,249 proteins)"},
+            "rho": {"type": "number", "description": "Spearman correlation coefficient (-1 to 1)"},
+            "pvalue": {"type": "number", "description": "Statistical p-value (0 to 1)"},
+            "fdr": {"type": "number", "description": "FDR-corrected p-value (Benjamini-Hochberg)"},
+            "activity_diff": {"type": "number", "description": "Activity difference (group1_mean - group2_mean, NOT log2FC)"},
+            "mean_activity": {"type": "number", "description": "Mean activity z-score (typically -3 to +3)"},
+            "n_cells": {"type": "integer", "description": "Number of cells in the group"},
+            "organ": {"type": "string", "description": "Organ/tissue name (scAtlas)"},
+            "disease": {"type": "string", "description": "Disease diagnosis (Inflammation Atlas)"},
+            "comparison": {"type": "string", "description": "Comparison label (e.g., 'sex_Male_vs_Female')"},
+            "neg_log10_pval": {"type": "number", "description": "-log10(pvalue) for volcano plots"},
+        }
+
+        if column_name in common_columns:
+            return {
+                "column": column_name,
+                **common_columns[column_name]
+            }
+
+        return {"error": f"Column definition not found: {column_name}"}
+
+    async def _execute_find_source_script(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Execute find_source_script tool."""
+        output_file = args["output_file"].lower()
+
+        registry = self._load_registry()
+        if not registry:
+            return {"error": "Documentation registry not available"}
+
+        files = registry.get("files", {})
+        scripts = registry.get("scripts", {})
+
+        # Search in files
+        matches = []
+        for fname, finfo in files.items():
+            if output_file in fname.lower():
+                matches.append({
+                    "file": fname,
+                    "source_script": finfo.get("source_script"),
+                    "source_function": finfo.get("source_function"),
+                })
+
+        if matches:
+            return {"matches": matches}
+
+        # Search in scripts output dirs
+        script_matches = []
+        for script_name, script_info in scripts.items():
+            output_dir = script_info.get("output_dir", "")
+            if output_file in output_dir.lower() or output_file in script_name.lower():
+                script_matches.append({
+                    "script": script_name,
+                    "output_dir": output_dir,
+                    "description": script_info.get("description"),
+                })
+
+        if script_matches:
+            return {"script_matches": script_matches}
+
+        return {"error": f"No source script found for: {output_file}"}
+
+    async def _execute_list_panel_outputs(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Execute list_panel_outputs tool."""
+        panel_name = args["panel_name"].lower().replace(" ", "-")
+
+        registry = self._load_registry()
+        if not registry:
+            return {"error": "Documentation registry not available"}
+
+        panels = registry.get("panels", {})
+        files = registry.get("files", {})
+
+        # Find panel
+        panel_info = None
+        for pname, pinfo in panels.items():
+            if panel_name in pname.lower():
+                panel_info = pinfo
+                panel_name = pname
+                break
+
+        if panel_info:
+            json_files = panel_info.get("json_files", [])
+            file_details = []
+            for jf in json_files:
+                if jf in files:
+                    file_details.append({
+                        "file": jf,
+                        "description": files[jf].get("description"),
+                        "api_endpoints": files[jf].get("api_endpoints", []),
+                    })
+
+            return {
+                "panel": panel_name,
+                "tab": panel_info.get("tab"),
+                "title": panel_info.get("title"),
+                "chart_type": panel_info.get("chart_type"),
+                "json_files": file_details,
+            }
+
+        # Search files by panel name
+        matching_files = []
+        for fname, finfo in files.items():
+            if panel_name in str(finfo.get("panels", [])).lower():
+                matching_files.append({
+                    "file": fname,
+                    "panels": finfo.get("panels", []),
+                    "description": finfo.get("description"),
+                })
+
+        if matching_files:
+            return {"matching_files": matching_files}
+
+        available_panels = list(panels.keys())
+        return {
+            "error": f"Panel not found: {panel_name}",
+            "available_panels": available_panels
+        }
+
+    async def _execute_get_dataset_info(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Execute get_dataset_info tool."""
+        dataset_name = args["dataset_name"].lower()
+
+        registry = self._load_registry()
+        if not registry:
+            return {"error": "Documentation registry not available"}
+
+        # Check atlases
+        atlases = registry.get("atlases", {})
+        if dataset_name in atlases:
+            return atlases[dataset_name]
+
+        # Check signatures
+        signatures = registry.get("signatures", {})
+        if dataset_name in signatures:
+            return signatures[dataset_name]
+
+        return {
+            "error": f"Dataset not found: {dataset_name}",
+            "available_datasets": list(atlases.keys()) + list(signatures.keys())
+        }
+
+    def _load_registry(self) -> dict[str, Any]:
+        """Load the documentation registry."""
+        from pathlib import Path
+
+        registry_path = Path("/vf/users/parks34/projects/2secactpy/docs/registry.json")
+        if not registry_path.exists():
+            return {}
+
+        try:
+            with open(registry_path) as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"Failed to load registry: {e}")
+            return {}
 
 
 # Singleton instance

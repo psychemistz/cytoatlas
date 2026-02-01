@@ -1269,8 +1269,59 @@ def preprocess_age_bmi_boxplots():
         print(f"    Inflammation BMI boxplots: {len(bmi_data)}")
         print(f"    Inflammation cell types: {len(all_cell_types)}")
 
+    # Save combined file for backward compatibility
     with open(OUTPUT_DIR / "age_bmi_boxplots.json", 'w') as f:
         json.dump(boxplot_data, f)
+
+    # === Split by signature type for faster loading ===
+    print("  Splitting by signature type for faster loading...")
+
+    # CytoSig data (smaller, loads faster)
+    cytosig_data = {
+        'cima': {
+            'age': [d for d in boxplot_data.get('cima', {}).get('age', []) if d.get('sig_type') == 'CytoSig'],
+            'bmi': [d for d in boxplot_data.get('cima', {}).get('bmi', []) if d.get('sig_type') == 'CytoSig'],
+            'signatures': boxplot_data.get('cima', {}).get('cytosig_signatures', []),
+            'cell_types': boxplot_data.get('cima', {}).get('cell_types', [])
+        },
+        'inflammation': {
+            'age': [d for d in boxplot_data.get('inflammation', {}).get('age', []) if d.get('sig_type') == 'CytoSig'],
+            'bmi': [d for d in boxplot_data.get('inflammation', {}).get('bmi', []) if d.get('sig_type') == 'CytoSig'],
+            'signatures': boxplot_data.get('inflammation', {}).get('cytosig_signatures', []),
+            'cell_types': boxplot_data.get('inflammation', {}).get('cell_types', []),
+            'age_bins': boxplot_data.get('inflammation', {}).get('age_bins', []),
+            'bmi_bins': boxplot_data.get('inflammation', {}).get('bmi_bins', [])
+        }
+    }
+
+    # SecAct data (larger)
+    secact_data = {
+        'cima': {
+            'age': [d for d in boxplot_data.get('cima', {}).get('age', []) if d.get('sig_type') == 'SecAct'],
+            'bmi': [d for d in boxplot_data.get('cima', {}).get('bmi', []) if d.get('sig_type') == 'SecAct'],
+            'signatures': boxplot_data.get('cima', {}).get('secact_signatures', []),
+            'cell_types': boxplot_data.get('cima', {}).get('cell_types', [])
+        },
+        'inflammation': {
+            'age': [d for d in boxplot_data.get('inflammation', {}).get('age', []) if d.get('sig_type') == 'SecAct'],
+            'bmi': [d for d in boxplot_data.get('inflammation', {}).get('bmi', []) if d.get('sig_type') == 'SecAct'],
+            'signatures': boxplot_data.get('inflammation', {}).get('secact_signatures', []),
+            'cell_types': boxplot_data.get('inflammation', {}).get('cell_types', []),
+            'age_bins': boxplot_data.get('inflammation', {}).get('age_bins', []),
+            'bmi_bins': boxplot_data.get('inflammation', {}).get('bmi_bins', [])
+        }
+    }
+
+    with open(OUTPUT_DIR / "age_bmi_boxplots_cytosig.json", 'w') as f:
+        json.dump(cytosig_data, f)
+
+    with open(OUTPUT_DIR / "age_bmi_boxplots_secact.json", 'w') as f:
+        json.dump(secact_data, f)
+
+    cytosig_size = (OUTPUT_DIR / "age_bmi_boxplots_cytosig.json").stat().st_size / (1024 * 1024)
+    secact_size = (OUTPUT_DIR / "age_bmi_boxplots_secact.json").stat().st_size / (1024 * 1024)
+    print(f"    CytoSig file: {cytosig_size:.1f} MB")
+    print(f"    SecAct file: {secact_size:.1f} MB")
 
     return boxplot_data
 
@@ -2245,6 +2296,204 @@ def preprocess_cima_population_stratification():
     return combined_strat_data
 
 
+def preprocess_inflammation_differential_clean():
+    """
+    Preprocess Inflammation Atlas differential analysis with CLEAN per-disease and pooled "All Diseases" data.
+
+    This ensures:
+    - Each cytokine/protein appears only ONCE for each disease comparison
+    - "All Diseases" is a pooled comparison (all disease samples vs healthy), not aggregation of individual diseases
+    """
+    print("Processing Inflammation Atlas differential analysis (clean)...")
+
+    try:
+        import anndata as ad
+        from statsmodels.stats.multitest import multipletests
+    except ImportError:
+        print("  Skipping - required packages not available")
+        return None
+
+    SAMPLE_META_PATH = Path('/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_ATLAS_afterQC_sampleMetadata.csv')
+    if not SAMPLE_META_PATH.exists():
+        print(f"  Skipping - metadata not found: {SAMPLE_META_PATH}")
+        return None
+
+    sample_meta = pd.read_csv(SAMPLE_META_PATH)
+    print(f"  Loaded sample metadata: {len(sample_meta)} samples")
+
+    all_diff_data = []
+
+    for sig_type in ['CytoSig', 'SecAct']:
+        h5ad_file = INFLAM_DIR / f"main_{sig_type}_pseudobulk.h5ad"
+        if not h5ad_file.exists():
+            print(f"  Skipping {sig_type} - file not found: {h5ad_file}")
+            continue
+
+        adata = ad.read_h5ad(h5ad_file)
+        print(f"  {sig_type} shape: {adata.shape}")
+
+        # Activity matrix (signatures x pseudobulk_samples)
+        activity_df = pd.DataFrame(adata.X, index=adata.obs_names, columns=adata.var_names)
+        var_info = adata.var[['sample', 'cell_type', 'n_cells']].copy()
+
+        # Aggregate to sample level (weighted mean across cell types)
+        sample_activity = {}
+        for sample in var_info['sample'].unique():
+            sample_cols = var_info[var_info['sample'] == sample].index
+            weights = var_info.loc[sample_cols, 'n_cells'].values
+            total_weight = weights.sum()
+            if total_weight > 0:
+                weighted_mean = (activity_df[sample_cols] * weights).sum(axis=1) / total_weight
+                sample_activity[sample] = weighted_mean
+
+        sample_activity_df = pd.DataFrame(sample_activity).T  # samples x signatures
+
+        # Merge with disease metadata
+        sample_activity_df = sample_activity_df.reset_index().rename(columns={'index': 'sampleID'})
+        merged = sample_activity_df.merge(
+            sample_meta[['sampleID', 'disease', 'studyID', 'diseaseStatus']],
+            on='sampleID', how='left'
+        )
+
+        signatures = [c for c in merged.columns if c not in ['sampleID', 'disease', 'studyID', 'diseaseStatus']]
+
+        # Identify healthy samples and their studies
+        healthy_mask = merged['disease'].str.lower() == 'healthy'
+        healthy_df = merged[healthy_mask]
+        healthy_studies = set(healthy_df['studyID'].dropna().unique())
+
+        print(f"    Healthy samples: {len(healthy_df)}, Studies with healthy: {len(healthy_studies)}")
+
+        # Get all diseases
+        diseases = [d for d in merged['disease'].dropna().unique() if str(d).lower() != 'healthy']
+        print(f"    Diseases to analyze: {len(diseases)}")
+
+        disease_diff_results = []
+
+        # Per-disease differential (with study-matched healthy controls where possible)
+        for disease in diseases:
+            disease_mask = merged['disease'] == disease
+            disease_df = merged[disease_mask]
+
+            if len(disease_df) < 5:
+                continue
+
+            # Find study-matched healthy controls
+            disease_studies = set(disease_df['studyID'].dropna().unique())
+            matched_studies = disease_studies & healthy_studies
+
+            if matched_studies:
+                # Use study-matched healthy
+                matched_healthy_df = healthy_df[healthy_df['studyID'].isin(matched_studies)]
+                comparison_type = 'study_matched'
+                healthy_note = 'Matched healthy from same study'
+            else:
+                # Use all healthy as fallback
+                matched_healthy_df = healthy_df
+                comparison_type = 'all_healthy'
+                healthy_note = '⚠️ No matched healthy; using all healthy samples'
+
+            if len(matched_healthy_df) < 3:
+                continue
+
+            for sig in signatures:
+                disease_vals = disease_df[sig].dropna()
+                healthy_vals = matched_healthy_df[sig].dropna()
+
+                if len(disease_vals) < 3 or len(healthy_vals) < 3:
+                    continue
+
+                try:
+                    stat, pval = stats.ranksums(disease_vals, healthy_vals)
+                    activity_diff = disease_vals.mean() - healthy_vals.mean()
+
+                    disease_diff_results.append({
+                        'protein': sig,
+                        'disease': disease,
+                        'group1': disease,
+                        'group2': 'healthy',
+                        'mean_g1': round(float(disease_vals.mean()), 4),
+                        'mean_g2': round(float(healthy_vals.mean()), 4),
+                        'n_g1': len(disease_vals),
+                        'n_g2': len(healthy_vals),
+                        'signature': sig_type,
+                        'comparison': comparison_type,
+                        'healthy_note': healthy_note,
+                        'activity_diff': round(float(activity_diff), 4),
+                        'pvalue': f"{pval:.2e}" if pval < 0.01 else round(float(pval), 6),
+                        'neg_log10_pval': round(-np.log10(max(pval, 1e-300)), 4)
+                    })
+                except Exception:
+                    continue
+
+        # FDR correction for per-disease results
+        if disease_diff_results:
+            pvals = [float(r['pvalue']) if isinstance(r['pvalue'], str) else r['pvalue'] for r in disease_diff_results]
+            _, qvals, _, _ = multipletests(pvals, method='fdr_bh')
+            for i, r in enumerate(disease_diff_results):
+                r['qvalue'] = round(float(qvals[i]), 6)
+
+        all_diff_data.extend(disease_diff_results)
+        print(f"    {sig_type}: {len(disease_diff_results)} per-disease differential results")
+
+        # POOLED "All Diseases" differential - single clean comparison
+        all_disease_mask = ~merged['disease'].str.lower().eq('healthy') & merged['disease'].notna()
+        all_disease_df = merged[all_disease_mask]
+
+        pooled_results = []
+        for sig in signatures:
+            disease_vals = all_disease_df[sig].dropna()
+            healthy_vals = healthy_df[sig].dropna()
+
+            if len(disease_vals) < 10 or len(healthy_vals) < 10:
+                continue
+
+            try:
+                stat, pval = stats.ranksums(disease_vals, healthy_vals)
+                activity_diff = disease_vals.mean() - healthy_vals.mean()
+
+                pooled_results.append({
+                    'protein': sig,
+                    'disease': 'All Diseases',
+                    'group1': 'All Diseases',
+                    'group2': 'healthy',
+                    'mean_g1': round(float(disease_vals.mean()), 4),
+                    'mean_g2': round(float(healthy_vals.mean()), 4),
+                    'n_g1': len(disease_vals),
+                    'n_g2': len(healthy_vals),
+                    'signature': sig_type,
+                    'comparison': 'pooled',
+                    'healthy_note': f'All {len(diseases)} diseases pooled vs healthy',
+                    'activity_diff': round(float(activity_diff), 4),
+                    'pvalue': f"{pval:.2e}" if pval < 0.01 else round(float(pval), 6),
+                    'neg_log10_pval': round(-np.log10(max(pval, 1e-300)), 4)
+                })
+            except Exception:
+                continue
+
+        # FDR for pooled results
+        if pooled_results:
+            pvals = [float(r['pvalue']) if isinstance(r['pvalue'], str) else r['pvalue'] for r in pooled_results]
+            _, qvals, _, _ = multipletests(pvals, method='fdr_bh')
+            for i, r in enumerate(pooled_results):
+                r['qvalue'] = round(float(qvals[i]), 6)
+
+        all_diff_data.extend(pooled_results)
+        print(f"    {sig_type}: {len(pooled_results)} pooled 'All Diseases' results")
+
+    # Save the differential data
+    with open(OUTPUT_DIR / "inflammation_differential.json", 'w') as f:
+        json.dump(all_diff_data, f)
+
+    print(f"  Total differential records: {len(all_diff_data)}")
+
+    # Summary by disease
+    diseases_in_data = set(r['disease'] for r in all_diff_data)
+    print(f"  Diseases in output: {diseases_in_data}")
+
+    return all_diff_data
+
+
 def preprocess_inflammation_longitudinal():
     """Preprocess inflammation atlas longitudinal data."""
     print("Processing inflammation longitudinal data...")
@@ -2557,7 +2806,7 @@ def create_embedded_data():
         'inflammation_cell_drivers.json',
         'inflammation_demographics.json',
         'disease_sankey.json',
-        'age_bmi_boxplots.json',
+        ('age_bmi_boxplots_cytosig.json', 'agebmiboxplots'),  # Only embed CytoSig for faster loading
         'treatment_response.json',
         'cohort_validation.json',
         'cross_atlas.json',
@@ -3273,6 +3522,7 @@ def main():
     preprocess_inflammation_correlations()
     preprocess_inflammation_celltype_correlations()  # Cell type-specific age/BMI correlations
     preprocess_inflammation_disease()
+    preprocess_inflammation_differential_clean()  # Clean differential with pooled All Diseases
     preprocess_inflammation_longitudinal()  # NEW: longitudinal data
     preprocess_inflammation_cell_drivers()  # NEW: cell type drivers
     preprocess_inflammation_demographics()  # NEW: demographics differential
