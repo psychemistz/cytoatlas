@@ -4992,12 +4992,13 @@ const AtlasDetailPage = {
     tissueViewMode: 'normal',
 
     async loadScatlasTissueAtlas(content) {
+        const sigLabel = this.signatureType === 'CytoSig' ? 'cytokine' : 'protein';
         content.innerHTML = `
             <div class="viz-grid">
                 <div class="sub-panel">
                     <div class="panel-header">
-                        <h3>Activity Distribution by Tissue</h3>
-                        <p id="tissue-atlas-desc-text">Compare cytokine activity across 35 normal human organs from scAtlas</p>
+                        <h3>Activity Distribution by Tissue <span class="badge">${this.signatureType}</span></h3>
+                        <p id="tissue-atlas-desc-text">Compare ${sigLabel} activity across 35 normal human organs from scAtlas</p>
                     </div>
                     <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
                         <div class="control-group">
@@ -5028,7 +5029,7 @@ const AtlasDetailPage = {
                 </div>
                 <div class="sub-panel">
                     <div class="panel-header">
-                        <h3>Signature × Tissue Heatmap</h3>
+                        <h3>Signature × Tissue Heatmap <span class="badge">${this.signatureType}</span></h3>
                         <p>Activity patterns across tissues</p>
                     </div>
                     <div id="tissue-heatmap" class="plot-container" style="height: 500px;"></div>
@@ -5514,12 +5515,13 @@ const AtlasDetailPage = {
     scatlasCelltypeData: null,
 
     async loadScatlasCelltypes(content) {
+        const sigLabel = this.signatureType === 'CytoSig' ? 'cytokine' : 'protein';
         content.innerHTML = `
             <div class="viz-grid">
                 <div class="sub-panel">
                     <div class="panel-header">
-                        <h3>Cell Type Activity Profile</h3>
-                        <p>Search and view activity of a specific ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'} across cell types</p>
+                        <h3>Cell Type Activity Profile <span class="badge">${this.signatureType}</span></h3>
+                        <p>Search and view activity of a specific ${sigLabel} across cell types</p>
                     </div>
                     <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
                         <div class="control-group">
@@ -5547,7 +5549,7 @@ const AtlasDetailPage = {
                 </div>
                 <div class="sub-panel">
                     <div class="panel-header">
-                        <h3>Activity Heatmap</h3>
+                        <h3>Activity Heatmap <span class="badge">${this.signatureType}</span></h3>
                         <p>Mean ${this.signatureType} activity z-scores across cell types</p>
                     </div>
                     <div id="scatlas-celltype-heatmap" class="plot-container" style="height: 500px;"></div>
@@ -5796,12 +5798,13 @@ const AtlasDetailPage = {
     diffCancerTypesData: null,     // Cancer type-specific data
 
     async loadScatlasDifferentialAnalysis(content) {
+        const sigLabel = this.signatureType === 'CytoSig' ? 'cytokine' : 'protein';
         content.innerHTML = `
             <div class="viz-grid">
                 <div class="sub-panel">
                     <div class="panel-header">
-                        <h3>Differential Volcano Plot</h3>
-                        <p>Compare cytokine activity between Tumor and Adjacent tissue</p>
+                        <h3>Differential Volcano Plot <span class="badge">${this.signatureType}</span></h3>
+                        <p>Compare ${sigLabel} activity between Tumor and Adjacent tissue</p>
                     </div>
                     <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
                         <div class="control-group">
@@ -5815,7 +5818,7 @@ const AtlasDetailPage = {
                 </div>
                 <div class="sub-panel">
                     <div class="panel-header">
-                        <h3>Top Differential Signatures</h3>
+                        <h3>Top Differential Signatures <span class="badge">${this.signatureType}</span></h3>
                         <p>Ranked by absolute activity difference</p>
                     </div>
                     <div id="diff-top-bar" class="plot-container" style="height: 450px;"></div>
@@ -5823,7 +5826,7 @@ const AtlasDetailPage = {
             </div>
             <div class="sub-panel" style="margin-top: 1rem;">
                 <div class="panel-header">
-                    <h3 id="diff-boxplot-title">Activity Comparison: Tumor vs Adjacent</h3>
+                    <h3 id="diff-boxplot-title">Activity Comparison: Tumor vs Adjacent <span class="badge">${this.signatureType}</span></h3>
                     <p id="diff-boxplot-subtitle">Distribution of selected signature across tissue types</p>
                 </div>
                 <div id="diff-boxplot" class="plot-container" style="height: 320px;"></div>
@@ -6604,10 +6607,11 @@ const AtlasDetailPage = {
     tcellStateCache: null,
 
     async loadScatlasTcellState(content) {
+        const sigLabel = this.signatureType === 'CytoSig' ? 'Cytokine' : 'Protein';
         content.innerHTML = `
             <div class="panel-header">
-                <h3>T Cell Functional States</h3>
-                <p>Cytokine activity patterns across T cell states in tumor-infiltrating lymphocytes</p>
+                <h3>T Cell Functional States <span class="badge">${this.signatureType}</span></h3>
+                <p>${sigLabel} activity patterns across T cell states in tumor-infiltrating lymphocytes</p>
             </div>
 
             <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
@@ -6627,7 +6631,7 @@ const AtlasDetailPage = {
 
             <div class="viz-grid" style="margin-bottom: 1rem;">
                 <div class="sub-panel">
-                    <div class="viz-title" id="tcell-heatmap-title">Top Signatures by T Cell State</div>
+                    <div class="viz-title" id="tcell-heatmap-title">Top Signatures by T Cell State <span class="badge">${this.signatureType}</span></div>
                     <div class="viz-subtitle" id="tcell-heatmap-subtitle">Mean activity of top variable signatures across T cell states</div>
                     <div id="tcell-state-heatmap" class="plot-container" style="height: 380px;"></div>
                 </div>
@@ -6639,7 +6643,7 @@ const AtlasDetailPage = {
             </div>
 
             <div class="sub-panel">
-                <div class="viz-title" id="tcell-boxplot-title">Activity by T Cell State</div>
+                <div class="viz-title" id="tcell-boxplot-title">Activity by T Cell State <span class="badge">${this.signatureType}</span></div>
                 <div class="viz-subtitle" id="tcell-boxplot-subtitle">Distribution of selected signature across T cell functional states</div>
                 <div id="tcell-state-comparison" class="plot-container" style="height: 320px;"></div>
             </div>
@@ -6849,10 +6853,11 @@ const AtlasDetailPage = {
     exhaustionData: null,
 
     async loadScatlasExhaustion(content) {
+        const sigLabel = this.signatureType === 'CytoSig' ? 'cytokine' : 'protein';
         content.innerHTML = `
             <div class="panel-header">
-                <h3>Exhaustion Differential</h3>
-                <p>Compare cytokine activity between exhausted and non-exhausted T cells in tumor microenvironment</p>
+                <h3>Exhaustion Differential <span class="badge">${this.signatureType}</span></h3>
+                <p>Compare ${sigLabel} activity between exhausted and non-exhausted T cells in tumor microenvironment</p>
             </div>
 
             <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
@@ -6881,12 +6886,12 @@ const AtlasDetailPage = {
 
             <div class="viz-grid">
                 <div class="sub-panel">
-                    <div class="viz-title" id="exhaustion-bar-title">Differential Activity</div>
+                    <div class="viz-title" id="exhaustion-bar-title">Differential Activity <span class="badge">${this.signatureType}</span></div>
                     <div class="viz-subtitle" id="exhaustion-bar-subtitle">Activity difference: Exhausted vs Non-exhausted T cells</div>
                     <div id="exhaustion-heatmap" class="plot-container" style="height: 480px;"></div>
                 </div>
                 <div class="sub-panel">
-                    <div class="viz-title" id="exhaustion-scatter-title">Activity Correlation</div>
+                    <div class="viz-title" id="exhaustion-scatter-title">Activity Correlation <span class="badge">${this.signatureType}</span></div>
                     <div class="viz-subtitle" id="exhaustion-scatter-subtitle">Mean activity comparison</div>
                     <div id="exhaustion-scatter" class="plot-container" style="height: 480px;"></div>
                 </div>
@@ -7061,10 +7066,11 @@ const AtlasDetailPage = {
     cafData: null,
 
     async loadScatlasCaf(content) {
+        const sigLabel = this.signatureType === 'CytoSig' ? 'cytokine' : 'protein';
         content.innerHTML = `
             <div class="panel-header">
-                <h3>CAF Types</h3>
-                <p>Cancer-associated fibroblast subtypes and their cytokine signatures in the tumor microenvironment</p>
+                <h3>CAF Types <span class="badge">${this.signatureType}</span></h3>
+                <p>Cancer-associated fibroblast subtypes and their ${sigLabel} signatures in the tumor microenvironment</p>
             </div>
 
             <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
@@ -7102,7 +7108,7 @@ const AtlasDetailPage = {
 
             <div class="viz-grid" style="margin-bottom: 1rem;">
                 <div class="sub-panel">
-                    <div class="viz-title">CAF Subtype Activity Profile</div>
+                    <div class="viz-title">CAF Subtype Activity Profile <span class="badge">${this.signatureType}</span></div>
                     <div class="viz-subtitle">Top 15 signatures by activity difference across CAF subtypes</div>
                     <div id="caf-activity-bar" class="plot-container" style="height: 320px;"></div>
                 </div>
@@ -7114,8 +7120,8 @@ const AtlasDetailPage = {
             </div>
 
             <div class="sub-panel">
-                <div class="viz-title">CAF Signature Heatmap</div>
-                <div class="viz-subtitle">Cytokine activity across CAF subtypes and cancer types</div>
+                <div class="viz-title">CAF Signature Heatmap <span class="badge">${this.signatureType}</span></div>
+                <div class="viz-subtitle">${this.signatureType === 'CytoSig' ? 'Cytokine' : 'Protein'} activity across CAF subtypes and cancer types</div>
                 <div id="caf-heatmap" class="plot-container" style="height: 350px;"></div>
             </div>
         `;

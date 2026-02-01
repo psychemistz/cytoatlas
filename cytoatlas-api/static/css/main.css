@@ -2240,3 +2240,28 @@ main {
 .cell-type-item .activity.negative {
     color: var(--danger);
 }
+
+/* ==================== Signature Type Badge ==================== */
+.badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    color: var(--primary);
+    background: rgba(37, 99, 235, 0.1);
+    border: 1px solid rgba(37, 99, 235, 0.2);
+    border-radius: var(--radius-sm);
+    margin-left: 0.5rem;
+    vertical-align: middle;
+}
+
+h3 .badge {
+    font-size: 0.65rem;
+}
+
+.viz-title .badge {
+    font-size: 0.6rem;
+    padding: 0.1rem 0.4rem;
+}
