@@ -130,23 +130,45 @@ class RealValidationGenerator:
 
     def _get_celltype_activity(self) -> Optional[List[Dict[str, Any]]]:
         """Get cell type activity data (flat list format)."""
-        filename = f"{self.atlas}_celltype.json"
-        return self._load_json(filename)
+        # Try different naming conventions
+        for suffix in ["_celltype.json", "_celltypes.json"]:
+            filename = f"{self.atlas}{suffix}"
+            data = self._load_json(filename)
+            if data is not None:
+                # Handle nested structure (data key contains list)
+                if isinstance(data, dict) and "data" in data:
+                    return data["data"]
+                return data
+        return None
 
     def _get_signatures(self) -> List[str]:
         """Get list of available signatures from real data."""
+        # First try correlations
         correlations = self._get_correlations()
-        if not correlations:
-            # Fallback to known signatures
-            return ["IFNG", "TNF", "IL17A", "IL6", "IL10", "IL1B", "TGFB1", "IL2", "IL4"]
+        if correlations:
+            signatures = set()
+            for row in correlations:
+                if row.get("signature") == self.signature_type:
+                    sig = row.get("protein")
+                    if sig:
+                        signatures.add(sig)
+            if signatures:
+                return sorted(signatures)[:20]  # Top 20 for manageable size
 
-        signatures = set()
-        for row in correlations:
-            if row.get("signature") == self.signature_type:
-                sig = row.get("protein")
-                if sig:
-                    signatures.add(sig)
-        return sorted(signatures)[:20]  # Top 20 for manageable size
+        # Fall back to cell type activity data
+        celltype_data = self._get_celltype_activity()
+        if celltype_data:
+            signatures = set()
+            for row in celltype_data:
+                if row.get("signature_type") == self.signature_type:
+                    sig = row.get("signature")
+                    if sig:
+                        signatures.add(sig)
+            if signatures:
+                return sorted(signatures)[:20]
+
+        # Ultimate fallback to known signatures
+        return ["IFNG", "TNF", "IL17A", "IL6", "IL10", "IL1B", "TGFB1", "IL2", "IL4"]
 
     def _compute_regression_stats(
         self,

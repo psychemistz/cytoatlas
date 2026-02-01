@@ -285,16 +285,27 @@ cytoatlas-api/
 | API Backend | 95% | 14 routers, 188+ endpoints |
 | Services | 100% | All atlas services complete |
 | Validation Service | 100% | 636 lines, 5-type system |
-| Validation Data | 0% | **JSON files not generated** |
+| Validation Data | 100% | JSON files generated for all 3 atlases |
 | Frontend SPA | 90% | 8 pages complete |
 | User Auth | 20% | Scaffolding only |
 | Dataset Submission | 20% | Scaffolding only |
 
-### Critical TODO
+### Validation Results
 
-1. Generate validation JSON data files
-2. Complete chat streaming fixes
-3. Finish scAtlas immune analysis
+| Atlas | Quality Grade | Biological Validation Rate |
+|-------|---------------|---------------------------|
+| CIMA | F (49.9) | 41.7% (5/12 pairs) |
+| Inflammation | F (45.5) | 33.3% (4/12 pairs) |
+| scAtlas | C (72.4) | 16.7% (2/12 pairs) |
+
+Note: Lower biological validation rates for scAtlas are expected because the known associations
+(e.g., IL17A→Th17, IFNG→CD8_CTL) are defined for immune cells, while scAtlas includes many
+non-immune tissue-resident cell types.
+
+### Remaining TODO
+
+1. Complete chat streaming fixes
+2. Finish scAtlas immune analysis
 
 See `ARCHITECTURE.md` and `/home/parks34/.claude/plans/cytoatlas-master-plan.md` for details.
 
