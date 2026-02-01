@@ -23,6 +23,7 @@ import os
 import sys
 import json
 import time
+import argparse
 from pathlib import Path
 from typing import List, Dict, Tuple
 
@@ -37,6 +38,16 @@ from scipy import stats
 
 INPUT_DIR = Path('/vf/users/parks34/projects/2secactpy/results/alphagenome')
 OUTPUT_DIR = INPUT_DIR
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='Stage 4: Interpret AlphaGenome predictions')
+    parser.add_argument('--input', type=str, default=None,
+                        help='Input h5ad file (default: stage3_predictions.h5ad)')
+    parser.add_argument('--test', action='store_true',
+                        help='Use stage3_test_predictions.h5ad for testing')
+    parser.add_argument('--output-suffix', type=str, default='',
+                        help='Suffix for output files (e.g., "_test")')
+    return parser.parse_args()
 
 # Quantile thresholds for prioritization
 HIGH_CONFIDENCE_QUANTILE = 0.99
@@ -221,12 +232,23 @@ def check_direction_concordance(
 
 
 def main():
+    args = parse_args()
+
     log("=" * 60)
     log("ALPHAGENOME STAGE 4: INTERPRET AND SCORE PREDICTIONS")
     log("=" * 60)
 
-    # Load Stage 3 predictions
-    input_path = INPUT_DIR / 'stage3_predictions.h5ad'
+    # Determine input file
+    if args.input:
+        input_path = Path(args.input)
+    elif args.test:
+        input_path = INPUT_DIR / 'stage3_test_predictions.h5ad'
+    else:
+        input_path = INPUT_DIR / 'stage3_predictions.h5ad'
+
+    # Output suffix for test mode
+    suffix = args.output_suffix or ('_test' if args.test else '')
+
     log(f"Loading: {input_path}")
     adata = ad.read_h5ad(input_path)
     log(f"  Variants: {adata.n_obs}")
@@ -314,7 +336,7 @@ def main():
     scores_df = scores_df.sort_values('priority_score', ascending=False)
 
     # Save all scored variants
-    output_csv = OUTPUT_DIR / 'stage4_scored_variants.csv'
+    output_csv = OUTPUT_DIR / f'stage4_scored_variants{suffix}.csv'
     scores_df.to_csv(output_csv, index=False)
     log(f"\nSaved: {output_csv}")
     log(f"  Total variants: {len(scores_df)}")
@@ -335,7 +357,7 @@ def main():
     prioritized = pd.concat([high_confidence, moderate_confidence]).drop_duplicates('variant_id')
     prioritized = prioritized.sort_values('priority_score', ascending=False)
 
-    prioritized_csv = OUTPUT_DIR / 'stage4_prioritized.csv'
+    prioritized_csv = OUTPUT_DIR / f'stage4_prioritized{suffix}.csv'
     prioritized.to_csv(prioritized_csv, index=False)
     log(f"\nSaved: {prioritized_csv}")
     log(f"  Prioritized variants: {len(prioritized)}")
@@ -380,7 +402,7 @@ def main():
         ].to_dict('records') if 'primary_gene' in prioritized.columns else [],
     }
 
-    summary_path = OUTPUT_DIR / 'stage4_summary.json'
+    summary_path = OUTPUT_DIR / f'stage4_summary{suffix}.json'
     with open(summary_path, 'w') as f:
         json.dump(summary, f, indent=2)
     log(f"\nSaved: {summary_path}")

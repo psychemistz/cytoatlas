@@ -25,6 +25,7 @@ import sys
 import json
 import time
 import gzip
+import argparse
 import urllib.request
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -39,6 +40,16 @@ from scipy import stats
 
 INPUT_DIR = Path('/vf/users/parks34/projects/2secactpy/results/alphagenome')
 OUTPUT_DIR = INPUT_DIR
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='Stage 5: Validate against GTEx')
+    parser.add_argument('--input', type=str, default=None,
+                        help='Input CSV file (default: stage4_prioritized.csv)')
+    parser.add_argument('--test', action='store_true',
+                        help='Use stage4_prioritized_test.csv for testing')
+    parser.add_argument('--output-suffix', type=str, default='',
+                        help='Suffix for output files (e.g., "_test")')
+    return parser.parse_args()
 
 # GTEx data paths
 GTEX_DIR = INPUT_DIR / 'gtex_data'
@@ -174,17 +185,27 @@ def match_variants(
     """
     log("Matching variants between CIMA and GTEx...")
 
-    # Parse GTEx variant IDs
-    gtex_parsed = gtex_df['variant_id'].apply(parse_gtex_variant)
+    # Handle empty GTEx dataframe
+    if len(gtex_df) == 0:
+        log("  WARNING: Empty GTEx data, no matches possible")
+        return pd.DataFrame()
+
+    # Parse GTEx variant IDs if needed (skip if already parsed)
     gtex_df = gtex_df.copy()
-    gtex_df['chrom'] = [p[0] for p in gtex_parsed]
-    gtex_df['pos'] = [p[1] for p in gtex_parsed]
-    gtex_df['ref'] = [p[2] for p in gtex_parsed]
-    gtex_df['alt'] = [p[3] for p in gtex_parsed]
+    if 'chrom' not in gtex_df.columns:
+        gtex_parsed = gtex_df['variant_id'].apply(parse_gtex_variant)
+        gtex_df['chrom'] = [p[0] for p in gtex_parsed]
+        gtex_df['pos'] = [p[1] for p in gtex_parsed]
+        gtex_df['ref'] = [p[2] for p in gtex_parsed]
+        gtex_df['alt'] = [p[3] for p in gtex_parsed]
 
     # Remove unparseable
     gtex_df = gtex_df[gtex_df['chrom'].notna()].copy()
     log(f"  GTEx variants with valid coordinates: {len(gtex_df):,}")
+
+    if len(gtex_df) == 0:
+        log("  WARNING: No valid GTEx coordinates after parsing")
+        return pd.DataFrame()
 
     # Create position keys
     cima_df = cima_df.copy()
@@ -340,12 +361,23 @@ This report validates CIMA immune cell eQTLs against GTEx v8 whole blood eQTLs.
 
 
 def main():
+    args = parse_args()
+
     log("=" * 60)
     log("ALPHAGENOME STAGE 5: GTEx VALIDATION")
     log("=" * 60)
 
-    # Load prioritized variants
-    input_csv = INPUT_DIR / 'stage4_prioritized.csv'
+    # Determine input file
+    if args.input:
+        input_csv = Path(args.input)
+    elif args.test:
+        input_csv = INPUT_DIR / 'stage4_prioritized_test.csv'
+    else:
+        input_csv = INPUT_DIR / 'stage4_prioritized.csv'
+
+    # Output suffix for test mode
+    suffix = args.output_suffix or ('_test' if args.test else '')
+
     log(f"Loading: {input_csv}")
 
     if not input_csv.exists():
@@ -378,8 +410,9 @@ def main():
         np.random.seed(42)
         mock_positions = cima_df[['CHROM', 'POS', 'REF', 'ALT']].drop_duplicates()
 
-        # Sample ~30% to simulate partial overlap
-        mock_gtex = mock_positions.sample(frac=0.3).copy()
+        # Sample ~30% to simulate partial overlap (minimum 1 if any data)
+        sample_n = max(1, int(len(mock_positions) * 0.3)) if len(mock_positions) > 0 else 0
+        mock_gtex = mock_positions.head(sample_n).copy()
         mock_gtex['variant_id'] = (
             mock_gtex['CHROM'] + '_' +
             mock_gtex['POS'].astype(str) + '_' +
@@ -415,13 +448,13 @@ def main():
             log(f"  Spearman rho: {metrics['spearman_rho']:.3f}")
 
     # Save matched variants
-    output_csv = OUTPUT_DIR / 'stage5_gtex_matched.csv'
+    output_csv = OUTPUT_DIR / f'stage5_gtex_matched{suffix}.csv'
     if len(matched_df) > 0:
         matched_df.to_csv(output_csv, index=False)
         log(f"\nSaved: {output_csv}")
 
     # Save metrics
-    metrics_json = OUTPUT_DIR / 'stage5_validation_metrics.json'
+    metrics_json = OUTPUT_DIR / f'stage5_validation_metrics{suffix}.json'
     full_metrics = {
         'stage': 5,
         'description': 'GTEx v8 whole blood validation',
@@ -442,7 +475,7 @@ def main():
 
     # Generate report
     report = generate_report(cima_df, matched_df, metrics)
-    report_path = OUTPUT_DIR / 'stage5_report.md'
+    report_path = OUTPUT_DIR / f'stage5_report{suffix}.md'
     with open(report_path, 'w') as f:
         f.write(report)
     log(f"Saved: {report_path}")
