@@ -2063,15 +2063,20 @@
 
                 <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
                     <strong>Exhausted vs Non-exhausted T cells:</strong> Differential activity analysis between dysfunctional and functional T cells.
-                    <div style="margin-top: 0.5rem; font-size: 0.9rem;">
-                        <div style="margin-bottom: 0.3rem;">
-                            <span style="color: #d62728; font-weight: bold;">● Exhausted:</span> T cells with inhibitory receptors (PDCD1+, LAG3+, TIGIT+, Tex)
+                    <div style="margin-top: 0.5rem;">
+                        <div style="margin-bottom: 0.5rem;">
+                            <span style="color: #d62728; font-weight: bold;">● Exhausted T cells</span> - Dysfunctional T cells with inhibitory receptor expression<br>
+                            <small style="color: #666; margin-left: 1rem;">Markers: PDCD1 (PD-1), CTLA4, LAG3, TIM3, TIGIT, Tex</small><br>
+                            <small style="color: #666; margin-left: 1rem;">Cell types: T01_CD8Tex_PDCD1, T09_CD8Tex_LAG3, CD8_exhausted_*, CD4_exhausted_*, Tex_*, *_TIGIT+</small>
                         </div>
-                        <div>
-                            <span style="color: #2166ac; font-weight: bold;">● Non-exhausted:</span> Functional T cells (cytotoxic GZMB+/GZMK+ + memory Tem/Tcm + other T cells)
+                        <div style="margin-bottom: 0.5rem;">
+                            <span style="color: #2166ac; font-weight: bold;">● Non-exhausted T cells</span> - Functional T cells (combined from 3 groups):<br>
+                            <small style="color: #666; margin-left: 1rem;"><strong>Cytotoxic:</strong> T02_CD8Tc_GZMB, T03_CD8Tc_GZMK, CD8_cytotoxic_*, NK-like T cells</small><br>
+                            <small style="color: #666; margin-left: 1rem;"><strong>Memory:</strong> T05_CD8Tem, T06_CD8Tcm, CD4_memory_*, CD8_memory_*</small><br>
+                            <small style="color: #666; margin-left: 1rem;"><strong>Other:</strong> MAIT cells, γδ T cells, Tregs (FOXP3+), unclassified T cells</small>
                         </div>
                     </div>
-                    <div style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">
+                    <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #eee; font-size: 0.85rem; color: #666;">
                         <strong>Interpretation:</strong> Positive Δ Activity = higher in exhausted; Negative = higher in non-exhausted (functional) T cells.
                     </div>
                 </div>
