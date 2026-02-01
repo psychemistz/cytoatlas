@@ -2,7 +2,7 @@
 #SBATCH --job-name=gene_expr
 #SBATCH --output=/vf/users/parks34/projects/2secactpy/logs/gene_expr_%j.out
 #SBATCH --error=/vf/users/parks34/projects/2secactpy/logs/gene_expr_%j.err
-#SBATCH --time=04:00:00
+#SBATCH --time=2-00:00:00
 #SBATCH --mem=240G
 #SBATCH --cpus-per-task=8
 #SBATCH --partition=norm

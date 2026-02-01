@@ -31,6 +31,9 @@ KEY_GENES = [
 
 DATA_PATHS = {
     'cima': '/data/Jiang_Lab/Data/Seongyong/CIMA/Cell_Atlas/CIMA_RNA_6484974cells_36326genes_compressed.h5ad',
+    'inflammation_main': '/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_ATLAS_main_afterQC.h5ad',
+    'inflammation_val': '/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_ATLAS_validation_afterQC.h5ad',
+    'inflammation_ext': '/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_ATLAS_external_afterQC.h5ad',
     'scatlas_normal': '/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/igt_s9_fine_counts.h5ad',
 }
 
@@ -147,6 +150,25 @@ def main():
         df = extract_sampled_expression(DATA_PATHS['cima'], KEY_GENES, 'CIMA')
         if not df.empty:
             all_results.append(df)
+
+    # Inflammation Atlas (main, validation, external)
+    inflam_dfs = []
+    for name in ['inflammation_main', 'inflammation_val', 'inflammation_ext']:
+        if Path(DATA_PATHS[name]).exists():
+            df = extract_sampled_expression(DATA_PATHS[name], KEY_GENES, 'Inflammation')
+            if not df.empty:
+                inflam_dfs.append(df)
+
+    if inflam_dfs:
+        # Combine and aggregate inflammation data
+        inflam_combined = pd.concat(inflam_dfs, ignore_index=True)
+        # Group by gene and cell_type, aggregate
+        inflam_agg = inflam_combined.groupby(['gene', 'cell_type', 'atlas']).agg({
+            'mean_expression': 'mean',
+            'pct_expressed': 'mean',
+            'n_cells': 'sum',
+        }).reset_index()
+        all_results.append(inflam_agg)
 
     # scAtlas Normal
     if Path(DATA_PATHS['scatlas_normal']).exists():
