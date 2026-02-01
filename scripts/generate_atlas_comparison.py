@@ -26,10 +26,91 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent))
 from cell_type_mapping import (
     COARSE_LINEAGES,
-    CIMA_TO_COARSE, INFLAMMATION_TO_COARSE, SCATLAS_TO_COARSE,
-    CIMA_TO_FINE, INFLAMMATION_TO_FINE, SCATLAS_TO_FINE,
+    CIMA_TO_COARSE, INFLAMMATION_TO_COARSE,
+    CIMA_TO_FINE, INFLAMMATION_TO_FINE,
     FINE_TYPES
 )
+
+# scAtlas cellType1 to coarse mapping (for pseudobulk data)
+# cellType1 uses different naming than subCluster
+SCATLAS_CELLTYPE1_TO_COARSE = {
+    # B cells
+    'B': 'B', 'B cell': 'B', 'B cells': 'B', 'b cell': 'B', 'bcells': 'B',
+    'B Cell CD79A': 'B', 'B Cell MS4A1': 'B', 'B Cell VPREB3': 'B',
+    'B cell memory': 'B', 'B_CD27neg': 'B', 'B_CD27pos': 'B',
+    'B_Hypermutation': 'B', 'B_follicular': 'B', 'B_mantle': 'B',
+    'Follicular B cell': 'B', 'Mature_B_Cells': 'B',
+    'memory b cell': 'B', 'naive b cell': 'B',
+    # Plasma cells
+    'Plasma': 'Plasma', 'Plasma cells': 'Plasma', 'Plasma_Cells': 'Plasma',
+    'Plasma B cells': 'Plasma', 'Plasma Cell JCHAIN': 'Plasma',
+    'plasma cell': 'Plasma', 'Plasmablast': 'Plasma',
+    'Plasma_IgG': 'Plasma', 'Plasma_IgM': 'Plasma',
+    'B cell IgA Plasma': 'Plasma', 'B cell IgG Plasma': 'Plasma',
+    # CD4 T cells
+    'CD4 T cell': 'CD4_T', 'T_CD4': 'CD4_T', 'T_CD4_conv': 'CD4_T',
+    'T_CD4_fh': 'CD4_T', 'T_CD4_naive': 'CD4_T', 'T_CD4_reg': 'CD4_T',
+    'abT (CD4)': 'CD4_T', 'cd4-positive alpha-beta t cell': 'CD4_T',
+    'cd4-positive helper t cell': 'CD4_T', 'cd4-positive, alpha-beta memory t cell': 'CD4_T',
+    'cd4-positive, alpha-beta t cell': 'CD4_T', 'Treg': 'CD4_T', 'Th1': 'CD4_T', 'Th17': 'CD4_T',
+    'regulatory t cell': 'CD4_T', 'naive regulatory t cell': 'CD4_T',
+    'naive thymus-derived cd4-positive, alpha-beta t cell': 'CD4_T',
+    't follicular helper cell': 'CD4_T', 'Tcm': 'CD4_T',
+    # CD8 T cells
+    'CD8 T': 'CD8_T', 'CD8 T cell': 'CD8_T', 'T_CD8_CTL': 'CD8_T',
+    'T_CD8_activated': 'CD8_T', 'abT (CD8)': 'CD8_T',
+    'cd8-positive alpha-beta t cell': 'CD8_T', 'cd8-positive, alpha-beta cytokine secreting effector t cell': 'CD8_T',
+    'cd8-positive, alpha-beta cytotoxic t cell': 'CD8_T', 'cd8-positive, alpha-beta memory t cell': 'CD8_T',
+    'cd8-positive, alpha-beta t cell': 'CD8_T', 'Cytotoxic T cells': 'CD8_T',
+    'naive thymus-derived cd8-positive, alpha-beta t cell': 'CD8_T',
+    # General T cells (split to CD4_T by default)
+    'T cell': 'CD4_T', 'T cells': 'CD4_T', 't cell': 'CD4_T', 'tcells': 'CD4_T',
+    'T Cell CCL5': 'CD8_T', 'T Cell GZMA': 'CD8_T', 'T Cell GZMK': 'CD8_T',
+    'T Cell IL7R': 'CD4_T', 'T Cell RGS1': 'CD4_T', 'T Cell XCL1': 'CD8_T',
+    'alpha-beta_T_Cells': 'CD4_T', 'T_cell_dividing': 'CD4_T',
+    # NK cells
+    'NK': 'NK', 'NK cell': 'NK', 'NK cells': 'NK', 'nk cell': 'NK',
+    'natural killer cell': 'NK', 'NK-like_Cells': 'NK',
+    'NK_CD160pos': 'NK', 'NK_FCGR3Apos': 'NK', 'NK_dividing': 'NK',
+    'Resident NK': 'NK', 'Circulating NK/NKT': 'NK',
+    'immature natural killer cell': 'NK',
+    # Unconventional T cells
+    'MAIT': 'Unconventional_T', 'T_CD8_MAIT': 'Unconventional_T',
+    'gd T': 'Unconventional_T', 'T_CD8_gd': 'Unconventional_T',
+    'gamma-delta_T_Cells_1': 'Unconventional_T', 'gamma-delta_T_Cells_2': 'Unconventional_T',
+    'NKT cell': 'Unconventional_T', 'nkt cell': 'Unconventional_T', 'NKTcell': 'Unconventional_T',
+    'NK-T cells': 'Unconventional_T', 'NK/T Cell GNLY': 'Unconventional_T',
+    'mature nk t cell': 'Unconventional_T', 'cd8b-positive nk t cell': 'Unconventional_T',
+    'type i nk t cell': 'Unconventional_T',
+    'ILC': 'Unconventional_T', 'ILCT': 'Unconventional_T',
+    'innate lymphoid cell': 'Unconventional_T', 'Innate_lymphoid': 'Unconventional_T',
+    # Myeloid
+    'Myeloid': 'Myeloid', 'myeloid': 'Myeloid', 'myeloid cell': 'Myeloid',
+    'Monocyte': 'Myeloid', 'Monocytes': 'Myeloid', 'monocyte': 'Myeloid', 'monocytes': 'Myeloid',
+    'classical monocyte': 'Myeloid', 'intermediate monocyte': 'Myeloid', 'non-classical monocyte': 'Myeloid',
+    'Mono+mono derived cells': 'Myeloid',
+    'Macrophage': 'Myeloid', 'macrophage': 'Myeloid', 'Macrophages': 'Myeloid',
+    'Macrophage C1QB': 'Myeloid', 'Macrophage FCN3': 'Myeloid',
+    'LYVE1 Macrophage': 'Myeloid', 'Inflammatory_Macrophage': 'Myeloid', 'Non-inflammatory_Macrophage': 'Myeloid',
+    'Macrophages and DCs': 'Myeloid', 'Mac and DCs': 'Myeloid',
+    'DC': 'Myeloid', 'DC_1': 'Myeloid', 'DC_2': 'Myeloid', 'DC_plasmacytoid': 'Myeloid',
+    'dendritic cell': 'Myeloid', 'mDC': 'Myeloid', 'cDC1s': 'Myeloid', 'cDC2s': 'Myeloid',
+    'pDC': 'Myeloid', 'pDCs': 'Myeloid', 'plasmacytoid dendritic cell': 'Myeloid',
+    'cd141-positive myeloid dendritic cell': 'Myeloid', 'cd1c-positive myeloid dendritic cell': 'Myeloid',
+    'MNP-a/classical monocyte derived': 'Myeloid', 'MNP-b/non-classical monocyte derived': 'Myeloid',
+    'Mast': 'Myeloid', 'Mast cells': 'Myeloid', 'mast cell': 'Myeloid',
+    'Neutrophils': 'Myeloid', 'neutrophil': 'Myeloid', 'granulocyte': 'Myeloid',
+    'cd24 neutrophil': 'Myeloid', 'nampt neutrophil': 'Myeloid',
+    'Basophils': 'Myeloid', 'basophil': 'Myeloid',
+    'microglial cell': 'Myeloid',
+    # Progenitor / Other
+    'Progenitor': 'Progenitor', 'DP': 'Progenitor', 'SP': 'Progenitor',
+    'dn1 thymic pro-t cell': 'Progenitor', 'dn3 thymocyte': 'Progenitor', 'thymocyte': 'Progenitor',
+    'mesenchymal stem cell': 'Progenitor',
+    # General/Mixed (assign to most likely)
+    'Lymphoid': 'CD4_T', 'Lymphocytes': 'CD4_T', 'Immune': 'Myeloid',
+    'immune cell': 'Myeloid', 'Leucocytes': 'Myeloid',
+}
 
 # Paths
 RESULTS_DIR = Path('/data/parks34/projects/2secactpy/results')
@@ -50,6 +131,8 @@ DATA_FILES = {
         'secact_sc': RESULTS_DIR / 'inflammation' / 'main_SecAct_singlecell.h5ad',
     },
     'scatlas': {
+        'cytosig_pb': RESULTS_DIR / 'scatlas' / 'scatlas_normal_CytoSig_pseudobulk.h5ad',
+        'secact_pb': RESULTS_DIR / 'scatlas' / 'scatlas_normal_SecAct_pseudobulk.h5ad',
         'cytosig_sc': RESULTS_DIR / 'scatlas' / 'scatlas_normal_CytoSig_singlecell.h5ad',
         'secact_sc': RESULTS_DIR / 'scatlas' / 'scatlas_normal_SecAct_singlecell.h5ad',
     }
@@ -63,7 +146,7 @@ def get_coarse_mapping(atlas: str) -> dict:
     elif atlas == 'inflammation':
         return INFLAMMATION_TO_COARSE
     elif atlas == 'scatlas':
-        return SCATLAS_TO_COARSE
+        return SCATLAS_CELLTYPE1_TO_COARSE  # Use cellType1 mapping for pseudobulk
     return {}
 
 
@@ -74,7 +157,8 @@ def get_fine_mapping(atlas: str) -> dict:
     elif atlas == 'inflammation':
         return INFLAMMATION_TO_FINE
     elif atlas == 'scatlas':
-        return SCATLAS_TO_FINE
+        # Use coarse mapping for scAtlas fine level (cellType1 doesn't have fine granularity)
+        return SCATLAS_CELLTYPE1_TO_COARSE
     return {}
 
 
