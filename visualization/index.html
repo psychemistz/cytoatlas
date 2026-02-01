@@ -2117,8 +2117,8 @@
                         <div id="caf-activity-bar" class="loading">Loading...</div>
                     </div>
                     <div class="viz-container">
-                        <div class="viz-title">CAF Subtype Proportions</div>
-                        <div class="viz-subtitle">Distribution by cancer type</div>
+                        <div class="viz-title">CAF Subtype Composition</div>
+                        <div class="viz-subtitle">Breakdown by myCAF, iCAF, apCAF, Other per cancer type</div>
                         <div id="caf-proportions" class="loading">Loading...</div>
                     </div>
                 </div>
@@ -9451,30 +9451,59 @@
                 height: 450
             }, { responsive: true });
 
-            // 2. CAF proportion by cancer type
-            if (proportionsContainer && data.proportions?.length) {
+            // 2. CAF subtype breakdown by cancer type (stacked bar chart)
+            if (proportionsContainer && data.subtypes?.length) {
                 proportionsContainer.classList.remove('loading');
                 Plotly.purge(proportionsContainer);
 
-                const propData = data.proportions.filter(d => d.caf_proportion > 0);
+                // Aggregate cell counts by cancer_type and caf_class
+                // Each subtype record has n_cells, but we need to dedupe by (cancer, class, subtype)
+                const cellsByCanerClass = {};
+                const seenSubtypes = new Set();
 
-                if (propData.length > 0) {
-                    Plotly.newPlot(proportionsContainer, [{
+                data.subtypes.forEach(d => {
+                    const key = `${d.cancer_type}|${d.caf_class}|${d.caf_subtype}`;
+                    if (!seenSubtypes.has(key)) {
+                        seenSubtypes.add(key);
+                        if (!cellsByCanerClass[d.cancer_type]) {
+                            cellsByCanerClass[d.cancer_type] = { myCAF: 0, iCAF: 0, apCAF: 0, Other: 0, total: 0 };
+                        }
+                        const cls = d.caf_class || 'Other';
+                        cellsByCanerClass[d.cancer_type][cls] += d.n_cells || 0;
+                        cellsByCanerClass[d.cancer_type].total += d.n_cells || 0;
+                    }
+                });
+
+                // Sort cancer types by total CAF cells
+                const sortedCancers = Object.keys(cellsByCanerClass)
+                    .filter(c => cellsByCanerClass[c].total > 100)
+                    .sort((a, b) => cellsByCanerClass[b].total - cellsByCanerClass[a].total);
+
+                if (sortedCancers.length > 0) {
+                    // Create stacked bar traces for each CAF class
+                    const cafClassOrder = ['myCAF', 'iCAF', 'apCAF', 'Other'];
+                    const traces = cafClassOrder.map(cls => ({
                         type: 'bar',
-                        x: propData.map(d => d.cancer_type),
-                        y: propData.map(d => d.caf_proportion),
-                        text: propData.map(d => `${(d.caf_proportion * 100).toFixed(1)}%`),
-                        textposition: 'auto',
-                        marker: {
-                            color: propData.map(d => d.caf_proportion),
-                            colorscale: 'Blues'
-                        },
-                        hovertemplate: '<b>%{x}</b><br>CAF: %{y:.1%}<br>Cells: %{customdata}<extra></extra>',
-                        customdata: propData.map(d => d.caf_cells)
-                    }], {
+                        name: cls,
+                        x: sortedCancers,
+                        y: sortedCancers.map(cancer => {
+                            const total = cellsByCanerClass[cancer].total;
+                            return total > 0 ? cellsByCanerClass[cancer][cls] / total : 0;
+                        }),
+                        text: sortedCancers.map(cancer => {
+                            const cells = cellsByCanerClass[cancer][cls];
+                            return cells > 0 ? cells.toLocaleString() : '';
+                        }),
+                        hovertemplate: `<b>%{x}</b><br>${cls}: %{y:.1%} (%{text} cells)<extra></extra>`,
+                        marker: { color: cafColors[cls] }
+                    }));
+
+                    Plotly.newPlot(proportionsContainer, traces, {
+                        barmode: 'stack',
                         xaxis: { title: 'Cancer Type', tickangle: 45 },
-                        yaxis: { title: 'CAF Proportion', tickformat: '.0%' },
+                        yaxis: { title: 'Proportion of CAF Cells', tickformat: '.0%' },
                         margin: { l: 60, r: 30, t: 30, b: 100 },
+                        legend: { orientation: 'h', y: 1.15 },
                         height: 350
                     }, { responsive: true });
                 } else {
