@@ -2,10 +2,14 @@
 #SBATCH --job-name=alphagenome
 #SBATCH --output=/data/parks34/projects/2secactpy/logs/alphagenome_%j.out
 #SBATCH --error=/data/parks34/projects/2secactpy/logs/alphagenome_%j.err
-#SBATCH --time=48:00:00
-#SBATCH --mem=64G
-#SBATCH --cpus-per-task=8
+#SBATCH --time=168:00:00
+#SBATCH --mem=32G
+#SBATCH --cpus-per-task=4
 #SBATCH --partition=norm
+
+# Note: Stage 3 API calls take ~15 sec/variant
+# Full run (29,816 variants) takes ~125 hours
+# Use --resume flag to continue from checkpoint if job restarts
 
 ###############################################################################
 # AlphaGenome eQTL Analysis Pipeline
@@ -56,6 +60,13 @@ done
 # Environment setup
 source ~/bin/myconda
 conda activate secactpy
+
+# AlphaGenome API key (must be set in ~/.bashrc or environment)
+if [ -z "$ALPHAGENOME_API_KEY" ]; then
+    echo "ERROR: ALPHAGENOME_API_KEY environment variable not set"
+    echo "Add to ~/.bashrc: export ALPHAGENOME_API_KEY='your-key'"
+    exit 1
+fi
 
 # Working directory
 cd /data/parks34/projects/2secactpy
