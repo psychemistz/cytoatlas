@@ -2568,6 +2568,8 @@
         const EMBEDDED_STATS = {
             "cima": {
                 "n_samples": 421,
+                "n_cell_types": 27,
+                "n_celltype_records": 32751,
                 "n_cytokines_cytosig": 43,
                 "n_proteins_secact": 1170,
                 "n_age_correlations": 1213,
@@ -2575,28 +2577,46 @@
                 "n_biochem_correlations": 21859,
                 "n_metabolite_correlations": 606500,
                 "n_differential": 12130,
+                "n_eqtl_records": 71530,
+                "n_eqtl_cell_types": 69,
+                "n_eqtl_genes": 9600,
                 "significant_age": 693,
                 "significant_bmi": 580
             },
             "scatlas": {
                 "n_organs": 35,
+                "n_cell_types": 376,
                 "n_cell_types_normal": 376,
-                "n_cell_types_cancer": 120,
+                "n_cell_types_cancer": 119,
+                "n_cancer_types": 29,
                 "n_donors_normal": 317,
-                "n_donors_cancer": 717,
+                "n_donors_cancer": 464,
                 "n_cells_normal": 2293951,
                 "n_cells_cancer": 4146975,
                 "n_cohorts_normal": 26,
                 "n_cohorts_cancer": 45,
                 "n_organ_signatures": 42455,
-                "n_celltype_signatures": 907324,
+                "n_celltype_signatures": 240174,
+                "n_cancer_type_signatures": 15769,
+                "n_tumor_adjacent": 1213,
+                "n_immune_infiltration": 31538,
+                "n_tcell_state": 15158,
+                "n_exhaustion_comparison": 3432,
+                "n_exhaustion_signatures": 43,
+                "n_caf_signatures": 7654,
                 "organs": ["Bladder","Blood","BoneMarrow","Breast","Colon","CommonBileDuct","Esophagus","Eye","Fat","Heart","Kidney","Liver","Lung","LymphNode","Nose","Omentum","Oral","Ovary","Pancreas","Prostate","Rectum","SalivaryGland","SkeletalMuscle","Skin","SmallIntestine","Spleen","Stomach","Testis","Thymus","Tongue","Trachea","Ureter","Uterus","Vagina","Vasculature"],
                 "cytosig_signatures": ["Activin A","BDNF","BMP2","BMP4","BMP6","CD40L","CXCL12","EGF","FGF2","GCSF","GDF11","GMCSF","HGF","IFN1","IFNG","IFNL","IL10","IL12","IL13","IL15","IL17A","IL1A","IL1B","IL2","IL21","IL22","IL27","IL3","IL36","IL4","IL6","LIF","LTA","MCSF","NO","OSM","TGFB1","TGFB3","TNFA","TRAIL","TWEAK","VEGFA","WNT3A"]
             },
             "inflammation": {
                 "n_samples": 817,
                 "n_cell_types": 66,
-                "n_cells": 4918140
+                "n_celltype_records": 36390,
+                "n_cells": 4918140,
+                "n_diseases": 20,
+                "n_disease_records": 1527167,
+                "n_differential": 23047,
+                "n_severity": 47307,
+                "n_cell_drivers": 44695
             }
         };
 
@@ -2881,13 +2901,13 @@
 
             // scAtlas data sources table - matches 7 analysis tabs
             const scatlasData = [
-                ['Cell Types', '376 cell types × 1,213 signatures across 35 organs (normal tissue)', stats.scatlas.n_celltype_signatures.toLocaleString()],
-                ['Tissue Atlas', '35 normal organs + 29 cancer types organ signatures', `${stats.scatlas.n_organ_signatures.toLocaleString()} + 35,177`],
-                ['Differential Analysis', 'Tumor (147) vs Adjacent (105) vs Normal (748) tissue comparison', '1,213'],
-                ['Immune Infiltration', '13 cancer types × immune/stromal/malignant cell proportions', '31,538'],
-                ['T Cell State', '7 cancer types × 4 states (exhausted, cytotoxic, memory, naive)', '1,204'],
-                ['Exhaustion Differential', 'Exhausted (96 cells) vs non-exhausted (734 cells) T cell signatures', '43'],
-                ['CAF Types', '5 cancer types × 4 subtypes (myCAF, iCAF, apCAF, other)', '8,674']
+                ['Cell Types', '376 cell types × (43 CytoSig + 1,170 SecAct) across 35 organs', stats.scatlas.n_celltype_signatures.toLocaleString()],
+                ['Tissue Atlas', `35 organs (${stats.scatlas.n_organ_signatures.toLocaleString()}) + 13 cancer types (${stats.scatlas.n_cancer_type_signatures.toLocaleString()})`, (stats.scatlas.n_organ_signatures + stats.scatlas.n_cancer_type_signatures).toLocaleString()],
+                ['Differential', 'Tumor vs Adjacent vs Normal tissue × (43 CytoSig + 1,170 SecAct)', stats.scatlas.n_tumor_adjacent.toLocaleString()],
+                ['Immune Infiltration', '13 cancer types × TME composition × (43 CytoSig + 1,170 SecAct)', stats.scatlas.n_immune_infiltration.toLocaleString()],
+                ['T Cell State', '7 cancer types × 5 states × (43 CytoSig + 100 SecAct*)', stats.scatlas.n_tcell_state.toLocaleString()],
+                ['Exhaustion Diff', 'Exhausted vs non-exhausted T cells × (43 CytoSig + 100 SecAct*)', (stats.scatlas.n_exhaustion_comparison || 3432).toLocaleString()],
+                ['CAF Types', '5 cancer types × 4 CAF subtypes × 43 CytoSig', stats.scatlas.n_caf_signatures.toLocaleString()]
             ];
             document.getElementById('data-sources-scatlas').innerHTML = scatlasData.map(row =>
                 `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td></tr>`
