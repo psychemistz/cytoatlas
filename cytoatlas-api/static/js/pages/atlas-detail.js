@@ -5832,28 +5832,6 @@ const AtlasDetailPage = {
                         <option value="all">All Cancers (Pan-Cancer)</option>
                     </select>
                 </div>
-                <div class="control-group">
-                    <label>Signature Type</label>
-                    <select id="diff-sig-type" class="filter-select" style="width: 150px;" onchange="AtlasDetailPage.updateDiffAnalysis()">
-                        <option value="CytoSig">CytoSig (43 cytokines)</option>
-                        <option value="SecAct">SecAct (1,170 proteins)</option>
-                    </select>
-                </div>
-                <div class="control-group">
-                    <label>Select Signature</label>
-                    <select id="diff-signature-dropdown" class="filter-select" style="width: 150px;" onchange="AtlasDetailPage.syncDiffSearch(); AtlasDetailPage.updateDiffBoxplot()">
-                        <option value="IFNG">IFNG</option>
-                    </select>
-                </div>
-                <div class="control-group" style="position: relative;">
-                    <label>Or Search</label>
-                    <input type="text" id="diff-signature-search" class="filter-select"
-                           placeholder="Search..." style="width: 120px;" autocomplete="off" value="IFNG"
-                           oninput="AtlasDetailPage.showDiffSignatureSuggestions()"
-                           onkeyup="if(event.key==='Enter') { AtlasDetailPage.syncDiffDropdown(); AtlasDetailPage.updateDiffBoxplot(); }"
-                           onblur="setTimeout(() => document.getElementById('diff-signature-suggestions').style.display = 'none', 200)">
-                    <div id="diff-signature-suggestions" style="position: absolute; top: 100%; left: 0; width: 150px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
-                </div>
             </div>
 
             <!-- Dynamic description card -->
@@ -5880,13 +5858,6 @@ const AtlasDetailPage = {
                     <div id="diff-top-bar" class="plot-container" style="height: 380px;">Loading...</div>
                 </div>
             </div>
-
-            <!-- Boxplot for Tumor vs Adjacent vs Normal -->
-            <div class="viz-container" style="margin-top: 1rem; min-height: 350px;">
-                <div class="viz-title" id="diff-boxplot-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Activity Comparison: Tumor vs Adjacent Normal</div>
-                <div class="viz-subtitle" id="diff-boxplot-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Distribution of activity across cell types for selected signature</div>
-                <div id="diff-boxplot" class="plot-container" style="height: 300px;">Loading...</div>
-            </div>
         `;
 
         // Load all data for differential analysis
@@ -5900,7 +5871,7 @@ const AtlasDetailPage = {
     },
 
     async loadDiffData() {
-        const sigType = document.getElementById('diff-sig-type')?.value || 'CytoSig';
+        const sigType = 'CytoSig';
 
         // Load adjacent tissue boxplot data (with proper statistics including by_cancer_type)
         try {
@@ -5945,7 +5916,7 @@ const AtlasDetailPage = {
         };
 
         // Get sample counts for each cancer type
-        const sigType = document.getElementById('diff-sig-type')?.value || 'CytoSig';
+        const sigType = 'CytoSig';
         const byCancerType = this.diffBoxplotData?.by_cancer_type || [];
 
         if (cancerDropdown && cancerTypes.length > 0) {
@@ -6001,7 +5972,7 @@ const AtlasDetailPage = {
 
     async updateDiffAnalysis() {
         // Reload data if signature type changed
-        const sigType = document.getElementById('diff-sig-type')?.value || 'CytoSig';
+        const sigType = 'CytoSig';
         if (this.lastDiffSigType !== sigType) {
             this.lastDiffSigType = sigType;
             await this.loadDiffData();
@@ -6022,7 +5993,7 @@ const AtlasDetailPage = {
         if (!descCard) return;
 
         const selectedCancer = document.getElementById('diff-cancer-dropdown')?.value || 'all';
-        const sigType = document.getElementById('diff-sig-type')?.value || 'CytoSig';
+        const sigType = 'CytoSig';
 
         // Cancer type labels
         const cancerLabels = this.diffCancerTypesData?.cancer_labels || {
@@ -6136,7 +6107,7 @@ const AtlasDetailPage = {
         if (!container) return;
 
         const selectedCancer = document.getElementById('diff-cancer-dropdown')?.value || 'all';
-        const sigType = document.getElementById('diff-sig-type')?.value || 'CytoSig';
+        const sigType = 'CytoSig';
 
         // Get filtered data based on cancer selection
         let filtered;
@@ -6226,7 +6197,7 @@ const AtlasDetailPage = {
         if (!container) return;
 
         const selectedCancer = document.getElementById('diff-cancer-dropdown')?.value || 'all';
-        const sigType = document.getElementById('diff-sig-type')?.value || 'CytoSig';
+        const sigType = 'CytoSig';
 
         // Get filtered data based on cancer selection
         let filtered;
@@ -6284,7 +6255,7 @@ const AtlasDetailPage = {
         if (!container) return;
 
         const selectedCancer = document.getElementById('diff-cancer-dropdown')?.value || 'all';
-        const sigType = document.getElementById('diff-sig-type')?.value || 'CytoSig';
+        const sigType = 'CytoSig';
         const searchVal = document.getElementById('diff-signature-search')?.value?.trim();
         const selectedSig = searchVal || document.getElementById('diff-signature-dropdown')?.value || 'IFNG';
 
