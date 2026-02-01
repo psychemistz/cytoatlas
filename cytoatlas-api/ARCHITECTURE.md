@@ -1,120 +1,52 @@
 # CytoAtlas API Architecture
 
+**Last Updated**: 2026-01-31
+
 ## Overview
 
-The CytoAtlas API is a FastAPI-based REST service that provides programmatic access to pre-computed cytokine and secreted protein activity signatures. The system is designed to be **atlas-agnostic** and extensible:
+The CytoAtlas API is a FastAPI-based REST service providing programmatic access to pre-computed cytokine and secreted protein activity signatures across 17+ million immune cells. The system is designed to be **atlas-agnostic** and extensible.
 
-- **Built-in atlases**: CIMA, Inflammation Atlas, scAtlas
-- **User-registered atlases**: Support for custom datasets
-- **Dynamic API**: Unified endpoints that work with any atlas
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              CytoAtlas API                                   │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  │
-│   │   CIMA      │    │ Inflammation│    │   scAtlas   │    │Cross-Atlas  │  │
-│   │   Router    │    │   Router    │    │   Router    │    │   Router    │  │
-│   │  (~32 eps)  │    │  (~44 eps)  │    │  (~36 eps)  │    │  (~28 eps)  │  │
-│   └──────┬──────┘    └──────┬──────┘    └──────┬──────┘    └──────┬──────┘  │
-│          │                  │                  │                  │         │
-│          └──────────────────┴──────────────────┴──────────────────┘         │
-│                                      │                                       │
-│                            ┌─────────▼─────────┐                            │
-│                            │   Service Layer   │                            │
-│                            │  (Business Logic) │                            │
-│                            └─────────┬─────────┘                            │
-│                                      │                                       │
-│          ┌───────────────────────────┼───────────────────────────┐          │
-│          │                           │                           │          │
-│   ┌──────▼──────┐           ┌────────▼────────┐         ┌───────▼───────┐  │
-│   │    Cache    │           │   JSON Files    │         │  PostgreSQL   │  │
-│   │ (In-Memory/ │           │ (visualization/ │         │  (Optional)   │  │
-│   │   Redis)    │           │     data/)      │         │               │  │
-│   └─────────────┘           └─────────────────┘         └───────────────┘  │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+**Key Stats:**
+- 188+ API endpoints
+- 14 routers
+- 30+ JSON data files (~500MB)
+- 3 built-in atlases + user registration support
 
 ---
 
-## Extensible Atlas System
-
-The API supports registering new atlases dynamically:
+## High-Level Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        Atlas Registry                                │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  Built-in Atlases (always available):                               │
-│  ┌──────────┐  ┌──────────────┐  ┌──────────┐                      │
-│  │   CIMA   │  │ Inflammation │  │  scAtlas │                      │
-│  │ 6.5M    │  │    4.9M     │  │   6.4M   │                      │
-│  │  cells   │  │   cells      │  │  cells   │                      │
-│  └──────────┘  └──────────────┘  └──────────┘                      │
-│                                                                      │
-│  User-Registered Atlases:                                           │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐              │
-│  │  my_atlas_1  │  │  my_atlas_2  │  │     ...      │              │
-│  │   (custom)   │  │   (custom)   │  │              │              │
-│  └──────────────┘  └──────────────┘  └──────────────┘              │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
++-----------------------------------------------------------------------------+
+|                           CytoAtlas Web Portal                               |
++-----------------------------------------------------------------------------+
+|                                                                              |
+|   +---------------------------------------------------------------------+   |
+|   |  FRONTEND (Single Page Application - 8 pages)                        |   |
+|   |  +---------+ +---------+ +---------+ +---------+ +---------+ +----+ |   |
+|   |  | Landing | | Explore | | Compare | |Validate | | Submit  | |Chat| |   |
+|   |  +---------+ +---------+ +---------+ +---------+ +---------+ +----+ |   |
+|   +---------------------------------------------------------------------+   |
+|                                      |                                       |
+|                                      v                                       |
+|   +---------------------------------------------------------------------+   |
+|   |  FastAPI Backend (14 routers)                                        |   |
+|   |  +----------+ +----------+ +----------+ +----------+ +----------+   |   |
+|   |  |  Atlas   | |Validation| |  Search  | |   Chat   | |  Export  |   |   |
+|   |  |   API    | |   API    | |   API    | |   API    | |   API    |   |   |
+|   |  +----------+ +----------+ +----------+ +----------+ +----------+   |   |
+|   +---------------------------------------------------------------------+   |
+|                                      |                                       |
+|          +---------------------------+---------------------------+          |
+|          v                           v                           v          |
+|   +--------------+          +--------------+          +--------------+      |
+|   |    Cache     |          |  JSON Files  |          |  PostgreSQL  |      |
+|   | (In-Memory/  |          | (30+ files,  |          |  (Optional)  |      |
+|   |   Redis)     |          |   ~500MB)    |          |              |      |
+|   +--------------+          +--------------+          +--------------+      |
+|                                                                              |
++-----------------------------------------------------------------------------+
 ```
-
-### Unified API Pattern
-
-Instead of atlas-specific endpoints, use the unified API:
-
-```bash
-# Old pattern (still supported for backward compatibility):
-GET /api/v1/cima/cell-types
-GET /api/v1/inflammation/diseases
-
-# New unified pattern (works for ANY atlas):
-GET /api/v1/atlases                           # List all atlases
-GET /api/v1/atlases/{atlas}/summary           # Any atlas summary
-GET /api/v1/atlases/{atlas}/cell-types        # Any atlas cell types
-GET /api/v1/atlases/{atlas}/features          # What's available
-GET /api/v1/atlases/{atlas}/activity          # Activity data
-GET /api/v1/atlases/{atlas}/correlations/age  # Correlations (if available)
-```
-
-### Registering a New Atlas
-
-```bash
-# Register a new atlas
-POST /api/v1/atlases/register
-{
-  "name": "my_immune_atlas",
-  "display_name": "My Immune Cell Atlas",
-  "description": "Custom single-cell RNA-seq dataset",
-  "h5ad_path": "/path/to/data.h5ad",
-  "data_dir": "/path/to/precomputed/json/",
-  "atlas_type": "immune",
-  "species": "human"
-}
-
-# After registration, all unified endpoints work:
-GET /api/v1/atlases/my_immune_atlas/summary
-GET /api/v1/atlases/my_immune_atlas/activity
-```
-
-### Atlas Features
-
-Each atlas declares its available features:
-
-| Feature | Description | Example Atlases |
-|---------|-------------|-----------------|
-| `cell_type_activity` | Basic activity data | All |
-| `age_correlation` | Age correlations | CIMA, Inflammation |
-| `bmi_correlation` | BMI correlations | CIMA, Inflammation |
-| `disease_activity` | Disease-specific data | Inflammation |
-| `organ_signatures` | Organ patterns | scAtlas |
-| `eqtl` | Genetic associations | CIMA |
-| `treatment_response` | Treatment prediction | Inflammation |
 
 ---
 
@@ -131,61 +63,138 @@ cytoatlas-api/
 │   │   ├── cache.py            # Redis/in-memory caching
 │   │   ├── database.py         # SQLAlchemy async engine
 │   │   ├── security.py         # JWT & API key authentication
+│   │   ├── logging.py          # Request logging
 │   │   └── rate_limit.py       # Request rate limiting
 │   │
-│   ├── models/                 # SQLAlchemy ORM models (optional DB)
+│   ├── models/                 # SQLAlchemy ORM models
 │   │   ├── atlas.py            # Atlas metadata
 │   │   ├── sample.py           # Sample information
 │   │   ├── cell_type.py        # Cell type definitions
 │   │   ├── signature.py        # Signature definitions
 │   │   ├── computed_stat.py    # Pre-computed statistics
 │   │   ├── validation_metric.py # Validation results
-│   │   └── user.py             # User accounts
+│   │   ├── user.py             # User accounts
+│   │   ├── conversation.py     # Chat conversations
+│   │   └── job.py              # Background job tracking
 │   │
 │   ├── schemas/                # Pydantic request/response schemas
 │   │   ├── common.py           # Shared schemas (pagination, errors)
+│   │   ├── atlas.py            # Atlas registration schemas
 │   │   ├── cima.py             # CIMA-specific schemas
 │   │   ├── inflammation.py     # Inflammation-specific schemas
 │   │   ├── scatlas.py          # scAtlas-specific schemas
 │   │   ├── cross_atlas.py      # Cross-atlas comparison schemas
-│   │   └── validation.py       # Validation panel schemas
+│   │   ├── validation.py       # 5-type validation schemas
+│   │   ├── chat.py             # Chat/conversation schemas
+│   │   ├── search.py           # Search schemas
+│   │   └── submit.py           # Atlas submission schemas
 │   │
 │   ├── services/               # Business logic layer
-│   │   ├── base.py             # Base service with common methods
+│   │   ├── base.py             # Base service (JSON loading, caching)
 │   │   ├── cima_service.py     # CIMA data access
 │   │   ├── inflammation_service.py
 │   │   ├── scatlas_service.py
 │   │   ├── cross_atlas_service.py
-│   │   ├── validation_service.py
-│   │   └── h5ad_service.py     # H5AD file access (future)
+│   │   ├── validation_service.py  # 5-type validation (636 lines)
+│   │   ├── atlas_registry.py   # Dynamic atlas registration
+│   │   ├── generic_atlas_service.py
+│   │   ├── search_service.py
+│   │   ├── submit_service.py
+│   │   ├── chat_service.py     # Claude API integration
+│   │   ├── context_manager.py
+│   │   └── mcp_tools.py        # Claude tool definitions
 │   │
-│   └── routers/                # API endpoint definitions
-│       ├── health.py           # Health check endpoints
-│       ├── auth.py             # Authentication endpoints
-│       ├── cima.py             # CIMA endpoints
-│       ├── inflammation.py     # Inflammation endpoints
-│       ├── scatlas.py          # scAtlas endpoints
-│       ├── cross_atlas.py      # Cross-atlas endpoints
-│       ├── validation.py       # Validation panel endpoints
-│       └── export.py           # Data export endpoints
+│   ├── routers/                # API endpoint definitions
+│   │   ├── health.py           # Health check endpoints
+│   │   ├── auth.py             # Authentication endpoints
+│   │   ├── atlases.py          # Unified dynamic API
+│   │   ├── cima.py             # CIMA endpoints (~32)
+│   │   ├── inflammation.py     # Inflammation endpoints (~44)
+│   │   ├── scatlas.py          # scAtlas endpoints (~36)
+│   │   ├── cross_atlas.py      # Cross-atlas endpoints (~28)
+│   │   ├── validation.py       # Validation endpoints (~12)
+│   │   ├── export.py           # Data export endpoints
+│   │   ├── search.py           # Search endpoints
+│   │   ├── submit.py           # Atlas submission endpoints
+│   │   ├── chat.py             # Chat endpoints
+│   │   └── websocket.py        # WebSocket endpoints
+│   │
+│   └── tasks/                  # Background task processing
+│       ├── celery_app.py       # Celery configuration
+│       └── process_atlas.py    # Atlas processing tasks
 │
-├── scripts/
-│   ├── run_server.sh           # Start server (HPC)
-│   ├── seed_database.py        # Populate database
-│   └── slurm/                  # SLURM job scripts
-│
-├── tests/
-│   ├── unit/                   # Unit tests
-│   ├── integration/            # Integration tests
-│   └── e2e/                    # End-to-end tests
+├── static/                     # Frontend assets
+│   ├── index.html              # SPA entry point
+│   ├── css/
+│   ├── js/
+│   │   ├── api.js              # API client
+│   │   ├── app.js              # Main application
+│   │   ├── router.js           # Client-side routing
+│   │   ├── components/         # Reusable components
+│   │   └── pages/              # Page views (8 files)
+│   └── assets/
 │
 ├── alembic/                    # Database migrations
-│   └── versions/
+├── tests/                      # Test suite
+├── scripts/                    # Deployment scripts
+├── singularity/                # Container definition
+├── nginx/                      # Reverse proxy config
 │
-├── .env.hpc                    # HPC environment template
-├── pyproject.toml              # Python project configuration
-└── README.md
+├── ARCHITECTURE.md             # This file
+├── README.md                   # Quick start guide
+├── pyproject.toml              # Python package config
+├── docker-compose.yml
+├── Dockerfile
+└── alembic.ini
 ```
+
+---
+
+## API Endpoints by Category
+
+### Atlas-Specific Endpoints
+
+| Router | Endpoints | Description |
+|--------|-----------|-------------|
+| CIMA | ~32 | Correlations (age/BMI/biochemistry/metabolites), eQTL, differential |
+| Inflammation | ~44 | Disease activity, treatment response, cohort validation |
+| scAtlas | ~36 | Organ/celltype signatures, cancer comparison, immune infiltration |
+| Cross-Atlas | ~28 | Atlas comparison, conserved signatures, meta-analysis |
+
+### Unified Atlas API
+
+```bash
+GET  /api/v1/atlases                      # List all atlases
+GET  /api/v1/atlases/{atlas}/summary      # Atlas statistics
+GET  /api/v1/atlases/{atlas}/cell-types   # Cell types
+GET  /api/v1/atlases/{atlas}/features     # Available features
+POST /api/v1/atlases/register             # Register new atlas
+```
+
+### 5-Type Validation System
+
+| Endpoint | Type | Description |
+|----------|------|-------------|
+| `/validation/sample-level/{atlas}/{sig}` | 1 | Sample pseudobulk vs activity |
+| `/validation/celltype-level/{atlas}/{sig}` | 2 | Cell type vs activity |
+| `/validation/pseudobulk-vs-singlecell/{atlas}/{sig}` | 3 | Aggregation comparison |
+| `/validation/singlecell-direct/{atlas}/{sig}` | 4 | Expressing vs non-expressing |
+| `/validation/biological-associations/{atlas}` | 5 | Known marker validation |
+| `/validation/gene-coverage/{atlas}/{sig}` | - | Gene detection analysis |
+| `/validation/cv-stability/{atlas}` | - | Cross-validation stability |
+| `/validation/summary/{atlas}` | - | Overall quality grade |
+
+### Other Endpoints
+
+| Category | Endpoints | Description |
+|----------|-----------|-------------|
+| Health | 2 | Health check, readiness |
+| Auth | 4 | Login, register, verify |
+| Search | 4 | Global signature/cell type search |
+| Chat | 4 | Claude AI conversation |
+| Submit | 4 | Dataset submission workflow |
+| Export | 6 | CSV/JSON data export |
+| WebSocket | 2 | Real-time streaming |
 
 ---
 
@@ -194,156 +203,28 @@ cytoatlas-api/
 ### Current Implementation (JSON-based)
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                     Data Preprocessing Pipeline                   │
-│                                                                   │
-│  Raw H5AD Files (282GB)                                          │
-│       │                                                           │
-│       ▼                                                           │
-│  scripts/06_preprocess_viz_data.py                               │
-│       │                                                           │
-│       ▼                                                           │
-│  JSON Files (71MB)  ──────────────────────────────────────────┐  │
-│  visualization/data/                                           │  │
-│    ├── cima_correlations.json                                 │  │
-│    ├── cima_celltype.json                                     │  │
-│    ├── cima_eqtl_top.json                                     │  │
-│    ├── inflammation_disease.json                              │  │
-│    ├── inflammation_celltype.json                             │  │
-│    ├── scatlas_organs.json                                    │  │
-│    ├── scatlas_celltypes.json                                 │  │
-│    └── ...                                                    │  │
-└───────────────────────────────────────────────────────────────┼──┘
-                                                                │
-                            ┌───────────────────────────────────┘
-                            ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                        FastAPI Server                             │
-│                                                                   │
-│  Request: GET /api/v1/cima/correlations/age                      │
-│       │                                                           │
-│       ▼                                                           │
-│  Router (cima.py)                                                │
-│       │                                                           │
-│       ▼                                                           │
-│  Service (cima_service.py)                                       │
-│       │                                                           │
-│       ├──► Check Cache ──► Cache Hit? ──► Return cached          │
-│       │                                                           │
-│       ▼ (Cache Miss)                                             │
-│  BaseService.load_json("cima_correlations.json")                 │
-│       │                                                           │
-│       ▼                                                           │
-│  Filter/Transform Data                                           │
-│       │                                                           │
-│       ▼                                                           │
-│  Cache Result ──► Return Response                                │
-└──────────────────────────────────────────────────────────────────┘
+Raw H5AD Files (282GB)
+       |
+       v
+scripts/06_preprocess_viz_data.py
+       |
+       v
+JSON Files (visualization/data/, ~500MB)
+       |
+       v
+FastAPI Service
+       |
+       +---> Check Cache ---> Cache Hit? ---> Return cached
+       |
+       v (Cache Miss)
+BaseService.load_json()
+       |
+       v
+Filter/Transform Data
+       |
+       v
+Cache Result ---> Return Response
 ```
-
----
-
-## API Endpoints by Atlas
-
-### CIMA Atlas (6.5M cells, 421 samples)
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/v1/cima/summary` | GET | Atlas statistics |
-| `/api/v1/cima/cell-types` | GET | List cell types |
-| `/api/v1/cima/signatures` | GET | List signatures |
-| `/api/v1/cima/activity` | GET | Cell type activity |
-| `/api/v1/cima/correlations/age` | GET | Age correlations |
-| `/api/v1/cima/correlations/bmi` | GET | BMI correlations |
-| `/api/v1/cima/correlations/biochemistry` | GET | Biochemistry correlations |
-| `/api/v1/cima/correlations/metabolites` | GET | Metabolite correlations |
-| `/api/v1/cima/differential` | GET | Differential analysis |
-| `/api/v1/cima/eqtl` | GET | eQTL browser |
-| `/api/v1/cima/eqtl/top` | GET | Top eQTL results |
-| `/api/v1/cima/boxplots/age/{signature}` | GET | Age boxplot data |
-| `/api/v1/cima/boxplots/bmi/{signature}` | GET | BMI boxplot data |
-
-### Inflammation Atlas (4.9M cells, 817 samples, 20 diseases)
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/v1/inflammation/summary` | GET | Atlas statistics |
-| `/api/v1/inflammation/diseases` | GET | List diseases |
-| `/api/v1/inflammation/cell-types` | GET | List cell types |
-| `/api/v1/inflammation/disease-activity` | GET | Disease activity |
-| `/api/v1/inflammation/activity` | GET | Cell type activity |
-| `/api/v1/inflammation/treatment-response` | GET | Treatment prediction |
-| `/api/v1/inflammation/roc-curves` | GET | ROC curve data |
-| `/api/v1/inflammation/feature-importance` | GET | Feature importance |
-| `/api/v1/inflammation/cohort-validation` | GET | Cross-cohort validation |
-| `/api/v1/inflammation/disease-sankey` | GET | Sankey diagram data |
-
-### scAtlas (6.4M cells, normal + cancer)
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/v1/scatlas/summary` | GET | Atlas statistics |
-| `/api/v1/scatlas/organs` | GET | Organ activity |
-| `/api/v1/scatlas/cell-types` | GET | Cell type activity |
-| `/api/v1/scatlas/cancer-comparison` | GET | Normal vs cancer |
-| `/api/v1/scatlas/cancer-types` | GET | Cancer type list |
-
-### Cross-Atlas Comparison
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/v1/cross-atlas/atlases` | GET | List atlases |
-| `/api/v1/cross-atlas/comparison` | GET | Atlas comparison |
-| `/api/v1/cross-atlas/conserved-signatures` | GET | Conserved patterns |
-
-### Validation Panel (5-Type Credibility System)
-
-The validation system assesses CytoSig/SecAct inference quality at multiple levels:
-
-| Endpoint | Method | Validation Type | Description |
-|----------|--------|-----------------|-------------|
-| `/api/v1/validation/sample-level/{atlas}/{signature}` | GET | Type 1 | Sample pseudobulk expression vs activity |
-| `/api/v1/validation/celltype-level/{atlas}/{signature}` | GET | Type 2 | Cell type expression vs activity |
-| `/api/v1/validation/pseudobulk-vs-singlecell/{atlas}/{signature}` | GET | Type 3 | Pseudobulk vs mean SC activity |
-| `/api/v1/validation/singlecell-direct/{atlas}/{signature}` | GET | Type 4 | Expressing vs non-expressing cells |
-| `/api/v1/validation/biological-associations/{atlas}` | GET | Type 5 | Known marker validation |
-| `/api/v1/validation/gene-coverage/{atlas}/{signature}` | GET | Coverage | Signature genes detected |
-| `/api/v1/validation/cv-stability/{atlas}` | GET | Stability | Cross-validation variance |
-| `/api/v1/validation/summary/{atlas}` | GET | Summary | Composite quality grade |
-
-#### Type 1: Sample-Level Validation
-- **Purpose**: Verify that pseudobulk gene expression correlates with predicted activity across samples
-- **Method**: For each sample, compute pseudobulk expression of cytokine gene and corresponding activity
-- **Output**: Scatter plot with regression line, r², p-value
-
-#### Type 2: Cell Type-Level Validation
-- **Purpose**: Verify that cell type pseudobulk expression matches cell type activity
-- **Method**: Aggregate expression and activity by cell type, compute correlation
-- **Output**: Scatter plot with cell type labels
-
-#### Type 3: Pseudobulk vs Single-Cell Comparison
-- **Purpose**: Assess consistency between aggregation methods
-- **Method**: Compare pseudobulk expression with mean/median single-cell activity per cell type
-- **Output**: Two scatter plots (mean vs median aggregation)
-
-#### Type 4: Single-Cell Direct Validation
-- **Purpose**: Verify that expressing cells have higher activity than non-expressing
-- **Method**: Classify cells by expression threshold, compare activity distributions
-- **Output**: Box plots, Mann-Whitney p-value, fold change
-
-#### Type 5: Biological Association Validation
-- **Purpose**: Validate known cytokine-cell type relationships
-- **Method**: Check if expected cell types rank highest for their canonical cytokines
-- **Expected Associations**:
-  - IL17A → Th17 (canonical)
-  - IFNG → CD8_CTL, NK (IFN-γ producers)
-  - TNF → Mono (macrophage cytokine)
-  - IL10 → Treg (regulatory cytokine)
-  - IL4 → Th2 (canonical)
-  - IL6, IL1B, CXCL8 → Mono (inflammatory)
-  - IL21 → Tfh (canonical)
-  - IL2 → CD4_helper (T cell growth factor)
-  - TGFB1 → Treg (TGF-β pathway)
 
 ---
 
@@ -355,22 +236,24 @@ The validation system assesses CytoSig/SecAct inference quality at multiple leve
 # Application
 APP_NAME=CytoAtlas API
 APP_VERSION=0.1.0
-ENVIRONMENT=production          # development, staging, production
-DEBUG=false
+ENVIRONMENT=production
 
 # API
 API_V1_PREFIX=/api/v1
-ALLOWED_ORIGINS=*               # CORS origins
+ALLOWED_ORIGINS=*
 
 # Database (optional)
-DATABASE_URL=                   # postgresql+asyncpg://...
+DATABASE_URL=postgresql+asyncpg://...
 
 # Cache (optional)
-REDIS_URL=                      # redis://localhost:6379
+REDIS_URL=redis://localhost:6379
 
 # Data Paths
 VIZ_DATA_PATH=/vf/users/parks34/projects/2secactpy/visualization/data
 RESULTS_BASE_PATH=/vf/users/parks34/projects/2secactpy/results
+
+# Claude API (for chat)
+ANTHROPIC_API_KEY=sk-ant-...
 
 # Security
 SECRET_KEY=your-secret-key
@@ -380,149 +263,94 @@ RATE_LIMIT_WINDOW=60
 
 ---
 
-## Development Roadmap
+## Development Status
 
-### Phase 1: Foundation ✅ COMPLETE
-- [x] Project structure
-- [x] FastAPI application factory
-- [x] Pydantic settings
-- [x] In-memory caching
-- [x] Basic authentication scaffolding
-- [x] Health check endpoints
+### Complete
 
-### Phase 2: Core Services ✅ COMPLETE
-- [x] Base service with JSON loading
-- [x] Caching decorator
-- [x] CIMA service
-- [x] Inflammation service
-- [x] scAtlas service
-- [x] Cross-atlas service
+- [x] FastAPI application factory with lifespan
+- [x] Pydantic v2 settings with HPC validators
+- [x] In-memory cache (Redis optional)
+- [x] All 14 routers implemented
+- [x] All services implemented
+- [x] Validation service (5 types, 636 lines)
+- [x] Frontend SPA (8 pages)
+- [x] 30+ JSON data files
 
-### Phase 3: Routers ✅ MOSTLY COMPLETE
-- [x] CIMA router (32 endpoints)
-- [x] Inflammation router (44 endpoints)
-- [x] scAtlas router (36 endpoints)
-- [x] Cross-atlas router (28 endpoints)
-- [x] Validation router (scaffolding)
-- [x] Export router (scaffolding)
+### In Progress
 
-### Phase 4: Data Alignment 🔄 IN PROGRESS
-- [x] Fix schema mismatches (InflammationDiseaseActivity)
-- [x] Fix eQTL endpoint
-- [ ] Verify all endpoints return valid data
-- [ ] Add missing JSON data files for some endpoints
-- [ ] Handle edge cases (empty results, missing data)
+- [ ] Validation JSON data generation
+- [ ] Chat streaming stability
+- [ ] scAtlas immune analysis completion
 
-### Phase 5: Validation Panel 🔄 IN PROGRESS
-- [x] Define comprehensive validation schemas (5 types)
-- [x] Define known biological associations (12 cytokine-cell type pairs)
-- [ ] Implement validation service methods
-- [ ] Update validation router with new endpoints
-- [ ] Create validation data generation script
-- [ ] Generate validation JSON data for all atlases
+### Planned
 
-### Phase 6: Export & Integration 📋 TODO
-- [ ] CSV export for all data types
-- [ ] Bulk download endpoints
-- [ ] WebSocket for long-running queries (future)
-
-### Phase 7: Production Hardening 📋 TODO
-- [ ] Comprehensive error handling
-- [ ] Request logging
+- [ ] Full JWT authentication
+- [ ] OAuth providers (Google, ORCID)
+- [ ] Dataset submission with Celery
 - [ ] Prometheus metrics
-- [ ] Rate limiting enforcement
-- [ ] API key management
 - [ ] Load testing
-
----
-
-## Testing Strategy
-
-### Unit Tests
-```bash
-pytest tests/unit/ -v
-```
-- Service method tests
-- Schema validation tests
-- Utility function tests
-
-### Integration Tests
-```bash
-pytest tests/integration/ -v
-```
-- Full request/response cycle
-- Database operations (when enabled)
-- Cache behavior
-
-### Manual Testing
-```bash
-# Start server
-./scripts/run_server.sh
-
-# Test endpoints
-curl http://localhost:8000/api/v1/health
-curl http://localhost:8000/api/v1/cima/summary
-curl http://localhost:8000/api/v1/inflammation/diseases
-```
-
----
-
-## Deployment
-
-### HPC (Biowulf/SLURM)
-```bash
-# Interactive node
-sinteractive --mem=32g --cpus-per-task=4
-
-# Run server
-cd /vf/users/parks34/projects/2secactpy/cytoatlas-api
-./scripts/run_server.sh
-
-# Or submit batch job
-sbatch scripts/slurm/run_api.sh
-```
-
-### Production Considerations
-1. **Reverse Proxy**: Use nginx for SSL termination
-2. **Multiple Workers**: `--workers 4` for production
-3. **Process Manager**: Use systemd or supervisord
-4. **Database**: Enable PostgreSQL for persistence
-5. **Caching**: Enable Redis for distributed caching
 
 ---
 
 ## Key Design Decisions
 
-1. **JSON-First Approach**: Pre-computed JSON files provide fast responses without database dependency
-
-2. **Optional Database**: PostgreSQL is optional; system works fully with JSON files only
-
-3. **In-Memory Cache Fallback**: Works without Redis on HPC nodes
-
-4. **Pydantic v2**: Modern schema validation with better performance
-
+1. **JSON-First Approach**: Pre-computed JSON provides fast responses without database
+2. **Optional Database**: PostgreSQL available but not required
+3. **In-Memory Cache Fallback**: Works on HPC without Redis
+4. **Atlas-Agnostic Design**: Unified API works with any registered atlas
 5. **Async Throughout**: All I/O operations are async for scalability
-
 6. **Service Layer Pattern**: Business logic separated from routing
-
-7. **HPC Compatibility**: Environment variable handling for SLURM/batch systems
+7. **HPC Compatibility**: Environment variable handling for SLURM
 
 ---
 
-## Common Issues & Solutions
+## How to Run
 
-### "ENVIRONMENT=BATCH" Error
-The HPC sets `ENVIRONMENT=BATCH`. Config validators normalize this to "production".
-
-### Port Already in Use
 ```bash
-pkill -f "uvicorn app.main"
-```
+# Activate environment
+source ~/bin/myconda
+conda activate secactpy
 
-### Missing Dependencies
-```bash
+# Navigate to API
+cd /vf/users/parks34/projects/2secactpy/cytoatlas-api
+
+# Install dependencies
 pip install -e .
+
+# Copy environment config
+cp .env.example .env
+
+# Run server
+./scripts/run_server.sh
+# Or: python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+# Access
+# - API docs: http://localhost:8000/docs
+# - Web UI: http://localhost:8000/
 ```
 
-### Schema Mismatch Errors
-Check that JSON data structure matches Pydantic schema. Use validators to transform data if needed.
+---
+
+## Testing
+
+```bash
+# Health check
+curl http://localhost:8000/api/v1/health
+
+# CIMA summary
+curl http://localhost:8000/api/v1/cima/summary
+
+# Inflammation diseases
+curl http://localhost:8000/api/v1/inflammation/diseases
+
+# scAtlas organs
+curl http://localhost:8000/api/v1/scatlas/organs
+```
+
+---
+
+## References
+
+- **Master Plan**: `/home/parks34/.claude/plans/cytoatlas-master-plan.md`
+- **Project Instructions**: `/vf/users/parks34/projects/2secactpy/CLAUDE.md`
+- **Session Log**: `/vf/users/parks34/projects/2secactpy/cytoatlas-api/SESSION_LOG.md`

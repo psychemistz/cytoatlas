@@ -278,6 +278,26 @@ cytoatlas-api/
 | Heatmaps | Redis | 1h |
 | Filtered results | Redis | 5min |
 
+## Current Status (2026-01-31)
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| API Backend | 95% | 14 routers, 188+ endpoints |
+| Services | 100% | All atlas services complete |
+| Validation Service | 100% | 636 lines, 5-type system |
+| Validation Data | 0% | **JSON files not generated** |
+| Frontend SPA | 90% | 8 pages complete |
+| User Auth | 20% | Scaffolding only |
+| Dataset Submission | 20% | Scaffolding only |
+
+### Critical TODO
+
+1. Generate validation JSON data files
+2. Complete chat streaming fixes
+3. Finish scAtlas immune analysis
+
+See `ARCHITECTURE.md` and `/home/parks34/.claude/plans/cytoatlas-master-plan.md` for details.
+
 ## License
 
 MIT

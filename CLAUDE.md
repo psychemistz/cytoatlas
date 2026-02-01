@@ -126,7 +126,7 @@ visualization/
 2. **Cross-cohort validation:** Main → validation → external cohort generalization
 3. **Output verification:** Activity z-scores in -3 to +3 range, gene overlap >80%, correlation r > 0.9
 
-## CytoAtlas REST API
+## CytoAtlas REST API (188+ endpoints)
 
 ```bash
 cd cytoatlas-api
@@ -134,13 +134,48 @@ pip install -e .
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Key endpoints:
-- `GET /api/v1/atlases` - List available atlases
-- `GET /api/v1/atlases/{atlas}/activity` - Activity data
-- `GET /api/v1/atlases/{atlas}/correlations/{var}` - Correlations
-- `POST /api/v1/atlases/register` - Register new atlas
+### Key Routers
+
+| Router | Endpoints | Description |
+|--------|-----------|-------------|
+| CIMA | ~32 | Age/BMI correlations, biochemistry, metabolites, eQTL |
+| Inflammation | ~44 | Disease activity, treatment response, cohort validation |
+| scAtlas | ~36 | Organ signatures, cancer comparison, immune infiltration |
+| Cross-Atlas | ~28 | Atlas comparison, conserved signatures |
+| Validation | ~12 | 5-type credibility assessment |
+| Search | ~4 | Global search |
+| Chat | ~4 | Claude AI assistant |
+| Submit | ~4 | Dataset submission |
+
+### Current Status (2026-01-31)
+
+- **API Backend**: 95% complete (14 routers, all services implemented)
+- **Frontend SPA**: 90% complete (8 pages)
+- **Validation Data**: NOT generated yet (blocking validation panel)
+- **User Auth**: Scaffolding only
+- **Dataset Submission**: Scaffolding only
 
 See `cytoatlas-api/ARCHITECTURE.md` for detailed API documentation.
+
+## Master Plan
+
+For comprehensive project status and implementation details, see:
+`/home/parks34/.claude/plans/cytoatlas-master-plan.md`
+
+### Critical TODOs
+
+1. **Generate Validation JSON Data** (Priority 1)
+   - Need: `visualization/data/validation/*.json`
+   - Script: Create `scripts/generate_validation_data.py`
+
+2. **Review Modified Files** (Priority 2)
+   - scatlas router/service/schema changes
+   - Immune analysis script completion
+
+3. **Production Hardening** (Priority 3)
+   - JWT authentication
+   - Prometheus metrics
+   - Load testing
 
 ## Git Configuration
 
