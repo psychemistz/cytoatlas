@@ -63,10 +63,26 @@ def extract_sampled_expression(h5ad_path: str, genes: list[str], atlas_name: str
     # Load in backed mode
     adata = sc.read_h5ad(h5ad_path, backed='r')
 
-    # Find genes
+    # Find genes - handle Ensembl IDs vs gene symbols
     available_genes = set(adata.var_names)
     genes_found = [g for g in genes if g in available_genes]
-    logger.info(f"Found {len(genes_found)}/{len(genes)} genes")
+
+    # If var_names are Ensembl IDs, check 'symbol' column
+    gene_name_map = {}  # Maps query gene to actual var_name
+    if len(genes_found) == 0 and 'symbol' in adata.var.columns:
+        logger.info("var_names are Ensembl IDs, using 'symbol' column for gene lookup")
+        symbol_to_idx = {}
+        for idx, symbol in zip(adata.var_names, adata.var['symbol'].values):
+            if isinstance(symbol, bytes):
+                symbol = symbol.decode()
+            symbol_to_idx[symbol] = idx
+
+        genes_found = [g for g in genes if g in symbol_to_idx]
+        gene_name_map = {g: symbol_to_idx[g] for g in genes_found}
+        logger.info(f"Found {len(genes_found)}/{len(genes)} genes via symbol column")
+    else:
+        gene_name_map = {g: g for g in genes_found}
+        logger.info(f"Found {len(genes_found)}/{len(genes)} genes")
 
     if not genes_found:
         return pd.DataFrame()
@@ -84,10 +100,13 @@ def extract_sampled_expression(h5ad_path: str, genes: list[str], atlas_name: str
     cell_type_labels = adata.obs[cell_type_col].values.copy()  # Copy labels
     logger.info(f"Found {len(cell_types)} cell types")
 
+    # Get the actual var_names to subset (may be Ensembl IDs)
+    var_names_to_subset = [gene_name_map[g] for g in genes_found]
+
     # Subset to only the genes we need - this creates a view, not a copy
     # This is the key optimization: subset columns first, then slice rows
     logger.info(f"Subsetting to {len(genes_found)} genes...")
-    adata_genes = adata[:, genes_found]
+    adata_genes = adata[:, var_names_to_subset]
     logger.info("Gene subset complete")
 
     results = []
