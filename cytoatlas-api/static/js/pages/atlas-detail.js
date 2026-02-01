@@ -5841,7 +5841,7 @@ const AtlasDetailPage = {
     },
 
     async loadDiffData() {
-        const sigType = 'CytoSig';
+        const sigType = this.signatureType;
 
         // Load adjacent tissue boxplot data (with proper statistics including by_cancer_type)
         try {
@@ -5886,7 +5886,7 @@ const AtlasDetailPage = {
         };
 
         // Get sample counts for each cancer type
-        const sigType = 'CytoSig';
+        const sigType = this.signatureType;
         const byCancerType = this.diffBoxplotData?.by_cancer_type || [];
 
         if (cancerDropdown && cancerTypes.length > 0) {
@@ -5942,7 +5942,7 @@ const AtlasDetailPage = {
 
     async updateDiffAnalysis() {
         // Reload data if signature type changed
-        const sigType = 'CytoSig';
+        const sigType = this.signatureType;
         if (this.lastDiffSigType !== sigType) {
             this.lastDiffSigType = sigType;
             await this.loadDiffData();
@@ -5963,7 +5963,7 @@ const AtlasDetailPage = {
         if (!descCard) return;
 
         const selectedCancer = document.getElementById('diff-cancer-dropdown')?.value || 'all';
-        const sigType = 'CytoSig';
+        const sigType = this.signatureType;
 
         // Cancer type labels
         const cancerLabels = this.diffCancerTypesData?.cancer_labels || {
@@ -6077,7 +6077,7 @@ const AtlasDetailPage = {
         if (!container) return;
 
         const selectedCancer = document.getElementById('diff-cancer-dropdown')?.value || 'all';
-        const sigType = 'CytoSig';
+        const sigType = this.signatureType;
 
         // Get filtered data based on cancer selection
         let filtered;
@@ -6167,7 +6167,7 @@ const AtlasDetailPage = {
         if (!container) return;
 
         const selectedCancer = document.getElementById('diff-cancer-dropdown')?.value || 'all';
-        const sigType = 'CytoSig';
+        const sigType = this.signatureType;
 
         // Get filtered data based on cancer selection
         let filtered;
@@ -6225,9 +6225,9 @@ const AtlasDetailPage = {
         if (!container) return;
 
         const selectedCancer = document.getElementById('diff-cancer-dropdown')?.value || 'all';
-        const sigType = 'CytoSig';
-        // Use IFNG as default signature (signature selector removed)
-        const selectedSig = 'IFNG';
+        const sigType = this.signatureType;
+        // Use IFNG as default signature for CytoSig, A1BG for SecAct
+        const selectedSig = sigType === 'CytoSig' ? 'IFNG' : 'A1BG';
 
         const cancerLabel = selectedCancer === 'all' ? 'Pan-Cancer' : selectedCancer;
 
