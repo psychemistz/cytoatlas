@@ -1991,15 +1991,35 @@
                 </div>
 
                 <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
-                    <strong>T Cell Functional States:</strong> Grouped by cell type annotations from original studies.
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; margin-top: 0.5rem; font-size: 0.9rem;">
-                        <div><span style="color: #d62728;">●</span> <strong>Exhausted:</strong> Tex, PDCD1+, exhausted, LAG3+, TIGIT+</div>
-                        <div><span style="color: #2ca02c;">●</span> <strong>Cytotoxic:</strong> GZMB+, GZMK+, PRF1+, cytotoxic</div>
-                        <div><span style="color: #1f77b4;">●</span> <strong>Memory:</strong> Tem, Tcm, memory</div>
-                        <div><span style="color: #ff7f0e;">●</span> <strong>Naive:</strong> Tn, naive, CCR7+</div>
+                    <strong>T Cell Functional States:</strong> Classified by marker gene patterns in cell type annotations.
+                    <div style="margin-top: 0.5rem;">
+                        <div style="margin-bottom: 0.5rem;">
+                            <span style="color: #d62728; font-weight: bold;">● Exhausted</span> - Dysfunctional T cells with inhibitory receptor expression<br>
+                            <small style="color: #666; margin-left: 1rem;">Markers: PDCD1 (PD-1), CTLA4, LAG3, TIM3, TIGIT, Tex</small><br>
+                            <small style="color: #666; margin-left: 1rem;">Cell types: T01_CD8Tex_PDCD1, T09_CD8Tex_LAG3, CD8_exhausted_*, CD4_exhausted_*</small>
+                        </div>
+                        <div style="margin-bottom: 0.5rem;">
+                            <span style="color: #2ca02c; font-weight: bold;">● Cytotoxic</span> - Effector T cells with cytolytic function<br>
+                            <small style="color: #666; margin-left: 1rem;">Markers: GZMB (Granzyme B), GZMK, PRF1 (Perforin), GNLY</small><br>
+                            <small style="color: #666; margin-left: 1rem;">Cell types: T02_CD8Tc_GZMB, T03_CD8Tc_GZMK, CD8_cytotoxic_*, NK-like T cells</small>
+                        </div>
+                        <div style="margin-bottom: 0.5rem;">
+                            <span style="color: #1f77b4; font-weight: bold;">● Memory</span> - Long-lived antigen-experienced T cells<br>
+                            <small style="color: #666; margin-left: 1rem;">Markers: Tem (effector memory), Tcm (central memory)</small><br>
+                            <small style="color: #666; margin-left: 1rem;">Cell types: T05_CD8Tem, T06_CD8Tcm, CD4_memory_*, CD8_memory_*</small>
+                        </div>
+                        <div style="margin-bottom: 0.5rem;">
+                            <span style="color: #ff7f0e; font-weight: bold;">● Naive</span> - Antigen-inexperienced T cells<br>
+                            <small style="color: #666; margin-left: 1rem;">Markers: CCR7, Tn (naive)</small><br>
+                            <small style="color: #666; margin-left: 1rem;">Cell types: T07_CD8Tn, CD4_naive_*, CCR7+ T cells</small>
+                        </div>
+                        <div>
+                            <span style="color: #9467bd; font-weight: bold;">● Other T cells</span> - Specialized T cell subsets<br>
+                            <small style="color: #666; margin-left: 1rem;">Includes: MAIT cells, γδ T cells, Tregs (FOXP3+), unclassified T cells</small>
+                        </div>
                     </div>
-                    <div style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">
-                        Note: State availability varies by cancer type based on original study annotations.
+                    <div style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid #eee; font-size: 0.85rem; color: #666;">
+                        <strong>Note:</strong> Classification is based on pattern matching in scAtlas cell type annotations. State availability varies by cancer type based on original study annotations.
                     </div>
                 </div>
 
@@ -2042,9 +2062,17 @@
                 </div>
 
                 <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
-                    <strong>Exhausted vs Non-exhausted T cells:</strong> Comparing activity signatures between dysfunctional and functional T cells.
-                    <div style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">
-                        Non-exhausted = cytotoxic + memory + other T cells
+                    <strong>Exhausted vs Non-exhausted T cells:</strong> Differential activity analysis between dysfunctional and functional T cells.
+                    <div style="margin-top: 0.5rem; font-size: 0.9rem;">
+                        <div style="margin-bottom: 0.3rem;">
+                            <span style="color: #d62728; font-weight: bold;">● Exhausted:</span> T cells with inhibitory receptors (PDCD1+, LAG3+, TIGIT+, Tex)
+                        </div>
+                        <div>
+                            <span style="color: #2166ac; font-weight: bold;">● Non-exhausted:</span> Functional T cells (cytotoxic GZMB+/GZMK+ + memory Tem/Tcm + other T cells)
+                        </div>
+                    </div>
+                    <div style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">
+                        <strong>Interpretation:</strong> Positive Δ Activity = higher in exhausted; Negative = higher in non-exhausted (functional) T cells.
                     </div>
                 </div>
 
