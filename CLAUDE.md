@@ -126,6 +126,48 @@ visualization/
 2. **Cross-cohort validation:** Main → validation → external cohort generalization
 3. **Output verification:** Activity z-scores in -3 to +3 range, gene overlap >80%, correlation r > 0.9
 
+## Important: Activity Difference vs Log2FC
+
+**Critical bug fixed (2026-01-31):** Activity values are z-scores (can be negative), so log2 fold-change calculation is incorrect.
+
+### The Problem
+
+```python
+# WRONG - log2 ratio doesn't work for z-scores
+log2fc = np.log2((mean_a + 0.01) / (mean_b + 0.01))
+
+# Example: exhausted=-2, non-exhausted=-4
+# -2 > -4, so activity is HIGHER in exhausted
+# But: log2((-2+0.01)/(-4+0.01)) = log2(0.5) = -1 (WRONG direction!)
+```
+
+### The Fix
+
+```python
+# CORRECT - use simple difference for z-scores
+diff = mean_a - mean_b
+
+# Example: exhausted=-2, non-exhausted=-4
+# diff = -2 - (-4) = +2 (correctly indicates higher in exhausted)
+```
+
+### Affected Components
+
+All differential analyses use activity z-scores and should use **difference**, not log2 ratio:
+
+| Analysis | Scripts |
+|----------|---------|
+| Disease vs healthy | `02_inflam_activity.py` |
+| Responder vs non-responder | `02_inflam_activity.py` |
+| Tumor vs adjacent | `03_scatlas_analysis.py` |
+| Cancer vs normal | `03_scatlas_analysis.py` |
+| Exhausted vs non-exhausted | `03_scatlas_analysis.py`, `07_scatlas_immune_analysis.py` |
+| Sex/smoking differential | `06_preprocess_viz_data.py` |
+
+### Visualization Labels
+
+The data field is still named `log2fc` for backward compatibility, but visualization labels now show "Δ Activity" instead of "Log2FC" to reflect the actual calculation (difference, not ratio).
+
 ## CytoAtlas REST API (188+ endpoints)
 
 ```bash
@@ -151,7 +193,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 - **API Backend**: 95% complete (14 routers, all services implemented)
 - **Frontend SPA**: 90% complete (8 pages)
-- **Validation Data**: NOT generated yet (blocking validation panel)
+- **Validation Data**: Complete (generated for all 3 atlases)
 - **User Auth**: Scaffolding only
 - **Dataset Submission**: Scaffolding only
 
@@ -164,18 +206,17 @@ For comprehensive project status and implementation details, see:
 
 ### Critical TODOs
 
-1. **Generate Validation JSON Data** (Priority 1)
-   - Need: `visualization/data/validation/*.json`
-   - Script: Create `scripts/generate_validation_data.py`
+1. ~~**Generate Validation JSON Data**~~ ✅ Complete (2026-01-31)
+   - Generated: `visualization/data/validation/*.json` for all 3 atlases
 
-2. **Review Modified Files** (Priority 2)
-   - scatlas router/service/schema changes
-   - Immune analysis script completion
-
-3. **Production Hardening** (Priority 3)
+2. **Production Hardening** (Priority 1)
    - JWT authentication
    - Prometheus metrics
    - Load testing
+
+3. **Dataset Submission** (Priority 2)
+   - Chunked file upload
+   - Celery background processing
 
 ## Git Configuration
 

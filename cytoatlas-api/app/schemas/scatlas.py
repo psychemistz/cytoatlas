@@ -82,7 +82,7 @@ class ScAtlasCancerType(BaseModel):
     signature_type: str
     mean_activity: float
     other_mean: float
-    log2fc: float | None = None
+    log2fc: float | None = Field(default=None, description="Activity difference (this cancer - others). Named log2fc for backward compatibility but represents z-score difference.")
     specificity_score: float
     n_cells: int
 

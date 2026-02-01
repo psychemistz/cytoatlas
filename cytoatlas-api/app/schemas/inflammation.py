@@ -34,7 +34,7 @@ class InflammationDiseaseComparison(BaseModel):
     signature: str
     signature_type: str
     disease: str
-    log2fc: float
+    log2fc: float = Field(description="Activity difference (disease - healthy). Named log2fc for backward compatibility but represents z-score difference, not log2 ratio.")
     mean_disease: float
     mean_healthy: float
     p_value: float = Field(alias="pvalue")
@@ -58,7 +58,7 @@ class InflammationDifferential(BaseModel):
     mean_g2: float  # Mean activity in healthy
     n_g1: int  # Sample count in disease
     n_g2: int  # Sample count in healthy
-    log2fc: float
+    log2fc: float = Field(description="Activity difference (group1 - group2). Named log2fc for backward compatibility but represents z-score difference.")
     p_value: float = Field(alias="pvalue")
     q_value: float | None = Field(default=None, alias="qvalue")
     neg_log10_pval: float | None = None
@@ -73,7 +73,7 @@ class InflammationDiseaseGroupComparison(BaseModel):
     signature: str
     signature_type: str
     disease_group: str
-    log2fc: float
+    log2fc: float = Field(description="Activity difference. Named log2fc for backward compatibility but represents z-score difference.")
     p_value: float
     q_value: float | None = None
 
@@ -166,7 +166,7 @@ class InflammationCellTypeStratified(BaseModel):
     signature: str
     signature_type: str
     disease: str
-    log2fc: float
+    log2fc: float = Field(description="Activity difference (disease - healthy). Named log2fc for backward compatibility.")
     p_value: float
     q_value: float | None = None
     is_driving: bool = False
@@ -180,7 +180,7 @@ class InflammationDrivingPopulation(BaseModel):
     cell_type: str
     n_signatures: int
     top_signatures: list[str]
-    mean_log2fc: float
+    mean_log2fc: float = Field(description="Mean activity difference across signatures.")
 
 
 class InflammationConservedProgram(BaseModel):
@@ -190,7 +190,7 @@ class InflammationConservedProgram(BaseModel):
     signature_type: str
     diseases: list[str]
     n_diseases: int
-    mean_log2fc: float
+    mean_log2fc: float = Field(description="Mean activity difference across diseases.")
     consistency_score: float
 
 

@@ -4629,7 +4629,7 @@ const AtlasDetailPage = {
             <div class="viz-grid">
                 <div class="sub-panel" style="grid-column: span 2;">
                     <h4>Cell Type Contribution</h4>
-                    <p style="color: #666; font-size: 0.9rem;">Disease vs Healthy effect size (log2FC) by cell type</p>
+                    <p style="color: #666; font-size: 0.9rem;">Disease vs Healthy effect size (Δ Activity) by cell type</p>
                     <div id="drivers-bar" class="plot-container" style="height: 450px;"></div>
                 </div>
             </div>
@@ -5870,13 +5870,13 @@ const AtlasDetailPage = {
                 <!-- Volcano plot -->
                 <div class="viz-container" style="min-height: 400px;">
                     <div class="viz-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Differential Volcano Plot</div>
-                    <div class="viz-subtitle" id="diff-volcano-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Tumor vs Adjacent: log2FC vs significance</div>
+                    <div class="viz-subtitle" id="diff-volcano-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Tumor vs Adjacent: Δ Activity vs significance</div>
                     <div id="diff-volcano" class="plot-container" style="height: 380px;">Loading...</div>
                 </div>
                 <!-- Top differential signatures -->
                 <div class="viz-container" style="min-height: 400px;">
                     <div class="viz-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Top Differential Signatures</div>
-                    <div class="viz-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Ranked by absolute log2 fold change</div>
+                    <div class="viz-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Ranked by absolute activity difference</div>
                     <div id="diff-top-bar" class="plot-container" style="height: 380px;">Loading...</div>
                 </div>
             </div>
@@ -6191,23 +6191,23 @@ const AtlasDetailPage = {
                 x: significantUp.map(d => d.log2fc), y: significantUp.map(d => d.negLogP),
                 text: significantUp.map(d => d.signature), textposition: 'top center', textfont: { size: 9 },
                 marker: { color: '#ff7f0e', size: 10 },
-                hovertemplate: '<b>%{text}</b><br>log2FC: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
+                hovertemplate: '<b>%{text}</b><br>Δ Activity: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
             },
             {
                 type: 'scatter', mode: 'markers+text', name: 'Higher in Tumor',
                 x: significantDown.map(d => d.log2fc), y: significantDown.map(d => d.negLogP),
                 text: significantDown.map(d => d.signature), textposition: 'top center', textfont: { size: 9 },
                 marker: { color: '#d62728', size: 10 },
-                hovertemplate: '<b>%{text}</b><br>log2FC: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
+                hovertemplate: '<b>%{text}</b><br>Δ Activity: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
             },
             {
                 type: 'scatter', mode: 'markers', name: 'Not significant',
                 x: notSig.map(d => d.log2fc), y: notSig.map(d => d.negLogP),
                 text: notSig.map(d => d.signature), marker: { color: '#ccc', size: 6 },
-                hovertemplate: '<b>%{text}</b><br>log2FC: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
+                hovertemplate: '<b>%{text}</b><br>Δ Activity: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
             }
         ], {
-            xaxis: { title: 'log2(Adjacent / Tumor)', zeroline: true },
+            xaxis: { title: 'Δ Activity (Adjacent - Tumor)', zeroline: true },
             yaxis: { title: '-log10(p-value)' },
             shapes: [
                 { type: 'line', x0: fcThreshold, y0: 0, x1: fcThreshold, y1: 10, line: { dash: 'dot', color: '#999' } },
@@ -6243,7 +6243,7 @@ const AtlasDetailPage = {
             return;
         }
 
-        // Sort by absolute log2FC
+        // Sort by absolute activity difference
         const sorted = [...filtered].sort((a, b) => Math.abs(b.log2fc || 0) - Math.abs(a.log2fc || 0));
         const top15 = sorted.slice(0, 15).reverse();  // Reverse for horizontal bar (most significant at top)
 
@@ -6258,10 +6258,10 @@ const AtlasDetailPage = {
             },
             text: top15.map(d => (d.log2fc || 0).toFixed(3)),
             textposition: 'auto',
-            hovertemplate: '<b>%{y}</b><br>log2FC: %{x:.3f}<br>p = %{customdata:.2e}<extra></extra>',
+            hovertemplate: '<b>%{y}</b><br>Δ Activity: %{x:.3f}<br>p = %{customdata:.2e}<extra></extra>',
             customdata: top15.map(d => d.pvalue || 1)
         }], {
-            xaxis: { title: 'log2(Adjacent / Tumor)', zeroline: true },
+            xaxis: { title: 'Δ Activity (Adjacent - Tumor)', zeroline: true },
             yaxis: { automargin: true, tickfont: { size: 10 } },
             margin: { l: 100, r: 50, t: 30, b: 50 },
             height: 380,
@@ -7219,10 +7219,10 @@ const AtlasDetailPage = {
                         color: x.map(v => v > 0 ? '#ef4444' : '#2563eb'),
                         size: 8,
                     },
-                    hovertemplate: '%{text}<br>Log2FC: %{x:.2f}<br>-log10(p): %{y:.2f}<extra></extra>',
+                    hovertemplate: '%{text}<br>Δ Activity: %{x:.2f}<br>-log10(p): %{y:.2f}<extra></extra>',
                 }], {
                     title: `Differential Analysis: ${comparison} [${this.signatureType}]`,
-                    xaxis: { title: 'Log2 Fold Change', zeroline: true },
+                    xaxis: { title: 'Δ Activity (z-score difference)', zeroline: true },
                     yaxis: { title: '-log10(p-value)' },
                     shapes: [
                         { type: 'line', x0: 0, x1: 0, y0: 0, y1: Math.max(...y), line: { dash: 'dash', color: 'gray' } },
