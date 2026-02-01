@@ -336,7 +336,7 @@ def disease_differential_analysis(
                 'disease': disease,
                 'median_disease': vals_disease.median(),
                 'median_healthy': vals_healthy.median(),
-                'log2fc': np.log2(vals_disease.median() + 0.01) - np.log2(vals_healthy.median() + 0.01),
+                'log2fc': vals_disease.median() - vals_healthy.median(),  # Activity difference for z-scores
                 'n_disease': len(vals_disease),
                 'n_healthy': len(vals_healthy),
                 'statistic': stat,
@@ -426,7 +426,7 @@ def treatment_response_analysis(
                 'disease': disease,
                 'median_responder': vals_r.median(),
                 'median_nonresponder': vals_nr.median(),
-                'log2fc': np.log2(vals_r.median() + 0.01) - np.log2(vals_nr.median() + 0.01),
+                'log2fc': vals_r.median() - vals_nr.median(),  # Activity difference for z-scores
                 'n_responder': len(vals_r),
                 'n_nonresponder': len(vals_nr),
                 'statistic': stat,
@@ -1376,7 +1376,7 @@ def celltype_stratified_disease_analysis(
 
                 try:
                     stat, pval = stats.mannwhitneyu(vals_disease, vals_healthy, alternative='two-sided')
-                    log2fc = np.log2(vals_disease.median() + 0.01) - np.log2(vals_healthy.median() + 0.01)
+                    log2fc = vals_disease.median() - vals_healthy.median()  # Activity difference for z-scores
 
                     results.append({
                         'cell_type': celltype,

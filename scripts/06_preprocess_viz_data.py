@@ -94,10 +94,8 @@ def preprocess_cima_differential():
 
     diff_df = pd.read_csv(CIMA_DIR / "CIMA_differential_demographics.csv")
 
-    # Calculate log2 fold change and -log10 pvalue for volcano plot
-    diff_df['log2fc'] = np.log2(
-        (diff_df['median_g1'] + 1) / (diff_df['median_g2'] + 1)
-    )
+    # Calculate activity difference for volcano plot (z-scores, not log2 ratio)
+    diff_df['log2fc'] = diff_df['median_g1'] - diff_df['median_g2']
     diff_df['neg_log10_pval'] = -np.log10(diff_df['pvalue'].clip(lower=1e-300))
 
     # Round floats to reduce file size
@@ -2488,10 +2486,10 @@ def preprocess_inflammation_demographics():
                 female_vals = female[cyt].dropna()
                 if len(male_vals) >= 10 and len(female_vals) >= 10:
                     stat, pval = stats.ranksums(male_vals, female_vals)
-                    log2fc = np.log2((male_vals.mean() + 0.01) / (female_vals.mean() + 0.01))
+                    diff = male_vals.mean() - female_vals.mean()  # Activity difference for z-scores
                     demo_data['sex'].append({
                         'cytokine': cyt,
-                        'log2fc': round(log2fc, 4),
+                        'log2fc': round(diff, 4),
                         'pvalue': round(pval, 6),
                         'n_male': len(male_vals),
                         'n_female': len(female_vals)
@@ -2508,10 +2506,10 @@ def preprocess_inflammation_demographics():
                 ns_vals = non_smoker[cyt].dropna()
                 if len(s_vals) >= 10 and len(ns_vals) >= 10:
                     stat, pval = stats.ranksums(s_vals, ns_vals)
-                    log2fc = np.log2((s_vals.mean() + 0.01) / (ns_vals.mean() + 0.01))
+                    diff = s_vals.mean() - ns_vals.mean()  # Activity difference for z-scores
                     demo_data['smoking'].append({
                         'cytokine': cyt,
-                        'log2fc': round(log2fc, 4),
+                        'log2fc': round(diff, 4),
                         'pvalue': round(pval, 6),
                         'n_smoker': len(s_vals),
                         'n_nonsmoker': len(ns_vals)
@@ -2929,7 +2927,7 @@ def preprocess_adjacent_tissue():
             pval = 1.0
         mean_tumor = float(np.mean(tumor_vals))
         mean_adj = float(np.mean(adj_vals))
-        log2fc = np.log2((mean_adj + 0.01) / (mean_tumor + 0.01)) if mean_tumor != 0 else 0
+        log2fc = mean_adj - mean_tumor  # Activity difference for z-scores
         return {
             'mean_tumor': round(mean_tumor, 4),
             'mean_adjacent': round(mean_adj, 4),
