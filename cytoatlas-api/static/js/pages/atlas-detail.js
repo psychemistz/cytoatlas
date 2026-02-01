@@ -5858,6 +5858,13 @@ const AtlasDetailPage = {
                     <div id="diff-top-bar" class="plot-container" style="height: 380px;">Loading...</div>
                 </div>
             </div>
+
+            <!-- Boxplot for top differential signatures -->
+            <div class="viz-container" style="margin-top: 1rem; min-height: 350px;">
+                <div class="viz-title" id="diff-boxplot-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Activity Comparison: Tumor vs Adjacent Normal</div>
+                <div class="viz-subtitle" id="diff-boxplot-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Distribution of top differential signatures</div>
+                <div id="diff-boxplot" class="plot-container" style="height: 300px;">Loading...</div>
+            </div>
         `;
 
         // Load all data for differential analysis
@@ -6256,8 +6263,8 @@ const AtlasDetailPage = {
 
         const selectedCancer = document.getElementById('diff-cancer-dropdown')?.value || 'all';
         const sigType = 'CytoSig';
-        const searchVal = document.getElementById('diff-signature-search')?.value?.trim();
-        const selectedSig = searchVal || document.getElementById('diff-signature-dropdown')?.value || 'IFNG';
+        // Use IFNG as default signature (signature selector removed)
+        const selectedSig = 'IFNG';
 
         const cancerLabel = selectedCancer === 'all' ? 'Pan-Cancer' : selectedCancer;
 
