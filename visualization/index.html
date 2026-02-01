@@ -2298,22 +2298,37 @@
             <div class="tab-content" id="tab-celltype-mapping">
                 <div class="controls">
                     <div class="control-group">
-                        <label>Cell Lineage</label>
+                        <label>Mapping Level</label>
+                        <select id="mapping-level">
+                            <option value="coarse">Coarse (8 Lineages)</option>
+                            <option value="fine">Fine (~32 Types)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Cell Lineage Filter</label>
                         <select id="mapping-lineage">
                             <option value="all">All Lineages</option>
-                            <option value="T_cell">T Cells (CD4, CD8, Treg, MAIT)</option>
-                            <option value="Myeloid">Myeloid (Monocyte, DC, pDC)</option>
+                            <option value="T_cell">T Cells (CD4, CD8, Unconventional)</option>
+                            <option value="Myeloid">Myeloid (Mono, DC, Mac)</option>
                             <option value="B_cell">B Cells & Plasma</option>
                             <option value="NK_ILC">NK & ILC</option>
                         </select>
                     </div>
                 </div>
 
-                <div class="viz-container" style="min-height: 600px;">
+                <div class="viz-container">
                     <div class="viz-title">Cell Type Harmonization</div>
-                    <div class="viz-subtitle">Mapping of cell types across atlases (Sankey diagram)</div>
-                    <div id="celltype-sankey" class="loading">Loading...</div>
+                    <div class="viz-subtitle" id="celltype-mapping-subtitle">Mapping of cell types across atlases (Sankey diagram)</div>
+                    <div id="celltype-sankey" class="loading" style="height: 420px;">Loading...</div>
                 </div>
+
+                <div class="viz-container" style="margin-top: 20px;">
+                    <div class="viz-title" id="celltype-detail-title">Original Annotations per Lineage</div>
+                    <div class="viz-subtitle" id="celltype-detail-subtitle">Number of atlas-specific cell type annotations mapped to each harmonized lineage</div>
+                    <div id="celltype-detail-bar" style="height: 320px;"></div>
+                </div>
+
+                <div id="celltype-mapping-info" style="margin-top: 15px; padding: 12px; background: #f8f9fa; border-radius: 6px; font-size: 0.9rem;"></div>
             </div>
 
             <!-- Meta-Analysis Tab -->
@@ -7028,6 +7043,11 @@
                             if (tabId === 'metabolites') updateMetaboliteNetwork();
                             if (tabId === 'cima-multiomics') updateMultiomicsViz();
                         }
+                        // Cross-Atlas: redraw charts that need visible container
+                        if (sectionId === 'cross-atlas') {
+                            if (tabId === 'celltype-mapping') updateCelltypeMapping();
+                            if (tabId === 'signature-correlation') updateSignatureCorrelation();
+                        }
                         // Resize any Plotly charts in the newly visible tab
                         const activeTab = document.getElementById('tab-' + tabId);
                         if (activeTab) {
@@ -10201,22 +10221,78 @@
 
         // Cross-Atlas: Cell Type Mapping
         // Shows harmonized cell type mapping across CIMA, Inflammation Atlas, and scAtlas
-        // Two levels: Coarse (8 lineages) and Fine (~30 types)
+        // Two levels: Coarse (8 lineages) and Fine (~32 types)
         function updateCelltypeMapping() {
             const container = document.getElementById('celltype-sankey');
-            if (!container) return;
+            if (!container) {
+                console.log('[CelltypeMapping] Container not found');
+                return;
+            }
+
+            // Check if container is visible (tab must be active)
+            const rect = container.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) {
+                console.log('[CelltypeMapping] Container not visible, skipping render');
+                return;
+            }
+
             container.classList.remove('loading');
             Plotly.purge(container);
 
-            // Get mapping data
+            // Get mapping data and controls
             const mappingData = state.data.crossatlas?.celltype_mapping;
+            const mappingLevel = document.getElementById('mapping-level')?.value || 'coarse';
             const lineageFilter = document.getElementById('mapping-lineage')?.value || 'all';
+
+            console.log('[CelltypeMapping] Data check:', {
+                hasCrossatlas: !!state.data.crossatlas,
+                hasCelltypeMapping: !!mappingData,
+                mappingLevel: mappingLevel,
+                lineageFilter: lineageFilter
+            });
 
             if (!mappingData || !mappingData.coarse_mapping) {
                 container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Cell type mapping data not available.</p>';
                 return;
             }
 
+            // Update subtitles based on level
+            const subtitle = document.getElementById('celltype-mapping-subtitle');
+            const detailTitle = document.getElementById('celltype-detail-title');
+            const detailSubtitle = document.getElementById('celltype-detail-subtitle');
+
+            if (mappingLevel === 'coarse') {
+                if (subtitle) subtitle.textContent = 'Mapping of cell types across atlases - Coarse level (8 lineages)';
+                if (detailTitle) detailTitle.textContent = 'Original Annotations per Lineage';
+                if (detailSubtitle) detailSubtitle.textContent = 'Number of atlas-specific cell type annotations mapped to each harmonized lineage';
+                renderCoarseMapping(container, mappingData, lineageFilter);
+            } else {
+                if (subtitle) subtitle.textContent = 'Mapping of cell types across atlases - Fine level (~32 types)';
+                if (detailTitle) detailTitle.textContent = 'Cell Counts per Fine Type';
+                if (detailSubtitle) detailSubtitle.textContent = 'Total cell counts for each harmonized fine type across atlases';
+                renderFineMapping(container, mappingData, lineageFilter);
+            }
+
+            // Update summary annotation
+            const summary = mappingData.summary;
+            const infoDiv = document.getElementById('celltype-mapping-info');
+            if (summary && infoDiv) {
+                const levelInfo = mappingLevel === 'coarse'
+                    ? `Showing ${summary.coarse.n_lineages} coarse lineages (${summary.coarse.n_shared} shared across all atlases)`
+                    : `Showing ${summary.fine.n_types} fine types (${summary.fine.n_shared} shared across all atlases)`;
+                infoDiv.innerHTML = `
+                    <strong>Mapping Summary:</strong> ${levelInfo}
+                    <br><span style="margin-top: 5px; display: inline-block;">
+                    <span style="color: #e41a1c;">●</span> CIMA: ${summary.coarse.cima_types} original types
+                    <span style="margin-left: 15px; color: #377eb8;">●</span> Inflammation: ${summary.coarse.inflammation_types} original types
+                    <span style="margin-left: 15px; color: #4daf4a;">●</span> scAtlas: ${summary.coarse.scatlas_types} original types
+                    </span>
+                `;
+            }
+        }
+
+        // Render coarse level mapping (Sankey diagram)
+        function renderCoarseMapping(container, mappingData, lineageFilter) {
             // Filter coarse mapping by lineage
             let coarseData = mappingData.coarse_mapping;
             if (lineageFilter !== 'all') {
@@ -10255,7 +10331,7 @@
             };
             coarseData.forEach(d => {
                 nodeIdx[d.lineage] = nodes.length;
-                nodes.push({ label: d.lineage.replace('_', ' '), color: lineageColors[d.lineage] || '#999' });
+                nodes.push({ label: d.lineage.replace(/_/g, ' '), color: lineageColors[d.lineage] || '#999' });
             });
 
             // Links from atlases to lineages (scaled by cell count, log scale for visibility)
@@ -10267,7 +10343,6 @@
                 ];
                 atlasKeys.forEach(({ key, name }) => {
                     if (d[key].total_cells > 0) {
-                        // Use log scale for better visualization of varying cell counts
                         const scaledValue = Math.log10(d[key].total_cells + 1) * 10;
                         links.push({
                             source: nodeIdx[name],
@@ -10303,58 +10378,156 @@
                         'Types: %{customdata.types}<extra></extra>'
                 }
             }], {
-                title: { text: 'Cell Type Harmonization (Coarse Level: 8 Lineages)', font: { size: 14 } },
-                margin: { t: 50, b: 30, l: 10, r: 10 },
+                margin: { t: 20, b: 20, l: 10, r: 10 },
                 height: 400
             }, { responsive: true });
 
-            // Add a second chart showing original cell type counts per lineage
-            let detailContainer = document.getElementById('celltype-detail-bar');
-            if (!detailContainer) {
-                detailContainer = document.createElement('div');
-                detailContainer.id = 'celltype-detail-bar';
-                detailContainer.style.marginTop = '20px';
-                container.parentNode.appendChild(detailContainer);
+            console.log('[CelltypeMapping] Coarse Sankey rendered with', nodes.length, 'nodes and', links.length, 'links');
+
+            // Update the bar chart showing original type counts per lineage
+            const detailContainer = document.getElementById('celltype-detail-bar');
+            if (detailContainer) {
+                Plotly.purge(detailContainer);
+
+                const lineages = coarseData.map(d => d.lineage.replace(/_/g, ' '));
+                const cimaTypeCounts = coarseData.map(d => d.cima.types.length);
+                const inflamTypeCounts = coarseData.map(d => d.inflammation.types.length);
+                const scatlasTypeCounts = coarseData.map(d => d.scatlas.types.length);
+
+                Plotly.newPlot(detailContainer, [
+                    { name: 'CIMA', x: lineages, y: cimaTypeCounts, type: 'bar', marker: { color: '#e41a1c' } },
+                    { name: 'Inflammation', x: lineages, y: inflamTypeCounts, type: 'bar', marker: { color: '#377eb8' } },
+                    { name: 'scAtlas', x: lineages, y: scatlasTypeCounts, type: 'bar', marker: { color: '#4daf4a' } }
+                ], {
+                    barmode: 'group',
+                    xaxis: { title: 'Harmonized Lineage', tickangle: -30 },
+                    yaxis: { title: 'Number of Original Types' },
+                    legend: { orientation: 'h', y: 1.12 },
+                    margin: { t: 40, b: 80, l: 60, r: 30 },
+                    height: 300
+                }, { responsive: true });
             }
-            Plotly.purge(detailContainer);
+        }
 
-            // Create grouped bar chart of original type counts
-            const lineages = coarseData.map(d => d.lineage.replace('_', ' '));
-            const cimaTypeCounts = coarseData.map(d => d.cima.types.length);
-            const inflamTypeCounts = coarseData.map(d => d.inflammation.types.length);
-            const scatlasTypeCounts = coarseData.map(d => d.scatlas.types.length);
+        // Render fine level mapping (heatmap + bar chart)
+        function renderFineMapping(container, mappingData, lineageFilter) {
+            let fineData = mappingData.fine_mapping || [];
 
-            Plotly.newPlot(detailContainer, [
-                { name: 'CIMA', x: lineages, y: cimaTypeCounts, type: 'bar', marker: { color: '#e41a1c' } },
-                { name: 'Inflammation', x: lineages, y: inflamTypeCounts, type: 'bar', marker: { color: '#377eb8' } },
-                { name: 'scAtlas', x: lineages, y: scatlasTypeCounts, type: 'bar', marker: { color: '#4daf4a' } }
-            ], {
-                barmode: 'group',
-                title: { text: 'Original Cell Type Annotations per Harmonized Lineage', font: { size: 14 } },
-                xaxis: { title: 'Harmonized Lineage', tickangle: -30 },
-                yaxis: { title: 'Number of Original Types' },
-                legend: { orientation: 'h', y: 1.15 },
-                margin: { t: 60, b: 80, l: 60, r: 30 },
-                height: 300
+            // Filter fine types by lineage category
+            if (lineageFilter !== 'all') {
+                const lineagePrefixes = {
+                    'T_cell': ['CD4', 'CD8', 'Treg', 'MAIT', 'gdT', 'NKT', 'ILC'],
+                    'Myeloid': ['Mono', 'Mac', 'DC', 'pDC', 'cDC', 'Mast', 'Neutro', 'Baso', 'Eosino'],
+                    'B_cell': ['B_', 'Plasma'],
+                    'NK_ILC': ['NK', 'ILC']
+                };
+                const prefixes = lineagePrefixes[lineageFilter] || [];
+                fineData = fineData.filter(d =>
+                    prefixes.some(p => d.fine_type.startsWith(p) || d.fine_type.includes(p))
+                );
+            }
+
+            if (fineData.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No fine types found for selected lineage filter.</p>';
+                return;
+            }
+
+            // Sort by total cells across atlases
+            fineData = fineData.map(d => ({
+                ...d,
+                totalCells: d.cima.total_cells + d.inflammation.total_cells + d.scatlas.total_cells
+            })).sort((a, b) => b.totalCells - a.totalCells);
+
+            // Build presence/absence heatmap data
+            const fineTypes = fineData.map(d => d.fine_type.replace(/_/g, ' '));
+            const atlases = ['CIMA', 'Inflammation', 'scAtlas'];
+
+            // Create heatmap z values (log cell counts) and text
+            const z = [];
+            const text = [];
+            const atlasKeys = ['cima', 'inflammation', 'scatlas'];
+
+            atlasKeys.forEach((key, i) => {
+                const row = [];
+                const textRow = [];
+                fineData.forEach(d => {
+                    const count = d[key].total_cells;
+                    row.push(count > 0 ? Math.log10(count + 1) : 0);
+                    textRow.push(count > 0 ? count.toLocaleString() + ' cells' : 'Not present');
+                });
+                z.push(row);
+                text.push(textRow);
+            });
+
+            // Create heatmap
+            Plotly.newPlot(container, [{
+                type: 'heatmap',
+                z: z,
+                x: fineTypes,
+                y: atlases,
+                text: text,
+                hovertemplate: '%{y} - %{x}<br>%{text}<extra></extra>',
+                colorscale: [
+                    [0, '#f7f7f7'],
+                    [0.2, '#d1e5f0'],
+                    [0.4, '#92c5de'],
+                    [0.6, '#4393c3'],
+                    [0.8, '#2166ac'],
+                    [1, '#053061']
+                ],
+                showscale: true,
+                colorbar: {
+                    title: 'log₁₀(cells)',
+                    titleside: 'right'
+                }
+            }], {
+                margin: { t: 20, b: 120, l: 100, r: 80 },
+                height: 200,
+                xaxis: { tickangle: -45, tickfont: { size: 10 } },
+                yaxis: { tickfont: { size: 11 } }
             }, { responsive: true });
 
-            // Add summary annotation
-            const summary = mappingData.summary;
-            if (summary) {
-                const infoDiv = document.getElementById('celltype-mapping-info') || document.createElement('div');
-                infoDiv.id = 'celltype-mapping-info';
-                infoDiv.style.cssText = 'margin-top: 15px; padding: 12px; background: #f8f9fa; border-radius: 6px; font-size: 0.9rem;';
-                infoDiv.innerHTML = `
-                    <strong>Mapping Summary:</strong>
-                    <span style="margin-left: 15px;">Coarse: ${summary.coarse.n_lineages} lineages (${summary.coarse.n_shared} shared)</span>
-                    <span style="margin-left: 15px;">Fine: ${summary.fine.n_types} types (${summary.fine.n_shared} shared)</span>
-                    <span style="margin-left: 15px;">CIMA: ${summary.coarse.cima_types} types</span>
-                    <span style="margin-left: 15px;">Inflammation: ${summary.coarse.inflammation_types} types</span>
-                    <span style="margin-left: 15px;">scAtlas: ${summary.coarse.scatlas_types} types</span>
-                `;
-                if (!document.getElementById('celltype-mapping-info')) {
-                    detailContainer.parentNode.appendChild(infoDiv);
-                }
+            console.log('[CelltypeMapping] Fine heatmap rendered with', fineTypes.length, 'types');
+
+            // Update bar chart to show cell counts per fine type
+            const detailContainer = document.getElementById('celltype-detail-bar');
+            if (detailContainer) {
+                Plotly.purge(detailContainer);
+
+                // Show top 15 fine types by cell count
+                const topFineData = fineData.slice(0, 15);
+                const topTypes = topFineData.map(d => d.fine_type.replace(/_/g, ' '));
+
+                Plotly.newPlot(detailContainer, [
+                    {
+                        name: 'CIMA',
+                        x: topTypes,
+                        y: topFineData.map(d => d.cima.total_cells),
+                        type: 'bar',
+                        marker: { color: '#e41a1c' }
+                    },
+                    {
+                        name: 'Inflammation',
+                        x: topTypes,
+                        y: topFineData.map(d => d.inflammation.total_cells),
+                        type: 'bar',
+                        marker: { color: '#377eb8' }
+                    },
+                    {
+                        name: 'scAtlas',
+                        x: topTypes,
+                        y: topFineData.map(d => d.scatlas.total_cells),
+                        type: 'bar',
+                        marker: { color: '#4daf4a' }
+                    }
+                ], {
+                    barmode: 'group',
+                    xaxis: { title: 'Harmonized Fine Type (Top 15)', tickangle: -45 },
+                    yaxis: { title: 'Cell Count', type: 'log' },
+                    legend: { orientation: 'h', y: 1.15 },
+                    margin: { t: 50, b: 120, l: 70, r: 30 },
+                    height: 350
+                }, { responsive: true });
             }
         }
 
@@ -11094,6 +11267,7 @@
             document.getElementById('conserved-min-atlases')?.addEventListener('change', updateConservedSignatures);
             document.getElementById('atlas-comparison-type')?.addEventListener('change', updateAtlasComparison);
             document.getElementById('atlas-comp-sig-type')?.addEventListener('change', updateAtlasComparison);
+            document.getElementById('mapping-level')?.addEventListener('change', updateCelltypeMapping);
             document.getElementById('mapping-lineage')?.addEventListener('change', updateCelltypeMapping);
             document.getElementById('meta-analysis-type')?.addEventListener('change', updateMetaAnalysis);
             document.getElementById('meta-sig-type')?.addEventListener('change', updateMetaAnalysis);
