@@ -9914,16 +9914,18 @@
         }
 
         // Cross-Atlas: Conserved Signatures
+        // Shows which cytokine/secreted protein signatures are consistently active across atlases.
+        // "Conserved" signatures (active in 2+ atlases) represent fundamental immune programs.
+        // "Atlas-specific" signatures reveal context-dependent biology (disease vs healthy vs tissue-specific).
         function updateConservedSignatures() {
             const container1 = document.getElementById('conserved-upset');
             const container2 = document.getElementById('specific-bar');
 
             // Get dropdown values
             const sigType = document.getElementById('conserved-sig-type')?.value || 'CytoSig';
-            const minAtlases = parseInt(document.getElementById('conserved-min-atlases')?.value || '3');
+            const minAtlases = parseInt(document.getElementById('conserved-min-atlases')?.value || '2');
 
-            // Use real data if available
-            const sigData = state.data.crossatlas?.atlas_specific_signatures;
+            // Use real data from cross_atlas.json
             const conservedData = state.data.crossatlas?.conserved;
 
             if (container1) {
@@ -9931,20 +9933,23 @@
                 Plotly.purge(container1);
 
                 let categories, values;
-                if (sigData) {
+                if (conservedData && conservedData.signatures) {
+                    // Filter by signature type and compute overlap counts dynamically
+                    const sigs = conservedData.signatures.filter(s => s.signature_type === sigType);
+
+                    const allThree = sigs.filter(s => s.cima && s.inflammation && s.scatlas).length;
+                    const cimaInflam = sigs.filter(s => s.cima && s.inflammation && !s.scatlas).length;
+                    const cimaScatlas = sigs.filter(s => s.cima && !s.inflammation && s.scatlas).length;
+                    const inflamScatlas = sigs.filter(s => !s.cima && s.inflammation && s.scatlas).length;
+                    const cimaOnly = sigs.filter(s => s.cima && !s.inflammation && !s.scatlas).length;
+                    const inflamOnly = sigs.filter(s => !s.cima && s.inflammation && !s.scatlas).length;
+                    const scatlasOnly = sigs.filter(s => !s.cima && !s.inflammation && s.scatlas).length;
+
                     categories = [
                         'CIMA only', 'Inflammation only', 'scAtlas only',
                         'CIMA+Inflam', 'CIMA+scAtlas', 'Inflam+scAtlas', 'All 3'
                     ];
-                    values = [
-                        sigData.cima_only || 0,
-                        sigData.inflam_only || sigData.inflammation_only || 0,
-                        sigData.scatlas_only || 0,
-                        sigData.cima_inflam || 0,
-                        sigData.cima_scatlas || 0,
-                        sigData.inflam_scatlas || 0,
-                        sigData.all_three || 0
-                    ];
+                    values = [cimaOnly, inflamOnly, scatlasOnly, cimaInflam, cimaScatlas, inflamScatlas, allThree];
                 } else {
                     categories = ['CIMA only', 'Inflammation only', 'scAtlas only', 'CIMA+Inflam', 'CIMA+scAtlas', 'Inflam+scAtlas', 'All 3'];
                     values = [8, 2, 4, 9, 6, 0, 5];
@@ -9960,22 +9965,25 @@
                         color: ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3', '#ff7f00', '#a65628', '#f781bf']
                     }
                 };
+                const totalSigs = sigType === 'CytoSig' ? 43 : 1148;
                 Plotly.newPlot(container1, [trace], {
-                    title: { text: `Signature Overlap (${sigType})`, font: { size: 14 } },
+                    title: { text: `Signature Overlap (${sigType}, ${totalSigs} total)`, font: { size: 14 } },
                     yaxis: { title: 'Number of Signatures' },
                     margin: { t: 50, b: 80, l: 60, r: 30 },
                     height: 450
                 }, { responsive: true });
             }
 
-            // Show atlas-specific signatures filtered by minAtlases
+            // Show conserved signatures filtered by minAtlases and sigType
             if (container2) {
                 container2.classList.remove('loading');
                 Plotly.purge(container2);
 
                 if (conservedData && conservedData.signatures) {
-                    // Filter signatures by minimum atlas count
-                    const filtered = conservedData.signatures.filter(s => s.n_atlases >= minAtlases);
+                    // Filter signatures by signature type and minimum atlas count
+                    const filtered = conservedData.signatures.filter(s =>
+                        s.signature_type === sigType && s.n_atlases >= minAtlases
+                    );
 
                     if (filtered.length > 0) {
                         // Sort by n_atlases descending, then by absolute mean activity
@@ -10000,14 +10008,14 @@
                             textposition: 'auto',
                             hovertemplate: '<b>%{y}</b><br>Present in %{x} atlases<extra></extra>'
                         }], {
-                            title: { text: `Signatures in ${minAtlases}+ Atlases (${filtered.length} total)`, font: { size: 14 } },
+                            title: { text: `${sigType} Signatures in ${minAtlases}+ Atlases (${filtered.length} total)`, font: { size: 14 } },
                             xaxis: { title: 'Number of Atlases', dtick: 1 },
                             yaxis: { automargin: true },
-                            margin: { l: 80, r: 30, t: 50, b: 50 },
+                            margin: { l: 100, r: 30, t: 50, b: 50 },
                             height: 450
                         }, { responsive: true });
                     } else {
-                        container2.innerHTML = `<p style="text-align:center; color:#666; padding:2rem;">No signatures found in ${minAtlases}+ atlases with current threshold.</p>`;
+                        container2.innerHTML = `<p style="text-align:center; color:#666; padding:2rem;">No ${sigType} signatures found in ${minAtlases}+ atlases with current threshold.</p>`;
                     }
                 } else {
                     container2.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No signature data available.</p>';
