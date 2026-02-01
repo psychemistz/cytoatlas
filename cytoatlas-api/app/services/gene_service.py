@@ -598,3 +598,153 @@ class GeneService(BaseService):
             pass
 
         return sorted(list(signatures))
+
+    @cached(prefix="gene", ttl=3600)
+    async def get_gene_expression(
+        self,
+        gene: str,
+    ) -> GeneExpressionResponse | None:
+        """
+        Get gene expression data by cell type across atlases.
+
+        Args:
+            gene: Gene symbol (e.g., IFNG, TNF)
+
+        Returns:
+            Gene expression response or None if not available
+        """
+        # Try to load from individual gene file first
+        gene_file = self.viz_data_path / "genes" / f"{gene}.json"
+
+        try:
+            if gene_file.exists():
+                import json
+                with open(gene_file) as f:
+                    data = json.load(f)
+            else:
+                # Fall back to full dataset
+                all_data = await self.load_json("gene_expression.json")
+                data = [r for r in all_data if r.get("gene") == gene]
+
+            if not data:
+                return None
+
+            results = [
+                GeneExpressionResult(
+                    gene=r.get("gene"),
+                    cell_type=r.get("cell_type"),
+                    atlas=r.get("atlas"),
+                    mean_expression=self._safe_float(r.get("mean_expression")),
+                    pct_expressed=self._safe_float(r.get("pct_expressed")),
+                    n_cells=r.get("n_cells"),
+                )
+                for r in data
+            ]
+
+            # Sort by mean expression descending
+            results.sort(key=lambda x: x.mean_expression, reverse=True)
+
+            atlases = sorted(list(set(r.atlas for r in results)))
+            n_cell_types = len(set(r.cell_type for r in results))
+            max_expression = max(r.mean_expression for r in results) if results else 0
+            top_cell_type = results[0].cell_type if results else None
+
+            return GeneExpressionResponse(
+                gene=gene,
+                data=results,
+                atlases=atlases,
+                n_cell_types=n_cell_types,
+                max_expression=max_expression,
+                top_cell_type=top_cell_type,
+            )
+
+        except (FileNotFoundError, Exception) as e:
+            return None
+
+    @cached(prefix="gene", ttl=3600)
+    async def get_gene_page_data(
+        self,
+        gene: str,
+    ) -> GenePageData:
+        """
+        Get complete gene page data including expression and activity.
+
+        Args:
+            gene: Gene symbol (e.g., IFNG, TNF)
+
+        Returns:
+            Complete gene page data
+        """
+        # Get gene expression
+        expression = await self.get_gene_expression(gene)
+
+        # Get CytoSig activity (use gene name as signature)
+        cytosig_activity = await self.get_cell_type_activity(gene, "CytoSig")
+
+        # Get SecAct activity
+        secact_activity = await self.get_cell_type_activity(gene, "SecAct")
+
+        # Determine available atlases
+        atlases = set()
+        if expression:
+            atlases.update(expression.atlases)
+        for r in cytosig_activity:
+            atlases.add(r.atlas)
+        for r in secact_activity:
+            atlases.add(r.atlas)
+
+        return GenePageData(
+            gene=gene,
+            has_expression=expression is not None and len(expression.data) > 0,
+            has_cytosig=len(cytosig_activity) > 0,
+            has_secact=len(secact_activity) > 0,
+            expression=expression,
+            cytosig_activity=cytosig_activity,
+            secact_activity=secact_activity,
+            atlases=sorted(list(atlases)),
+        )
+
+    async def get_available_genes(self) -> list[str]:
+        """Get list of genes with expression data available."""
+        try:
+            return await self.load_json("gene_list.json")
+        except FileNotFoundError:
+            return []
+
+    async def check_gene_exists(self, gene: str) -> dict:
+        """Check if a gene exists in expression data, CytoSig, or SecAct."""
+        has_expression = False
+        has_cytosig = False
+        has_secact = False
+
+        # Check expression
+        gene_file = self.viz_data_path / "genes" / f"{gene}.json"
+        has_expression = gene_file.exists()
+
+        # Check CytoSig
+        try:
+            cima_data = await self.load_json("cima_celltype.json")
+            has_cytosig = any(
+                r.get("signature") == gene and r.get("signature_type") == "CytoSig"
+                for r in cima_data
+            )
+        except FileNotFoundError:
+            pass
+
+        # Check SecAct
+        try:
+            cima_data = await self.load_json("cima_celltype.json")
+            has_secact = any(
+                r.get("signature") == gene and r.get("signature_type") == "SecAct"
+                for r in cima_data
+            )
+        except FileNotFoundError:
+            pass
+
+        return {
+            "gene": gene,
+            "has_expression": has_expression,
+            "has_cytosig": has_cytosig,
+            "has_secact": has_secact,
+            "exists": has_expression or has_cytosig or has_secact,
+        }

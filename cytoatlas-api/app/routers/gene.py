@@ -9,7 +9,9 @@ from app.schemas.gene import (
     GeneCorrelations,
     GeneCrossAtlasConsistency,
     GeneDiseaseActivityResponse,
+    GeneExpressionResponse,
     GeneOverview,
+    GenePageData,
     GeneTissueActivity,
 )
 from app.services.gene_service import GeneService
@@ -217,3 +219,89 @@ async def list_signatures(
     - `GET /api/v1/gene/list/signatures?signature_type=SecAct` - List SecAct proteins
     """
     return await service.get_available_signatures(signature_type)
+
+
+@router.get("/list/genes", response_model=list[str])
+async def list_genes(
+    service: GeneService = Depends(get_gene_service),
+) -> list[str]:
+    """List all genes with expression data available.
+
+    **Example:**
+    - `GET /api/v1/gene/list/genes` - List all genes with expression data
+    """
+    return await service.get_available_genes()
+
+
+@router.get("/{gene}/expression", response_model=GeneExpressionResponse)
+async def get_gene_expression(
+    gene: str,
+    service: GeneService = Depends(get_gene_service),
+) -> GeneExpressionResponse:
+    """Get gene expression by cell type across atlases.
+
+    Returns mean log-normalized expression and percent of cells expressing
+    the gene for each cell type in each atlas.
+
+    **Parameters:**
+    - **gene**: Gene symbol (e.g., IFNG, TNF, IL6)
+
+    **Example:**
+    - `GET /api/v1/gene/IFNG/expression` - IFNG expression by cell type
+    """
+    result = await service.get_gene_expression(gene)
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Gene expression data not found for: {gene}",
+        )
+
+    return result
+
+
+@router.get("/{gene}/full", response_model=GenePageData)
+async def get_gene_page_data(
+    gene: str,
+    service: GeneService = Depends(get_gene_service),
+) -> GenePageData:
+    """Get complete gene page data including expression and activity.
+
+    Returns all available data for a gene:
+    - Gene expression by cell type (if available)
+    - CytoSig activity (if gene is a CytoSig signature)
+    - SecAct activity (if gene is a SecAct signature)
+
+    **Parameters:**
+    - **gene**: Gene symbol (e.g., IFNG, TNF, IL6)
+
+    **Example:**
+    - `GET /api/v1/gene/IFNG/full` - Complete IFNG data
+    """
+    result = await service.get_gene_page_data(gene)
+
+    if not result.has_expression and not result.has_cytosig and not result.has_secact:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No data found for gene: {gene}",
+        )
+
+    return result
+
+
+@router.get("/{gene}/check", response_model=dict)
+async def check_gene(
+    gene: str,
+    service: GeneService = Depends(get_gene_service),
+) -> dict:
+    """Check if a gene exists in the database.
+
+    Returns availability flags for expression data, CytoSig, and SecAct.
+
+    **Parameters:**
+    - **gene**: Gene symbol (e.g., IFNG, TNF, IL6)
+
+    **Example:**
+    - `GET /api/v1/gene/IFNG/check` - Check IFNG availability
+    """
+    return await service.check_gene_exists(gene)
