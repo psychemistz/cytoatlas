@@ -287,6 +287,59 @@ class ScAtlasService(BaseService):
         return [ScAtlasExhaustion(**r) for r in results]
 
     @cached(prefix="scatlas", ttl=3600)
+    async def get_tcell_states(
+        self,
+        signature_type: str = "CytoSig",
+    ) -> dict:
+        """
+        Get T cell state data for functional state analysis.
+
+        Returns T cell states (exhausted, cytotoxic, memory, naive) with activity signatures.
+        """
+        data = await self.load_json("exhaustion.json")
+
+        # Filter to signature type (data uses "signature_type" field with lowercase values)
+        sig_type_lower = signature_type.lower()
+        state_data = [r for r in data.get("data", []) if r.get("signature_type") == sig_type_lower]
+
+        # Get cancer types from filtered data
+        cancer_types = sorted(list(set(r.get("cancer_type") for r in state_data)))
+
+        return {
+            "data": state_data,
+            "cancer_types": cancer_types,
+            "cytosig_signatures": data.get("cytosig_signatures", []),
+            "secact_signatures": data.get("secact_signatures", []),
+            "exhaustion_states": data.get("exhaustion_states", ["exhausted", "cytotoxic", "memory", "naive"]),
+        }
+
+    @cached(prefix="scatlas", ttl=3600)
+    async def get_exhaustion_comparison(
+        self,
+        signature_type: str = "CytoSig",
+    ) -> dict:
+        """
+        Get exhausted vs non-exhausted T cell comparison data.
+
+        Returns comparison metrics including activity_diff and p-values.
+        """
+        data = await self.load_json("exhaustion.json")
+
+        # Filter comparison data to signature type
+        sig_type_lower = signature_type.lower()
+        comparison_data = [r for r in data.get("comparison", []) if r.get("signature_type") == sig_type_lower]
+
+        # Get cancer types from filtered data
+        cancer_types = sorted(list(set(r.get("cancer_type") for r in comparison_data)))
+
+        return {
+            "comparison": comparison_data,
+            "cancer_types": cancer_types,
+            "cytosig_signatures": data.get("cytosig_signatures", []),
+            "secact_signatures": data.get("secact_signatures", []),
+        }
+
+    @cached(prefix="scatlas", ttl=3600)
     async def get_caf_signatures(
         self,
         signature_type: str = "CytoSig",
@@ -310,6 +363,35 @@ class ScAtlasService(BaseService):
             results = [r for r in results if r.get("cancer_type") == cancer_type]
 
         return [ScAtlasCAFSignature(**r) for r in results]
+
+    @cached(prefix="scatlas", ttl=3600)
+    async def get_caf_full_data(
+        self,
+        signature_type: str = "CytoSig",
+    ) -> dict:
+        """
+        Get full CAF classification data including subtypes and proportions.
+
+        Returns comprehensive CAF analysis for visualization.
+        """
+        data = await self.load_json("caf_signatures.json")
+
+        # Get subtypes data (these don't have signature_type field, filter by matching to signatures list)
+        subtypes = data.get("subtypes", [])
+
+        # Get proportions (no filtering needed)
+        proportions = data.get("proportions", [])
+
+        # Get cancer types from subtypes
+        cancer_types = sorted(list(set(r.get("cancer_type") for r in subtypes if r.get("cancer_type"))))
+
+        return {
+            "subtypes": subtypes,
+            "proportions": proportions,
+            "cancer_types": cancer_types,
+            "signatures": data.get("signatures", []),
+            "caf_classes": data.get("caf_classes", ["myCAF", "iCAF", "apCAF"]),
+        }
 
     @cached(prefix="scatlas", ttl=3600)
     async def get_adjacent_tissue(

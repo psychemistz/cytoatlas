@@ -54,10 +54,11 @@ const AtlasDetailPage = {
                 { id: 'overview', label: 'Overview', icon: '&#127968;' },
                 { id: 'celltypes', label: 'Cell Types', icon: '&#128300;' },
                 { id: 'tissue-atlas', label: 'Tissue Atlas', icon: '&#128149;' },
-                { id: 'differential-analysis', label: 'Differential Analysis', icon: '&#128201;' },
+                { id: 'differential-analysis', label: 'Differential', icon: '&#128201;' },
                 { id: 'immune-infiltration', label: 'Immune Infiltration', icon: '&#128300;' },
-                { id: 'exhaustion', label: 'T Cell Exhaustion', icon: '&#128546;' },
-                { id: 'caf', label: 'CAF Types', icon: '&#128302;' },
+                { id: 'tcell-state', label: 'T Cell State', icon: '&#129516;' },
+                { id: 'exhaustion', label: 'Exhaustion Diff', icon: '&#128546;' },
+                { id: 'caf', label: 'CAF Classification', icon: '&#128302;' },
             ],
         },
     },
@@ -4878,6 +4879,9 @@ const AtlasDetailPage = {
             case 'immune-infiltration':
                 await this.loadScatlasImmuneInfiltration(content);
                 break;
+            case 'tcell-state':
+                await this.loadScatlasTcellState(content);
+                break;
             case 'exhaustion':
                 await this.loadScatlasExhaustion(content);
                 break;
@@ -6636,28 +6640,596 @@ const AtlasDetailPage = {
         }, { responsive: true });
     },
 
+    // T Cell State data cache
+    tcellStateData: null,
+    tcellStateCache: null,
+
+    async loadScatlasTcellState(content) {
+        content.innerHTML = `
+            <div class="panel-header">
+                <h3>T Cell Functional States</h3>
+                <p>Cytokine activity patterns across T cell states in tumor-infiltrating lymphocytes</p>
+            </div>
+
+            <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+                <div class="control-group">
+                    <label>Cancer Type</label>
+                    <select id="tcell-cancer" class="filter-select" style="width: 160px;" onchange="AtlasDetailPage.updateTcellState()">
+                        <option value="all">All Cancers</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Signature</label>
+                    <select id="tcell-signature" class="filter-select" style="width: 140px;" onchange="AtlasDetailPage.updateTcellBoxplot()">
+                        <option value="_top6">Top 6 differential</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 1rem;">
+                <div class="viz-container" style="min-height: 400px;">
+                    <div class="viz-title" id="tcell-heatmap-title">Top Signatures by T Cell State</div>
+                    <div class="viz-subtitle" id="tcell-heatmap-subtitle">Mean activity of top variable signatures across T cell states</div>
+                    <div id="tcell-state-heatmap" class="plot-container" style="height: 380px;">Loading...</div>
+                </div>
+                <div class="viz-container" style="min-height: 400px;">
+                    <div class="viz-title" id="tcell-bar-title">T Cell State Distribution</div>
+                    <div class="viz-subtitle" id="tcell-bar-subtitle">Cell counts by functional state</div>
+                    <div id="tcell-state-bar" class="plot-container" style="height: 380px;">Loading...</div>
+                </div>
+            </div>
+
+            <div class="viz-container" style="min-height: 350px;">
+                <div class="viz-title" id="tcell-boxplot-title">Activity by T Cell State</div>
+                <div class="viz-subtitle" id="tcell-boxplot-subtitle">Distribution of selected signature across T cell functional states</div>
+                <div id="tcell-state-comparison" class="plot-container" style="height: 320px;">Loading...</div>
+            </div>
+        `;
+
+        // Load T cell state data
+        try {
+            this.tcellStateData = await API.get('/scatlas/tcell-states', { signature_type: this.signatureType });
+        } catch (e) {
+            console.warn('Failed to load T cell state data:', e);
+            this.tcellStateData = null;
+        }
+
+        if (this.tcellStateData) {
+            // Populate cancer dropdown
+            const cancerSelect = document.getElementById('tcell-cancer');
+            const cancerTypes = this.tcellStateData.cancer_types || [];
+            if (cancerSelect && cancerTypes.length > 0) {
+                cancerSelect.innerHTML = '<option value="all">All Cancers</option>' +
+                    cancerTypes.map(c => `<option value="${c}">${c}</option>`).join('');
+            }
+
+            // Populate signature dropdown
+            const sigSelect = document.getElementById('tcell-signature');
+            const signatures = this.signatureType === 'CytoSig'
+                ? (this.tcellStateData.cytosig_signatures || [])
+                : (this.tcellStateData.secact_signatures || []);
+            if (sigSelect && signatures.length > 0) {
+                sigSelect.innerHTML = '<option value="_top6">Top 6 differential</option>' +
+                    signatures.map(s => `<option value="${s}">${s}</option>`).join('');
+            }
+
+            this.updateTcellState();
+        } else {
+            document.getElementById('tcell-state-heatmap').innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">T cell state data not available.</p>';
+            document.getElementById('tcell-state-bar').innerHTML = '';
+            document.getElementById('tcell-state-comparison').innerHTML = '';
+        }
+    },
+
+    updateTcellState() {
+        if (!this.tcellStateData?.data) return;
+
+        const cancerFilter = document.getElementById('tcell-cancer')?.value || 'all';
+
+        // Filter data
+        let data = this.tcellStateData.data;
+        if (cancerFilter !== 'all') {
+            data = data.filter(d => d.cancer_type === cancerFilter);
+        }
+
+        // Cache filtered data for boxplot updates
+        this.tcellStateCache = data;
+
+        // State colors
+        const stateColors = {
+            'exhausted': '#d62728',
+            'cytotoxic': '#2ca02c',
+            'memory': '#1f77b4',
+            'naive': '#ff7f0e',
+            'other_tcell': '#7f7f7f'
+        };
+
+        const states = ['exhausted', 'cytotoxic', 'memory', 'naive'];
+
+        // === Heatmap: top signatures by state ===
+        const heatmapContainer = document.getElementById('tcell-state-heatmap');
+        if (heatmapContainer && data.length > 0) {
+            // Calculate variance per signature across states
+            const sigStats = {};
+            data.forEach(d => {
+                if (!sigStats[d.signature]) sigStats[d.signature] = {};
+                if (!sigStats[d.signature][d.exhaustion_state]) sigStats[d.signature][d.exhaustion_state] = [];
+                sigStats[d.signature][d.exhaustion_state].push(d.mean_activity);
+            });
+
+            // Calculate variance and pick top 15
+            const sigVariance = Object.entries(sigStats).map(([sig, stateData]) => {
+                const means = states.map(s => {
+                    const vals = stateData[s] || [];
+                    return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+                });
+                const mean = means.reduce((a, b) => a + b, 0) / means.length;
+                const variance = means.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / means.length;
+                return { signature: sig, variance, means };
+            }).sort((a, b) => b.variance - a.variance).slice(0, 15);
+
+            const topSigs = sigVariance.map(s => s.signature);
+            const z = sigVariance.map(s => s.means);
+
+            Plotly.newPlot(heatmapContainer, [{
+                type: 'heatmap',
+                z: z,
+                x: states.map(s => s.charAt(0).toUpperCase() + s.slice(1)),
+                y: topSigs,
+                colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
+                zmid: 0,
+                hovertemplate: '<b>%{y}</b><br>State: %{x}<br>Activity: %{z:.2f}<extra></extra>'
+            }], {
+                margin: { l: 100, r: 60, t: 30, b: 60 },
+                xaxis: { title: 'T Cell State' },
+                yaxis: { automargin: true },
+                height: 380
+            }, { responsive: true });
+        }
+
+        // === Bar chart: state distribution ===
+        const barContainer = document.getElementById('tcell-state-bar');
+        if (barContainer && data.length > 0) {
+            // Sum cells by state
+            const stateCounts = {};
+            data.forEach(d => {
+                const state = d.exhaustion_state;
+                if (!stateCounts[state]) stateCounts[state] = 0;
+                stateCounts[state] += d.n_cells || 0;
+            });
+
+            const orderedStates = states.filter(s => stateCounts[s] > 0);
+            Plotly.newPlot(barContainer, [{
+                type: 'bar',
+                x: orderedStates.map(s => s.charAt(0).toUpperCase() + s.slice(1)),
+                y: orderedStates.map(s => stateCounts[s]),
+                marker: { color: orderedStates.map(s => stateColors[s]) },
+                hovertemplate: '<b>%{x}</b><br>Cells: %{y:,}<extra></extra>'
+            }], {
+                margin: { l: 60, r: 30, t: 30, b: 60 },
+                xaxis: { title: 'T Cell State' },
+                yaxis: { title: 'Number of Cells' },
+                height: 380
+            }, { responsive: true });
+        }
+
+        // Update boxplot
+        this.updateTcellBoxplot();
+    },
+
+    updateTcellBoxplot() {
+        const container = document.getElementById('tcell-state-comparison');
+        if (!container || !this.tcellStateCache) return;
+
+        const sigSelect = document.getElementById('tcell-signature')?.value || '_top6';
+        const data = this.tcellStateCache;
+
+        const stateColors = {
+            'exhausted': '#d62728',
+            'cytotoxic': '#2ca02c',
+            'memory': '#1f77b4',
+            'naive': '#ff7f0e'
+        };
+        const states = ['exhausted', 'cytotoxic', 'memory', 'naive'];
+
+        let signatures = [];
+        if (sigSelect === '_top6') {
+            // Find top 6 most variable signatures
+            const sigStats = {};
+            data.forEach(d => {
+                if (!sigStats[d.signature]) sigStats[d.signature] = {};
+                if (!sigStats[d.signature][d.exhaustion_state]) sigStats[d.signature][d.exhaustion_state] = [];
+                sigStats[d.signature][d.exhaustion_state].push(d.mean_activity);
+            });
+
+            signatures = Object.entries(sigStats).map(([sig, stateData]) => {
+                const means = states.map(s => {
+                    const vals = stateData[s] || [];
+                    return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+                });
+                const mean = means.reduce((a, b) => a + b, 0) / means.length;
+                const variance = means.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0);
+                return { signature: sig, variance };
+            }).sort((a, b) => b.variance - a.variance).slice(0, 6).map(s => s.signature);
+        } else {
+            signatures = [sigSelect];
+        }
+
+        // Create grouped box plots
+        const traces = states.map(state => ({
+            type: 'box',
+            name: state.charAt(0).toUpperCase() + state.slice(1),
+            x: [],
+            y: [],
+            marker: { color: stateColors[state] },
+            boxpoints: false
+        }));
+
+        signatures.forEach(sig => {
+            const sigData = data.filter(d => d.signature === sig);
+            states.forEach((state, i) => {
+                const stateData = sigData.filter(d => d.exhaustion_state === state);
+                stateData.forEach(d => {
+                    traces[i].x.push(sig);
+                    traces[i].y.push(d.mean_activity);
+                });
+            });
+        });
+
+        Plotly.newPlot(container, traces, {
+            boxmode: 'group',
+            margin: { l: 60, r: 30, t: 30, b: 80 },
+            xaxis: { title: 'Signature' },
+            yaxis: { title: 'Mean Activity (z-score)' },
+            legend: { orientation: 'h', y: 1.1, x: 0.5, xanchor: 'center' },
+            height: 320
+        }, { responsive: true });
+    },
+
+    // Exhaustion Differential data
+    exhaustionData: null,
+
     async loadScatlasExhaustion(content) {
         content.innerHTML = `
             <div class="panel-header">
-                <h3>T Cell Exhaustion</h3>
-                <p>Exhaustion signatures in tumor-infiltrating T cells</p>
+                <h3>Exhaustion Differential</h3>
+                <p>Compare cytokine activity between exhausted and non-exhausted T cells in tumor microenvironment</p>
             </div>
-            <div id="exhaustion-plot" class="plot-container" style="height: 500px;">
-                <p class="loading">T cell exhaustion analysis coming soon</p>
+
+            <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+                <div class="control-group">
+                    <label>Cancer Type</label>
+                    <select id="exhaustion-cancer" class="filter-select" style="width: 160px;" onchange="AtlasDetailPage.updateExhaustion()">
+                        <option value="all">All Cancers</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="viz-container" style="min-height: 450px;">
+                    <div class="viz-title">Top Differential Signatures</div>
+                    <div class="viz-subtitle">Δ Activity: Exhausted − Non-exhausted T cells (top 20)</div>
+                    <div id="exhaustion-heatmap" class="plot-container" style="height: 420px;">Loading...</div>
+                </div>
+                <div class="viz-container" style="min-height: 450px;">
+                    <div class="viz-title">Exhausted vs Non-exhausted Activity</div>
+                    <div class="viz-subtitle">Scatter plot of mean activity by exhaustion state</div>
+                    <div id="exhaustion-scatter" class="plot-container" style="height: 420px;">Loading...</div>
+                </div>
             </div>
         `;
+
+        // Load exhaustion data
+        try {
+            this.exhaustionData = await API.get('/scatlas/exhaustion-comparison', { signature_type: this.signatureType });
+        } catch (e) {
+            console.warn('Failed to load exhaustion data:', e);
+            this.exhaustionData = null;
+        }
+
+        if (this.exhaustionData) {
+            // Populate cancer dropdown
+            const cancerSelect = document.getElementById('exhaustion-cancer');
+            const cancerTypes = this.exhaustionData.cancer_types || [];
+            if (cancerSelect && cancerTypes.length > 0) {
+                cancerSelect.innerHTML = '<option value="all">All Cancers</option>' +
+                    cancerTypes.map(c => `<option value="${c}">${c}</option>`).join('');
+            }
+
+            this.updateExhaustion();
+        } else {
+            document.getElementById('exhaustion-heatmap').innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Exhaustion comparison data not available.</p>';
+            document.getElementById('exhaustion-scatter').innerHTML = '';
+        }
     },
+
+    updateExhaustion() {
+        if (!this.exhaustionData?.comparison) return;
+
+        const cancerFilter = document.getElementById('exhaustion-cancer')?.value || 'all';
+
+        // Filter data
+        let data = this.exhaustionData.comparison;
+        if (cancerFilter !== 'all') {
+            data = data.filter(d => d.cancer_type === cancerFilter);
+        }
+
+        // Aggregate by signature (average across cancer types if "all")
+        const sigAgg = {};
+        data.forEach(d => {
+            if (!sigAgg[d.signature]) {
+                sigAgg[d.signature] = { exhausted: [], nonexhausted: [], diff: [] };
+            }
+            sigAgg[d.signature].exhausted.push(d.mean_exhausted);
+            sigAgg[d.signature].nonexhausted.push(d.mean_nonexhausted);
+            sigAgg[d.signature].diff.push(d.activity_diff);
+        });
+
+        const sigData = Object.entries(sigAgg).map(([sig, vals]) => ({
+            signature: sig,
+            mean_exhausted: vals.exhausted.reduce((a, b) => a + b, 0) / vals.exhausted.length,
+            mean_nonexhausted: vals.nonexhausted.reduce((a, b) => a + b, 0) / vals.nonexhausted.length,
+            activity_diff: vals.diff.reduce((a, b) => a + b, 0) / vals.diff.length
+        }));
+
+        // === Heatmap: top 20 by absolute activity_diff ===
+        const heatmapContainer = document.getElementById('exhaustion-heatmap');
+        if (heatmapContainer && sigData.length > 0) {
+            const sorted = [...sigData].sort((a, b) => Math.abs(b.activity_diff) - Math.abs(a.activity_diff)).slice(0, 20);
+
+            Plotly.newPlot(heatmapContainer, [{
+                type: 'bar',
+                y: sorted.map(d => d.signature),
+                x: sorted.map(d => d.activity_diff),
+                orientation: 'h',
+                marker: {
+                    color: sorted.map(d => d.activity_diff > 0 ? '#d62728' : '#2166ac')
+                },
+                hovertemplate: '<b>%{y}</b><br>Δ Activity: %{x:.2f}<extra></extra>'
+            }], {
+                margin: { l: 100, r: 30, t: 30, b: 60 },
+                xaxis: { title: 'Δ Activity (Exhausted − Non-exhausted)', zeroline: true },
+                yaxis: { automargin: true },
+                height: 420,
+                shapes: [{
+                    type: 'line', x0: 0, x1: 0, y0: -0.5, y1: sorted.length - 0.5,
+                    line: { color: 'gray', width: 1, dash: 'dash' }
+                }]
+            }, { responsive: true });
+        }
+
+        // === Scatter: exhausted vs non-exhausted ===
+        const scatterContainer = document.getElementById('exhaustion-scatter');
+        if (scatterContainer && sigData.length > 0) {
+            const minVal = Math.min(...sigData.map(d => Math.min(d.mean_exhausted, d.mean_nonexhausted)));
+            const maxVal = Math.max(...sigData.map(d => Math.max(d.mean_exhausted, d.mean_nonexhausted)));
+
+            Plotly.newPlot(scatterContainer, [
+                {
+                    type: 'scatter',
+                    mode: 'markers',
+                    x: sigData.map(d => d.mean_nonexhausted),
+                    y: sigData.map(d => d.mean_exhausted),
+                    text: sigData.map(d => d.signature),
+                    marker: {
+                        color: sigData.map(d => d.activity_diff),
+                        colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#d62728']],
+                        size: 8,
+                        colorbar: { title: 'Δ Activity' }
+                    },
+                    hovertemplate: '<b>%{text}</b><br>Non-exhausted: %{x:.2f}<br>Exhausted: %{y:.2f}<extra></extra>'
+                },
+                {
+                    type: 'scatter',
+                    mode: 'lines',
+                    x: [minVal, maxVal],
+                    y: [minVal, maxVal],
+                    line: { color: 'gray', dash: 'dash', width: 1 },
+                    showlegend: false,
+                    hoverinfo: 'skip'
+                }
+            ], {
+                margin: { l: 60, r: 30, t: 30, b: 60 },
+                xaxis: { title: 'Non-exhausted Mean Activity' },
+                yaxis: { title: 'Exhausted Mean Activity' },
+                height: 420
+            }, { responsive: true });
+        }
+    },
+
+    // CAF Classification data
+    cafData: null,
 
     async loadScatlasCaf(content) {
         content.innerHTML = `
             <div class="panel-header">
-                <h3>Cancer-Associated Fibroblast Types</h3>
-                <p>CAF classification and cytokine signatures</p>
+                <h3>CAF Classification</h3>
+                <p>Cancer-associated fibroblast subtypes (myCAF, iCAF, apCAF) and their cytokine signatures</p>
             </div>
-            <div id="caf-plot" class="plot-container" style="height: 500px;">
-                <p class="loading">CAF classification coming soon</p>
+
+            <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+                <div class="control-group">
+                    <label>Cancer Type</label>
+                    <select id="caf-cancer-type" class="filter-select" style="width: 160px;" onchange="AtlasDetailPage.updateCafClassification()">
+                        <option value="all">All Cancers</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="viz-container" style="min-height: 380px; margin-bottom: 1rem;">
+                <div class="viz-title">CAF Subtype Activity Profile</div>
+                <div class="viz-subtitle">Top 15 signatures by activity difference across CAF subtypes</div>
+                <div id="caf-activity-bar" class="plot-container" style="height: 350px;">Loading...</div>
+            </div>
+
+            <div class="two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="viz-container" style="min-height: 380px;">
+                    <div class="viz-title">CAF Proportions by Cancer Type</div>
+                    <div class="viz-subtitle">Relative abundance of CAF subtypes</div>
+                    <div id="caf-proportions" class="plot-container" style="height: 350px;">Loading...</div>
+                </div>
+                <div class="viz-container" style="min-height: 380px;">
+                    <div class="viz-title">CAF Signature Heatmap</div>
+                    <div class="viz-subtitle">Top signatures × CAF subtypes</div>
+                    <div id="caf-heatmap" class="plot-container" style="height: 350px;">Loading...</div>
+                </div>
             </div>
         `;
+
+        // Load CAF data (full data with subtypes and proportions)
+        try {
+            this.cafData = await API.get('/scatlas/caf-full', { signature_type: this.signatureType });
+        } catch (e) {
+            console.warn('Failed to load CAF data:', e);
+            this.cafData = null;
+        }
+
+        if (this.cafData) {
+            // Populate cancer dropdown
+            const cancerSelect = document.getElementById('caf-cancer-type');
+            const cancerTypes = this.cafData.cancer_types || [];
+            if (cancerSelect && cancerTypes.length > 0) {
+                cancerSelect.innerHTML = '<option value="all">All Cancers</option>' +
+                    cancerTypes.map(c => `<option value="${c}">${c}</option>`).join('');
+            }
+
+            this.updateCafClassification();
+        } else {
+            document.getElementById('caf-activity-bar').innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">CAF classification data not available.</p>';
+            document.getElementById('caf-proportions').innerHTML = '';
+            document.getElementById('caf-heatmap').innerHTML = '';
+        }
+    },
+
+    updateCafClassification() {
+        if (!this.cafData) return;
+
+        const cancerFilter = document.getElementById('caf-cancer-type')?.value || 'all';
+
+        const cafColors = {
+            'myCAF': '#1f77b4',
+            'iCAF': '#ff7f0e',
+            'apCAF': '#2ca02c'
+        };
+        const cafTypes = ['myCAF', 'iCAF', 'apCAF'];
+
+        // Filter subtypes data
+        let subtypes = this.cafData.subtypes || [];
+        if (cancerFilter !== 'all') {
+            subtypes = subtypes.filter(d => d.cancer_type === cancerFilter);
+        }
+
+        // === Activity Bar: top 15 signatures by variance ===
+        const barContainer = document.getElementById('caf-activity-bar');
+        if (barContainer && subtypes.length > 0) {
+            // Calculate variance per signature across CAF types
+            const sigStats = {};
+            subtypes.forEach(d => {
+                if (!sigStats[d.signature]) sigStats[d.signature] = {};
+                if (!sigStats[d.signature][d.caf_subtype]) sigStats[d.signature][d.caf_subtype] = [];
+                sigStats[d.signature][d.caf_subtype].push(d.mean_activity);
+            });
+
+            const sigVariance = Object.entries(sigStats).map(([sig, cafData]) => {
+                const means = cafTypes.map(caf => {
+                    const vals = cafData[caf] || [];
+                    return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+                });
+                const mean = means.reduce((a, b) => a + b, 0) / means.length;
+                const variance = means.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0);
+                return { signature: sig, variance, means };
+            }).sort((a, b) => b.variance - a.variance).slice(0, 15);
+
+            const topSigs = sigVariance.map(s => s.signature);
+
+            const traces = cafTypes.map((caf, i) => ({
+                type: 'bar',
+                name: caf,
+                x: topSigs,
+                y: sigVariance.map(s => s.means[i]),
+                marker: { color: cafColors[caf] }
+            }));
+
+            Plotly.newPlot(barContainer, traces, {
+                barmode: 'group',
+                margin: { l: 60, r: 30, t: 30, b: 100 },
+                xaxis: { title: 'Signature', tickangle: -45 },
+                yaxis: { title: 'Mean Activity' },
+                legend: { orientation: 'h', y: 1.1, x: 0.5, xanchor: 'center' },
+                height: 350
+            }, { responsive: true });
+        }
+
+        // === Proportions Bar ===
+        const propContainer = document.getElementById('caf-proportions');
+        const proportions = this.cafData.proportions || [];
+        if (propContainer && proportions.length > 0) {
+            // Get unique cancer types
+            const cancerTypes = [...new Set(proportions.map(d => d.cancer_type))];
+
+            const traces = cafTypes.map(caf => ({
+                type: 'bar',
+                name: caf,
+                x: cancerTypes,
+                y: cancerTypes.map(ct => {
+                    const entry = proportions.find(d => d.cancer_type === ct && d.caf_subtype === caf);
+                    return entry ? entry.proportion : 0;
+                }),
+                marker: { color: cafColors[caf] }
+            }));
+
+            Plotly.newPlot(propContainer, traces, {
+                barmode: 'stack',
+                margin: { l: 60, r: 30, t: 30, b: 100 },
+                xaxis: { title: 'Cancer Type', tickangle: -45 },
+                yaxis: { title: 'Proportion', tickformat: '.0%' },
+                legend: { orientation: 'h', y: 1.1, x: 0.5, xanchor: 'center' },
+                height: 350
+            }, { responsive: true });
+        } else if (propContainer) {
+            propContainer.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Proportion data not available.</p>';
+        }
+
+        // === Heatmap: signatures × CAF types ===
+        const heatmapContainer = document.getElementById('caf-heatmap');
+        if (heatmapContainer && subtypes.length > 0) {
+            // Aggregate by signature and CAF type
+            const sigStats = {};
+            subtypes.forEach(d => {
+                if (!sigStats[d.signature]) sigStats[d.signature] = {};
+                if (!sigStats[d.signature][d.caf_subtype]) sigStats[d.signature][d.caf_subtype] = [];
+                sigStats[d.signature][d.caf_subtype].push(d.mean_activity);
+            });
+
+            // Get top 12 signatures by variance
+            const sigVariance = Object.entries(sigStats).map(([sig, cafData]) => {
+                const means = cafTypes.map(caf => {
+                    const vals = cafData[caf] || [];
+                    return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+                });
+                const mean = means.reduce((a, b) => a + b, 0) / means.length;
+                const variance = means.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0);
+                return { signature: sig, variance, means };
+            }).sort((a, b) => b.variance - a.variance).slice(0, 12);
+
+            const topSigs = sigVariance.map(s => s.signature);
+            const z = sigVariance.map(s => s.means);
+
+            Plotly.newPlot(heatmapContainer, [{
+                type: 'heatmap',
+                z: z,
+                x: cafTypes,
+                y: topSigs,
+                colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
+                zmid: 0,
+                hovertemplate: '<b>%{y}</b><br>%{x}: %{z:.2f}<extra></extra>'
+            }], {
+                margin: { l: 100, r: 60, t: 30, b: 60 },
+                xaxis: { title: 'CAF Subtype' },
+                yaxis: { automargin: true },
+                height: 350
+            }, { responsive: true });
+        }
     },
 
     // ==================== Helper Functions ====================

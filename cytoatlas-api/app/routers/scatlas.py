@@ -260,6 +260,32 @@ async def get_exhaustion_by_cancer(
     return await service.get_exhaustion_signatures(signature_type, cancer_type)
 
 
+@router.get("/tcell-states")
+async def get_tcell_states(
+    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
+    service: ScAtlasService = Depends(get_scatlas_service),
+) -> dict:
+    """
+    Get T cell state data for functional state analysis.
+
+    Returns T cell states (exhausted, cytotoxic, memory, naive) with activity signatures.
+    """
+    return await service.get_tcell_states(signature_type)
+
+
+@router.get("/exhaustion-comparison")
+async def get_exhaustion_comparison(
+    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
+    service: ScAtlasService = Depends(get_scatlas_service),
+) -> dict:
+    """
+    Get exhausted vs non-exhausted T cell comparison data.
+
+    Returns comparison metrics including activity_diff and p-values.
+    """
+    return await service.get_exhaustion_comparison(signature_type)
+
+
 # CAF Signatures
 @router.get("/caf-signatures", response_model=list[ScAtlasCAFSignature])
 async def get_caf_signatures(
@@ -283,6 +309,19 @@ async def get_caf_by_cancer(
 ) -> list[ScAtlasCAFSignature]:
     """Get CAF signatures for a specific cancer type."""
     return await service.get_caf_signatures(signature_type, cancer_type)
+
+
+@router.get("/caf-full")
+async def get_caf_full_data(
+    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
+    service: ScAtlasService = Depends(get_scatlas_service),
+) -> dict:
+    """
+    Get full CAF classification data including subtypes and proportions.
+
+    Returns comprehensive CAF analysis for visualization.
+    """
+    return await service.get_caf_full_data(signature_type)
 
 
 # Adjacent Tissue

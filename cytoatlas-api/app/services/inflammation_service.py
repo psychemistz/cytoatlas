@@ -672,18 +672,14 @@ class InflammationService(BaseService):
 
         inflam_stats = data.get("inflammation", {})
 
-        # Get unique diseases from disease activity data
-        disease_data = await self.get_disease_activity()
-        diseases = sorted(list(set(d.disease for d in disease_data)))
-        disease_groups = sorted(list(set(d.disease_group for d in disease_data)))
-
-        # Get cell types
-        cell_type_data = await self.get_cell_type_activity()
-        cell_types = sorted(list(set(c.cell_type for c in cell_type_data)))
+        # Use pre-computed lists from summary_stats.json (avoids loading 275MB disease file)
+        diseases = inflam_stats.get("diseases", [])
+        disease_groups = inflam_stats.get("disease_groups", [])
+        cell_types = inflam_stats.get("cell_types", [])
 
         return InflammationSummaryStats(
             n_samples=inflam_stats.get("n_samples", 0),
-            n_cell_types=len(cell_types),
+            n_cell_types=inflam_stats.get("n_cell_types", len(cell_types)),
             n_cells=inflam_stats.get("n_cells", 0),
             n_diseases=len(diseases),
             n_disease_groups=len(disease_groups),
