@@ -6434,56 +6434,32 @@ const AtlasDetailPage = {
         content.innerHTML = `
             <div class="panel-header">
                 <h3>Immune Infiltration</h3>
-                <p>Tumor microenvironment composition and immune cell activity across cancer types</p>
+                <p>Tumor microenvironment composition and immune cell proportions across cancer types</p>
                 <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 0.5rem; margin: 0.5rem 0;">
                     <strong>Data Source:</strong> Primary tumor tissue samples only (excludes PBMC/Blood, Adjacent, Metastasis)
                 </div>
             </div>
-            <div class="controls" style="margin-bottom: 16px; display: flex; gap: 16px; flex-wrap: wrap;">
-                <div class="control-group">
-                    <label for="immune-sig-type" style="font-weight: 500; margin-right: 8px;">Signature Type:</label>
-                    <select id="immune-sig-type" class="filter-select" onchange="AtlasDetailPage.updateImmuneInfiltration()">
-                        <option value="CytoSig">CytoSig (43 cytokines)</option>
-                        <option value="SecAct">SecAct (1,170 secreted proteins)</option>
-                    </select>
-                </div>
-                <div class="control-group">
-                    <label for="immune-signature" style="font-weight: 500; margin-right: 8px;">Signature:</label>
-                    <select id="immune-signature" class="filter-select" onchange="AtlasDetailPage.updateSignatureHeatmap()">
-                        <option value="">Select a signature...</option>
-                    </select>
-                </div>
-            </div>
 
             <!-- TME Composition -->
-            <div class="viz-container" style="min-height: 350px; margin-bottom: 1rem;">
-                <div class="viz-title">Tumor Microenvironment Composition</div>
-                <div class="viz-subtitle">Breakdown: Malignant cells, Immune cells, Stromal cells</div>
-                <div id="tme-composition" class="plot-container" style="height: 300px;">Loading...</div>
+            <div class="viz-container" style="min-height: 400px; margin-bottom: 1rem;">
+                <div class="viz-title" id="tme-composition-title">Tumor Microenvironment Composition</div>
+                <div class="viz-subtitle" id="tme-composition-subtitle">Full TME breakdown: Malignant, Immune, Stromal, and Other cells</div>
+                <div id="tme-composition" class="plot-container" style="height: 380px;">Loading...</div>
             </div>
 
             <div class="two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                 <!-- Immune Cell Composition -->
-                <div class="viz-container" style="min-height: 400px;">
-                    <div class="viz-title">Immune Cell Composition</div>
-                    <div class="viz-subtitle">Breakdown within tumor-infiltrating immune cells</div>
-                    <div id="immune-composition" class="plot-container" style="height: 350px;">Loading...</div>
+                <div class="viz-container" style="min-height: 450px;">
+                    <div class="viz-title" id="immune-composition-title">Immune Cell Composition within TME</div>
+                    <div class="viz-subtitle" id="immune-composition-subtitle">Breakdown of immune cell types in the tumor microenvironment</div>
+                    <div id="immune-composition" class="plot-container" style="height: 420px;">Loading...</div>
                 </div>
 
                 <!-- TIL Proportions -->
-                <div class="viz-container" style="min-height: 400px;">
-                    <div class="viz-title">Tumor-Infiltrating Lymphocytes (TIL)</div>
-                    <div class="viz-subtitle">CD8:Treg and T:Myeloid ratios by cancer type</div>
-                    <div id="til-ratios" class="plot-container" style="height: 350px;">Loading...</div>
-                </div>
-            </div>
-
-            <!-- Signature-specific heatmap -->
-            <div class="viz-container" style="min-height: 400px; margin-top: 20px;">
-                <div class="viz-title" id="sig-heatmap-title">Signature Activity by Cancer Type</div>
-                <div class="viz-subtitle" id="sig-heatmap-subtitle">Select a signature above to view immune enrichment across cancer types</div>
-                <div id="sig-activity-heatmap" class="plot-container" style="height: 400px;">
-                    <p style="text-align:center; color:#666; padding:2rem;">Select a signature to view activity heatmap</p>
+                <div class="viz-container" style="min-height: 450px;">
+                    <div class="viz-title" id="til-ratios-title">Tumor-Infiltrating Lymphocytes (TIL)</div>
+                    <div class="viz-subtitle" id="til-ratios-subtitle">Lymphocyte proportion (T, B, NK, ILC cells) of TME</div>
+                    <div id="til-ratios" class="plot-container" style="height: 420px;">Loading...</div>
                 </div>
             </div>
         `;
@@ -6499,7 +6475,6 @@ const AtlasDetailPage = {
             const data = await API.get('/scatlas/immune-infiltration-full');
             if (data) {
                 this.immuneData = data;
-                this.populateSignatureDropdown();
                 this.updateImmuneInfiltration();
             } else {
                 // Fallback: load from embedded data or show placeholder
@@ -6511,30 +6486,8 @@ const AtlasDetailPage = {
         }
     },
 
-    populateSignatureDropdown() {
-        const sigTypeSelect = document.getElementById('immune-sig-type');
-        const sigSelect = document.getElementById('immune-signature');
-        if (!sigSelect || !this.immuneData) return;
-
-        const sigType = sigTypeSelect?.value || 'CytoSig';
-        const signatures = sigType === 'CytoSig'
-            ? (this.immuneData.cytosig_signatures || [])
-            : (this.immuneData.secact_signatures || []);
-
-        sigSelect.innerHTML = '<option value="">Select a signature...</option>';
-        signatures.forEach(sig => {
-            const option = document.createElement('option');
-            option.value = sig;
-            option.textContent = sig;
-            sigSelect.appendChild(option);
-        });
-    },
-
     updateImmuneInfiltration() {
         if (!this.immuneData) return;
-
-        // Repopulate signature dropdown when sig type changes
-        this.populateSignatureDropdown();
 
         // Render TME composition
         this.renderTMEComposition();
@@ -6552,41 +6505,54 @@ const AtlasDetailPage = {
 
         const tme = this.immuneData.tme_summary;
 
-        // Sort by immune proportion
+        // Sort by immune proportion (matching index.html ordering)
         const sorted = [...tme].sort((a, b) => b.immune_proportion - a.immune_proportion);
         const cancerTypes = sorted.map(d => d.cancer_type);
 
-        const traces = [
-            {
-                name: 'Immune',
-                x: cancerTypes,
-                y: sorted.map(d => d.immune_proportion * 100),
-                type: 'bar',
-                marker: { color: '#1f77b4' }
-            },
-            {
-                name: 'Malignant',
-                x: cancerTypes,
-                y: sorted.map(d => d.malignant_proportion * 100),
-                type: 'bar',
-                marker: { color: '#d62728' }
-            },
-            {
-                name: 'Stromal',
-                x: cancerTypes,
-                y: sorted.map(d => d.stromal_proportion * 100),
-                type: 'bar',
-                marker: { color: '#ff7f0e' }
-            }
-        ];
+        // Colors matching index.html: Red for Malignant, Blue for Immune, Orange for Stromal
+        const tmeColors = {
+            'Malignant': '#d62728',
+            'Immune': '#1f77b4',
+            'Stromal': '#ff7f0e'
+        };
+
+        // Order: Malignant, Immune, Stromal (matching index.html)
+        const tmeCategories = ['Malignant', 'Immune', 'Stromal'];
+
+        const traces = tmeCategories.map(cat => ({
+            type: 'bar',
+            name: cat,
+            x: cancerTypes,
+            y: sorted.map(d => (d[`${cat.toLowerCase()}_proportion`] || 0) * 100),
+            marker: { color: tmeColors[cat] },
+            hovertemplate: sorted.map(d => {
+                const prop = d[`${cat.toLowerCase()}_proportion`] || 0;
+                const count = d[`${cat.toLowerCase()}_cells`] || 0;
+                return `<b>${cat}</b><br>` +
+                    `${d.cancer_type}: ${(prop * 100).toFixed(1)}%<br>` +
+                    `Cells: ${count.toLocaleString()}<extra></extra>`;
+            })
+        }));
+
+        // Check for sample_notes (cancer types without malignant cells)
+        const notedCancers = sorted.filter(d => d.sample_note);
+        const noteLines = notedCancers.map(d => `* ${d.cancer_type}: ${d.sample_note}`);
+        const hasNotes = noteLines.length > 0;
 
         Plotly.newPlot(container, traces, {
             barmode: 'stack',
-            xaxis: { title: 'Cancer Type', tickangle: -45 },
-            yaxis: { title: '% of TME', range: [0, 100] },
-            margin: { l: 50, r: 30, t: 30, b: 100 },
-            legend: { orientation: 'h', y: 1.1 },
-            height: 300
+            xaxis: { title: 'Cancer Type', tickangle: 45 },
+            yaxis: { title: 'Proportion of TME', tickformat: '.0%', range: [0, 105] },
+            margin: { l: 60, r: 30, t: 50, b: hasNotes ? 160 : 100 },
+            legend: { orientation: 'h', y: 1.15, x: 0.5, xanchor: 'center', font: { size: 11 } },
+            annotations: hasNotes ? [{
+                x: 0.5, y: -0.48, xref: 'paper', yref: 'paper',
+                text: noteLines.join('  |  '),
+                showarrow: false,
+                font: { size: 8, color: '#888' },
+                xanchor: 'center'
+            }] : [],
+            height: hasNotes ? 420 : 380
         }, { responsive: true });
     },
 
@@ -6595,31 +6561,35 @@ const AtlasDetailPage = {
         if (!container || !this.immuneData?.tme_summary) return;
 
         const tme = this.immuneData.tme_summary;
+        // Use same ordering as TME composition (sorted by immune proportion)
         const sorted = [...tme].sort((a, b) => b.immune_proportion - a.immune_proportion);
         const cancerTypes = sorted.map(d => d.cancer_type);
 
-        const categories = ['T_cell', 'NK', 'B_cell', 'Macrophage', 'Monocyte', 'DC', 'Mast', 'Neutrophil'];
+        // Categories and colors matching index.html
+        const categories = ['T_cell', 'NK', 'ILC', 'B_cell', 'Macrophage', 'Monocyte', 'DC', 'Mast'];
         const colors = {
-            'T_cell': '#1f77b4', 'NK': '#ff7f0e', 'B_cell': '#9467bd',
+            'T_cell': '#1f77b4', 'CD8_T': '#2ca02c', 'CD4_T': '#98df8a',
+            'Treg': '#d62728', 'NK': '#ff7f0e', 'B_cell': '#9467bd',
             'Macrophage': '#8c564b', 'Monocyte': '#e377c2', 'DC': '#bcbd22',
-            'Mast': '#7f7f7f', 'Neutrophil': '#17becf'
+            'Neutrophil': '#17becf', 'Mast': '#7f7f7f', 'ILC': '#aec7e8'
         };
 
         const traces = categories.map(cat => ({
-            name: cat.replace('_', ' '),
+            type: 'bar',
+            name: cat.replace(/_/g, ' '),
             x: cancerTypes,
             y: sorted.map(d => (d[`immune_${cat}`] || 0) * 100),
-            type: 'bar',
-            marker: { color: colors[cat] }
+            marker: { color: colors[cat] || '#666' },
+            hovertemplate: `<b>${cat.replace(/_/g, ' ')}</b><br>%{x}: %{y:.1f}% of immune cells<extra></extra>`
         }));
 
         Plotly.newPlot(container, traces, {
             barmode: 'stack',
-            xaxis: { title: 'Cancer Type', tickangle: -45 },
-            yaxis: { title: '% of Immune Cells', range: [0, 100] },
-            margin: { l: 50, r: 30, t: 30, b: 100 },
-            legend: { orientation: 'h', y: 1.15, font: { size: 10 } },
-            height: 350
+            xaxis: { title: 'Cancer Type', tickangle: 45 },
+            yaxis: { title: 'Immune Cell Composition', tickformat: '.0%', range: [0, 105] },
+            margin: { l: 60, r: 30, t: 60, b: 100 },
+            legend: { orientation: 'h', y: 1.18, x: 0.5, xanchor: 'center', font: { size: 9 } },
+            height: 420
         }, { responsive: true });
     },
 
@@ -6627,78 +6597,42 @@ const AtlasDetailPage = {
         const container = document.getElementById('til-ratios');
         if (!container || !this.immuneData?.tme_summary) return;
 
-        const tme = this.immuneData.tme_summary.filter(d => d.cd8_treg_ratio && d.cd8_treg_ratio < 50);
-        const sorted = [...tme].sort((a, b) => b.cd8_treg_ratio - a.cd8_treg_ratio);
-        const cancerTypes = sorted.map(d => d.cancer_type);
+        const tmeSummary = this.immuneData.tme_summary;
 
-        const traces = [
-            {
-                name: 'CD8:Treg Ratio',
-                x: cancerTypes,
-                y: sorted.map(d => d.cd8_treg_ratio),
-                type: 'bar',
-                marker: { color: '#2ca02c' },
-                hovertemplate: '%{x}<br>CD8:Treg = %{y:.2f}<extra></extra>'
-            }
-        ];
+        // Compute lymphocyte proportion (T + B + NK + ILC) from immune_* fields (matching index.html)
+        const withTIL = tmeSummary.map(d => {
+            const lymphocyteCategories = ['T_cell', 'B_cell', 'NK', 'ILC'];
+            const lymphPropWithinImmune = lymphocyteCategories.reduce((sum, cat) =>
+                sum + (d[`immune_${cat}`] || 0), 0);
+            // TIL proportion of TME = lymphocyte proportion within immune * immune proportion
+            const tilProportion = lymphPropWithinImmune * d.immune_proportion;
+            return { ...d, til_proportion: tilProportion, lymph_within_immune: lymphPropWithinImmune };
+        });
+
+        const sorted = [...withTIL].sort((a, b) => b.til_proportion - a.til_proportion);
+
+        const traces = [{
+            type: 'bar',
+            x: sorted.map(d => d.cancer_type),
+            y: sorted.map(d => d.til_proportion),
+            marker: { color: '#1f77b4' },
+            hovertemplate: sorted.map(d => {
+                const cd8treg = d.cd8_treg_ratio ? d.cd8_treg_ratio.toFixed(1) : 'N/A';
+                const lymphPct = (d.lymph_within_immune * 100).toFixed(1);
+                return `<b>${d.cancer_type}</b><br>` +
+                    `TIL: ${(d.til_proportion * 100).toFixed(1)}% of TME<br>` +
+                    `Lymphocytes: ${lymphPct}% of immune<br>` +
+                    `Total immune: ${(d.immune_proportion * 100).toFixed(1)}%<br>` +
+                    `CD8:Treg ratio: ${cd8treg}<br>` +
+                    `Samples: ${d.n_samples} | Donors: ${d.n_donors}<extra></extra>`;
+            })
+        }];
 
         Plotly.newPlot(container, traces, {
-            xaxis: { title: 'Cancer Type', tickangle: -45 },
-            yaxis: { title: 'CD8:Treg Ratio' },
-            margin: { l: 50, r: 30, t: 30, b: 100 },
-            height: 350
-        }, { responsive: true });
-    },
-
-    updateSignatureHeatmap() {
-        const sigSelect = document.getElementById('immune-signature');
-        const sigType = document.getElementById('immune-sig-type')?.value || 'CytoSig';
-        const signature = sigSelect?.value;
-
-        if (!signature || !this.immuneData?.data) {
-            return;
-        }
-
-        const container = document.getElementById('sig-activity-heatmap');
-        const title = document.getElementById('sig-heatmap-title');
-        const subtitle = document.getElementById('sig-heatmap-subtitle');
-
-        if (title) title.textContent = `${signature} Activity Across Cancer Types`;
-        if (subtitle) subtitle.textContent = `Immune enrichment: mean activity in immune cells vs non-immune cells`;
-
-        // Filter data for selected signature
-        const sigData = this.immuneData.data.filter(d =>
-            d.signature === signature && d.signature_type === sigType
-        );
-
-        if (sigData.length === 0) {
-            container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No data available for this signature</p>';
-            return;
-        }
-
-        // Sort by immune enrichment
-        const sorted = [...sigData].sort((a, b) => b.immune_enrichment - a.immune_enrichment);
-
-        const trace = {
-            x: sorted.map(d => d.cancer_type),
-            y: sorted.map(d => d.immune_enrichment),
-            type: 'bar',
-            marker: {
-                color: sorted.map(d => d.immune_enrichment > 0 ? '#1f77b4' : '#d62728')
-            },
-            hovertemplate: '%{x}<br>Enrichment: %{y:.2f}<br>Immune: %{customdata[0]:.2f}<br>Non-immune: %{customdata[1]:.2f}<extra></extra>',
-            customdata: sorted.map(d => [d.mean_immune_activity, d.mean_nonimmune_activity])
-        };
-
-        Plotly.newPlot(container, [trace], {
-            xaxis: { title: 'Cancer Type', tickangle: -45 },
-            yaxis: { title: 'Immune Enrichment (z-score diff)' },
+            xaxis: { title: 'Cancer Type', tickangle: 45 },
+            yaxis: { title: 'TIL Proportion of TME', tickformat: '.0%' },
             margin: { l: 60, r: 30, t: 30, b: 100 },
-            height: 400,
-            shapes: [{
-                type: 'line', x0: -0.5, x1: sorted.length - 0.5, y0: 0, y1: 0,
-                line: { color: 'gray', width: 1, dash: 'dash' }
-            }]
+            height: 420
         }, { responsive: true });
     },
 
