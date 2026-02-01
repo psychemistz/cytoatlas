@@ -128,9 +128,34 @@ def create_pseudobulk(adata, groupby_cols=['cellType1', 'sampleID'], min_cells=M
     return pb_adata
 
 
+def normalize_and_transform(expr_df: pd.DataFrame) -> pd.DataFrame:
+    """TPM normalize and log2 transform expression data (matching CIMA pipeline)."""
+    # TPM normalize (sum to 1M per sample)
+    col_sums = expr_df.sum(axis=0)
+    expr_tpm = expr_df / col_sums * 1e6
+
+    # Log2 transform
+    expr_log = np.log2(expr_tpm + 1)
+
+    return expr_log
+
+
+def compute_differential(expr_df: pd.DataFrame) -> pd.DataFrame:
+    """Compute differential expression (subtract row mean) - centers genes across samples."""
+    row_means = expr_df.mean(axis=1)
+    diff = expr_df.subtract(row_means, axis=0)
+    return diff
+
+
 def compute_activity(pb_adata, sig_matrix, sig_type: str):
     """
     Compute activity scores for pseudobulk data.
+
+    IMPORTANT: This matches the CIMA/Inflammation pipeline:
+    1. TPM normalize
+    2. Log2 transform
+    3. Center genes (subtract row mean)
+    4. Z-score normalize before ridge regression
 
     Args:
         pb_adata: Pseudobulk AnnData (samples × genes)
@@ -142,52 +167,100 @@ def compute_activity(pb_adata, sig_matrix, sig_type: str):
     """
     print(f"  Computing {sig_type} activity...")
 
-    # Get overlapping genes
-    pb_genes = set(pb_adata.var_names)
-    sig_genes = set(sig_matrix.index)
-    common_genes = sorted(pb_genes & sig_genes)
+    # Get overlapping genes (case-insensitive matching)
+    pb_genes_upper = {g.upper(): g for g in pb_adata.var_names}
+    sig_genes_upper = {g.upper(): g for g in sig_matrix.index}
+    common_genes_upper = set(pb_genes_upper.keys()) & set(sig_genes_upper.keys())
 
-    print(f"    Common genes: {len(common_genes)} / {len(sig_genes)} ({100*len(common_genes)/len(sig_genes):.1f}%)")
+    print(f"    Common genes: {len(common_genes_upper)} / {len(sig_matrix.index)} ({100*len(common_genes_upper)/len(sig_matrix.index):.1f}%)")
 
-    if len(common_genes) < 100:
+    if len(common_genes_upper) < 100:
         print(f"    [WARN] Too few common genes, skipping")
         return None
 
-    # Subset to common genes
-    pb_subset = pb_adata[:, common_genes].copy()
-    sig_subset = sig_matrix.loc[common_genes]
+    # Map to original gene names
+    pb_common = [pb_genes_upper[g] for g in sorted(common_genes_upper)]
+    sig_common = [sig_genes_upper[g] for g in sorted(common_genes_upper)]
 
-    # Log transform (pseudobulk is CPM-normalized)
+    # Subset to common genes
+    pb_subset = pb_adata[:, pb_common].copy()
+    sig_subset = sig_matrix.loc[sig_common].copy()
+
+    # Make indices consistent (uppercase)
+    pb_subset.var_names = [g.upper() for g in pb_subset.var_names]
+    sig_subset.index = [g.upper() for g in sig_subset.index]
+    common_genes = sorted(common_genes_upper)
+
+    # Get expression matrix (samples × genes)
     X = pb_subset.X
     if sparse.issparse(X):
         X = X.toarray()
-    X_log = np.log1p(X)
+
+    # Create DataFrame for processing (genes × samples for consistency with CIMA pipeline)
+    expr_df = pd.DataFrame(X.T, index=common_genes, columns=pb_subset.obs_names)
+
+    # Apply CIMA preprocessing pipeline:
+    # 1. TPM normalize and log2 transform
+    print(f"    Normalizing (TPM + log2)...")
+    expr_log = normalize_and_transform(expr_df)
+
+    # 2. Compute differential (center genes)
+    print(f"    Computing differential (centering genes)...")
+    expr_diff = compute_differential(expr_log)
+
+    # 3. Z-score columns (samples)
+    print(f"    Z-scoring expression...")
+    expr_scaled = (expr_diff - expr_diff.mean()) / expr_diff.std(ddof=1)
+    expr_scaled = expr_scaled.fillna(0)
+
+    # 4. Z-score signature matrix
+    print(f"    Z-scoring signature matrix...")
+    sig_aligned = sig_subset.loc[common_genes]
+    sig_scaled = (sig_aligned - sig_aligned.mean()) / sig_aligned.std(ddof=1)
+    sig_scaled = sig_scaled.fillna(0)
 
     # Ridge regression expects:
     # X: signature matrix (genes × signatures)
     # Y: expression data (genes × samples)
-    # Returns: beta (signatures × samples)
+    # Returns: beta, zscore (signatures × samples)
 
-    print(f"    Running ridge regression...")
-    # X_log is samples × genes, need to transpose to genes × samples
+    print(f"    Running ridge regression with permutation testing...")
+    print(f"      Signature matrix: {sig_scaled.shape}")
+    print(f"      Expression matrix: {expr_scaled.shape}")
+
     result = ridge(
-        X=sig_subset.values,  # genes × signatures
-        Y=X_log.T,            # genes × samples
+        X=sig_scaled.values,      # genes × signatures
+        Y=expr_scaled.values,     # genes × samples (already transposed)
         lambda_=5e5,
-        n_rand=0,             # Skip permutation testing for speed
-        verbose=False
+        n_rand=1000,              # Permutation testing for z-scores (matching CIMA)
+        seed=0,
+        verbose=True
     )
 
-    # beta is signatures × samples
-    activity = result['beta']
+    # zscore is signatures × samples (this is what CIMA stores in X)
+    activity = result['zscore']
 
-    # Create activity AnnData
+    # Debug: check activity range
+    print(f"    Activity (zscore) stats: min={activity.min():.3f}, max={activity.max():.3f}, mean={activity.mean():.3f}, std={activity.std():.3f}")
+
+    # Create activity AnnData (matching CIMA format)
+    # X = zscore, layers = beta, se, pvalue
     # obs = signatures, var = samples
     act_adata = ad.AnnData(
-        X=activity,  # signatures × samples
-        obs=pd.DataFrame(index=sig_subset.columns),  # Signatures
+        X=activity,  # zscore: signatures × samples
+        obs=pd.DataFrame(index=sig_scaled.columns),  # Signatures
         var=pb_adata.obs.copy()  # Sample metadata
     )
+
+    # Store additional result matrices in layers (matching CIMA)
+    act_adata.layers['beta'] = result['beta']
+    act_adata.layers['se'] = result['se']
+    act_adata.layers['pvalue'] = result['pvalue']
+
+    # Store metadata
+    act_adata.uns['signature'] = sig_type
+    act_adata.uns['n_rand'] = 1000
+    act_adata.uns['seed'] = 0
 
     print(f"    Activity shape: {act_adata.shape} (signatures × samples)")
     return act_adata
