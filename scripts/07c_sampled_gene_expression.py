@@ -36,13 +36,14 @@ DATA_PATHS = {
 
 OUTPUT_DIR = Path('/vf/users/parks34/projects/2secactpy/visualization/data')
 
-# Sample size per cell type
-SAMPLE_SIZE = 5000
+# Sample size per cell type (reduced for memory efficiency)
+SAMPLE_SIZE = 2000
 
 
 def get_cell_type_column(adata):
     """Find the cell type column."""
-    for col in ['cell_type', 'cell_type_l1', 'celltype', 'CellType', 'cell_type_fine']:
+    for col in ['cell_type', 'cell_type_l1', 'celltype', 'CellType', 'cell_type_fine',
+                'cellType1', 'cellType2', 'ann1', 'majorCluster']:
         if col in adata.obs.columns:
             return col
     return None
@@ -75,13 +76,16 @@ def extract_sampled_expression(h5ad_path: str, genes: list[str], atlas_name: str
 
     logger.info(f"Using cell type column: {cell_type_col}")
 
-    # Get gene indices
-    var_names = list(adata.var_names)
-    gene_indices = [var_names.index(g) for g in genes_found]
-
-    # Get unique cell types
+    # Get unique cell types BEFORE subsetting (obs will change after subset)
     cell_types = adata.obs[cell_type_col].unique()
+    cell_type_labels = adata.obs[cell_type_col].values.copy()  # Copy labels
     logger.info(f"Found {len(cell_types)} cell types")
+
+    # Subset to only the genes we need - this creates a view, not a copy
+    # This is the key optimization: subset columns first, then slice rows
+    logger.info(f"Subsetting to {len(genes_found)} genes...")
+    adata_genes = adata[:, genes_found]
+    logger.info("Gene subset complete")
 
     results = []
     np.random.seed(42)
@@ -91,8 +95,8 @@ def extract_sampled_expression(h5ad_path: str, genes: list[str], atlas_name: str
             logger.info(f"Processing cell type {ct_idx+1}/{len(cell_types)}: {ct}")
             gc.collect()
 
-        # Get cells of this type
-        mask = (adata.obs[cell_type_col] == ct).values
+        # Get cells of this type using the copied labels
+        mask = (cell_type_labels == ct)
         cell_indices = np.where(mask)[0]
         n_total = len(cell_indices)
 
@@ -104,8 +108,8 @@ def extract_sampled_expression(h5ad_path: str, genes: list[str], atlas_name: str
         sampled_indices = np.random.choice(cell_indices, size=n_sample, replace=False)
         sampled_indices = np.sort(sampled_indices)
 
-        # Read expression for sampled cells
-        X_sample = adata.X[sampled_indices, :][:, gene_indices]
+        # Read expression for sampled cells - now only reads the genes we need
+        X_sample = adata_genes.X[sampled_indices, :]
         if hasattr(X_sample, 'toarray'):
             X_sample = X_sample.toarray()
 
@@ -126,6 +130,9 @@ def extract_sampled_expression(h5ad_path: str, genes: list[str], atlas_name: str
 
         del X_sample
         gc.collect()
+
+    del adata_genes
+    gc.collect()
 
     return pd.DataFrame(results)
 
