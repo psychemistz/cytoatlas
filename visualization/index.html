@@ -2191,9 +2191,9 @@
 
             <div class="tabs">
                 <button class="tab active" data-tab="atlas-overview">Overview</button>
+                <button class="tab" data-tab="celltype-mapping">Cell Type Mapping</button>
                 <button class="tab" data-tab="conserved-signatures">Conserved</button>
                 <button class="tab" data-tab="atlas-comparison">Atlas Comparison</button>
-                <button class="tab" data-tab="celltype-mapping">Cell Type Mapping</button>
                 <button class="tab" data-tab="meta-analysis">Meta-Analysis</button>
                 <button class="tab" data-tab="signature-correlation">Signature Matrix</button>
                 <button class="tab" data-tab="pathway-enrichment">Pathways</button>
@@ -2225,6 +2225,43 @@
                     <div class="viz-subtitle">Comparison of cell counts, sample sizes, and coverage across atlases</div>
                     <div id="atlas-summary-chart" class="loading">Loading...</div>
                 </div>
+            </div>
+
+            <!-- Cell Type Mapping Tab -->
+            <div class="tab-content" id="tab-celltype-mapping">
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Mapping Level</label>
+                        <select id="mapping-level">
+                            <option value="coarse">Coarse (8 Lineages)</option>
+                            <option value="fine">Fine (~32 Types)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Cell Lineage Filter</label>
+                        <select id="mapping-lineage">
+                            <option value="all">All Lineages</option>
+                            <option value="T_cell">T Cells (CD4, CD8, Unconventional)</option>
+                            <option value="Myeloid">Myeloid (Mono, DC, Mac)</option>
+                            <option value="B_cell">B Cells & Plasma</option>
+                            <option value="NK_ILC">NK & ILC</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="viz-container">
+                    <div class="viz-title">Cell Type Harmonization</div>
+                    <div class="viz-subtitle" id="celltype-mapping-subtitle">Mapping of cell types across atlases (Sankey diagram)</div>
+                    <div id="celltype-sankey" class="loading" style="height: 420px;">Loading...</div>
+                </div>
+
+                <div class="viz-container" style="margin-top: 20px;">
+                    <div class="viz-title" id="celltype-detail-title">Original Annotations per Lineage</div>
+                    <div class="viz-subtitle" id="celltype-detail-subtitle">Number of atlas-specific cell type annotations mapped to each harmonized lineage</div>
+                    <div id="celltype-detail-bar" style="height: 320px;"></div>
+                </div>
+
+                <div id="celltype-mapping-info" style="margin-top: 15px; padding: 12px; background: #f8f9fa; border-radius: 6px; font-size: 0.9rem;"></div>
             </div>
 
             <!-- Conserved Signatures Tab -->
@@ -2292,43 +2329,6 @@
                         <div id="atlas-diff-bar" class="loading">Loading...</div>
                     </div>
                 </div>
-            </div>
-
-            <!-- Cell Type Mapping Tab -->
-            <div class="tab-content" id="tab-celltype-mapping">
-                <div class="controls">
-                    <div class="control-group">
-                        <label>Mapping Level</label>
-                        <select id="mapping-level">
-                            <option value="coarse">Coarse (8 Lineages)</option>
-                            <option value="fine">Fine (~32 Types)</option>
-                        </select>
-                    </div>
-                    <div class="control-group">
-                        <label>Cell Lineage Filter</label>
-                        <select id="mapping-lineage">
-                            <option value="all">All Lineages</option>
-                            <option value="T_cell">T Cells (CD4, CD8, Unconventional)</option>
-                            <option value="Myeloid">Myeloid (Mono, DC, Mac)</option>
-                            <option value="B_cell">B Cells & Plasma</option>
-                            <option value="NK_ILC">NK & ILC</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="viz-container">
-                    <div class="viz-title">Cell Type Harmonization</div>
-                    <div class="viz-subtitle" id="celltype-mapping-subtitle">Mapping of cell types across atlases (Sankey diagram)</div>
-                    <div id="celltype-sankey" class="loading" style="height: 420px;">Loading...</div>
-                </div>
-
-                <div class="viz-container" style="margin-top: 20px;">
-                    <div class="viz-title" id="celltype-detail-title">Original Annotations per Lineage</div>
-                    <div class="viz-subtitle" id="celltype-detail-subtitle">Number of atlas-specific cell type annotations mapped to each harmonized lineage</div>
-                    <div id="celltype-detail-bar" style="height: 320px;"></div>
-                </div>
-
-                <div id="celltype-mapping-info" style="margin-top: 15px; padding: 12px; background: #f8f9fa; border-radius: 6px; font-size: 0.9rem;"></div>
             </div>
 
             <!-- Meta-Analysis Tab -->
