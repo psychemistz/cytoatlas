@@ -3458,14 +3458,28 @@
             const diffData = state.data.cimadifferential;
             if (!diffData) return;
 
-            let data = diffData.filter(d =>
-                d.comparison === comparison &&
-                d.group1 === group1 &&
-                d.group2 === group2 &&
-                d.signature === sigType &&
-                !isNaN(d.activity_diff) &&
-                isFinite(d.neg_log10_pval)
-            );
+            // Filter and compute activity_diff (z-score difference) on the fly
+            // This handles both pre-computed activity_diff and raw median values
+            let data = diffData
+                .filter(d =>
+                    d.comparison === comparison &&
+                    d.group1 === group1 &&
+                    d.group2 === group2 &&
+                    d.signature === sigType
+                )
+                .map(d => {
+                    // Compute activity_diff from median z-scores if not present
+                    // activity_diff = median_g1 - median_g2 (difference between z-scores)
+                    const activityDiff = d.activity_diff !== undefined ? d.activity_diff : (d.median_g1 - d.median_g2);
+                    // Compute -log10(pvalue) if not present
+                    const negLog10Pval = d.neg_log10_pval !== undefined ? d.neg_log10_pval : -Math.log10(Math.max(d.pvalue, 1e-300));
+                    return {
+                        ...d,
+                        activity_diff: activityDiff,
+                        neg_log10_pval: negLog10Pval
+                    };
+                })
+                .filter(d => !isNaN(d.activity_diff) && isFinite(d.neg_log10_pval));
 
             // For SecAct (many proteins), limit to top 200 by significance score
             if (sigType === 'SecAct' && data.length > 200) {
