@@ -529,7 +529,7 @@ def compute_organ_signatures(
                 'signature': sig,
                 'mean_activity': mean_activity[i],
                 'other_mean': other_mean[i],
-                'log2fc': mean_activity[i] - other_mean[i],  # Activity difference for z-scores
+                'activity_diff': mean_activity[i] - other_mean[i],  # Activity difference for z-scores
                 'specificity_score': specificity[i],
                 'n_cells': mask.sum()
             })
@@ -664,7 +664,7 @@ def compute_tumor_vs_adjacent(
             'mean_adjacent': adjacent_vals.mean(),
             'median_tumor': np.median(tumor_vals),
             'median_adjacent': np.median(adjacent_vals),
-            'log2fc': tumor_vals.mean() - adjacent_vals.mean(),  # Activity difference for z-scores
+            'activity_diff': tumor_vals.mean() - adjacent_vals.mean(),  # Activity difference for z-scores
             'statistic': stat,
             'pvalue': pval,
             'n_tumor': n_tumor,
@@ -796,7 +796,7 @@ def compute_normal_vs_cancer(
                 'signature': sig,
                 'mean_normal': normal_vals.mean(),
                 'mean_cancer': cancer_vals.mean(),
-                'log2fc': cancer_vals.mean() - normal_vals.mean(),  # Activity difference for z-scores
+                'activity_diff': cancer_vals.mean() - normal_vals.mean(),  # Activity difference for z-scores
                 'statistic': stat,
                 'pvalue': pval,
                 'n_normal': normal_mask.sum(),
@@ -824,7 +824,7 @@ def compute_normal_vs_cancer(
 def identify_pan_signatures(
     result_df: pd.DataFrame,
     qvalue_threshold: float = 0.05,
-    log2fc_threshold: float = 0.5
+    activity_diff_threshold: float = 0.5
 ) -> pd.DataFrame:
     """
     Identify signatures that are consistently altered across multiple organs/cancers.
@@ -844,18 +844,18 @@ def identify_pan_signatures(
         sig_data = result_df[result_df['signature'] == sig]
 
         # Count significant up/down regulated
-        if 'qvalue' in sig_data.columns and 'log2fc' in sig_data.columns:
+        if 'qvalue' in sig_data.columns and 'activity_diff' in sig_data.columns:
             sig_up = sig_data[(sig_data['qvalue'] < qvalue_threshold) &
-                              (sig_data['log2fc'] > log2fc_threshold)]
+                              (sig_data['activity_diff'] > activity_diff_threshold)]
             sig_down = sig_data[(sig_data['qvalue'] < qvalue_threshold) &
-                                (sig_data['log2fc'] < -log2fc_threshold)]
+                                (sig_data['activity_diff'] < -activity_diff_threshold)]
 
             sig_stats.append({
                 'signature': sig,
                 'n_comparisons': len(sig_data),
                 'n_significant_up': len(sig_up),
                 'n_significant_down': len(sig_down),
-                'mean_log2fc': sig_data['log2fc'].mean(),
+                'mean_activity_diff': sig_data['activity_diff'].mean(),
                 'consistency_score': max(len(sig_up), len(sig_down)) / len(sig_data) if len(sig_data) > 0 else 0
             })
 
@@ -1035,7 +1035,7 @@ def compute_tcell_exhaustion(
             'mean_nonexhausted': nonexhausted_vals.mean(),
             'median_exhausted': np.median(exhausted_vals),
             'median_nonexhausted': np.median(nonexhausted_vals),
-            'log2fc': exhausted_vals.mean() - nonexhausted_vals.mean(),  # Activity difference for z-scores
+            'activity_diff': exhausted_vals.mean() - nonexhausted_vals.mean(),  # Activity difference for z-scores
             'statistic': stat,
             'pvalue': pval,
             'n_exhausted': n_exhausted,
@@ -1241,7 +1241,7 @@ def compute_adjacent_signatures(
             'signature': sig,
             'mean_adjacent': adjacent_vals.mean(),
             'mean_tumor': tumor_vals.mean(),
-            'log2fc_adj_vs_tumor': adjacent_vals.mean() - tumor_vals.mean(),  # Activity difference for z-scores
+            'activity_diff_adj_vs_tumor': adjacent_vals.mean() - tumor_vals.mean(),  # Activity difference for z-scores
             'statistic': stat,
             'pvalue': pval,
             'n_adjacent': n_adjacent,
@@ -1279,7 +1279,7 @@ def compute_adjacent_signatures(
                     'signature': sig,
                     'mean_adjacent': adj_vals.mean(),
                     'mean_tumor': tumor_vals.mean(),
-                    'log2fc_adj_vs_tumor': adj_vals.mean() - tumor_vals.mean(),  # Activity difference for z-scores
+                    'activity_diff_adj_vs_tumor': adj_vals.mean() - tumor_vals.mean(),  # Activity difference for z-scores
                     'statistic': stat,
                     'pvalue': pval,
                     'n_adjacent': n_ct_adj,

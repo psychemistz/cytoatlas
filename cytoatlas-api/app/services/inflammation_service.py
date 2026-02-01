@@ -265,7 +265,7 @@ class InflammationService(BaseService):
                     mean_g2=item.get("mean_g2", 0),
                     n_g1=item.get("n_g1", 0),
                     n_g2=item.get("n_g2", 0),
-                    log2fc=item.get("log2fc", 0),
+                    activity_diff=item.get("activity_diff", 0),
                     pvalue=item.get("pvalue", 1.0),
                     qvalue=item.get("qvalue"),
                     neg_log10_pval=item.get("neg_log10_pval"),
@@ -528,10 +528,10 @@ class InflammationService(BaseService):
             if disease and item.get("disease") != disease:
                 continue
 
-            log2fc = item.get("effect", 0)
+            activity_diff = item.get("effect", 0)
             pvalue = item.get("pvalue", 1.0)
             # Consider significant and large effect as "driving"
-            is_driving = pvalue < 0.05 and abs(log2fc) > 0.5
+            is_driving = pvalue < 0.05 and abs(activity_diff) > 0.5
 
             results.append(
                 InflammationCellTypeStratified(
@@ -539,7 +539,7 @@ class InflammationService(BaseService):
                     signature=item.get("signature", item.get("cytokine", "")),
                     signature_type=item.get("signature_type", ""),
                     disease=item.get("disease", ""),
-                    log2fc=log2fc,
+                    activity_diff=activity_diff,
                     p_value=pvalue,
                     q_value=None,
                     is_driving=is_driving,
@@ -589,10 +589,10 @@ class InflammationService(BaseService):
                     "disease": item.disease,
                     "cell_type": item.cell_type,
                     "signatures": [],
-                    "log2fc_sum": 0,
+                    "activity_diff_sum": 0,
                 }
             driving_map[key]["signatures"].append(item.signature)
-            driving_map[key]["log2fc_sum"] += abs(item.log2fc)
+            driving_map[key]["activity_diff_sum"] += abs(item.activity_diff)
 
         results = []
         for key, data in driving_map.items():
@@ -602,7 +602,7 @@ class InflammationService(BaseService):
                     cell_type=data["cell_type"],
                     n_signatures=len(data["signatures"]),
                     top_signatures=data["signatures"][:5],
-                    mean_log2fc=data["log2fc_sum"] / len(data["signatures"]),
+                    mean_activity_diff=data["activity_diff_sum"] / len(data["signatures"]),
                 )
             )
 
@@ -659,7 +659,7 @@ class InflammationService(BaseService):
                         signature_type=signature_type,
                         diseases=sorted(list(data["diseases"])),
                         n_diseases=len(data["diseases"]),
-                        mean_log2fc=data["activity_sum"] / len(data["diseases"]),
+                        mean_activity_diff=data["activity_sum"] / len(data["diseases"]),
                         consistency_score=consistency,
                     )
                 )
@@ -856,7 +856,7 @@ class InflammationService(BaseService):
         matching the format expected by index.html.
 
         Fields: protein, disease, signature (CytoSig/SecAct), comparison,
-        healthy_note, n_g1, n_g2, log2fc, pvalue, qvalue, neg_log10_pval
+        healthy_note, n_g1, n_g2, activity_diff, pvalue, qvalue, neg_log10_pval
         """
         return await self.load_json("inflammation_differential.json")
 

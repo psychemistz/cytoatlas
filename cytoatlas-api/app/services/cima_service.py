@@ -184,13 +184,13 @@ class CIMAService(BaseService):
             return val
 
         # Transform field names to match schema
-        # JSON has: protein, signature (type), comparison, group1, group2, log2fc, etc.
+        # JSON has: protein, signature (type), comparison, group1, group2, activity_diff, etc.
         # Schema expects: signature (protein name), signature_type
         transformed = []
         for r in data:
-            # Skip records with NaN log2fc (invalid data)
-            log2fc_val = r.get("log2fc")
-            if log2fc_val is not None and isinstance(log2fc_val, float) and math.isnan(log2fc_val):
+            # Skip records with NaN activity_diff (invalid data)
+            activity_diff_val = r.get("activity_diff")
+            if activity_diff_val is not None and isinstance(activity_diff_val, float) and math.isnan(activity_diff_val):
                 continue
 
             # The JSON "signature" field contains the type (CytoSig/SecAct)
@@ -203,7 +203,7 @@ class CIMAService(BaseService):
                 "comparison": r.get("comparison"),
                 "group1": r.get("group1"),
                 "group2": r.get("group2"),
-                "log2fc": safe_float(r.get("log2fc"), 0),
+                "activity_diff": safe_float(r.get("activity_diff"), 0),
                 "median_g1": safe_float(r.get("median_g1"), 0),
                 "median_g2": safe_float(r.get("median_g2"), 0),
                 "pvalue": safe_float(r.get("pvalue", r.get("p_value")), 1),

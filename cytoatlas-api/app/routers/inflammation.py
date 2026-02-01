@@ -197,7 +197,7 @@ async def get_differential_raw(
     matching the format expected by index.html.
 
     Fields: protein, disease, signature (CytoSig/SecAct), comparison,
-    healthy_note, n_g1, n_g2, log2fc, pvalue, qvalue, neg_log10_pval
+    healthy_note, n_g1, n_g2, activity_diff, pvalue, qvalue, neg_log10_pval
     """
     return await service.get_differential_raw()
 
@@ -494,7 +494,7 @@ async def get_disease_heatmap(
         key = (d.disease, d.signature)
         if key not in disease_sig_values:
             disease_sig_values[key] = []
-        disease_sig_values[key].append(d.log2fc)
+        disease_sig_values[key].append(d.activity_diff)
 
     diseases = sorted(list(set(d.disease for d in data)))
     signatures = sorted(list(set(d.signature for d in data)))
@@ -531,7 +531,7 @@ async def get_celltype_disease_heatmap(
     cell_types = sorted(list(set(d.cell_type for d in data)))
     signatures = sorted(list(set(d.signature for d in data)))
 
-    lookup = {(d.cell_type, d.signature): d.log2fc for d in data}
+    lookup = {(d.cell_type, d.signature): d.activity_diff for d in data}
 
     matrix = []
     for ct in cell_types:

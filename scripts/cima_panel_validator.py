@@ -612,7 +612,7 @@ class CIMAPanelValidator:
         ))
 
         if data:
-            # Data is a list of differential records [{protein, comparison, log2fc, pvalue, ...}, ...]
+            # Data is a list of differential records [{protein, comparison, activity_diff, pvalue, ...}, ...]
             if isinstance(data, list):
                 results.append(self._check(
                     panel, "record_count", len(data) >= 100,
@@ -622,7 +622,7 @@ class CIMAPanelValidator:
                 if data:
                     first = data[0]
                     # Check required fields
-                    required_fields = ['protein', 'comparison', 'log2fc', 'pvalue']
+                    required_fields = ['protein', 'comparison', 'activity_diff', 'pvalue']
                     for field in required_fields:
                         results.append(self._check(
                             panel, f"has_{field}", field in first,

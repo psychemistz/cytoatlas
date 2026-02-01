@@ -2259,7 +2259,7 @@ const AtlasDetailPage = {
                 Plotly.purge(effectContainer);
 
                 // Sort by effect size (positive to negative)
-                const sortedByEffect = [...effects].sort((a, b) => (b.effect || b.effect_size || b.log2fc || 0) - (a.effect || a.effect_size || a.log2fc || 0));
+                const sortedByEffect = [...effects].sort((a, b) => (b.effect || b.effect_size || b.activity_diff || 0) - (a.effect || a.effect_size || a.activity_diff || 0));
 
                 // Get top 10 (most positive) and bottom 10 (most negative)
                 const top10 = sortedByEffect.slice(0, 10);
@@ -2274,10 +2274,10 @@ const AtlasDetailPage = {
                 [...top10, ...bottom10, ...mustHave].forEach(d => combined.set(d.cytokine || d.signature, d));
 
                 // Sort final list by effect size
-                const selectedEffects = Array.from(combined.values()).sort((a, b) => (b.effect || b.effect_size || b.log2fc || 0) - (a.effect || a.effect_size || a.log2fc || 0));
+                const selectedEffects = Array.from(combined.values()).sort((a, b) => (b.effect || b.effect_size || b.activity_diff || 0) - (a.effect || a.effect_size || a.activity_diff || 0));
 
                 const effectSigs = selectedEffects.map(d => d.cytokine || d.signature);
-                const effectVals = selectedEffects.map(d => d.effect || d.effect_size || d.log2fc || 0);
+                const effectVals = selectedEffects.map(d => d.effect || d.effect_size || d.activity_diff || 0);
                 const pvals = selectedEffects.map(d => d.pvalue || d.p_value || 1);
 
                 Plotly.newPlot(effectContainer, [{
@@ -2314,14 +2314,14 @@ const AtlasDetailPage = {
                 Plotly.purge(heatmapContainer);
 
                 // Use same signatures from effect chart for heatmap
-                const sortedByEffect = [...effects].sort((a, b) => Math.abs(b.effect || b.effect_size || b.log2fc || 0) - Math.abs(a.effect || a.effect_size || a.log2fc || 0));
+                const sortedByEffect = [...effects].sort((a, b) => Math.abs(b.effect || b.effect_size || b.activity_diff || 0) - Math.abs(a.effect || a.effect_size || a.activity_diff || 0));
                 const top10 = sortedByEffect.slice(0, 10);
                 const bottom10 = sortedByEffect.slice(-10);
                 const alwaysInclude = ['IFNG', 'TNFA', 'TNF'];
                 const mustHave = effects.filter(d => alwaysInclude.includes(((d.cytokine || d.signature || '')).toUpperCase()));
                 const combined = new Map();
                 [...top10, ...bottom10, ...mustHave].forEach(d => combined.set(d.cytokine || d.signature, d));
-                const heatmapSigs = Array.from(combined.values()).sort((a, b) => (b.effect || b.effect_size || b.log2fc || 0) - (a.effect || a.effect_size || a.log2fc || 0)).map(d => d.cytokine || d.signature);
+                const heatmapSigs = Array.from(combined.values()).sort((a, b) => (b.effect || b.effect_size || b.activity_diff || 0) - (a.effect || a.effect_size || a.activity_diff || 0)).map(d => d.cytokine || d.signature);
 
                 // Build z-matrix from group means
                 const zData = groupNames.map(group => {
@@ -6156,7 +6156,7 @@ const AtlasDetailPage = {
         // Process data for volcano plot
         const volcanoData = filtered.map(d => ({
             signature: d.signature,
-            log2fc: d.log2fc || 0,
+            activity_diff: d.activity_diff || 0,
             pvalue: d.pvalue || 1,
             negLogP: d.neg_log10_pval || -Math.log10(Math.max(d.pvalue || 1, 1e-100))
         }));
@@ -6165,9 +6165,9 @@ const AtlasDetailPage = {
         const fcThreshold = 0.3;
         const pThreshold = 0.05;
 
-        const significantUp = volcanoData.filter(d => d.log2fc > fcThreshold && d.pvalue < pThreshold);
-        const significantDown = volcanoData.filter(d => d.log2fc < -fcThreshold && d.pvalue < pThreshold);
-        const notSig = volcanoData.filter(d => Math.abs(d.log2fc) <= fcThreshold || d.pvalue >= pThreshold);
+        const significantUp = volcanoData.filter(d => d.activity_diff > fcThreshold && d.pvalue < pThreshold);
+        const significantDown = volcanoData.filter(d => d.activity_diff < -fcThreshold && d.pvalue < pThreshold);
+        const notSig = volcanoData.filter(d => Math.abs(d.activity_diff) <= fcThreshold || d.pvalue >= pThreshold);
 
         // Update subtitle with sample counts
         const volcanoSubtitle = document.getElementById('diff-volcano-subtitle');
@@ -6188,21 +6188,21 @@ const AtlasDetailPage = {
         Plotly.newPlot(container, [
             {
                 type: 'scatter', mode: 'markers+text', name: 'Higher in Adjacent',
-                x: significantUp.map(d => d.log2fc), y: significantUp.map(d => d.negLogP),
+                x: significantUp.map(d => d.activity_diff), y: significantUp.map(d => d.negLogP),
                 text: significantUp.map(d => d.signature), textposition: 'top center', textfont: { size: 9 },
                 marker: { color: '#ff7f0e', size: 10 },
                 hovertemplate: '<b>%{text}</b><br>Δ Activity: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
             },
             {
                 type: 'scatter', mode: 'markers+text', name: 'Higher in Tumor',
-                x: significantDown.map(d => d.log2fc), y: significantDown.map(d => d.negLogP),
+                x: significantDown.map(d => d.activity_diff), y: significantDown.map(d => d.negLogP),
                 text: significantDown.map(d => d.signature), textposition: 'top center', textfont: { size: 9 },
                 marker: { color: '#d62728', size: 10 },
                 hovertemplate: '<b>%{text}</b><br>Δ Activity: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
             },
             {
                 type: 'scatter', mode: 'markers', name: 'Not significant',
-                x: notSig.map(d => d.log2fc), y: notSig.map(d => d.negLogP),
+                x: notSig.map(d => d.activity_diff), y: notSig.map(d => d.negLogP),
                 text: notSig.map(d => d.signature), marker: { color: '#ccc', size: 6 },
                 hovertemplate: '<b>%{text}</b><br>Δ Activity: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
             }
@@ -6244,7 +6244,7 @@ const AtlasDetailPage = {
         }
 
         // Sort by absolute activity difference
-        const sorted = [...filtered].sort((a, b) => Math.abs(b.log2fc || 0) - Math.abs(a.log2fc || 0));
+        const sorted = [...filtered].sort((a, b) => Math.abs(b.activity_diff || 0) - Math.abs(a.activity_diff || 0));
         const top15 = sorted.slice(0, 15).reverse();  // Reverse for horizontal bar (most significant at top)
 
         Plotly.purge(container);
@@ -6252,11 +6252,11 @@ const AtlasDetailPage = {
             type: 'bar',
             orientation: 'h',
             y: top15.map(d => d.signature),
-            x: top15.map(d => d.log2fc || 0),
+            x: top15.map(d => d.activity_diff || 0),
             marker: {
-                color: top15.map(d => (d.pvalue || 1) < 0.05 ? ((d.log2fc || 0) > 0 ? '#ff7f0e' : '#d62728') : '#ccc')
+                color: top15.map(d => (d.pvalue || 1) < 0.05 ? ((d.activity_diff || 0) > 0 ? '#ff7f0e' : '#d62728') : '#ccc')
             },
-            text: top15.map(d => (d.log2fc || 0).toFixed(3)),
+            text: top15.map(d => (d.activity_diff || 0).toFixed(3)),
             textposition: 'auto',
             hovertemplate: '<b>%{y}</b><br>Δ Activity: %{x:.3f}<br>p = %{customdata:.2e}<extra></extra>',
             customdata: top15.map(d => d.pvalue || 1)
@@ -7207,7 +7207,7 @@ const AtlasDetailPage = {
 
             if (data && data.length > 0) {
                 // Volcano plot
-                const x = data.map(d => d.log2fc || d.effect_size || 0);
+                const x = data.map(d => d.activity_diff || d.effect_size || 0);
                 const y = data.map(d => -Math.log10(d.pvalue || d.p_value || 1));
                 const labels = data.map(d => d.signature || d.protein);
 
@@ -7286,8 +7286,8 @@ const AtlasDetailPage = {
         // For SecAct (many proteins), limit to top 200 by significance score
         if (sigType === 'SecAct' && filteredData.length > 200) {
             filteredData = [...filteredData].sort((a, b) => {
-                const scoreA = a.neg_log10_pval * Math.abs(a.log2fc);
-                const scoreB = b.neg_log10_pval * Math.abs(b.log2fc);
+                const scoreA = a.neg_log10_pval * Math.abs(a.activity_diff);
+                const scoreB = b.neg_log10_pval * Math.abs(b.activity_diff);
                 return scoreB - scoreA;
             }).slice(0, 200);
         }
@@ -7331,26 +7331,26 @@ const AtlasDetailPage = {
 
         // Color by significance (matching index.html style)
         const colors = filteredData.map(d => {
-            if (d.qvalue < 0.05 && Math.abs(d.log2fc) > 0.5) {
-                return d.log2fc > 0 ? '#f4a6a6' : '#a8d4e6';
+            if (d.qvalue < 0.05 && Math.abs(d.activity_diff) > 0.5) {
+                return d.activity_diff > 0 ? '#f4a6a6' : '#a8d4e6';
             }
             return '#cccccc';
         });
 
         // Only show text for significant points
         const textLabels = filteredData.map(d => {
-            if (d.qvalue < 0.05 && Math.abs(d.log2fc) > 0.5) {
+            if (d.qvalue < 0.05 && Math.abs(d.activity_diff) > 0.5) {
                 return d.protein;  // Use protein field for signature name
             }
             return '';
         });
 
         // Dynamic x-axis range based on data
-        const maxAbsFC = Math.max(3, Math.ceil(Math.max(...filteredData.map(d => Math.abs(d.log2fc)))));
+        const maxAbsFC = Math.max(3, Math.ceil(Math.max(...filteredData.map(d => Math.abs(d.activity_diff)))));
         const maxY = Math.max(4, Math.ceil(Math.max(...filteredData.map(d => d.neg_log10_pval))));
 
         Plotly.newPlot(volcanoContainer, [{
-            x: filteredData.map(d => d.log2fc),
+            x: filteredData.map(d => d.activity_diff),
             y: filteredData.map(d => d.neg_log10_pval),
             text: textLabels,
             customdata: filteredData.map(d => d.protein),  // Use protein for hover
@@ -7411,7 +7411,7 @@ const AtlasDetailPage = {
             // Calculate significance score and sort
             const scoredData = filteredData.map(d => ({
                 ...d,
-                score: Math.abs(d.log2fc) * d.neg_log10_pval
+                score: Math.abs(d.activity_diff) * d.neg_log10_pval
             }));
 
             // Sort by score descending and take top 20
@@ -7422,11 +7422,11 @@ const AtlasDetailPage = {
                 type: 'bar',
                 orientation: 'h',
                 y: top20.map(d => d.protein),  // Use protein field for signature name
-                x: top20.map(d => d.log2fc),
+                x: top20.map(d => d.activity_diff),
                 marker: {
-                    color: top20.map(d => d.log2fc > 0 ? '#f4a6a6' : '#a8d4e6')
+                    color: top20.map(d => d.activity_diff > 0 ? '#f4a6a6' : '#a8d4e6')
                 },
-                text: top20.map(d => d.log2fc.toFixed(2)),
+                text: top20.map(d => d.activity_diff.toFixed(2)),
                 textposition: 'outside',
                 textfont: { size: 9 },
                 hovertemplate: '<b>%{y}</b><br>Effect: %{x:.3f}<br>q = %{customdata}<extra></extra>',

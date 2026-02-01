@@ -336,7 +336,7 @@ def disease_differential_analysis(
                 'disease': disease,
                 'median_disease': vals_disease.median(),
                 'median_healthy': vals_healthy.median(),
-                'log2fc': vals_disease.median() - vals_healthy.median(),  # Activity difference for z-scores
+                'activity_diff': vals_disease.median() - vals_healthy.median(),  # Activity difference for z-scores
                 'n_disease': len(vals_disease),
                 'n_healthy': len(vals_healthy),
                 'statistic': stat,
@@ -426,7 +426,7 @@ def treatment_response_analysis(
                 'disease': disease,
                 'median_responder': vals_r.median(),
                 'median_nonresponder': vals_nr.median(),
-                'log2fc': vals_r.median() - vals_nr.median(),  # Activity difference for z-scores
+                'activity_diff': vals_r.median() - vals_nr.median(),  # Activity difference for z-scores
                 'n_responder': len(vals_r),
                 'n_nonresponder': len(vals_nr),
                 'statistic': stat,
@@ -1376,7 +1376,7 @@ def celltype_stratified_disease_analysis(
 
                 try:
                     stat, pval = stats.mannwhitneyu(vals_disease, vals_healthy, alternative='two-sided')
-                    log2fc = vals_disease.median() - vals_healthy.median()  # Activity difference for z-scores
+                    activity_diff = vals_disease.median() - vals_healthy.median()  # Activity difference for z-scores
 
                     results.append({
                         'cell_type': celltype,
@@ -1384,7 +1384,7 @@ def celltype_stratified_disease_analysis(
                         'protein': protein,
                         'median_disease': vals_disease.median(),
                         'median_healthy': vals_healthy.median(),
-                        'log2fc': log2fc,
+                        'activity_diff': activity_diff,
                         'n_disease': len(vals_disease),
                         'n_healthy': len(vals_healthy),
                         'statistic': stat,
@@ -1412,7 +1412,7 @@ def celltype_stratified_disease_analysis(
 def identify_driving_cell_populations(
     celltype_diff: pd.DataFrame,
     qvalue_threshold: float = 0.05,
-    log2fc_threshold: float = 0.5
+    activity_diff_threshold: float = 0.5
 ) -> pd.DataFrame:
     """
     Identify which cell populations drive disease-specific cytokine signatures.
@@ -1420,7 +1420,7 @@ def identify_driving_cell_populations(
     Args:
         celltype_diff: Results from celltype_stratified_disease_analysis
         qvalue_threshold: FDR threshold
-        log2fc_threshold: Minimum effect size
+        activity_diff_threshold: Minimum effect size
 
     Returns:
         DataFrame summarizing driving cell populations per disease
@@ -1433,7 +1433,7 @@ def identify_driving_cell_populations(
     # Filter significant results
     sig_df = celltype_diff[
         (celltype_diff['qvalue'] < qvalue_threshold) &
-        (celltype_diff['log2fc'].abs() > log2fc_threshold)
+        (celltype_diff['activity_diff'].abs() > activity_diff_threshold)
     ].copy()
 
     if len(sig_df) == 0:
@@ -1443,12 +1443,12 @@ def identify_driving_cell_populations(
     # Summarize per disease-celltype
     summary = sig_df.groupby(['disease', 'cell_type']).agg({
         'protein': 'count',
-        'log2fc': ['mean', 'std'],
+        'activity_diff': ['mean', 'std'],
         'qvalue': 'min'
     }).reset_index()
 
     summary.columns = ['disease', 'cell_type', 'n_significant_proteins',
-                       'mean_log2fc', 'std_log2fc', 'min_qvalue']
+                       'mean_activity_diff', 'std_activity_diff', 'min_qvalue']
 
     # Sort by number of significant proteins
     summary = summary.sort_values(['disease', 'n_significant_proteins'], ascending=[True, False])
@@ -1495,7 +1495,7 @@ def identify_conserved_programs(
     # Count diseases per protein-celltype combination
     protein_celltype_diseases = sig_df.groupby(['protein', 'cell_type']).agg({
         'disease': lambda x: list(x.unique()),
-        'log2fc': 'mean',
+        'activity_diff': 'mean',
         'qvalue': 'min'
     }).reset_index()
 
@@ -1507,7 +1507,7 @@ def identify_conserved_programs(
     ].copy()
 
     # Classify direction
-    conserved['direction'] = conserved['log2fc'].apply(
+    conserved['direction'] = conserved['activity_diff'].apply(
         lambda x: 'up' if x > 0 else 'down'
     )
 

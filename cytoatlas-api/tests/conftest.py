@@ -116,7 +116,7 @@ def sample_inflammation_data() -> dict[str, Any]:
                 "signature": "TNFA",
                 "signature_type": "CytoSig",
                 "disease": "Rheumatoid Arthritis",
-                "log2fc": 1.2,
+                "activity_diff": 1.2,
                 "mean_disease": 2.0,
                 "mean_healthy": 0.8,
                 "pvalue": 0.001,

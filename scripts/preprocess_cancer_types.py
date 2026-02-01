@@ -54,7 +54,7 @@ def main():
             'signature': row['signature'],
             'mean_activity': round(row['mean_activity'], 4) if pd.notna(row['mean_activity']) else 0,
             'other_mean': round(row['other_mean'], 4) if pd.notna(row['other_mean']) else 0,
-            'log2fc': round(row['log2fc'], 4) if pd.notna(row['log2fc']) else None,
+            'activity_diff': round(row['activity_diff'], 4) if pd.notna(row['activity_diff']) else None,
             'specificity_score': round(row['specificity_score'], 4) if pd.notna(row['specificity_score']) else 0,
             'n_cells': int(row['n_cells']) if pd.notna(row['n_cells']) else 0,
             'signature_type': row['signature_type']

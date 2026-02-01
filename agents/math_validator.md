@@ -97,9 +97,9 @@ reject, pvals_corrected, _, _ = multipletests(pvals, method='fdr_bh')
 stat, pval = scipy.stats.mannwhitneyu(group1, group2, alternative='two-sided')
 
 # Log2 fold change
-log2fc = np.log2(mean_group1 / mean_group2)
+activity_diff = np.log2(mean_group1 / mean_group2)
 # or for log-transformed data:
-log2fc = mean_log_group1 - mean_log_group2
+activity_diff = mean_log_group1 - mean_log_group2
 ```
 
 ### Z-score Normalization

@@ -50,7 +50,7 @@ class ComputedStat(Base):
     # Metric name and value
     metric: Mapped[str] = mapped_column(
         String(50), nullable=False, index=True
-    )  # 'rho', 'pvalue', 'log2fc', 'mean_activity', etc.
+    )  # 'rho', 'pvalue', 'activity_diff', 'mean_activity', etc.
     value: Mapped[float] = mapped_column(Float, nullable=False)
 
     # Additional values (for multi-value stats)

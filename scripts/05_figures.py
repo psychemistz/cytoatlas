@@ -214,7 +214,7 @@ def figure2_activity_heatmap():
     pivot_df = cyto_df.pivot_table(
         index='protein',
         columns='disease',
-        values='log2fc',
+        values='activity_diff',
         aggfunc='mean'
     ).fillna(0)
 
@@ -359,16 +359,16 @@ def figure4_volcano_plots():
         colors = []
         for _, row in disease_data.iterrows():
             if row['qvalue'] < 0.05:
-                if row['log2fc'] > 0.5:
+                if row['activity_diff'] > 0.5:
                     colors.append('#E41A1C')  # Up, red
-                elif row['log2fc'] < -0.5:
+                elif row['activity_diff'] < -0.5:
                     colors.append('#377EB8')  # Down, blue
                 else:
                     colors.append('gray')
             else:
                 colors.append('lightgray')
 
-        ax.scatter(disease_data['log2fc'], disease_data['neg_log_p'],
+        ax.scatter(disease_data['activity_diff'], disease_data['neg_log_p'],
                    c=colors, alpha=0.7, s=50, edgecolors='black', linewidths=0.5)
 
         # Add significance lines
@@ -379,7 +379,7 @@ def figure4_volcano_plots():
         # Label top hits
         top_hits = disease_data.nlargest(5, 'neg_log_p')
         for _, row in top_hits.iterrows():
-            ax.annotate(row['protein'], (row['log2fc'], row['neg_log_p']),
+            ax.annotate(row['protein'], (row['activity_diff'], row['neg_log_p']),
                         fontsize=8, ha='center', va='bottom')
 
         ax.set_xlabel('log2 Fold Change', fontsize=10)
@@ -480,7 +480,7 @@ def figure6_cross_disease_comparison():
     sig_df = diff_df[
         (diff_df['qvalue'] < 0.05) &
         (diff_df['signature'] == 'CytoSig') &
-        (diff_df['log2fc'].abs() > 0.5)
+        (diff_df['activity_diff'].abs() > 0.5)
     ].copy()
 
     if len(sig_df) == 0:

@@ -95,7 +95,7 @@ def preprocess_cima_differential():
     diff_df = pd.read_csv(CIMA_DIR / "CIMA_differential_demographics.csv")
 
     # Calculate activity difference for volcano plot (z-scores, not log2 ratio)
-    diff_df['log2fc'] = diff_df['median_g1'] - diff_df['median_g2']
+    diff_df['activity_diff'] = diff_df['median_g1'] - diff_df['median_g2']
     diff_df['neg_log10_pval'] = -np.log10(diff_df['pvalue'].clip(lower=1e-300))
 
     # Round floats to reduce file size
@@ -2489,7 +2489,7 @@ def preprocess_inflammation_demographics():
                     diff = male_vals.mean() - female_vals.mean()  # Activity difference for z-scores
                     demo_data['sex'].append({
                         'cytokine': cyt,
-                        'log2fc': round(diff, 4),
+                        'activity_diff': round(diff, 4),
                         'pvalue': round(pval, 6),
                         'n_male': len(male_vals),
                         'n_female': len(female_vals)
@@ -2509,7 +2509,7 @@ def preprocess_inflammation_demographics():
                     diff = s_vals.mean() - ns_vals.mean()  # Activity difference for z-scores
                     demo_data['smoking'].append({
                         'cytokine': cyt,
-                        'log2fc': round(diff, 4),
+                        'activity_diff': round(diff, 4),
                         'pvalue': round(pval, 6),
                         'n_smoker': len(s_vals),
                         'n_nonsmoker': len(ns_vals)
@@ -2640,7 +2640,7 @@ def preprocess_cancer_types():
             'signature': row['signature'],
             'mean_activity': round(row['mean_activity'], 4) if pd.notna(row['mean_activity']) else 0,
             'other_mean': round(row['other_mean'], 4) if pd.notna(row.get('other_mean')) else 0,
-            'log2fc': round(row['log2fc'], 4) if pd.notna(row.get('log2fc')) else None,
+            'activity_diff': round(row['activity_diff'], 4) if pd.notna(row.get('activity_diff')) else None,
             'specificity_score': round(row['specificity_score'], 4) if pd.notna(row.get('specificity_score')) else 0,
             'n_cells': int(row['n_cells']) if pd.notna(row.get('n_cells')) else 0,
             'signature_type': row['signature_type']
@@ -2927,11 +2927,11 @@ def preprocess_adjacent_tissue():
             pval = 1.0
         mean_tumor = float(np.mean(tumor_vals))
         mean_adj = float(np.mean(adj_vals))
-        log2fc = mean_adj - mean_tumor  # Activity difference for z-scores
+        activity_diff = mean_adj - mean_tumor  # Activity difference for z-scores
         return {
             'mean_tumor': round(mean_tumor, 4),
             'mean_adjacent': round(mean_adj, 4),
-            'log2fc': round(log2fc, 4),
+            'activity_diff': round(activity_diff, 4),
             'pvalue': pval,
             'neg_log10_pval': round(-np.log10(max(pval, 1e-100)), 4),
             'n_tumor': len(tumor_vals),
@@ -3073,11 +3073,11 @@ def preprocess_adjacent_tissue():
 
         mean_tumor = row.get('mean_tumor', 0)
         mean_adj = row.get('mean_adjacent', 0)
-        # Compute log2fc from means if not available (for z-scores, use difference)
-        if pd.notna(row.get('log2fc_adj_vs_tumor')):
-            log2fc = row['log2fc_adj_vs_tumor']
+        # Compute activity_diff from means if not available (for z-scores, use difference)
+        if pd.notna(row.get('activity_diff_adj_vs_tumor')):
+            activity_diff = row['activity_diff_adj_vs_tumor']
         else:
-            log2fc = mean_adj - mean_tumor  # Difference for z-score data
+            activity_diff = mean_adj - mean_tumor  # Difference for z-score data
 
         record = {
             'signature': row['signature'],
@@ -3085,7 +3085,7 @@ def preprocess_adjacent_tissue():
             'cancer_type': 'all',
             'mean_tumor': round(mean_tumor, 4),
             'mean_adjacent': round(mean_adj, 4),
-            'log2fc': round(float(log2fc), 4),
+            'activity_diff': round(float(activity_diff), 4),
             'pvalue': row.get('pvalue', 1),
             'qvalue': row.get('qvalue', 1),
             'neg_log10_pval': round(-np.log10(max(row.get('pvalue', 1), 1e-100)), 4),
@@ -3118,9 +3118,9 @@ def preprocess_adjacent_tissue():
 
                 mean_tumor = float(np.mean(tumor_vals))
                 mean_adj = float(np.mean(adj_vals))
-                # For z-scores, use difference as log2fc (already on log scale)
+                # For z-scores, use difference as activity_diff (already on log scale)
                 # Positive means higher in adjacent, negative means higher in tumor
-                log2fc = mean_adj - mean_tumor
+                activity_diff = mean_adj - mean_tumor
 
                 secact_pvals.append(pval)
                 tumor_vs_adjacent.append({
@@ -3129,7 +3129,7 @@ def preprocess_adjacent_tissue():
                     'cancer_type': 'all',
                     'mean_tumor': round(mean_tumor, 4),
                     'mean_adjacent': round(mean_adj, 4),
-                    'log2fc': round(float(log2fc), 4),
+                    'activity_diff': round(float(activity_diff), 4),
                     'pvalue': pval,
                     'qvalue': pval,  # Will be corrected below
                     'neg_log10_pval': round(-np.log10(max(pval, 1e-100)), 4),

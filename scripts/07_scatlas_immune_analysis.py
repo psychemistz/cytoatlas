@@ -878,7 +878,7 @@ def compute_tcell_exhaustion(meta_df, cytosig_df):
                 'signature': sig,
                 'mean_exhausted': round(mean_exhausted, 4),
                 'mean_nonexhausted': round(mean_nonexhausted, 4),
-                'log2fc': round(diff, 4) if not np.isnan(diff) else 0,  # Actually activity difference, not log2FC
+                'activity_diff': round(diff, 4) if not np.isnan(diff) else 0,  # Actually activity difference, not log2FC
                 'pvalue': round(pval, 6) if not np.isnan(pval) else None,
                 'n_exhausted': len(exhausted_samples),
                 'n_nonexhausted': len(nonexhausted_samples)

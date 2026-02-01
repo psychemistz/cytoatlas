@@ -101,7 +101,7 @@ class DifferentialResult(StatisticBase):
     comparison: str
     group1: str
     group2: str
-    log2fc: float = Field(description="Activity difference (group1 - group2). Named log2fc for backward compatibility but represents z-score difference, not log2 ratio.")
+    activity_diff: float = Field(description="Activity difference (group1 - group2). Activity difference (z-score).")
     mean_g1: float
     mean_g2: float
     median_g1: float

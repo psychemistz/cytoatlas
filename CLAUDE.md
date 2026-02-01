@@ -126,34 +126,23 @@ visualization/
 2. **Cross-cohort validation:** Main → validation → external cohort generalization
 3. **Output verification:** Activity z-scores in -3 to +3 range, gene overlap >80%, correlation r > 0.9
 
-## Important: Activity Difference vs Log2FC
+## Activity Difference (not Log2FC)
 
-**Critical bug fixed (2026-01-31):** Activity values are z-scores (can be negative), so log2 fold-change calculation is incorrect.
+**Fixed (2026-01-31):** Activity values are z-scores (can be negative), so we use simple difference, not log2 fold-change.
 
-### The Problem
-
-```python
-# WRONG - log2 ratio doesn't work for z-scores
-log2fc = np.log2((mean_a + 0.01) / (mean_b + 0.01))
-
-# Example: exhausted=-2, non-exhausted=-4
-# -2 > -4, so activity is HIGHER in exhausted
-# But: log2((-2+0.01)/(-4+0.01)) = log2(0.5) = -1 (WRONG direction!)
-```
-
-### The Fix
+### Calculation
 
 ```python
-# CORRECT - use simple difference for z-scores
-diff = mean_a - mean_b
+# activity_diff = group1_mean - group2_mean
+activity_diff = mean_a - mean_b
 
 # Example: exhausted=-2, non-exhausted=-4
-# diff = -2 - (-4) = +2 (correctly indicates higher in exhausted)
+# activity_diff = -2 - (-4) = +2 (correctly indicates higher in exhausted)
 ```
 
-### Affected Components
+### Field Name
 
-All differential analyses use activity z-scores and should use **difference**, not log2 ratio:
+All differential analyses use `activity_diff` field (renamed from `log2fc`):
 
 | Analysis | Scripts |
 |----------|---------|
@@ -166,7 +155,7 @@ All differential analyses use activity z-scores and should use **difference**, n
 
 ### Visualization Labels
 
-The data field is still named `log2fc` for backward compatibility, but visualization labels now show "Δ Activity" instead of "Log2FC" to reflect the actual calculation (difference, not ratio).
+UI labels show "Δ Activity" to reflect the calculation (difference, not ratio).
 
 ## CytoAtlas REST API (188+ endpoints)
 

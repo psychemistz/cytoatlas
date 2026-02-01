@@ -49,7 +49,7 @@ class CIMADifferential(BaseModel):
     comparison: str
     group1: str
     group2: str
-    log2fc: float = Field(description="Activity difference (group1 - group2). Named log2fc for backward compatibility but represents z-score difference, not log2 ratio.")
+    activity_diff: float = Field(description="Activity difference (group1 - group2). Activity difference (z-score).")
     median_g1: float
     median_g2: float
     p_value: float = Field(alias="pvalue")
