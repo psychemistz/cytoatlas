@@ -489,17 +489,34 @@ class ScAtlasService(BaseService):
         """Get scAtlas summary statistics."""
         data = await self.load_json("summary_stats.json")
 
-        scatlas_stats = data.get("scatlas", {})
+        s = data.get("scatlas", {})
 
         return ScAtlasSummaryStats(
-            n_organs=scatlas_stats.get("n_organs", 0),
-            n_cell_types=scatlas_stats.get("n_cell_types", 0),
-            n_cells=scatlas_stats.get("n_cells", 0),
-            n_cancer_types=0,  # Would need to count from cancer data
-            n_paired_donors=0,  # Would get from cancer comparison
-            organs=scatlas_stats.get("organs", []),
-            cancer_types=[],
-            cytosig_signatures=scatlas_stats.get("cytosig_signatures", []),
+            # Core counts
+            n_organs=s.get("n_organs", 0),
+            n_cell_types=s.get("n_cell_types", 0),
+            n_cell_types_normal=s.get("n_cell_types_normal", 0),
+            n_cell_types_cancer=s.get("n_cell_types_cancer", 0),
+            n_cells_normal=s.get("n_cells_normal", 0),
+            n_cells_cancer=s.get("n_cells_cancer", 0),
+            n_cancer_types=s.get("n_cancer_types", 0),
+            n_donors_normal=s.get("n_donors_normal", 0),
+            n_donors_cancer=s.get("n_donors_cancer", 0),
+            # Data source record counts
+            n_organ_signatures=s.get("n_organ_signatures", 0),
+            n_celltype_signatures=s.get("n_celltype_signatures", 0),
+            n_cancer_type_signatures=s.get("n_cancer_type_signatures", 0),
+            n_tumor_adjacent=s.get("n_tumor_adjacent", 0),
+            n_organ_cancer_matrix=s.get("n_organ_cancer_matrix", 0),
+            n_immune_infiltration=s.get("n_immune_infiltration", 0),
+            n_tcell_state=s.get("n_tcell_state", 0),
+            n_exhaustion_comparison=s.get("n_exhaustion_comparison", 0),
+            n_exhaustion_signatures=s.get("n_exhaustion_signatures", 0),
+            n_caf_signatures=s.get("n_caf_signatures", 0),
+            # Lists
+            organs=s.get("organs", []),
+            cancer_types=[],  # TODO: add cancer types to summary_stats.json
+            cytosig_signatures=s.get("cytosig_signatures", []),
         )
 
     async def get_available_organs(self) -> list[str]:

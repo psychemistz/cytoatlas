@@ -195,11 +195,30 @@ class ScAtlasOrganCancerMatrix(BaseModel):
 class ScAtlasSummaryStats(BaseModel):
     """scAtlas summary statistics."""
 
+    # Core counts
     n_organs: int
     n_cell_types: int
-    n_cells: int
+    n_cell_types_normal: int = 0
+    n_cell_types_cancer: int = 0
+    n_cells_normal: int = 0
+    n_cells_cancer: int = 0
     n_cancer_types: int
-    n_paired_donors: int
+    n_donors_normal: int = 0
+    n_donors_cancer: int = 0
+
+    # Data source record counts
+    n_organ_signatures: int = 0
+    n_celltype_signatures: int = 0
+    n_cancer_type_signatures: int = 0
+    n_tumor_adjacent: int = 0
+    n_organ_cancer_matrix: int = 0
+    n_immune_infiltration: int = 0
+    n_tcell_state: int = 0
+    n_exhaustion_comparison: int = 0
+    n_exhaustion_signatures: int = 0
+    n_caf_signatures: int = 0
+
+    # Lists
     organs: list[str]
     cancer_types: list[str]
     cytosig_signatures: list[str]

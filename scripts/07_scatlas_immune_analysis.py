@@ -949,9 +949,10 @@ def compute_exhaustion_by_subset(meta_df, cytosig_df):
 # CAF Analysis
 # ==============================================================================
 
-def compute_caf_analysis(meta_df, cytosig_df):
+def compute_caf_analysis(meta_df, cytosig_df, secact_df=None):
     """
     Compute cancer-associated fibroblast analysis.
+    Now supports both CytoSig and SecAct signatures.
     """
     log("Computing CAF analysis...")
 
@@ -969,92 +970,110 @@ def compute_caf_analysis(meta_df, cytosig_df):
         log("  Warning: Too few fibroblast samples")
         return [], []
 
-    results = []
+    def process_signatures(sig_df, sig_type):
+        """Process signatures for a given DataFrame."""
+        results = []
+        subtype_results = []
 
-    # Get unique fibroblast subtypes
-    fb_subtypes = fb_meta['cell_type'].unique()
-    log(f"  Fibroblast subtypes: {len(fb_subtypes)}")
+        # Get unique fibroblast subtypes
+        fb_subtypes = fb_meta['cell_type'].unique()
 
-    # Overall CAF activity per cancer type
-    cancer_types = fb_meta['cancerType'].dropna().unique() if 'cancerType' in fb_meta.columns else ['All']
-
-    for cancer in cancer_types:
-        if cancer != 'All':
-            ct_meta = fb_meta[fb_meta['cancerType'] == cancer]
-        else:
-            ct_meta = fb_meta
-
-        if len(ct_meta) < 2:
-            continue
-
-        ct_samples = ct_meta.index.tolist()
-        n_cells = ct_meta['n_cells'].sum()
-
-        for sig in cytosig_df.index:
-            mean_act = cytosig_df.loc[sig, ct_samples].mean()
-            std_act = cytosig_df.loc[sig, ct_samples].std()
-
-            results.append({
-                'cancer_type': cancer,
-                'caf_subtype': 'All_CAF',
-                'signature': sig,
-                'mean_activity': round(mean_act, 4) if not np.isnan(mean_act) else 0,
-                'std_activity': round(std_act, 4) if not np.isnan(std_act) else 0,
-                'n_cells': int(n_cells),
-                'n_samples': len(ct_samples)
-            })
-
-    # Per fibroblast subtype analysis
-    subtype_results = []
-
-    for subtype in fb_subtypes:
-        subtype_meta = fb_meta[fb_meta['cell_type'] == subtype]
-
-        if len(subtype_meta) < 2:
-            continue
-
-        # Try to classify CAF subtype based on name
-        subtype_lower = str(subtype).lower()
-        caf_class = 'Other'
-        if any(p.lower() in subtype_lower for p in ['cxcl12', 'il6', 'ccl2', 'icaf', 'inflammatory']):
-            caf_class = 'iCAF'
-        elif any(p.lower() in subtype_lower for p in ['acta2', 'myl', 'col1', 'mycaf', 'myo']):
-            caf_class = 'myCAF'
-        elif any(p.lower() in subtype_lower for p in ['hla', 'cd74', 'apcaf', 'mhc']):
-            caf_class = 'apCAF'
-
-        cancer_types = subtype_meta['cancerType'].dropna().unique() if 'cancerType' in subtype_meta.columns else ['All']
+        # Overall CAF activity per cancer type
+        cancer_types = fb_meta['cancerType'].dropna().unique() if 'cancerType' in fb_meta.columns else ['All']
 
         for cancer in cancer_types:
             if cancer != 'All':
-                ct_meta = subtype_meta[subtype_meta['cancerType'] == cancer]
+                ct_meta = fb_meta[fb_meta['cancerType'] == cancer]
             else:
-                ct_meta = subtype_meta
+                ct_meta = fb_meta
 
-            if len(ct_meta) < 1:
+            if len(ct_meta) < 2:
                 continue
 
             ct_samples = ct_meta.index.tolist()
             n_cells = ct_meta['n_cells'].sum()
 
-            for sig in cytosig_df.index:
-                if len(ct_samples) > 0 and ct_samples[0] in cytosig_df.columns:
-                    mean_act = cytosig_df.loc[sig, ct_samples].mean()
-                else:
-                    mean_act = np.nan
+            for sig in sig_df.index:
+                mean_act = sig_df.loc[sig, ct_samples].mean()
+                std_act = sig_df.loc[sig, ct_samples].std()
 
-                subtype_results.append({
+                results.append({
                     'cancer_type': cancer,
-                    'caf_subtype': subtype,
-                    'caf_class': caf_class,
+                    'caf_subtype': 'All_CAF',
                     'signature': sig,
+                    'signature_type': sig_type,
                     'mean_activity': round(mean_act, 4) if not np.isnan(mean_act) else 0,
+                    'std_activity': round(std_act, 4) if not np.isnan(std_act) else 0,
                     'n_cells': int(n_cells),
                     'n_samples': len(ct_samples)
                 })
 
-    log(f"  Generated {len(results)} overall, {len(subtype_results)} subtype records")
-    return results, subtype_results
+        # Per fibroblast subtype analysis
+        for subtype in fb_subtypes:
+            subtype_meta = fb_meta[fb_meta['cell_type'] == subtype]
+
+            if len(subtype_meta) < 2:
+                continue
+
+            # Try to classify CAF subtype based on name
+            subtype_lower = str(subtype).lower()
+            caf_class = 'Other'
+            if any(p.lower() in subtype_lower for p in ['cxcl12', 'il6', 'ccl2', 'icaf', 'inflammatory', 's22_']):
+                caf_class = 'iCAF'
+            elif any(p.lower() in subtype_lower for p in ['acta2', 'myl', 'col1', 'mycaf', 'myo', 's23_']):
+                caf_class = 'myCAF'
+            elif any(p.lower() in subtype_lower for p in ['hla', 'cd74', 'apcaf', 'mhc', 's24_']):
+                caf_class = 'apCAF'
+
+            cancer_types_sub = subtype_meta['cancerType'].dropna().unique() if 'cancerType' in subtype_meta.columns else ['All']
+
+            for cancer in cancer_types_sub:
+                if cancer != 'All':
+                    ct_meta = subtype_meta[subtype_meta['cancerType'] == cancer]
+                else:
+                    ct_meta = subtype_meta
+
+                if len(ct_meta) < 1:
+                    continue
+
+                ct_samples = ct_meta.index.tolist()
+                n_cells = ct_meta['n_cells'].sum()
+
+                for sig in sig_df.index:
+                    if len(ct_samples) > 0 and ct_samples[0] in sig_df.columns:
+                        mean_act = sig_df.loc[sig, ct_samples].mean()
+                    else:
+                        mean_act = np.nan
+
+                    subtype_results.append({
+                        'cancer_type': cancer,
+                        'caf_subtype': subtype,
+                        'caf_class': caf_class,
+                        'signature': sig,
+                        'signature_type': sig_type,
+                        'mean_activity': round(mean_act, 4) if not np.isnan(mean_act) else 0,
+                        'n_cells': int(n_cells),
+                        'n_samples': len(ct_samples)
+                    })
+
+        return results, subtype_results
+
+    # Process CytoSig
+    log(f"  Processing CytoSig ({len(cytosig_df)} signatures)...")
+    cytosig_overall, cytosig_subtypes = process_signatures(cytosig_df, 'CytoSig')
+
+    # Process SecAct if provided
+    if secact_df is not None:
+        log(f"  Processing SecAct ({len(secact_df)} signatures)...")
+        secact_overall, secact_subtypes = process_signatures(secact_df, 'SecAct')
+        all_overall = cytosig_overall + secact_overall
+        all_subtypes = cytosig_subtypes + secact_subtypes
+    else:
+        all_overall = cytosig_overall
+        all_subtypes = cytosig_subtypes
+
+    log(f"  Generated {len(all_overall)} overall, {len(all_subtypes)} subtype records")
+    return all_overall, all_subtypes
 
 
 def compute_caf_proportions(meta_df):
@@ -1183,14 +1202,11 @@ def main():
     for d in cytosig_subset_data:
         d['signature_type'] = 'cytosig'
 
-    # SecAct exhaustion analysis (top 100 most variable signatures)
-    # Select top signatures by variance across samples
-    secact_var = secact_df.var(axis=1).sort_values(ascending=False)
-    top_secact = secact_df.loc[secact_var.head(100).index]
-    log(f"  Using top 100 SecAct signatures (of {len(secact_df)})")
+    # SecAct exhaustion analysis (ALL signatures)
+    log(f"  Using all {len(secact_df)} SecAct signatures")
 
-    secact_state_data, secact_comparison = compute_tcell_exhaustion(meta_df, top_secact)
-    secact_subset_data = compute_exhaustion_by_subset(meta_df, top_secact)
+    secact_state_data, secact_comparison = compute_tcell_exhaustion(meta_df, secact_df)
+    secact_subset_data = compute_exhaustion_by_subset(meta_df, secact_df)
 
     # Add signature_type field to SecAct data
     for d in secact_state_data:
@@ -1210,21 +1226,23 @@ def main():
         'comparison': all_comparison,
         'by_subset': all_subset_data,
         'cytosig_signatures': list(cytosig_df.index),
-        'secact_signatures': list(top_secact.index),
+        'secact_signatures': list(secact_df.index),
         'exhaustion_states': ['exhausted', 'cytotoxic', 'memory', 'naive', 'other_tcell'],
         'tcell_subsets': ['CD8', 'CD4', 'Treg', 'gdT', 'MAIT']
     }, 'exhaustion.json')
 
     # CAF Analysis
     log("\n--- CAF Analysis ---")
-    caf_overall, caf_subtypes = compute_caf_analysis(meta_df, cytosig_df)
+    caf_overall, caf_subtypes = compute_caf_analysis(meta_df, cytosig_df, secact_df)
     caf_proportions = compute_caf_proportions(meta_df)
 
     save_json({
         'data': caf_overall,
         'subtypes': caf_subtypes,
         'proportions': caf_proportions,
-        'signatures': list(cytosig_df.index),
+        'cytosig_signatures': list(cytosig_df.index),
+        'secact_signatures': list(secact_df.index),
+        'signatures': list(cytosig_df.index) + list(secact_df.index),
         'caf_classes': ['myCAF', 'iCAF', 'apCAF', 'Other']
     }, 'caf_signatures.json')
 

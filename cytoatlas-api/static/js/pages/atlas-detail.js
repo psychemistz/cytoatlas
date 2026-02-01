@@ -58,7 +58,7 @@ const AtlasDetailPage = {
                 { id: 'immune-infiltration', label: 'Immune Infiltration', icon: '&#128300;' },
                 { id: 'tcell-state', label: 'T Cell State', icon: '&#129516;' },
                 { id: 'exhaustion', label: 'Exhaustion Diff', icon: '&#128546;' },
-                { id: 'caf', label: 'CAF Classification', icon: '&#128302;' },
+                { id: 'caf', label: 'CAF Types', icon: '&#128302;' },
             ],
         },
     },
@@ -1155,17 +1155,13 @@ const AtlasDetailPage = {
 
             <div class="viz-grid">
                 <div class="sub-panel" style="flex: 2;">
-                    <div id="biochem-scatter-plot" class="plot-container" style="height: 500px;">
-                        <p class="loading">Loading scatter data...</p>
-                    </div>
+                    <div id="biochem-scatter-plot" class="plot-container" style="height: 500px;"></div>
                 </div>
                 <div class="sub-panel" style="flex: 1;">
                     <div class="panel-header">
                         <h4>Regression Statistics</h4>
                     </div>
-                    <div id="biochem-regression-stats" style="padding: 1rem; font-size: 0.9rem;">
-                        <p class="loading">Loading...</p>
-                    </div>
+                    <div id="biochem-regression-stats" style="padding: 1rem; font-size: 0.9rem;"></div>
                 </div>
             </div>
         `;
@@ -2817,9 +2813,7 @@ const AtlasDetailPage = {
                         <h3>Cell Type Activity Profile</h3>
                         <p>Mean cytokine activity across immune cell populations</p>
                     </div>
-                    <div id="inflam-activity-profile" class="plot-container" style="height: 450px;">
-                        <p class="loading">Loading...</p>
-                    </div>
+                    <div id="inflam-activity-profile" class="plot-container" style="height: 450px;"></div>
                 </div>
 
                 <!-- Sub-panel 2: Activity Heatmap -->
@@ -3362,14 +3356,14 @@ const AtlasDetailPage = {
                         <h4>Disease-Cell Type Activity</h4>
                         <p id="inflam-disease-bar-subtitle">Activity profile across cell types per disease</p>
                     </div>
-                    <div id="inflam-disease-bar" class="plot-container" style="height: 450px;">Loading...</div>
+                    <div id="inflam-disease-bar" class="plot-container" style="height: 450px;"></div>
                 </div>
                 <div class="sub-panel">
                     <div class="panel-header">
                         <h4>Disease Activity Heatmap</h4>
                         <p id="inflam-disease-heatmap-subtitle">Diseases × Signatures</p>
                     </div>
-                    <div id="inflam-disease-heatmap" class="plot-container" style="height: 450px;">Loading...</div>
+                    <div id="inflam-disease-heatmap" class="plot-container" style="height: 450px;"></div>
                 </div>
             </div>
         `;
@@ -4909,11 +4903,11 @@ const AtlasDetailPage = {
 
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-number">${stats?.n_normal_donors || 145} / ${stats?.n_cancer_donors || 325}</div>
+                        <div class="stat-number">${stats?.n_donors_normal || 317} / ${stats?.n_donors_cancer || 464}</div>
                         <div class="stat-label">Donors (Normal / Cancer)</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-number">${stats?.n_normal_cells ? (stats.n_normal_cells / 1e6).toFixed(1) + 'M' : '2.8M'} / ${stats?.n_cancer_cells ? (stats.n_cancer_cells / 1e6).toFixed(1) + 'M' : '3.6M'}</div>
+                        <div class="stat-number">${stats?.n_cells_normal ? (stats.n_cells_normal / 1e6).toFixed(1) + 'M' : '2.3M'} / ${stats?.n_cells_cancer ? (stats.n_cells_cancer / 1e6).toFixed(1) + 'M' : '4.1M'}</div>
                         <div class="stat-label">Total Cells (Normal / Cancer)</div>
                     </div>
                     <div class="stat-card">
@@ -4921,11 +4915,11 @@ const AtlasDetailPage = {
                         <div class="stat-label">Organs Profiled</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-number">${stats?.n_normal_celltypes || 192} / ${stats?.n_cancer_celltypes || 214}</div>
+                        <div class="stat-number">${stats?.n_cell_types_normal || 376} / ${stats?.n_cell_types_cancer || 119}</div>
                         <div class="stat-label">Cell Types (Normal / Cancer)</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-number">${stats?.n_cancer_types || 25}</div>
+                        <div class="stat-number">${stats?.n_cancer_types || 29}</div>
                         <div class="stat-label">Cancer Types</div>
                     </div>
                 </div>
@@ -4940,60 +4934,50 @@ const AtlasDetailPage = {
                 </div>
 
                 <div class="card" style="margin-top: 1rem;">
-                    <div class="card-title">Analysis Data Sources</div>
+                    <div class="card-title">scAtlas Analysis Data Sources</div>
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>Analysis</th>
+                                <th>Tab</th>
                                 <th>Description</th>
                                 <th>Records</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr>
-                                <td>Organ Signatures</td>
-                                <td>Mean cytokine activities per organ (normal tissue)</td>
-                                <td>${stats?.n_organ_signatures?.toLocaleString() || 'N/A'}</td>
+                                <td>Cell Types</td>
+                                <td>376 cell types × (43 CytoSig + 1,170 SecAct) across 35 organs</td>
+                                <td>${stats?.n_celltype_signatures?.toLocaleString() || '240,174'}</td>
                             </tr>
                             <tr>
-                                <td>Cell Type Signatures</td>
-                                <td>Mean activities per cell type across organs</td>
-                                <td>${stats?.n_celltype_signatures?.toLocaleString() || 'N/A'}</td>
+                                <td>Tissue Atlas</td>
+                                <td>35 organs (${stats?.n_organ_signatures?.toLocaleString() || '42,455'}) + 13 cancer types (${stats?.n_cancer_type_signatures?.toLocaleString() || '15,769'})</td>
+                                <td>${((stats?.n_organ_signatures || 42455) + (stats?.n_cancer_type_signatures || 15769)).toLocaleString()}</td>
                             </tr>
                             <tr>
-                                <td>Tumor vs Adjacent</td>
-                                <td>Differential activity between tumor and adjacent tissue</td>
-                                <td>${stats?.n_cancer_celltypes || 214} cell types</td>
-                            </tr>
-                            <tr>
-                                <td>Normal vs Cancer</td>
-                                <td>Matched organ-cancer type comparisons</td>
-                                <td>13 organ-cancer pairs</td>
+                                <td>Differential</td>
+                                <td>Tumor vs Adjacent vs Normal tissue × (43 CytoSig + 1,170 SecAct)</td>
+                                <td>${stats?.n_tumor_adjacent?.toLocaleString() || '1,213'}</td>
                             </tr>
                             <tr>
                                 <td>Immune Infiltration</td>
-                                <td>Immune cell proportions and activity per cancer type</td>
-                                <td>Per cancer type</td>
+                                <td>13 cancer types × TME composition × (43 CytoSig + 1,170 SecAct)</td>
+                                <td>${stats?.n_immune_infiltration?.toLocaleString() || '31,538'}</td>
                             </tr>
                             <tr>
-                                <td>T Cell Exhaustion</td>
-                                <td>Exhausted vs non-exhausted T cell signatures</td>
-                                <td>Tex vs non-Tex</td>
+                                <td>T Cell State</td>
+                                <td>7 cancer types × 5 states × (43 CytoSig + 1,170 SecAct)</td>
+                                <td>${stats?.n_tcell_state?.toLocaleString() || '128,578'}</td>
                             </tr>
                             <tr>
-                                <td>CAF Signatures</td>
-                                <td>Cancer-associated fibroblast subtype activities</td>
-                                <td>Per cancer type</td>
+                                <td>Exhaustion Diff</td>
+                                <td>Exhausted vs non-exhausted T cells × (43 CytoSig + 1,170 SecAct)</td>
+                                <td>${stats?.n_exhaustion_comparison?.toLocaleString() || '29,112'}</td>
                             </tr>
                             <tr>
-                                <td>Adjacent Tissue</td>
-                                <td>Field effect analysis in tumor-adjacent tissue</td>
-                                <td>Per cancer type</td>
-                            </tr>
-                            <tr>
-                                <td>Pan-Cancer Signatures</td>
-                                <td>Signatures consistent across multiple cancers</td>
-                                <td>Cross-cancer</td>
+                                <td>CAF Types</td>
+                                <td>5 cancer types × 4 CAF subtypes × (43 CytoSig + 1,170 SecAct)</td>
+                                <td>${stats?.n_caf_signatures?.toLocaleString() || '215,914'}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -5009,54 +4993,46 @@ const AtlasDetailPage = {
 
     async loadScatlasTissueAtlas(content) {
         content.innerHTML = `
-            <div class="panel-header">
-                <h3>Tissue Atlas</h3>
-                <p>Compare cytokine activity across 35 normal human organs and 13 cancer types from scAtlas.</p>
-            </div>
-
-            <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
-                <div class="control-group">
-                    <label>View Mode</label>
-                    <select id="tissue-mode" class="filter-select" onchange="AtlasDetailPage.updateTissueAtlas()">
-                        <option value="normal">Normal Tissues</option>
-                        <option value="cancer">Cancer Tissues</option>
-                        <option value="comparison">Cancer vs Normal (matched)</option>
-                    </select>
+            <div class="viz-grid">
+                <div class="sub-panel">
+                    <div class="panel-header">
+                        <h3>Activity Distribution by Tissue</h3>
+                        <p id="tissue-atlas-desc-text">Compare cytokine activity across 35 normal human organs from scAtlas</p>
+                    </div>
+                    <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+                        <div class="control-group">
+                            <label>View Mode</label>
+                            <select id="tissue-mode" class="filter-select" onchange="AtlasDetailPage.updateTissueAtlas()">
+                                <option value="normal">Normal Tissues</option>
+                                <option value="cancer">Cancer Tissues</option>
+                                <option value="comparison">Cancer vs Normal</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label>${this.signatureType === 'CytoSig' ? 'Cytokine' : 'Protein'}</label>
+                            <select id="tissue-signature-dropdown" class="filter-select" style="width: 150px;" onchange="AtlasDetailPage.updateTissueBoxplot()">
+                                <option value="IFNG">IFNG</option>
+                            </select>
+                        </div>
+                        <div class="control-group" style="position: relative;">
+                            <label>Search</label>
+                            <input type="text" id="tissue-signature-search" class="filter-select"
+                                   placeholder="Type to search..." style="width: 140px;" autocomplete="off"
+                                   oninput="AtlasDetailPage.showTissueSignatureSuggestions()"
+                                   onkeyup="if(event.key==='Enter') AtlasDetailPage.updateTissueBoxplot()"
+                                   onblur="setTimeout(() => document.getElementById('tissue-signature-suggestions').style.display = 'none', 200)">
+                            <div id="tissue-signature-suggestions" style="position: absolute; top: 100%; left: 0; width: 150px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                        </div>
+                    </div>
+                    <div id="tissue-boxplot" class="plot-container" style="height: 400px;"></div>
                 </div>
-                <div class="control-group">
-                    <label>Select ${this.signatureType === 'CytoSig' ? 'Cytokine' : 'Protein'}</label>
-                    <select id="tissue-signature-dropdown" class="filter-select" style="width: 150px;" onchange="AtlasDetailPage.updateTissueBoxplot()">
-                        <option value="IFNG">IFNG</option>
-                    </select>
+                <div class="sub-panel">
+                    <div class="panel-header">
+                        <h3>Signature × Tissue Heatmap</h3>
+                        <p>Activity patterns across tissues</p>
+                    </div>
+                    <div id="tissue-heatmap" class="plot-container" style="height: 500px;"></div>
                 </div>
-                <div class="control-group" style="position: relative;">
-                    <label>Or Search</label>
-                    <input type="text" id="tissue-signature-search" class="filter-select"
-                           placeholder="Search..." style="width: 120px;" autocomplete="off" value=""
-                           oninput="AtlasDetailPage.showTissueSignatureSuggestions()"
-                           onkeyup="if(event.key==='Enter') AtlasDetailPage.updateTissueBoxplot()"
-                           onblur="setTimeout(() => document.getElementById('tissue-signature-suggestions').style.display = 'none', 200)">
-                    <div id="tissue-signature-suggestions" style="position: absolute; top: 100%; left: 0; width: 150px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
-                </div>
-            </div>
-
-            <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
-                <strong id="tissue-atlas-description">Tissue Atlas:</strong>
-                <span id="tissue-atlas-desc-text">Compare cytokine activity across 35 normal human organs from scAtlas.</span>
-            </div>
-
-            <!-- Activity Boxplot (Top) -->
-            <div class="viz-container" style="max-height: 650px; overflow-y: auto;">
-                <div class="viz-title" id="tissue-boxplot-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Activity Distribution by Tissue</div>
-                <div class="viz-subtitle" id="tissue-boxplot-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Cell-type agnostic mean activity per tissue</div>
-                <div id="tissue-boxplot" class="plot-container" style="min-height: 360px;">Loading...</div>
-            </div>
-
-            <!-- Heatmap (Bottom) -->
-            <div class="viz-container" style="margin-top: 1.5rem; max-height: 520px; overflow: hidden;">
-                <div class="viz-title" id="tissue-heatmap-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Signature × Tissue Heatmap</div>
-                <div class="viz-subtitle" id="tissue-heatmap-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Activity patterns across tissues</div>
-                <div id="tissue-heatmap" class="plot-container" style="height: 480px; max-height: 480px; overflow: hidden;">Loading...</div>
             </div>
         `;
 
@@ -5205,9 +5181,6 @@ const AtlasDetailPage = {
             if (titleEl) titleEl.textContent = `${signature} Activity Across Normal Organs`;
             if (subtitleEl) subtitleEl.textContent = `${this.signatureType} activity z-scores (${organs.length} organs)`;
 
-            // Dynamic height based on number of organs (min 15px per bar)
-            const barHeight = Math.max(360, organs.length * 15 + 50);
-
             Plotly.purge(container);
             Plotly.newPlot(container, [{
                 y: organs,
@@ -5221,10 +5194,10 @@ const AtlasDetailPage = {
                 },
                 hovertemplate: '<b>%{y}</b><br>Activity: %{x:.3f}<extra></extra>'
             }], {
-                margin: { l: 120, r: 30, t: 10, b: 40 },
-                xaxis: { title: 'Mean Activity (z-score)' },
-                yaxis: { tickfont: { size: 10 } },
-                height: barHeight,
+                margin: { l: 100, r: 20, t: 5, b: 35 },
+                xaxis: { title: 'Mean Activity (z-score)', titlefont: { size: 11 } },
+                yaxis: { tickfont: { size: 9 }, automargin: true },
+                height: 380,
                 font: { family: 'Inter, sans-serif' }
             }, { responsive: true });
 
@@ -5261,9 +5234,11 @@ const AtlasDetailPage = {
                 },
                 hovertemplate: '<b>%{y}</b><br>Activity: %{x:.3f}<extra></extra>'
             }], {
-                margin: { l: 150, r: 30, t: 10, b: 40 },
-                xaxis: { title: 'Mean Activity (z-score)' },
-                height: 360
+                margin: { l: 130, r: 20, t: 5, b: 35 },
+                xaxis: { title: 'Mean Activity (z-score)', titlefont: { size: 11 } },
+                yaxis: { tickfont: { size: 9 } },
+                height: 380,
+                font: { family: 'Inter, sans-serif' }
             }, { responsive: true });
 
         } else {
@@ -5540,44 +5515,42 @@ const AtlasDetailPage = {
 
     async loadScatlasCelltypes(content) {
         content.innerHTML = `
-            <div class="panel-header">
-                <h3>Cell Type Activity</h3>
-                <p>Cytokine activity patterns across cell types in normal human organs</p>
-            </div>
-
-            <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
-                <div class="control-group">
-                    <label>Filter by Organ</label>
-                    <select id="scatlas-organ-filter" class="filter-select" onchange="AtlasDetailPage.updateScatlasCelltypeBar(); AtlasDetailPage.updateScatlasCelltypeHeatmap();">
-                        <option value="">All Organs</option>
-                    </select>
+            <div class="viz-grid">
+                <div class="sub-panel">
+                    <div class="panel-header">
+                        <h3>Cell Type Activity Profile</h3>
+                        <p>Search and view activity of a specific ${this.signatureType === 'CytoSig' ? 'cytokine' : 'protein'} across cell types</p>
+                    </div>
+                    <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+                        <div class="control-group">
+                            <label>Organ</label>
+                            <select id="scatlas-organ-filter" class="filter-select" onchange="AtlasDetailPage.updateScatlasCelltypeBar(); AtlasDetailPage.updateScatlasCelltypeHeatmap();">
+                                <option value="">All Organs</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label>${this.signatureType === 'CytoSig' ? 'Cytokine' : 'Protein'}</label>
+                            <select id="scatlas-ct-protein-dropdown" class="filter-select" style="width: 150px;" onchange="AtlasDetailPage.updateScatlasCelltypeBar();">
+                                <option value="IFNG">IFNG</option>
+                            </select>
+                        </div>
+                        <div class="control-group" style="position: relative;">
+                            <label>Search</label>
+                            <input type="text" id="scatlas-ct-protein-search" class="filter-select"
+                                   placeholder="Type to search..." style="width: 140px;" autocomplete="off"
+                                   oninput="AtlasDetailPage.showScatlasCelltypeSuggestions()"
+                                   onkeyup="if(event.key==='Enter') AtlasDetailPage.updateScatlasCelltypeBar()">
+                            <div id="scatlas-ct-suggestions" style="position: absolute; top: 100%; left: 0; width: 140px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                        </div>
+                    </div>
+                    <div id="scatlas-celltype-bar" class="plot-container" style="height: 450px;"></div>
                 </div>
-                <div class="control-group">
-                    <label>Select ${this.signatureType === 'CytoSig' ? 'Cytokine' : 'Protein'}</label>
-                    <select id="scatlas-ct-protein-dropdown" class="filter-select" style="width: 150px;" onchange="AtlasDetailPage.updateScatlasCelltypeBar();">
-                        <option value="IFNG">IFNG</option>
-                    </select>
-                </div>
-                <div class="control-group" style="position: relative;">
-                    <label>Or Search</label>
-                    <input type="text" id="scatlas-ct-protein-search" class="filter-select"
-                           placeholder="Search..." style="width: 120px;" autocomplete="off" value="IFNG"
-                           oninput="AtlasDetailPage.showScatlasCelltypeSuggestions()"
-                           onkeyup="if(event.key==='Enter') AtlasDetailPage.updateScatlasCelltypeBar()">
-                    <div id="scatlas-ct-suggestions" style="position: absolute; top: 100%; left: 0; width: 120px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
-                </div>
-            </div>
-
-            <div class="two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                <div class="viz-container" style="max-height: 520px; overflow: hidden;">
-                    <div class="viz-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Cell Type Activity Profile</div>
-                    <div class="viz-subtitle" id="scatlas-celltype-bar-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Mean activity across cell types</div>
-                    <div id="scatlas-celltype-bar" class="plot-container" style="height: 460px; max-height: 460px; overflow: hidden;">Loading...</div>
-                </div>
-                <div class="viz-container" style="max-height: 520px; overflow: hidden;">
-                    <div class="viz-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Activity Heatmap</div>
-                    <div class="viz-subtitle" id="scatlas-celltype-heatmap-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Top variable cell types × signatures</div>
-                    <div id="scatlas-celltype-heatmap" class="plot-container" style="height: 460px; max-height: 460px; overflow: hidden;">Loading...</div>
+                <div class="sub-panel">
+                    <div class="panel-header">
+                        <h3>Activity Heatmap</h3>
+                        <p>Mean ${this.signatureType} activity z-scores across cell types</p>
+                    </div>
+                    <div id="scatlas-celltype-heatmap" class="plot-container" style="height: 500px;"></div>
                 </div>
             </div>
         `;
@@ -5824,50 +5797,36 @@ const AtlasDetailPage = {
 
     async loadScatlasDifferentialAnalysis(content) {
         content.innerHTML = `
-            <div class="panel-header">
-                <h3>Differential Analysis</h3>
-                <p>Compare cytokine activity between Tumor and Adjacent tissue (paired samples from cancer patients).</p>
-            </div>
-
-            <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
-                <div class="control-group">
-                    <label>Cancer Type</label>
-                    <select id="diff-cancer-dropdown" class="filter-select" style="width: 160px;" onchange="AtlasDetailPage.updateDiffAnalysis()">
-                        <option value="all">All Cancers (Pan-Cancer)</option>
-                    </select>
+            <div class="viz-grid">
+                <div class="sub-panel">
+                    <div class="panel-header">
+                        <h3>Differential Volcano Plot</h3>
+                        <p>Compare cytokine activity between Tumor and Adjacent tissue</p>
+                    </div>
+                    <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+                        <div class="control-group">
+                            <label>Cancer Type</label>
+                            <select id="diff-cancer-dropdown" class="filter-select" style="width: 180px;" onchange="AtlasDetailPage.updateDiffAnalysis()">
+                                <option value="all">All Cancers (Pan-Cancer)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="diff-volcano" class="plot-container" style="height: 400px;"></div>
+                </div>
+                <div class="sub-panel">
+                    <div class="panel-header">
+                        <h3>Top Differential Signatures</h3>
+                        <p>Ranked by absolute activity difference</p>
+                    </div>
+                    <div id="diff-top-bar" class="plot-container" style="height: 450px;"></div>
                 </div>
             </div>
-
-            <!-- Dynamic description card -->
-            <div class="card" id="diff-description-card" style="margin-bottom: 1rem; padding: 1rem; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
-                <strong>Differential Analysis:</strong> Compare cytokine activity across tissue types (Pan-Cancer):
-                <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
-                    <li><strong style="color:#d62728;">Tumor:</strong> Cancer tissue from pan-cancer scAtlas (147 cell type samples)</li>
-                    <li><strong style="color:#ff7f0e;">Adjacent:</strong> Tumor-adjacent normal tissue - sample-matched controls (105 samples)</li>
-                    <li><strong style="color:#2ca02c;">Normal:</strong> Healthy tissue from scAtlas normal organs - independent healthy donors</li>
-                </ul>
-            </div>
-
-            <div class="two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                <!-- Volcano plot -->
-                <div class="viz-container" style="min-height: 400px;">
-                    <div class="viz-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Differential Volcano Plot</div>
-                    <div class="viz-subtitle" id="diff-volcano-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Tumor vs Adjacent: Δ Activity vs significance</div>
-                    <div id="diff-volcano" class="plot-container" style="height: 380px;">Loading...</div>
+            <div class="sub-panel" style="margin-top: 1rem;">
+                <div class="panel-header">
+                    <h3 id="diff-boxplot-title">Activity Comparison: Tumor vs Adjacent</h3>
+                    <p id="diff-boxplot-subtitle">Distribution of selected signature across tissue types</p>
                 </div>
-                <!-- Top differential signatures -->
-                <div class="viz-container" style="min-height: 400px;">
-                    <div class="viz-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Top Differential Signatures</div>
-                    <div class="viz-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Ranked by absolute activity difference</div>
-                    <div id="diff-top-bar" class="plot-container" style="height: 380px;">Loading...</div>
-                </div>
-            </div>
-
-            <!-- Boxplot for top differential signatures -->
-            <div class="viz-container" style="margin-top: 1rem; min-height: 350px;">
-                <div class="viz-title" id="diff-boxplot-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Activity Comparison: Tumor vs Adjacent Normal</div>
-                <div class="viz-subtitle" id="diff-boxplot-subtitle" style="color: #666; font-size: 12px; margin-bottom: 8px;">Distribution of top differential signatures</div>
-                <div id="diff-boxplot" class="plot-container" style="height: 300px;">Loading...</div>
+                <div id="diff-boxplot" class="plot-container" style="height: 320px;"></div>
             </div>
         `;
 
@@ -6445,25 +6404,25 @@ const AtlasDetailPage = {
             </div>
 
             <!-- TME Composition -->
-            <div class="viz-container" style="min-height: 400px; margin-bottom: 1rem;">
+            <div class="sub-panel" style="margin-bottom: 1rem;">
                 <div class="viz-title" id="tme-composition-title">Tumor Microenvironment Composition</div>
                 <div class="viz-subtitle" id="tme-composition-subtitle">Full TME breakdown: Malignant, Immune, Stromal, and Other cells</div>
-                <div id="tme-composition" class="plot-container" style="height: 380px;">Loading...</div>
+                <div id="tme-composition" class="plot-container" style="height: 380px;"></div>
             </div>
 
-            <div class="two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div class="viz-grid">
                 <!-- Immune Cell Composition -->
-                <div class="viz-container" style="min-height: 450px;">
+                <div class="sub-panel">
                     <div class="viz-title" id="immune-composition-title">Immune Cell Composition within TME</div>
                     <div class="viz-subtitle" id="immune-composition-subtitle">Breakdown of immune cell types in the tumor microenvironment</div>
-                    <div id="immune-composition" class="plot-container" style="height: 420px;">Loading...</div>
+                    <div id="immune-composition" class="plot-container" style="height: 420px;"></div>
                 </div>
 
                 <!-- TIL Proportions -->
-                <div class="viz-container" style="min-height: 450px;">
+                <div class="sub-panel">
                     <div class="viz-title" id="til-ratios-title">Tumor-Infiltrating Lymphocytes (TIL)</div>
                     <div class="viz-subtitle" id="til-ratios-subtitle">Lymphocyte proportion (T, B, NK, ILC cells) of TME</div>
-                    <div id="til-ratios" class="plot-container" style="height: 420px;">Loading...</div>
+                    <div id="til-ratios" class="plot-container" style="height: 420px;"></div>
                 </div>
             </div>
         `;
@@ -6666,23 +6625,23 @@ const AtlasDetailPage = {
                 </div>
             </div>
 
-            <div class="two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 1rem;">
-                <div class="viz-container" style="min-height: 400px;">
+            <div class="viz-grid" style="margin-bottom: 1rem;">
+                <div class="sub-panel">
                     <div class="viz-title" id="tcell-heatmap-title">Top Signatures by T Cell State</div>
                     <div class="viz-subtitle" id="tcell-heatmap-subtitle">Mean activity of top variable signatures across T cell states</div>
-                    <div id="tcell-state-heatmap" class="plot-container" style="height: 380px;">Loading...</div>
+                    <div id="tcell-state-heatmap" class="plot-container" style="height: 380px;"></div>
                 </div>
-                <div class="viz-container" style="min-height: 400px;">
+                <div class="sub-panel">
                     <div class="viz-title" id="tcell-bar-title">T Cell State Distribution</div>
                     <div class="viz-subtitle" id="tcell-bar-subtitle">Cell counts by functional state</div>
-                    <div id="tcell-state-bar" class="plot-container" style="height: 380px;">Loading...</div>
+                    <div id="tcell-state-bar" class="plot-container" style="height: 380px;"></div>
                 </div>
             </div>
 
-            <div class="viz-container" style="min-height: 350px;">
+            <div class="sub-panel">
                 <div class="viz-title" id="tcell-boxplot-title">Activity by T Cell State</div>
                 <div class="viz-subtitle" id="tcell-boxplot-subtitle">Distribution of selected signature across T cell functional states</div>
-                <div id="tcell-state-comparison" class="plot-container" style="height: 320px;">Loading...</div>
+                <div id="tcell-state-comparison" class="plot-container" style="height: 320px;"></div>
             </div>
         `;
 
@@ -6920,16 +6879,16 @@ const AtlasDetailPage = {
                 </div>
             </div>
 
-            <div class="two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                <div class="viz-container" style="min-height: 500px;">
+            <div class="viz-grid">
+                <div class="sub-panel">
                     <div class="viz-title" id="exhaustion-bar-title">Differential Activity</div>
                     <div class="viz-subtitle" id="exhaustion-bar-subtitle">Activity difference: Exhausted vs Non-exhausted T cells</div>
-                    <div id="exhaustion-heatmap" class="plot-container" style="height: 480px;">Loading...</div>
+                    <div id="exhaustion-heatmap" class="plot-container" style="height: 480px;"></div>
                 </div>
-                <div class="viz-container" style="min-height: 500px;">
+                <div class="sub-panel">
                     <div class="viz-title" id="exhaustion-scatter-title">Activity Correlation</div>
                     <div class="viz-subtitle" id="exhaustion-scatter-subtitle">Mean activity comparison</div>
-                    <div id="exhaustion-scatter" class="plot-container" style="height: 480px;">Loading...</div>
+                    <div id="exhaustion-scatter" class="plot-container" style="height: 480px;"></div>
                 </div>
             </div>
         `;
@@ -7054,6 +7013,10 @@ const AtlasDetailPage = {
             const showLabels = this.signatureType === 'CytoSig' || sigData.length <= 50;
             const topLabeled = sorted.slice(0, 10).map(d => d.signature);
 
+            // Compute symmetric color range centered at 0
+            const diffValues = sigData.map(d => d.activity_diff);
+            const maxAbsDiff = Math.max(Math.abs(Math.min(...diffValues)), Math.abs(Math.max(...diffValues)));
+
             Plotly.newPlot(scatterContainer, [
                 {
                     type: 'scatter',
@@ -7064,8 +7027,10 @@ const AtlasDetailPage = {
                     textposition: 'top center',
                     textfont: { size: 8 },
                     marker: {
-                        color: sigData.map(d => d.activity_diff),
+                        color: diffValues,
                         colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#d62728']],
+                        cmin: -maxAbsDiff,
+                        cmax: maxAbsDiff,
                         size: showLabels ? 10 : 6,
                         colorbar: { title: 'Δ Activity', len: 0.6 }
                     },
@@ -7098,8 +7063,8 @@ const AtlasDetailPage = {
     async loadScatlasCaf(content) {
         content.innerHTML = `
             <div class="panel-header">
-                <h3>CAF Classification</h3>
-                <p>Cancer-associated fibroblast subtypes (myCAF, iCAF, apCAF) and their cytokine signatures</p>
+                <h3>CAF Types</h3>
+                <p>Cancer-associated fibroblast subtypes and their cytokine signatures in the tumor microenvironment</p>
             </div>
 
             <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
@@ -7111,23 +7076,44 @@ const AtlasDetailPage = {
                 </div>
             </div>
 
-            <div class="viz-container" style="min-height: 380px; margin-bottom: 1rem;">
-                <div class="viz-title">CAF Subtype Activity Profile</div>
-                <div class="viz-subtitle">Top 15 signatures by activity difference across CAF subtypes</div>
-                <div id="caf-activity-bar" class="plot-container" style="height: 350px;">Loading...</div>
+            <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
+                <strong>Cancer-Associated Fibroblast (CAF) Subtypes:</strong>
+                <div style="margin-top: 0.5rem; font-size: 0.9rem;">
+                    <div style="margin-bottom: 0.4rem;">
+                        <span style="color: #1f77b4; font-weight: bold;">● myCAF</span> (myofibroblastic) - ECM remodeling, contractile markers (ACTA2, COL1A1)
+                    </div>
+                    <div style="margin-bottom: 0.4rem;">
+                        <span style="color: #ff7f0e; font-weight: bold;">● iCAF</span> (inflammatory) - Cytokine secretion, immune modulation (IL6, CXCL12)
+                    </div>
+                    <div style="margin-bottom: 0.4rem;">
+                        <span style="color: #2ca02c; font-weight: bold;">● apCAF</span> (antigen-presenting) - MHC-II expression (HLA-DR, CD74)
+                    </div>
+                    <div>
+                        <span style="color: #999; font-weight: bold;">● Other</span> - General fibroblast populations (S01-S12)
+                    </div>
+                </div>
+                <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #666;">
+                    <strong>Note:</strong> CAF subtypes are classified based on scAtlas cell type annotations (S22-S24 prefixes).
+                </div>
             </div>
 
-            <div class="two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                <div class="viz-container" style="min-height: 380px;">
-                    <div class="viz-title">CAF Proportions by Cancer Type</div>
-                    <div class="viz-subtitle">Relative abundance of CAF subtypes</div>
-                    <div id="caf-proportions" class="plot-container" style="height: 350px;">Loading...</div>
+            <div class="viz-grid" style="margin-bottom: 1rem;">
+                <div class="sub-panel">
+                    <div class="viz-title">CAF Subtype Activity Profile</div>
+                    <div class="viz-subtitle">Top 15 signatures by activity difference across CAF subtypes</div>
+                    <div id="caf-activity-bar" class="plot-container" style="height: 320px;"></div>
                 </div>
-                <div class="viz-container" style="min-height: 380px;">
-                    <div class="viz-title">CAF Signature Heatmap</div>
-                    <div class="viz-subtitle">Top signatures × CAF subtypes</div>
-                    <div id="caf-heatmap" class="plot-container" style="height: 350px;">Loading...</div>
+                <div class="sub-panel">
+                    <div class="viz-title">CAF Subtype Composition</div>
+                    <div class="viz-subtitle">Breakdown by myCAF, iCAF, apCAF, Other per cancer type</div>
+                    <div id="caf-proportions" class="plot-container" style="height: 320px;"></div>
                 </div>
+            </div>
+
+            <div class="sub-panel">
+                <div class="viz-title">CAF Signature Heatmap</div>
+                <div class="viz-subtitle">Cytokine activity across CAF subtypes and cancer types</div>
+                <div id="caf-heatmap" class="plot-container" style="height: 350px;"></div>
             </div>
         `;
 
@@ -7164,9 +7150,10 @@ const AtlasDetailPage = {
         const cafColors = {
             'myCAF': '#1f77b4',
             'iCAF': '#ff7f0e',
-            'apCAF': '#2ca02c'
+            'apCAF': '#2ca02c',
+            'Other': '#999999'
         };
-        const cafTypes = ['myCAF', 'iCAF', 'apCAF'];
+        const cafTypes = ['myCAF', 'iCAF', 'apCAF', 'Other'];
 
         // Filter subtypes data
         let subtypes = this.cafData.subtypes || [];

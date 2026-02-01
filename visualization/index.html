@@ -2905,9 +2905,9 @@
                 ['Tissue Atlas', `35 organs (${stats.scatlas.n_organ_signatures.toLocaleString()}) + 13 cancer types (${stats.scatlas.n_cancer_type_signatures.toLocaleString()})`, (stats.scatlas.n_organ_signatures + stats.scatlas.n_cancer_type_signatures).toLocaleString()],
                 ['Differential', 'Tumor vs Adjacent vs Normal tissue × (43 CytoSig + 1,170 SecAct)', stats.scatlas.n_tumor_adjacent.toLocaleString()],
                 ['Immune Infiltration', '13 cancer types × TME composition × (43 CytoSig + 1,170 SecAct)', stats.scatlas.n_immune_infiltration.toLocaleString()],
-                ['T Cell State', '7 cancer types × 5 states × (43 CytoSig + 100 SecAct*)', stats.scatlas.n_tcell_state.toLocaleString()],
-                ['Exhaustion Diff', 'Exhausted vs non-exhausted T cells × (43 CytoSig + 100 SecAct*)', (stats.scatlas.n_exhaustion_comparison || 3432).toLocaleString()],
-                ['CAF Types', '5 cancer types × 4 CAF subtypes × 43 CytoSig', stats.scatlas.n_caf_signatures.toLocaleString()]
+                ['T Cell State', '7 cancer types × 5 states × (43 CytoSig + 1,170 SecAct)', stats.scatlas.n_tcell_state.toLocaleString()],
+                ['Exhaustion Diff', 'Exhausted vs non-exhausted T cells × (43 CytoSig + 1,170 SecAct)', stats.scatlas.n_exhaustion_comparison.toLocaleString()],
+                ['CAF Types', '5 cancer types × 4 CAF subtypes × (43 CytoSig + 1,170 SecAct)', stats.scatlas.n_caf_signatures.toLocaleString()]
             ];
             document.getElementById('data-sources-scatlas').innerHTML = scatlasData.map(row =>
                 `<tr><td>${row[0]}</td><td>${row[1]}</td><td>${row[2]}</td></tr>`
