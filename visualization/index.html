@@ -1896,7 +1896,7 @@
                 <div class="controls">
                     <div class="control-group">
                         <label>Signature Type</label>
-                        <select id="diff-sigtype" onchange="updateDifferentialAnalysis()">
+                        <select id="diff-sigtype" onchange="updateDiffSignatureList(); updateDifferentialAnalysis()">
                             <option value="CytoSig">CytoSig (43 cytokines)</option>
                             <option value="SecAct">SecAct (1,249 proteins)</option>
                         </select>
@@ -1907,13 +1907,23 @@
                             <option value="all">All Cancers (Pan-Cancer)</option>
                         </select>
                     </div>
+                    <div class="control-group">
+                        <label>Signature (for boxplot)</label>
+                        <input type="text" id="diff-sig-search" placeholder="Search..."
+                               oninput="filterDiffSignatures()"
+                               style="width: 120px; padding: 0.4rem; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 4px;">
+                        <select id="diff-signature" onchange="updateDiffBoxplot()" size="1" style="width: 180px;">
+                            <option value="IFNG">IFNG</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div class="card" style="margin-bottom: 1rem; padding: 1rem;" id="diff-description-card">
-                    <strong>Differential Analysis:</strong> Compare cytokine activity between tumor and tumor-matched normal tissue:
+                    <strong>Differential Analysis:</strong> Compare cytokine activity between tumor, adjacent, and normal tissue:
                     <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
-                        <li><strong>Tumor:</strong> Cancer tissue (pan-cancer, 147 cell type samples)</li>
-                        <li><strong>Adjacent Normal:</strong> Tumor-adjacent normal tissue (matched controls, 105 cell type samples)</li>
+                        <li><strong style="color:#d62728;">Tumor:</strong> Cancer tissue (pan-cancer, 147 cell type samples)</li>
+                        <li><strong style="color:#ff7f0e;">Adjacent:</strong> Tumor-adjacent normal tissue (matched controls, 105 samples)</li>
+                        <li><strong style="color:#2ca02c;">Normal:</strong> Healthy tissue from scAtlas normal organs (748 samples)</li>
                     </ul>
                 </div>
 
@@ -1924,12 +1934,19 @@
                         <div class="viz-subtitle" id="diff-volcano-subtitle">Tumor vs Adjacent: Δ activity vs significance</div>
                         <div id="diff-volcano" class="loading">Loading...</div>
                     </div>
-                    <!-- Top differential signatures -->
+                    <!-- Tissue Comparison Boxplot -->
                     <div class="viz-container" style="min-height: 400px;">
-                        <div class="viz-title">Top Differential Signatures</div>
-                        <div class="viz-subtitle">Ranked by absolute activity difference</div>
-                        <div id="diff-top-bar" class="loading">Loading...</div>
+                        <div class="viz-title">Tissue Comparison</div>
+                        <div class="viz-subtitle" id="diff-boxplot-subtitle">Activity distribution across tissue types</div>
+                        <div id="diff-boxplot" class="loading">Loading...</div>
                     </div>
+                </div>
+
+                <!-- Top differential signatures (full width) -->
+                <div class="viz-container" style="min-height: 350px; margin-top: 1rem;">
+                    <div class="viz-title">Top Differential Signatures</div>
+                    <div class="viz-subtitle">Ranked by absolute activity difference (Tumor vs Adjacent)</div>
+                    <div id="diff-top-bar" class="loading">Loading...</div>
                 </div>
             </div>
 
@@ -2728,6 +2745,7 @@
                 // Tissue Atlas tab (combined normal + cancer)
                 updateTissueAtlas();
                 // Differential Analysis tab (consolidated tumor/adjacent/normal)
+                updateDiffSignatureList();
                 updateDifferentialAnalysis();
                 updateImmuneInfiltration();
                 updateTcellFunction();
@@ -4575,6 +4593,183 @@
                     height: 380
                 }, { responsive: true });
             }
+
+            // Update boxplot
+            updateDiffBoxplot();
+        }
+
+        // Populate signature dropdown for differential boxplot
+        function updateDiffSignatureList() {
+            const adjData = state.data.adjacenttissue;
+            if (!adjData?.boxplot_data) return;
+
+            const sigType = document.getElementById('diff-sigtype')?.value || 'CytoSig';
+            const dropdown = document.getElementById('diff-signature');
+            if (!dropdown) return;
+
+            // Get unique signatures for this type
+            const signatures = adjData.boxplot_data
+                .filter(d => d.signature_type === sigType)
+                .map(d => d.signature)
+                .filter((v, i, a) => a.indexOf(v) === i)
+                .sort();
+
+            dropdown.innerHTML = signatures.map(s => `<option value="${s}">${s}</option>`).join('');
+
+            // Default to IFNG or first signature
+            if (signatures.includes('IFNG')) {
+                dropdown.value = 'IFNG';
+            }
+        }
+
+        // Filter signatures by search text
+        function filterDiffSignatures() {
+            const searchInput = document.getElementById('diff-sig-search');
+            const dropdown = document.getElementById('diff-signature');
+            if (!searchInput || !dropdown) return;
+
+            const searchText = searchInput.value.toLowerCase();
+            const adjData = state.data.adjacenttissue;
+            if (!adjData?.boxplot_data) return;
+
+            const sigType = document.getElementById('diff-sigtype')?.value || 'CytoSig';
+            const allSigs = adjData.boxplot_data
+                .filter(d => d.signature_type === sigType)
+                .map(d => d.signature)
+                .filter((v, i, a) => a.indexOf(v) === i)
+                .sort();
+
+            const filtered = searchText ? allSigs.filter(s => s.toLowerCase().includes(searchText)) : allSigs;
+            dropdown.innerHTML = filtered.map(s => `<option value="${s}">${s}</option>`).join('');
+
+            if (filtered.length > 0) {
+                updateDiffBoxplot();
+            }
+        }
+
+        // Update tissue comparison boxplot
+        function updateDiffBoxplot() {
+            const container = document.getElementById('diff-boxplot');
+            if (!container) return;
+
+            const adjData = state.data.adjacenttissue;
+            if (!adjData?.boxplot_data?.length) {
+                container.classList.remove('loading');
+                container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Boxplot data not available.</p>';
+                return;
+            }
+
+            const sigType = document.getElementById('diff-sigtype')?.value || 'CytoSig';
+            const selectedSig = document.getElementById('diff-signature')?.value || 'IFNG';
+            const selectedCancer = document.getElementById('diff-cancer-type')?.value || 'all';
+
+            // Find boxplot data for selected signature
+            let boxData;
+            if (selectedCancer === 'all') {
+                // Use boxplot_data for pan-cancer (includes normal tissue)
+                boxData = adjData.boxplot_data?.find(d =>
+                    d.signature === selectedSig &&
+                    d.signature_type === sigType &&
+                    d.cancer_type === 'all'
+                );
+            } else {
+                // Use by_cancer_type for specific cancer (tumor + adjacent only)
+                boxData = adjData.by_cancer_type?.find(d =>
+                    d.signature === selectedSig &&
+                    d.signature_type === sigType &&
+                    d.cancer_type === selectedCancer
+                );
+            }
+
+            if (!boxData) {
+                container.classList.remove('loading');
+                container.innerHTML = `<p style="text-align:center; color:#666; padding:2rem;">No data for ${selectedSig} in ${selectedCancer === 'all' ? 'Pan-Cancer' : selectedCancer}.</p>`;
+                return;
+            }
+
+            container.classList.remove('loading');
+            Plotly.purge(container);
+
+            // Update subtitle
+            const subtitle = document.getElementById('diff-boxplot-subtitle');
+            if (subtitle) {
+                if (selectedCancer === 'all') {
+                    subtitle.textContent = `${selectedSig} activity: Tumor (n=${boxData.tumor?.n || 0}) vs Adjacent (n=${boxData.adjacent?.n || 0}) vs Normal (n=${boxData.normal?.n || 0})`;
+                } else {
+                    subtitle.textContent = `${selectedSig} activity in ${selectedCancer}: Tumor (n=${boxData.tumor?.n || boxData.n_tumor || 0}) vs Adjacent (n=${boxData.adjacent?.n || boxData.n_adjacent || 0})`;
+                }
+            }
+
+            // Create box traces for each tissue type
+            const traces = [];
+
+            // Tumor
+            if (boxData.tumor) {
+                traces.push({
+                    type: 'box',
+                    name: 'Tumor',
+                    y: [boxData.tumor.min, boxData.tumor.q1, boxData.tumor.median, boxData.tumor.q3, boxData.tumor.max],
+                    lowerfence: [boxData.tumor.min],
+                    upperfence: [boxData.tumor.max],
+                    q1: [boxData.tumor.q1],
+                    median: [boxData.tumor.median],
+                    q3: [boxData.tumor.q3],
+                    mean: [boxData.tumor.mean],
+                    boxmean: true,
+                    marker: { color: '#d62728' },
+                    line: { color: '#d62728' },
+                    fillcolor: 'rgba(214, 39, 40, 0.3)',
+                    hovertemplate: `<b>Tumor</b><br>Median: ${boxData.tumor.median.toFixed(3)}<br>Mean: ${boxData.tumor.mean.toFixed(3)}<br>Q1-Q3: ${boxData.tumor.q1.toFixed(2)} - ${boxData.tumor.q3.toFixed(2)}<br>n=${boxData.tumor.n}<extra></extra>`
+                });
+            }
+
+            // Adjacent
+            if (boxData.adjacent) {
+                traces.push({
+                    type: 'box',
+                    name: 'Adjacent',
+                    y: [boxData.adjacent.min, boxData.adjacent.q1, boxData.adjacent.median, boxData.adjacent.q3, boxData.adjacent.max],
+                    lowerfence: [boxData.adjacent.min],
+                    upperfence: [boxData.adjacent.max],
+                    q1: [boxData.adjacent.q1],
+                    median: [boxData.adjacent.median],
+                    q3: [boxData.adjacent.q3],
+                    mean: [boxData.adjacent.mean],
+                    boxmean: true,
+                    marker: { color: '#ff7f0e' },
+                    line: { color: '#ff7f0e' },
+                    fillcolor: 'rgba(255, 127, 14, 0.3)',
+                    hovertemplate: `<b>Adjacent</b><br>Median: ${boxData.adjacent.median.toFixed(3)}<br>Mean: ${boxData.adjacent.mean.toFixed(3)}<br>Q1-Q3: ${boxData.adjacent.q1.toFixed(2)} - ${boxData.adjacent.q3.toFixed(2)}<br>n=${boxData.adjacent.n}<extra></extra>`
+                });
+            }
+
+            // Normal
+            if (boxData.normal) {
+                traces.push({
+                    type: 'box',
+                    name: 'Normal',
+                    y: [boxData.normal.min, boxData.normal.q1, boxData.normal.median, boxData.normal.q3, boxData.normal.max],
+                    lowerfence: [boxData.normal.min],
+                    upperfence: [boxData.normal.max],
+                    q1: [boxData.normal.q1],
+                    median: [boxData.normal.median],
+                    q3: [boxData.normal.q3],
+                    mean: [boxData.normal.mean],
+                    boxmean: true,
+                    marker: { color: '#2ca02c' },
+                    line: { color: '#2ca02c' },
+                    fillcolor: 'rgba(44, 160, 44, 0.3)',
+                    hovertemplate: `<b>Normal</b><br>Median: ${boxData.normal.median.toFixed(3)}<br>Mean: ${boxData.normal.mean.toFixed(3)}<br>Q1-Q3: ${boxData.normal.q1.toFixed(2)} - ${boxData.normal.q3.toFixed(2)}<br>n=${boxData.normal.n}<extra></extra>`
+                });
+            }
+
+            Plotly.newPlot(container, traces, {
+                yaxis: { title: 'Activity (z-score)', zeroline: true },
+                margin: { l: 60, r: 30, t: 30, b: 50 },
+                showlegend: true,
+                legend: { orientation: 'h', y: -0.15 },
+                height: 380
+            }, { responsive: true });
         }
 
         // Update inflammation visualization
