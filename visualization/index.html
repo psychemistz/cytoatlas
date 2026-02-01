@@ -9828,27 +9828,32 @@
                 cellTypes = [27, 66, 376, 150];
             }
 
+            // Bar chart for cells (millions)
             const trace1 = {
                 x: atlases,
                 y: cells,
                 type: 'bar',
                 name: 'Cells (millions)',
-                marker: { color: '#1f77b4' }
+                marker: { color: '#1f77b4' },
+                hovertemplate: '<b>%{x}</b><br>Cells: %{y:.1f}M<extra></extra>'
             };
 
+            // Point and line graph for cell types
             const trace2 = {
                 x: atlases,
                 y: cellTypes,
-                type: 'bar',
+                type: 'scatter',
+                mode: 'lines+markers',
                 name: 'Cell Types',
-                marker: { color: '#ff7f0e' },
-                yaxis: 'y2'
+                marker: { color: '#ff7f0e', size: 12, symbol: 'circle' },
+                line: { color: '#ff7f0e', width: 2 },
+                yaxis: 'y2',
+                hovertemplate: '<b>%{x}</b><br>Cell Types: %{y}<extra></extra>'
             };
 
             Plotly.newPlot(container, [trace1, trace2], {
-                barmode: 'group',
-                yaxis: { title: 'Cells (millions)', side: 'left' },
-                yaxis2: { title: 'Cell Types', side: 'right', overlaying: 'y' },
+                yaxis: { title: 'Cells (millions)', side: 'left', rangemode: 'tozero' },
+                yaxis2: { title: 'Cell Types', side: 'right', overlaying: 'y', rangemode: 'tozero' },
                 margin: { t: 30, b: 60, l: 60, r: 60 },
                 legend: { orientation: 'h', y: 1.1 },
                 height: 450
