@@ -83,7 +83,35 @@ const SearchPage = {
 
                 <div id="search-results" class="search-results">
                     <div class="search-intro">
-                        <h3>Quick Search Examples</h3>
+                        <h3>Popular Signatures</h3>
+                        <div class="popular-signatures">
+                            <a href="/gene/IFNG" class="signature-link">
+                                <span class="sig-name">IFNG</span>
+                                <span class="sig-type cytosig">CytoSig</span>
+                            </a>
+                            <a href="/gene/TNF" class="signature-link">
+                                <span class="sig-name">TNF</span>
+                                <span class="sig-type cytosig">CytoSig</span>
+                            </a>
+                            <a href="/gene/IL6" class="signature-link">
+                                <span class="sig-name">IL6</span>
+                                <span class="sig-type cytosig">CytoSig</span>
+                            </a>
+                            <a href="/gene/IL17A" class="signature-link">
+                                <span class="sig-name">IL17A</span>
+                                <span class="sig-type cytosig">CytoSig</span>
+                            </a>
+                            <a href="/gene/TGFB1" class="signature-link">
+                                <span class="sig-name">TGFB1</span>
+                                <span class="sig-type cytosig">CytoSig</span>
+                            </a>
+                            <a href="/gene/CCL2?type=SecAct" class="signature-link">
+                                <span class="sig-name">CCL2</span>
+                                <span class="sig-type secact">SecAct</span>
+                            </a>
+                        </div>
+
+                        <h3>Quick Search</h3>
                         <div class="example-chips">
                             <button class="chip" data-query="IFNG">IFNG</button>
                             <button class="chip" data-query="TNF">TNF</button>
@@ -93,6 +121,7 @@ const SearchPage = {
                             <button class="chip" data-query="COVID-19">COVID-19</button>
                         </div>
 
+                        <h3>Browse by Type</h3>
                         <div class="search-type-cards" id="search-type-cards"></div>
                     </div>
                 </div>
@@ -263,6 +292,10 @@ const SearchPage = {
             <div class="autocomplete-item" data-text="${s.text}" data-type="${s.type}">
                 <span class="type-badge ${s.type}">${s.type}</span>
                 <span class="text">${s.highlight}</span>
+                ${(s.type === 'cytokine' || s.type === 'protein') ?
+                    `<a href="/gene/${encodeURIComponent(s.text)}?type=${s.type === 'protein' ? 'SecAct' : 'CytoSig'}"
+                        class="autocomplete-action"
+                        onclick="event.stopPropagation()">View →</a>` : ''}
             </div>
         `).join('');
 
@@ -270,7 +303,10 @@ const SearchPage = {
 
         // Add click handlers
         dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
-            item.addEventListener('click', () => {
+            item.addEventListener('click', (e) => {
+                // Don't trigger if clicking the action link
+                if (e.target.classList.contains('autocomplete-action')) return;
+
                 const text = item.dataset.text;
                 document.getElementById('search-input').value = text;
                 this.currentQuery = text;
@@ -301,7 +337,7 @@ const SearchPage = {
 
         // Show loading state
         if (this.offset === 0) {
-            resultsContainer.innerHTML = '<div class="loading">Searching...</div>';
+            resultsContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Searching...</div>';
         }
 
         try {
@@ -318,7 +354,7 @@ const SearchPage = {
             // Update stats
             statsContainer.innerHTML = `
                 Found <strong>${data.total_results.toLocaleString()}</strong> results
-                for "${data.query}"
+                for "<strong>${data.query}</strong>"
                 ${data.type_filter !== 'all' ? `in <strong>${data.type_filter}</strong>` : ''}
             `;
 
@@ -348,7 +384,8 @@ const SearchPage = {
             console.error('Search error:', error);
             resultsContainer.innerHTML = `
                 <div class="error-message">
-                    Search failed. Please try again.
+                    <h3>Search Failed</h3>
+                    <p>Unable to search. Please try again.</p>
                 </div>
             `;
         }
@@ -384,130 +421,324 @@ const SearchPage = {
             </div>
         `;
 
-        // Add click handlers for result cards
-        container.querySelectorAll('.result-card').forEach(card => {
-            card.addEventListener('click', () => {
-                const entityId = card.dataset.entityId;
-                this.showEntityDetail(entityId);
-            });
-        });
+        // Use event delegation for all result card actions
+        container.addEventListener('click', (e) => this.handleResultClick(e));
+    },
+
+    /**
+     * Handle clicks on result cards using event delegation
+     */
+    handleResultClick(e) {
+        const card = e.target.closest('.result-card');
+        if (!card) return;
+
+        // Check if clicking a specific action button
+        const viewDetailsBtn = e.target.closest('.view-details-btn');
+        const quickViewBtn = e.target.closest('.quick-view-btn');
+        const exploreBtn = e.target.closest('.explore-btn');
+
+        if (viewDetailsBtn) {
+            e.preventDefault();
+            const name = viewDetailsBtn.dataset.name;
+            const sigType = viewDetailsBtn.dataset.sigtype;
+            router.navigate(`/gene/${encodeURIComponent(name)}?type=${sigType}`);
+            return;
+        }
+
+        if (quickViewBtn) {
+            e.preventDefault();
+            const entityId = card.dataset.entityId;
+            this.showQuickView(entityId);
+            return;
+        }
+
+        if (exploreBtn) {
+            e.preventDefault();
+            const atlas = exploreBtn.dataset.atlas;
+            router.navigate(`/atlas/${atlas}`);
+            return;
+        }
+
+        // Default: clicking card opens quick view
+        if (!e.target.closest('a') && !e.target.closest('button')) {
+            const entityId = card.dataset.entityId;
+            this.showQuickView(entityId);
+        }
     },
 
     /**
      * Render individual result card
      */
     renderResultCard(result) {
+        const isSignature = result.type === 'cytokine' || result.type === 'protein' || result.type === 'gene';
+
+        // For signatures, show both CytoSig and SecAct options
+        let signatureLinks = '';
+        if (isSignature) {
+            signatureLinks = `
+                <div class="signature-links">
+                    <a href="/gene/${encodeURIComponent(result.name)}?type=CytoSig"
+                       class="sig-link cytosig"
+                       onclick="event.stopPropagation()">
+                        <span class="sig-icon">&#128300;</span>
+                        <span class="sig-label">CytoSig</span>
+                    </a>
+                    <a href="/gene/${encodeURIComponent(result.name)}?type=SecAct"
+                       class="sig-link secact"
+                       onclick="event.stopPropagation()">
+                        <span class="sig-icon">&#9898;</span>
+                        <span class="sig-label">SecAct</span>
+                    </a>
+                </div>
+            `;
+        }
+
         return `
-            <div class="result-card" data-entity-id="${result.id}">
+            <div class="result-card" data-entity-id="${result.id}" data-type="${result.type}">
                 <div class="result-header">
-                    <span class="type-badge ${result.type}">${result.type}</span>
+                    <span class="type-badge ${result.type}">${this.formatTypeName(result.type)}</span>
                     <h3 class="result-name">${result.name}</h3>
-                    <span class="score">${Math.round(result.score)}</span>
                 </div>
                 ${result.description ? `<p class="result-description">${result.description}</p>` : ''}
                 <div class="result-meta">
-                    <span class="atlas-count">
-                        ${result.atlas_count} ${result.atlas_count === 1 ? 'atlas' : 'atlases'}
+                    <span class="atlas-badges">
+                        ${result.atlases.map(a => `<span class="atlas-badge">${a}</span>`).join('')}
                     </span>
-                    <span class="atlases">${result.atlases.join(', ')}</span>
                 </div>
+                ${isSignature ? signatureLinks : ''}
                 <div class="result-actions">
-                    <button class="btn btn-sm btn-outline view-activity">View Activity</button>
-                    <button class="btn btn-sm btn-outline view-correlations">Correlations</button>
+                    <button class="btn btn-sm btn-outline quick-view-btn">
+                        Quick View
+                    </button>
+                    ${!isSignature && result.atlases.length === 1 ? `
+                        <button class="btn btn-sm btn-outline explore-btn" data-atlas="${result.atlases[0].toLowerCase()}">
+                            Explore in ${result.atlases[0]}
+                        </button>
+                    ` : ''}
+                    ${result.type === 'disease' ? `
+                        <a href="/atlas/inflammation" class="btn btn-sm btn-outline" onclick="event.stopPropagation()">
+                            Inflammation Atlas
+                        </a>
+                    ` : ''}
+                    ${result.type === 'organ' ? `
+                        <a href="/atlas/scatlas" class="btn btn-sm btn-outline" onclick="event.stopPropagation()">
+                            scAtlas
+                        </a>
+                    ` : ''}
                 </div>
             </div>
         `;
     },
 
     /**
-     * Show entity detail modal/panel
+     * Format type name for display
      */
-    async showEntityDetail(entityId) {
-        // Load activity data
+    formatTypeName(type) {
+        const names = {
+            cytokine: 'Cytokine',
+            protein: 'Protein',
+            cell_type: 'Cell Type',
+            disease: 'Disease',
+            organ: 'Organ',
+            gene: 'Gene',
+        };
+        return names[type] || type;
+    },
+
+    /**
+     * Show quick view panel for an entity
+     */
+    async showQuickView(entityId) {
+        // Parse entity type and name from ID (format: "type:name")
+        const [entityType, entityName] = entityId.includes(':') ? entityId.split(':') : ['unknown', entityId];
+
         try {
             const response = await fetch(`/api/v1/search/${encodeURIComponent(entityId)}/activity`);
+
+            if (!response.ok) {
+                throw new Error('Failed to load activity data');
+            }
+
             const data = await response.json();
-
-            // Create modal
-            const modal = document.createElement('div');
-            modal.className = 'modal entity-detail-modal';
-            modal.innerHTML = `
-                <div class="modal-backdrop"></div>
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h2>${data.entity_name}</h2>
-                        <span class="type-badge ${data.entity_type}">${data.entity_type}</span>
-                        <button class="modal-close">&times;</button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="activity-summary">
-                            <h3>Activity Summary</h3>
-                            <div class="stats-grid">
-                                <div class="stat">
-                                    <span class="label">Mean</span>
-                                    <span class="value">${data.mean_activity.toFixed(3)}</span>
-                                </div>
-                                <div class="stat">
-                                    <span class="label">Std Dev</span>
-                                    <span class="value">${data.std_activity.toFixed(3)}</span>
-                                </div>
-                                <div class="stat">
-                                    <span class="label">Min</span>
-                                    <span class="value">${data.min_activity.toFixed(3)}</span>
-                                </div>
-                                <div class="stat">
-                                    <span class="label">Max</span>
-                                    <span class="value">${data.max_activity.toFixed(3)}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="top-cell-types">
-                            <h3>Top Positive Activity</h3>
-                            <div class="cell-type-list">
-                                ${data.top_positive_cell_types.slice(0, 5).map(ct => `
-                                    <div class="cell-type-item">
-                                        <span class="cell-type-name">${ct.cell_type}</span>
-                                        <span class="atlas">${ct.atlas}</span>
-                                        <span class="activity positive">${ct.activity.toFixed(3)}</span>
-                                    </div>
-                                `).join('')}
-                            </div>
-
-                            <h3>Top Negative Activity</h3>
-                            <div class="cell-type-list">
-                                ${data.top_negative_cell_types.slice(0, 5).map(ct => `
-                                    <div class="cell-type-item">
-                                        <span class="cell-type-name">${ct.cell_type}</span>
-                                        <span class="atlas">${ct.atlas}</span>
-                                        <span class="activity negative">${ct.activity.toFixed(3)}</span>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-
-                        <div class="modal-actions">
-                            <button class="btn btn-primary" onclick="Router.navigate('/explore')">
-                                Explore in Atlas
-                            </button>
-                            <button class="btn btn-secondary" onclick="Router.navigate('/compare')">
-                                Compare Across Atlases
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            document.body.appendChild(modal);
-
-            // Close handlers
-            modal.querySelector('.modal-close').addEventListener('click', () => modal.remove());
-            modal.querySelector('.modal-backdrop').addEventListener('click', () => modal.remove());
+            this.renderQuickViewModal(data);
 
         } catch (error) {
             console.error('Failed to load entity detail:', error);
-            alert('Failed to load entity details. Please try again.');
+            // Show a simplified modal for entities without activity data
+            this.renderSimpleInfoModal(entityType, entityName);
         }
+    },
+
+    /**
+     * Render quick view modal with activity data
+     */
+    renderQuickViewModal(data) {
+        // Remove any existing modal
+        document.querySelector('.search-modal')?.remove();
+
+        const isSignature = data.entity_type === 'cytokine' || data.entity_type === 'protein';
+        const sigType = data.entity_type === 'protein' ? 'SecAct' : 'CytoSig';
+
+        const modal = document.createElement('div');
+        modal.className = 'search-modal';
+        modal.innerHTML = `
+            <div class="modal-backdrop"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-title">
+                        <h2>${data.entity_name}</h2>
+                        <span class="type-badge ${data.entity_type}">${this.formatTypeName(data.entity_type)}</span>
+                    </div>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="activity-summary">
+                        <h3>Activity Summary</h3>
+                        <div class="stats-row">
+                            <div class="stat-item">
+                                <span class="stat-value">${data.mean_activity?.toFixed(3) || 'N/A'}</span>
+                                <span class="stat-label">Mean</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value">${data.std_activity?.toFixed(3) || 'N/A'}</span>
+                                <span class="stat-label">Std Dev</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value">${data.min_activity?.toFixed(3) || 'N/A'}</span>
+                                <span class="stat-label">Min</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value">${data.max_activity?.toFixed(3) || 'N/A'}</span>
+                                <span class="stat-label">Max</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    ${data.top_positive_cell_types?.length ? `
+                        <div class="cell-type-section">
+                            <h3>Highest Activity</h3>
+                            <div class="cell-type-list">
+                                ${data.top_positive_cell_types.slice(0, 5).map(ct => `
+                                    <div class="cell-type-row">
+                                        <span class="cell-name">${ct.cell_type}</span>
+                                        <span class="cell-atlas">${ct.atlas}</span>
+                                        <span class="cell-activity positive">${ct.activity.toFixed(3)}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${data.top_negative_cell_types?.length ? `
+                        <div class="cell-type-section">
+                            <h3>Lowest Activity</h3>
+                            <div class="cell-type-list">
+                                ${data.top_negative_cell_types.slice(0, 5).map(ct => `
+                                    <div class="cell-type-row">
+                                        <span class="cell-name">${ct.cell_type}</span>
+                                        <span class="cell-atlas">${ct.atlas}</span>
+                                        <span class="cell-activity negative">${ct.activity.toFixed(3)}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="modal-footer">
+                    ${isSignature ? `
+                        <div class="modal-sig-links">
+                            <a href="/gene/${encodeURIComponent(data.entity_name)}?type=CytoSig" class="btn btn-primary">
+                                View CytoSig
+                            </a>
+                            <a href="/gene/${encodeURIComponent(data.entity_name)}?type=SecAct" class="btn btn-outline">
+                                View SecAct
+                            </a>
+                        </div>
+                    ` : ''}
+                    <button class="btn btn-secondary close-modal-btn">Close</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        // Close handlers
+        modal.querySelector('.modal-close').addEventListener('click', () => modal.remove());
+        modal.querySelector('.modal-backdrop').addEventListener('click', () => modal.remove());
+        modal.querySelector('.close-modal-btn')?.addEventListener('click', () => modal.remove());
+
+        // Close on escape
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                modal.remove();
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+    },
+
+    /**
+     * Render simple info modal for entities without activity data
+     */
+    renderSimpleInfoModal(type, name) {
+        document.querySelector('.search-modal')?.remove();
+
+        const modal = document.createElement('div');
+        modal.className = 'search-modal';
+        modal.innerHTML = `
+            <div class="modal-backdrop"></div>
+            <div class="modal-content modal-small">
+                <div class="modal-header">
+                    <div class="modal-title">
+                        <h2>${name}</h2>
+                        <span class="type-badge ${type}">${this.formatTypeName(type)}</span>
+                    </div>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="info-text">
+                        ${this.getEntityDescription(type, name)}
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    ${type === 'disease' ? `
+                        <a href="/atlas/inflammation" class="btn btn-primary">View in Inflammation Atlas</a>
+                    ` : type === 'organ' ? `
+                        <a href="/atlas/scatlas" class="btn btn-primary">View in scAtlas</a>
+                    ` : type === 'cell_type' ? `
+                        <a href="/explore" class="btn btn-primary">Explore Cell Types</a>
+                    ` : ''}
+                    <button class="btn btn-secondary close-modal-btn">Close</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        modal.querySelector('.modal-close').addEventListener('click', () => modal.remove());
+        modal.querySelector('.modal-backdrop').addEventListener('click', () => modal.remove());
+        modal.querySelector('.close-modal-btn')?.addEventListener('click', () => modal.remove());
+    },
+
+    /**
+     * Get description for entity type
+     */
+    getEntityDescription(type, name) {
+        const descriptions = {
+            disease: `<strong>${name}</strong> is a disease condition in the Inflammation Atlas. View the atlas to explore cytokine activity patterns associated with this disease.`,
+            organ: `<strong>${name}</strong> is an organ/tissue in scAtlas. View the atlas to explore cell type-specific cytokine activities in this tissue.`,
+            cell_type: `<strong>${name}</strong> is an immune cell type. Explore the atlases to see cytokine activity patterns in this cell population.`,
+        };
+        return descriptions[type] || `<strong>${name}</strong> - ${type}`;
+    },
+
+    /**
+     * Navigate to gene detail page (for modal button)
+     */
+    navigateToGeneDetail(name, type) {
+        document.querySelector('.search-modal')?.remove();
+        const signatureType = type === 'protein' ? 'SecAct' : 'CytoSig';
+        router.navigate(`/gene/${encodeURIComponent(name)}?type=${signatureType}`);
     },
 };
 

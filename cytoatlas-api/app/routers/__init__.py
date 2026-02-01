@@ -6,6 +6,7 @@ from app.routers.chat import router as chat_router
 from app.routers.cima import router as cima_router
 from app.routers.cross_atlas import router as cross_atlas_router
 from app.routers.export import router as export_router
+from app.routers.gene import router as gene_router
 from app.routers.health import router as health_router
 from app.routers.inflammation import router as inflammation_router
 from app.routers.scatlas import router as scatlas_router
@@ -21,6 +22,7 @@ __all__ = [
     "cima_router",
     "cross_atlas_router",
     "export_router",
+    "gene_router",
     "health_router",
     "inflammation_router",
     "scatlas_router",

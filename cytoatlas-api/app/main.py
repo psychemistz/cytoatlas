@@ -23,6 +23,7 @@ from app.routers import (
     cima_router,
     cross_atlas_router,
     export_router,
+    gene_router,
     health_router,
     inflammation_router,
     scatlas_router,
@@ -135,6 +136,7 @@ def create_app() -> FastAPI:
 
     # New modules
     app.include_router(search_router, prefix=api_prefix)
+    app.include_router(gene_router, prefix=api_prefix)  # Gene-centric views
     app.include_router(submit_router, prefix=api_prefix)
     app.include_router(chat_router, prefix=api_prefix)
     app.include_router(websocket_router, prefix=api_prefix)

@@ -138,32 +138,37 @@
             <section class="features-section">
                 <h2 class="section-title">What You Can Do</h2>
                 <div class="features-grid">
-                    <div class="feature-card" onclick="Router.navigate('/search')">
+                    <div class="feature-card" onclick="router.navigate('/search')">
                         <div class="feature-icon">&#128270;</div>
                         <h3>Search</h3>
                         <p>Find cytokines, proteins, cell types, and diseases across all atlases</p>
+                        <div class="quick-links">
+                            <a href="/gene/IFNG" onclick="event.stopPropagation()">IFNG</a>
+                            <a href="/gene/TNF" onclick="event.stopPropagation()">TNF</a>
+                            <a href="/gene/IL6" onclick="event.stopPropagation()">IL6</a>
+                        </div>
                     </div>
-                    <div class="feature-card" onclick="Router.navigate('/explore')">
+                    <div class="feature-card" onclick="router.navigate('/explore')">
                         <div class="feature-icon">&#128202;</div>
                         <h3>Explore</h3>
                         <p>Interactive heatmaps, scatter plots, and correlation analyses</p>
                     </div>
-                    <div class="feature-card" onclick="Router.navigate('/compare')">
+                    <div class="feature-card" onclick="router.navigate('/compare')">
                         <div class="feature-icon">&#128200;</div>
                         <h3>Compare</h3>
                         <p>Cross-atlas comparison of cytokine activities</p>
                     </div>
-                    <div class="feature-card" onclick="Router.navigate('/validate')">
+                    <div class="feature-card" onclick="router.navigate('/validate')">
                         <div class="feature-icon">&#9989;</div>
                         <h3>Validate</h3>
                         <p>5-type credibility assessment for inference quality</p>
                     </div>
-                    <div class="feature-card" onclick="Router.navigate('/submit')">
+                    <div class="feature-card" onclick="router.navigate('/submit')">
                         <div class="feature-icon">&#128193;</div>
                         <h3>Submit</h3>
                         <p>Upload your H5AD data for CytoSig/SecAct inference</p>
                     </div>
-                    <div class="feature-card" onclick="Router.navigate('/chat')">
+                    <div class="feature-card" onclick="router.navigate('/chat')">
                         <div class="feature-icon">&#128172;</div>
                         <h3>Chat</h3>
                         <p>Ask questions with AI-powered natural language assistant</p>
@@ -339,6 +344,7 @@
     <script src="/static/js/pages/validate.js"></script>
     <script src="/static/js/pages/compare.js"></script>
     <script src="/static/js/pages/search.js"></script>
+    <script src="/static/js/pages/gene-detail.js"></script>
     <script src="/static/js/pages/submit.js"></script>
     <script src="/static/js/pages/chat.js"></script>
     <script src="/static/js/app.js"></script>

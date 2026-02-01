@@ -13,6 +13,7 @@
         // Register routes
         router.register('/', (params, query) => HomePage.init());
         router.register('/search', (params, query) => SearchPage.init(params, query));
+        router.register('/gene/:signature', (params, query) => GeneDetailPage.init(params, query));
         router.register('/explore', (params, query) => ExplorePage.init(params, query));
         router.register('/atlas/:name', (params, query) => AtlasDetailPage.init(params));
         router.register('/validate', (params, query) => ValidatePage.init(params, query));
