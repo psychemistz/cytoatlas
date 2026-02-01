@@ -865,7 +865,8 @@ def compute_tcell_exhaustion(meta_df, cytosig_df):
 
             mean_exhausted = np.mean(exhausted_vals)
             mean_nonexhausted = np.mean(nonexhausted_vals)
-            log2fc = np.log2((mean_exhausted + 0.01) / (mean_nonexhausted + 0.01))
+            # Use difference for z-score activity data (not log2 ratio)
+            diff = mean_exhausted - mean_nonexhausted
 
             try:
                 stat, pval = stats.mannwhitneyu(exhausted_vals, nonexhausted_vals, alternative='two-sided')
@@ -877,7 +878,7 @@ def compute_tcell_exhaustion(meta_df, cytosig_df):
                 'signature': sig,
                 'mean_exhausted': round(mean_exhausted, 4),
                 'mean_nonexhausted': round(mean_nonexhausted, 4),
-                'log2fc': round(log2fc, 4) if not np.isnan(log2fc) else 0,
+                'log2fc': round(diff, 4) if not np.isnan(diff) else 0,  # Actually activity difference, not log2FC
                 'pvalue': round(pval, 6) if not np.isnan(pval) else None,
                 'n_exhausted': len(exhausted_samples),
                 'n_nonexhausted': len(nonexhausted_samples)

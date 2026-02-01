@@ -1055,12 +1055,12 @@
                 <div class="two-col">
                     <div class="viz-container" style="min-height: 500px;">
                         <div class="viz-title">Volcano Plot: Differential Activity</div>
-                        <div class="viz-subtitle" id="volcano-subtitle">Effect size (log2 fold change) vs significance (-log10 p-value)</div>
+                        <div class="viz-subtitle" id="volcano-subtitle">Effect size (Δ activity) vs significance (-log10 p-value)</div>
                         <div id="volcano-plot" class="loading">Loading...</div>
                     </div>
                     <div class="viz-container" style="min-height: 500px;">
                         <div class="viz-title">Top Differential Signatures</div>
-                        <div class="viz-subtitle">Sorted by significance (|log2FC| × -log10 p)</div>
+                        <div class="viz-subtitle">Sorted by significance (|Δ activity| × -log10 p)</div>
                         <div id="cima-diff-bar" class="loading">Loading...</div>
                     </div>
                 </div>
@@ -1787,8 +1787,8 @@
                 <button class="tab" data-tab="tissue-atlas">Tissue Atlas</button>
                 <button class="tab" data-tab="differential-analysis">Differential Analysis</button>
                 <button class="tab" data-tab="immune-infiltration">Immune Infiltration</button>
-                <button class="tab" data-tab="tcell-function">T Cell Function</button>
-                <button class="tab" data-tab="exhaustion">T Cell Exhaustion</button>
+                <button class="tab" data-tab="tcell-function">T Cell State</button>
+                <button class="tab" data-tab="exhaustion">Exhaustion Differential</button>
                 <button class="tab" data-tab="caf-classification">CAF Types</button>
             </div>
 
@@ -1934,13 +1934,13 @@
                     <!-- Volcano plot -->
                     <div class="viz-container" style="min-height: 400px;">
                         <div class="viz-title">Differential Volcano Plot</div>
-                        <div class="viz-subtitle" id="diff-volcano-subtitle">Tumor vs Adjacent: log2FC vs significance</div>
+                        <div class="viz-subtitle" id="diff-volcano-subtitle">Tumor vs Adjacent: Δ activity vs significance</div>
                         <div id="diff-volcano" class="loading">Loading...</div>
                     </div>
                     <!-- Top differential signatures -->
                     <div class="viz-container" style="min-height: 400px;">
                         <div class="viz-title">Top Differential Signatures</div>
-                        <div class="viz-subtitle">Ranked by absolute log2 fold change</div>
+                        <div class="viz-subtitle">Ranked by absolute activity difference</div>
                         <div id="diff-top-bar" class="loading">Loading...</div>
                     </div>
                 </div>
@@ -1983,12 +1983,12 @@
                 </div>
             </div>
 
-            <!-- T Cell Function Tab -->
+            <!-- T Cell State Tab -->
             <div class="tab-content" id="tab-tcell-function">
                 <div class="controls">
                     <div class="control-group">
                         <label>Signature Type</label>
-                        <select id="tcell-sigtype" onchange="updateTcellFunction()">
+                        <select id="tcell-sigtype" onchange="updateTcellSignatureList(); updateTcellFunction()">
                             <option value="cytosig">CytoSig (43 cytokines)</option>
                             <option value="secact">SecAct (100 secreted proteins)</option>
                         </select>
@@ -1997,6 +1997,15 @@
                         <label>Cancer Type</label>
                         <select id="tcell-cancer" onchange="updateTcellFunction()">
                             <option value="all">All Cancers</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Signature (for boxplot)</label>
+                        <input type="text" id="tcell-sig-search" placeholder="Search..."
+                               oninput="filterTcellSignatures()"
+                               style="width: 120px; padding: 0.4rem; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 4px;">
+                        <select id="tcell-signature" onchange="updateTcellBoxplot()" size="1" style="width: 180px;">
+                            <option value="top">Top 6 differential</option>
                         </select>
                     </div>
                 </div>
@@ -2034,7 +2043,7 @@
                 </div>
             </div>
 
-            <!-- Exhaustion Signatures Tab -->
+            <!-- Exhaustion Differential Tab -->
             <div class="tab-content" id="tab-exhaustion">
                 <div class="controls">
                     <div class="control-group">
@@ -2062,7 +2071,7 @@
                 <div class="two-col">
                     <div class="viz-container" style="min-height: 450px;">
                         <div class="viz-title">Differential Cytokine Activity</div>
-                        <div class="viz-subtitle">Log2 fold change: Exhausted vs Non-exhausted T cells</div>
+                        <div class="viz-subtitle">Activity difference: Exhausted vs Non-exhausted T cells</div>
                         <div id="exhaustion-heatmap" class="loading">Loading data...</div>
                     </div>
                     <div class="viz-container" style="min-height: 450px;">
@@ -2422,7 +2431,7 @@
             <p>Spearman's rank correlation coefficient (ρ) was used for continuous variables (age, BMI, biochemistry, metabolites). P-values were adjusted using Benjamini-Hochberg FDR correction.</p>
 
             <h4>Differential Analysis</h4>
-            <p>Mann-Whitney U test (Wilcoxon rank-sum) was used for two-group comparisons (sex, disease vs. healthy). Effect sizes are reported as log2 fold-change of median activity.</p>
+            <p>Mann-Whitney U test (Wilcoxon rank-sum) was used for two-group comparisons (sex, disease vs. healthy). Effect sizes are reported as activity difference (z-score units).</p>
 
             <h4>Treatment Response Prediction</h4>
             <p>Logistic regression and Random Forest classifiers were trained using 5-fold cross-validation. ROC curves show model performance with AUC metrics. Feature importance was assessed using permutation importance for interpretability.</p>
@@ -2467,7 +2476,7 @@
                 </tr>
                 <tr style="border-bottom: 1px solid #eee;">
                     <td style="padding: 0.5rem;"><strong>Disease Differential</strong></td>
-                    <td style="padding: 0.5rem;">Volcano plots showing disease-specific activity changes (log2FC vs. -log10 p-value)</td>
+                    <td style="padding: 0.5rem;">Volcano plots showing disease-specific activity changes (Δ activity vs. -log10 p-value)</td>
                 </tr>
                 <tr style="border-bottom: 1px solid #eee;">
                     <td style="padding: 0.5rem;"><strong>Atlas Comparison</strong></td>
@@ -2774,8 +2783,8 @@
                 ['Tumor vs Adjacent', 'Differential activity between tumor and adjacent tissue', stats.scatlas.n_cell_types_cancer + ' cell types'],
                 ['Normal vs Cancer', 'Matched organ-cancer type comparisons', '13 organ-cancer pairs'],
                 ['Immune Infiltration', 'Immune cell proportions and activity per cancer type', 'Per cancer type'],
-                ['T Cell Function', 'Cytokine activity across T cell functional states', 'Exhausted/Cytotoxic/Memory/Naive'],
-                ['T Cell Exhaustion', 'Exhausted vs non-exhausted T cell signatures', 'Tex vs non-Tex'],
+                ['T Cell State', 'Cytokine activity across T cell functional states', 'Exhausted/Cytotoxic/Memory/Naive'],
+                ['Exhaustion Differential', 'Exhausted vs non-exhausted T cell signatures', 'Tex vs non-Tex'],
                 ['CAF Signatures', 'Cancer-associated fibroblast subtype activities', 'Per cancer type'],
                 ['Adjacent Tissue', 'Field effect analysis in tumor-adjacent tissue', 'Per cancer type'],
                 ['Pan-Cancer Signatures', 'Signatures consistent across multiple cancers', 'Cross-cancer']
@@ -3452,7 +3461,7 @@
             // Update subtitle with comparison info
             const subtitleEl = container.closest('.viz-container').querySelector('.viz-subtitle');
             if (subtitleEl) {
-                subtitleEl.textContent = `Positive log2FC = higher in ${group1}, Negative = higher in ${group2}`;
+                subtitleEl.textContent = `Positive Δ = higher in ${group1}, Negative = higher in ${group2}`;
             }
 
             // Color by significance
@@ -3488,10 +3497,10 @@
                 },
                 textposition: 'top center',
                 textfont: {size: 10},
-                hovertemplate: '<b>%{customdata}</b><br>log2FC: %{x:.2f}<br>-log10(p): %{y:.2f}<extra></extra>'
+                hovertemplate: '<b>%{customdata}</b><br>Δ Activity: %{x:.2f}<br>-log10(p): %{y:.2f}<extra></extra>'
             }], {
                 xaxis: {
-                    title: `log2 Fold Change (${group1} / ${group2})`,
+                    title: `Δ Activity (${group1} - ${group2})`,
                     zeroline: true,
                     zerolinecolor: '#ccc',
                     range: [-maxAbsFC, maxAbsFC]
@@ -3580,10 +3589,10 @@
                 text: top20.map(d => d.log2fc.toFixed(2)),
                 textposition: 'outside',
                 textfont: { size: 9 },
-                hovertemplate: '<b>%{y}</b><br>log2FC: %{x:.3f}<br>q = %{customdata}<extra></extra>',
+                hovertemplate: '<b>%{y}</b><br>Δ Activity: %{x:.3f}<br>q = %{customdata}<extra></extra>',
                 customdata: top20.map(d => d.qvalue?.toExponential(2) || 'N/A')
             }], {
-                xaxis: { title: 'log2 Fold Change', zeroline: true, zerolinecolor: '#ccc' },
+                xaxis: { title: 'Δ Activity', zeroline: true, zerolinecolor: '#ccc' },
                 yaxis: { automargin: true, tickfont: { size: 10 } },
                 margin: { l: 120, r: 50, t: 30, b: 50 },
                 height: 500
@@ -4082,7 +4091,7 @@
                 document.getElementById('tissue-boxplot-subtitle').textContent = `Paired comparison across ${sigData.length} cancer types (blue=normal, red=cancer)`;
             }
 
-            // 2. Heatmap: Log2FC Cancer vs Normal
+            // 2. Heatmap: Activity Difference Cancer vs Normal
             if (heatmapContainer) {
                 heatmapContainer.classList.remove('loading');
                 Plotly.purge(heatmapContainer);
@@ -4102,7 +4111,7 @@
                     y: cancerTypes.map(ct => labels[ct] || ct),
                     colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
                     zmid: 0,
-                    colorbar: { title: 'Log2FC' },
+                    colorbar: { title: 'Δ Activity' },
                     hovertemplate: '<b>%{y}</b><br>%{x}: %{z:.3f}<extra></extra>'
                 }], {
                     xaxis: { tickangle: 45, tickfont: { size: 9 } },
@@ -4111,7 +4120,7 @@
                     height: Math.max(350, cancerTypes.length * 30)
                 }, { responsive: true });
 
-                document.getElementById('tissue-heatmap-title').textContent = 'Cancer vs Normal Log2 Fold Change';
+                document.getElementById('tissue-heatmap-title').textContent = 'Cancer vs Normal Activity Difference';
                 document.getElementById('tissue-heatmap-subtitle').textContent = `${cancerTypes.length} cancer types × ${dispSigs.length} ${sigType} signatures (red = higher in cancer)`;
             }
         }
@@ -4703,10 +4712,10 @@
                         type: 'scatter', mode: 'markers', name: 'Not significant',
                         x: notSig.map(d => d.log2fc), y: notSig.map(d => d.negLogP),
                         text: notSig.map(d => d.signature), marker: { color: '#ccc', size: 6 },
-                        hovertemplate: '<b>%{text}</b><br>Log2FC: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
+                        hovertemplate: '<b>%{text}</b><br>Δ Activity: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
                     }
                 ], {
-                    xaxis: { title: 'log2(Adjacent / Tumor)', zeroline: true },
+                    xaxis: { title: 'Δ Activity (Adjacent - Tumor)', zeroline: true },
                     yaxis: { title: '-log10(p-value)' },
                     shapes: [
                         { type: 'line', x0: 0.3, y0: 0, x1: 0.3, y1: 10, line: { dash: 'dot', color: '#999' } },
@@ -4737,10 +4746,10 @@
                     },
                     text: top15.map(d => (d.log2fc || 0).toFixed(3)),
                     textposition: 'auto',
-                    hovertemplate: '<b>%{y}</b><br>log2FC: %{x:.3f}<br>p = %{customdata:.2e}<extra></extra>',
+                    hovertemplate: '<b>%{y}</b><br>Δ Activity: %{x:.3f}<br>p = %{customdata:.2e}<extra></extra>',
                     customdata: top15.map(d => d.pvalue || 1)
                 }], {
-                    xaxis: { title: 'log2(Adjacent / Tumor)', zeroline: true },
+                    xaxis: { title: 'Δ Activity (Adjacent - Tumor)', zeroline: true },
                     yaxis: { automargin: true },
                     margin: { l: 100, r: 50, t: 30, b: 50 },
                     height: 380
@@ -9098,7 +9107,134 @@
                 }
         }
 
-        // scAtlas: T Cell Function
+        // scAtlas: T Cell State - cached data for boxplot updates
+        let tcellFunctionCache = {
+            stateActivity: {},
+            signatures: [],
+            topSigs: [],
+            states: ['exhausted', 'cytotoxic', 'memory', 'naive'],
+            stateColors: {
+                'exhausted': '#d62728',
+                'cytotoxic': '#2ca02c',
+                'memory': '#1f77b4',
+                'naive': '#ff7f0e',
+                'other_tcell': '#7f7f7f'
+            },
+            stateLabels: {
+                'exhausted': 'Exhausted',
+                'cytotoxic': 'Cytotoxic',
+                'memory': 'Memory',
+                'naive': 'Naive',
+                'other_tcell': 'Other'
+            }
+        };
+
+        // Update signature dropdown list based on signature type
+        function updateTcellSignatureList() {
+            const data = state.data.exhaustion;
+            if (!data) return;
+
+            const sigType = document.getElementById('tcell-sigtype')?.value || 'cytosig';
+            const dropdown = document.getElementById('tcell-signature');
+            if (!dropdown) return;
+
+            // Get signatures for this type
+            const signatures = sigType === 'cytosig'
+                ? (data.cytosig_signatures || data.signatures || [])
+                : (data.secact_signatures || []);
+
+            // Clear and repopulate
+            dropdown.innerHTML = '<option value="top">Top 6 differential</option>';
+            signatures.sort().forEach(sig => {
+                const opt = document.createElement('option');
+                opt.value = sig;
+                opt.textContent = sig;
+                dropdown.appendChild(opt);
+            });
+
+            // Clear search
+            const searchInput = document.getElementById('tcell-sig-search');
+            if (searchInput) searchInput.value = '';
+        }
+
+        // Filter signature dropdown based on search input
+        function filterTcellSignatures() {
+            const searchInput = document.getElementById('tcell-sig-search');
+            const dropdown = document.getElementById('tcell-signature');
+            if (!searchInput || !dropdown) return;
+
+            const searchTerm = searchInput.value.toLowerCase();
+            const options = dropdown.options;
+
+            for (let i = 0; i < options.length; i++) {
+                const opt = options[i];
+                if (opt.value === 'top') {
+                    opt.style.display = '';  // Always show "Top 6" option
+                } else {
+                    opt.style.display = opt.textContent.toLowerCase().includes(searchTerm) ? '' : 'none';
+                }
+            }
+        }
+
+        // Update just the boxplot based on selected signature
+        function updateTcellBoxplot() {
+            const comparisonContainer = document.getElementById('tcell-state-comparison');
+            if (!comparisonContainer) return;
+
+            const selectedSig = document.getElementById('tcell-signature')?.value || 'top';
+            const { stateActivity, topSigs, states, stateColors, stateLabels } = tcellFunctionCache;
+
+            if (Object.keys(stateActivity).length === 0) return;
+
+            comparisonContainer.classList.remove('loading');
+            Plotly.purge(comparisonContainer);
+
+            // Determine which signatures to show
+            const sigsToShow = selectedSig === 'top' ? topSigs.slice(0, 6) : [selectedSig];
+            const traces = [];
+
+            // Create box plot traces for each state
+            states.forEach(s => {
+                sigsToShow.forEach(sig => {
+                    const vals = stateActivity[s]?.[sig] || [];
+                    if (vals.length > 0) {
+                        traces.push({
+                            type: 'box',
+                            name: stateLabels[s],
+                            x: vals.map(() => sig),
+                            y: vals,
+                            marker: { color: stateColors[s] },
+                            boxpoints: sigsToShow.length === 1 ? 'outliers' : false,
+                            legendgroup: s,
+                            showlegend: sigsToShow.indexOf(sig) === 0,
+                            hovertemplate: `<b>${stateLabels[s]}</b><br>${sig}<br>Median: %{y:.2f}<extra></extra>`
+                        });
+                    }
+                });
+            });
+
+            const layout = {
+                boxmode: 'group',
+                xaxis: { title: sigsToShow.length > 1 ? 'Signature' : '', tickangle: sigsToShow.length > 3 ? 45 : 0 },
+                yaxis: { title: 'Activity (z-score)' },
+                margin: { l: 60, r: 30, t: 30, b: sigsToShow.length > 3 ? 100 : 50 },
+                legend: { orientation: 'h', y: 1.1 },
+                height: 380
+            };
+
+            // Add title annotation for single signature
+            if (sigsToShow.length === 1) {
+                layout.annotations = [{
+                    x: 0.5, y: 1.05, xref: 'paper', yref: 'paper',
+                    text: `<b>${sigsToShow[0]}</b> Activity by T Cell State`,
+                    showarrow: false, font: { size: 14 }
+                }];
+            }
+
+            Plotly.newPlot(comparisonContainer, traces, layout, { responsive: true });
+        }
+
+        // scAtlas: T Cell State
         function updateTcellFunction() {
             const heatmapContainer = document.getElementById('tcell-state-heatmap');
             const barContainer = document.getElementById('tcell-state-bar');
@@ -9198,6 +9334,17 @@
 
             const topSigs = sigVariance.slice(0, 15).map(d => d.signature);
 
+            // Cache data for boxplot updates
+            tcellFunctionCache.stateActivity = stateActivity;
+            tcellFunctionCache.signatures = signatures;
+            tcellFunctionCache.topSigs = topSigs;
+
+            // Initialize signature dropdown if needed
+            const sigDropdown = document.getElementById('tcell-signature');
+            if (sigDropdown && sigDropdown.options.length <= 1) {
+                updateTcellSignatureList();
+            }
+
             // 1. Heatmap of cytokine activity by state
             if (heatmapContainer) {
                 heatmapContainer.classList.remove('loading');
@@ -9244,46 +9391,11 @@
                 }, { responsive: true });
             }
 
-            // 3. Box plots - top cytokines by state
-            if (comparisonContainer) {
-                comparisonContainer.classList.remove('loading');
-                Plotly.purge(comparisonContainer);
-
-                const top6Sigs = topSigs.slice(0, 6);
-                const traces = [];
-
-                // Create box plot traces for each state
-                states.forEach(s => {
-                    top6Sigs.forEach(sig => {
-                        const vals = stateActivity[s][sig] || [];
-                        if (vals.length > 0) {
-                            traces.push({
-                                type: 'box',
-                                name: stateLabels[s],
-                                x: vals.map(() => sig),
-                                y: vals,
-                                marker: { color: stateColors[s] },
-                                boxpoints: false,
-                                legendgroup: s,
-                                showlegend: top6Sigs.indexOf(sig) === 0,
-                                hovertemplate: `<b>${stateLabels[s]}</b><br>${sig}<br>Median: %{y:.2f}<extra></extra>`
-                            });
-                        }
-                    });
-                });
-
-                Plotly.newPlot(comparisonContainer, traces, {
-                    boxmode: 'group',
-                    xaxis: { title: 'Signature', tickangle: 45 },
-                    yaxis: { title: 'Activity (z-score)' },
-                    margin: { l: 60, r: 30, t: 30, b: 100 },
-                    legend: { orientation: 'h', y: 1.1 },
-                    height: 380
-                }, { responsive: true });
-            }
+            // 3. Box plots - use helper function
+            updateTcellBoxplot();
         }
 
-        // scAtlas: T Cell Exhaustion (Exhausted vs Non-exhausted)
+        // scAtlas: Exhaustion Differential (Exhausted vs Non-exhausted)
         function updateExhaustion() {
             const container1 = document.getElementById('exhaustion-heatmap');
             const container2 = document.getElementById('exhaustion-scatter');
@@ -9358,7 +9470,7 @@
             const subtitle2El = container2?.closest('.viz-container')?.querySelector('.viz-subtitle');
 
             if (title1El) title1El.textContent = `Differential ${sigLabel} Activity`;
-            if (subtitle1El) subtitle1El.textContent = `Log2 FC (Exhausted vs Non-exhausted) - ${cancerLabel}`;
+            if (subtitle1El) subtitle1El.textContent = `Δ Activity (Exhausted vs Non-exhausted) - ${cancerLabel}`;
             if (title2El) title2El.textContent = `${sigLabel} Activity Correlation`;
             if (subtitle2El) subtitle2El.textContent = `Mean activity comparison - ${cancerLabel}`;
 
@@ -9375,23 +9487,23 @@
                     y: top20.map(d => d.signature),
                     x: top20.map(d => d.log2fc),
                     marker: {
-                        color: top20.map(d => d.log2fc > 0 ? '#d62728' : '#2ca02c')
+                        color: top20.map(d => d.log2fc > 0 ? '#d62728' : '#2166ac')
                     },
                     text: top20.map(d => d.log2fc.toFixed(2)),
                     textposition: 'auto',
                     textfont: { size: 10 },
                     hovertemplate: top20.map(d => {
-                        const direction = d.log2fc > 0 ? 'Higher in Exhausted' : 'Higher in Functional';
-                        return `<b>${d.signature}</b><br>Log2FC: ${d.log2fc.toFixed(3)}<br>${direction}<br>P-value: ${d.pvalue.toExponential(2)}<extra></extra>`;
+                        const direction = d.log2fc > 0 ? 'High in Exhausted' : 'High in Non-exhausted';
+                        return `<b>${d.signature}</b><br>Δ Activity: ${d.log2fc.toFixed(3)}<br>${direction}<br>P-value: ${d.pvalue.toExponential(2)}<extra></extra>`;
                     })
                 }], {
-                    xaxis: { title: '← Higher in Functional    Log2FC    Higher in Exhausted →', zeroline: true, zerolinewidth: 2 },
+                    xaxis: { title: '← High in Non-exhausted    Δ Activity    High in Exhausted →', zeroline: true, zerolinewidth: 2 },
                     yaxis: { automargin: true },
                     margin: { l: 100, r: 30, t: 30, b: 60 },
                     height: 500,
                     annotations: [{
                         x: -0.5, y: 1.02, xref: 'paper', yref: 'paper',
-                        text: '<span style="color:#2ca02c">■</span> Functional T cells',
+                        text: '<span style="color:#2166ac">■</span> Non-exhausted T cells',
                         showarrow: false, font: { size: 10 }, xanchor: 'left'
                     }, {
                         x: 0.5, y: 1.02, xref: 'paper', yref: 'paper',
@@ -9426,10 +9538,10 @@
                     marker: {
                         size: showLabels ? 8 : 10,
                         color: aggregatedList.map(d => d.log2fc),
-                        colorscale: [[0, '#2ca02c'], [0.5, '#f5f5f5'], [1, '#d62728']],
+                        colorscale: [[0, '#2166ac'], [0.5, '#f5f5f5'], [1, '#d62728']],
                         cmin: -1,
                         cmax: 1,
-                        colorbar: { title: 'Log2FC' }
+                        colorbar: { title: 'Δ Activity' }
                     },
                     hovertemplate: '<b>%{text}</b><br>Non-exhausted: %{x:.3f}<br>Exhausted: %{y:.3f}<extra></extra>'
                 }], {

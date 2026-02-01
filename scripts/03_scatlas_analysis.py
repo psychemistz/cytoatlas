@@ -529,7 +529,7 @@ def compute_organ_signatures(
                 'signature': sig,
                 'mean_activity': mean_activity[i],
                 'other_mean': other_mean[i],
-                'log2fc': np.log2(mean_activity[i] + 0.01) - np.log2(other_mean[i] + 0.01),
+                'log2fc': mean_activity[i] - other_mean[i],  # Activity difference for z-scores
                 'specificity_score': specificity[i],
                 'n_cells': mask.sum()
             })
@@ -664,7 +664,7 @@ def compute_tumor_vs_adjacent(
             'mean_adjacent': adjacent_vals.mean(),
             'median_tumor': np.median(tumor_vals),
             'median_adjacent': np.median(adjacent_vals),
-            'log2fc': np.log2(tumor_vals.mean() + 0.01) - np.log2(adjacent_vals.mean() + 0.01),
+            'log2fc': tumor_vals.mean() - adjacent_vals.mean(),  # Activity difference for z-scores
             'statistic': stat,
             'pvalue': pval,
             'n_tumor': n_tumor,
@@ -796,7 +796,7 @@ def compute_normal_vs_cancer(
                 'signature': sig,
                 'mean_normal': normal_vals.mean(),
                 'mean_cancer': cancer_vals.mean(),
-                'log2fc': np.log2(cancer_vals.mean() + 0.01) - np.log2(normal_vals.mean() + 0.01),
+                'log2fc': cancer_vals.mean() - normal_vals.mean(),  # Activity difference for z-scores
                 'statistic': stat,
                 'pvalue': pval,
                 'n_normal': normal_mask.sum(),
@@ -1035,7 +1035,7 @@ def compute_tcell_exhaustion(
             'mean_nonexhausted': nonexhausted_vals.mean(),
             'median_exhausted': np.median(exhausted_vals),
             'median_nonexhausted': np.median(nonexhausted_vals),
-            'log2fc': np.log2(exhausted_vals.mean() + 0.01) - np.log2(nonexhausted_vals.mean() + 0.01),
+            'log2fc': exhausted_vals.mean() - nonexhausted_vals.mean(),  # Activity difference for z-scores
             'statistic': stat,
             'pvalue': pval,
             'n_exhausted': n_exhausted,
@@ -1241,7 +1241,7 @@ def compute_adjacent_signatures(
             'signature': sig,
             'mean_adjacent': adjacent_vals.mean(),
             'mean_tumor': tumor_vals.mean(),
-            'log2fc_adj_vs_tumor': np.log2(adjacent_vals.mean() + 0.01) - np.log2(tumor_vals.mean() + 0.01),
+            'log2fc_adj_vs_tumor': adjacent_vals.mean() - tumor_vals.mean(),  # Activity difference for z-scores
             'statistic': stat,
             'pvalue': pval,
             'n_adjacent': n_adjacent,
@@ -1279,7 +1279,7 @@ def compute_adjacent_signatures(
                     'signature': sig,
                     'mean_adjacent': adj_vals.mean(),
                     'mean_tumor': tumor_vals.mean(),
-                    'log2fc_adj_vs_tumor': np.log2(adj_vals.mean() + 0.01) - np.log2(tumor_vals.mean() + 0.01),
+                    'log2fc_adj_vs_tumor': adj_vals.mean() - tumor_vals.mean(),  # Activity difference for z-scores
                     'statistic': stat,
                     'pvalue': pval,
                     'n_adjacent': n_ct_adj,
