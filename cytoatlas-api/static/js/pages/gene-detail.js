@@ -1,31 +1,30 @@
 /**
  * Gene Detail Page Handler
- * Displays gene/signature-centric views across all atlases
+ * Displays gene expression + CytoSig + SecAct data across all atlases
  */
 
 const GeneDetailPage = {
-    signature: null,
-    signatureType: 'CytoSig',
-    activeTab: 'cell-types',
+    gene: null,
+    activeTab: 'expression',
+    data: null,
 
     tabs: [
-        { id: 'cell-types', label: 'Cell Types', icon: '&#128300;' },
-        { id: 'tissues', label: 'Tissues', icon: '&#128149;' },
+        { id: 'expression', label: 'Gene Expression', icon: '&#129516;' },
+        { id: 'cytosig', label: 'CytoSig Activity', icon: '&#128300;' },
+        { id: 'secact', label: 'SecAct Activity', icon: '&#9898;' },
         { id: 'diseases', label: 'Diseases', icon: '&#129658;' },
         { id: 'correlations', label: 'Correlations', icon: '&#128200;' },
-        { id: 'cross-atlas', label: 'Cross-Atlas', icon: '&#128202;' },
     ],
 
     /**
      * Initialize the gene detail page
      */
     async init(params, query) {
-        this.signature = params.signature;
-        this.signatureType = query.type || 'CytoSig';
-        this.activeTab = query.tab || 'cell-types';
+        this.gene = decodeURIComponent(params.signature);
+        this.activeTab = query.tab || 'expression';
 
         this.render();
-        await this.loadOverview();
+        await this.loadGeneData();
     },
 
     /**
@@ -39,22 +38,13 @@ const GeneDetailPage = {
                 <header class="gene-header">
                     <div class="header-top">
                         <a href="/search" class="back-link">&#8592; Back to Search</a>
-                        <div class="signature-type-toggle">
-                            <button class="toggle-btn ${this.signatureType === 'CytoSig' ? 'active' : ''}"
-                                    onclick="GeneDetailPage.changeSignatureType('CytoSig')">
-                                CytoSig
-                            </button>
-                            <button class="toggle-btn ${this.signatureType === 'SecAct' ? 'active' : ''}"
-                                    onclick="GeneDetailPage.changeSignatureType('SecAct')">
-                                SecAct
-                            </button>
-                        </div>
                     </div>
                     <div id="gene-title" class="gene-title">
-                        <h1>${this.signature}</h1>
-                        <span class="signature-type-badge ${this.signatureType.toLowerCase()}">${this.signatureType}</span>
+                        <h1>${this.gene}</h1>
                     </div>
-                    <div id="gene-summary" class="gene-summary">Loading...</div>
+                    <div id="gene-summary" class="gene-summary">
+                        <div class="loading"><div class="spinner"></div>Loading gene data...</div>
+                    </div>
                 </header>
 
                 <nav class="gene-tabs" id="gene-tabs">
@@ -75,70 +65,26 @@ const GeneDetailPage = {
     },
 
     /**
-     * Load gene overview and summary
+     * Load complete gene data
      */
-    async loadOverview() {
+    async loadGeneData() {
         try {
-            const overview = await API.get(`/gene/${encodeURIComponent(this.signature)}`, {
-                signature_type: this.signatureType,
-            });
+            // Load complete gene page data
+            this.data = await API.get(`/gene/${encodeURIComponent(this.gene)}/full`);
 
-            // Update title
-            const titleEl = document.getElementById('gene-title');
-            if (titleEl) {
-                titleEl.innerHTML = `
-                    <h1>${overview.signature}</h1>
-                    <span class="signature-type-badge ${overview.signature_type.toLowerCase()}">${overview.signature_type}</span>
-                    <span class="atlas-badges">
-                        ${overview.atlases.map(a => `<span class="atlas-badge">${a}</span>`).join('')}
-                    </span>
-                `;
-            }
-
-            // Update summary
-            const summaryEl = document.getElementById('gene-summary');
-            if (summaryEl) {
-                const stats = overview.summary_stats;
-                summaryEl.innerHTML = `
-                    <div class="summary-stats">
-                        <div class="stat">
-                            <span class="value">${stats.n_atlases}</span>
-                            <span class="label">Atlases</span>
-                        </div>
-                        <div class="stat">
-                            <span class="value">${stats.n_cell_types}</span>
-                            <span class="label">Cell Types</span>
-                        </div>
-                        <div class="stat">
-                            <span class="value">${stats.n_tissues}</span>
-                            <span class="label">Tissues</span>
-                        </div>
-                        <div class="stat">
-                            <span class="value">${stats.n_diseases}</span>
-                            <span class="label">Diseases</span>
-                        </div>
-                        <div class="stat">
-                            <span class="value">${stats.n_correlations}</span>
-                            <span class="label">Correlations</span>
-                        </div>
-                    </div>
-                    ${stats.top_cell_type ? `<p class="top-feature">Top cell type: <strong>${stats.top_cell_type}</strong></p>` : ''}
-                    ${stats.top_tissue ? `<p class="top-feature">Top tissue: <strong>${stats.top_tissue}</strong></p>` : ''}
-                `;
-            }
-
-            // Load the active tab
+            this.updateSummary();
+            this.updateTabs();
             await this.loadTabContent(this.activeTab);
 
         } catch (error) {
-            console.error('Failed to load gene overview:', error);
+            console.error('Failed to load gene data:', error);
             const content = document.getElementById('gene-content');
             if (content) {
                 content.innerHTML = `
                     <div class="error-message">
-                        <h3>Signature Not Found</h3>
-                        <p>${this.signature} was not found in ${this.signatureType}.</p>
-                        <p>Try switching to ${this.signatureType === 'CytoSig' ? 'SecAct' : 'CytoSig'} or search for a different signature.</p>
+                        <h3>Gene Not Found</h3>
+                        <p>No data available for <strong>${this.gene}</strong>.</p>
+                        <p>Try searching for a different gene or check the spelling.</p>
                         <a href="/search" class="btn btn-primary">Back to Search</a>
                     </div>
                 `;
@@ -147,30 +93,69 @@ const GeneDetailPage = {
     },
 
     /**
-     * Switch signature type
+     * Update the summary section
      */
-    changeSignatureType(type) {
-        if (type === this.signatureType) return;
+    updateSummary() {
+        const summaryEl = document.getElementById('gene-summary');
+        if (!summaryEl || !this.data) return;
 
-        this.signatureType = type;
+        const badges = [];
+        if (this.data.has_expression) badges.push('<span class="data-badge expression">Expression</span>');
+        if (this.data.has_cytosig) badges.push('<span class="data-badge cytosig">CytoSig</span>');
+        if (this.data.has_secact) badges.push('<span class="data-badge secact">SecAct</span>');
 
-        // Update URL
-        const url = new URL(window.location);
-        url.searchParams.set('type', type);
-        window.history.replaceState({}, '', url);
+        summaryEl.innerHTML = `
+            <div class="data-availability">
+                <span class="label">Available data:</span>
+                ${badges.length ? badges.join('') : '<span class="no-data">No data available</span>'}
+            </div>
+            <div class="atlas-info">
+                <span class="label">Atlases:</span>
+                ${this.data.atlases.map(a => `<span class="atlas-badge">${a}</span>`).join('')}
+            </div>
+        `;
+    },
 
-        // Reload page content
-        this.render();
-        this.loadOverview();
+    /**
+     * Update tab states based on data availability
+     */
+    updateTabs() {
+        const tabsContainer = document.getElementById('gene-tabs');
+        if (!tabsContainer || !this.data) return;
+
+        // Disable tabs with no data
+        tabsContainer.querySelectorAll('.gene-tab').forEach(tab => {
+            const tabId = tab.dataset.tab;
+            let hasData = true;
+
+            if (tabId === 'expression' && !this.data.has_expression) hasData = false;
+            if (tabId === 'cytosig' && !this.data.has_cytosig) hasData = false;
+            if (tabId === 'secact' && !this.data.has_secact) hasData = false;
+
+            if (!hasData) {
+                tab.classList.add('disabled');
+                tab.title = 'No data available';
+            }
+        });
+
+        // If current tab has no data, switch to first available
+        if (this.activeTab === 'expression' && !this.data.has_expression) {
+            if (this.data.has_cytosig) this.switchTab('cytosig');
+            else if (this.data.has_secact) this.switchTab('secact');
+        }
     },
 
     /**
      * Switch to a different tab
      */
     async switchTab(tabId) {
+        // Don't switch to disabled tabs
+        const tab = document.querySelector(`.gene-tab[data-tab="${tabId}"]`);
+        if (tab?.classList.contains('disabled')) return;
+
         // Update active state
-        document.querySelectorAll('.gene-tab').forEach(tab => {
-            tab.classList.toggle('active', tab.dataset.tab === tabId);
+        document.querySelectorAll('.gene-tab').forEach(t => {
+            t.classList.toggle('active', t.dataset.tab === tabId);
         });
 
         this.activeTab = tabId;
@@ -194,20 +179,20 @@ const GeneDetailPage = {
 
         try {
             switch (tabId) {
-                case 'cell-types':
-                    await this.loadCellTypesTab(content);
+                case 'expression':
+                    await this.loadExpressionTab(content);
                     break;
-                case 'tissues':
-                    await this.loadTissuesTab(content);
+                case 'cytosig':
+                    await this.loadActivityTab(content, 'CytoSig', this.data.cytosig_activity);
+                    break;
+                case 'secact':
+                    await this.loadActivityTab(content, 'SecAct', this.data.secact_activity);
                     break;
                 case 'diseases':
                     await this.loadDiseasesTab(content);
                     break;
                 case 'correlations':
                     await this.loadCorrelationsTab(content);
-                    break;
-                case 'cross-atlas':
-                    await this.loadCrossAtlasTab(content);
                     break;
                 default:
                     content.innerHTML = '<p>Tab not found</p>';
@@ -218,51 +203,191 @@ const GeneDetailPage = {
         }
     },
 
-    // ==================== Cell Types Tab ====================
+    // ==================== Expression Tab ====================
 
-    async loadCellTypesTab(content) {
-        const data = await API.get(`/gene/${encodeURIComponent(this.signature)}/cell-types`, {
-            signature_type: this.signatureType,
+    async loadExpressionTab(content) {
+        if (!this.data.expression || !this.data.expression.data.length) {
+            content.innerHTML = `
+                <div class="no-data-panel">
+                    <h3>No Expression Data</h3>
+                    <p>Gene expression data is not available for <strong>${this.gene}</strong>.</p>
+                    <p>Try viewing the CytoSig or SecAct activity tabs instead.</p>
+                </div>
+            `;
+            return;
+        }
+
+        const expr = this.data.expression;
+
+        content.innerHTML = `
+            <div class="tab-header">
+                <h2>${this.gene} Gene Expression</h2>
+                <p>Mean log-normalized expression by cell type across atlases</p>
+                <div class="stats-inline">
+                    <span><strong>${expr.n_cell_types}</strong> cell types</span>
+                    <span><strong>${expr.atlases.length}</strong> atlases</span>
+                    <span>Top: <strong>${expr.top_cell_type}</strong></span>
+                </div>
+                <div class="tab-filters">
+                    <select id="expr-atlas-filter" onchange="GeneDetailPage.filterExpressionByAtlas()">
+                        <option value="all">All Atlases</option>
+                        ${expr.atlases.map(a => `<option value="${a}">${a}</option>`).join('')}
+                    </select>
+                </div>
+            </div>
+            <div class="viz-container">
+                <div id="expression-chart" class="chart-container"></div>
+            </div>
+            <div class="data-table-container">
+                <table class="data-table" id="expression-table">
+                    <thead>
+                        <tr>
+                            <th>Cell Type</th>
+                            <th>Atlas</th>
+                            <th>Mean Expression</th>
+                            <th>% Expressed</th>
+                            <th>N Cells</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${expr.data.slice(0, 50).map(d => `
+                            <tr>
+                                <td>${d.cell_type}</td>
+                                <td><span class="atlas-badge">${d.atlas}</span></td>
+                                <td class="expression-value">${d.mean_expression.toFixed(4)}</td>
+                                <td>${d.pct_expressed.toFixed(1)}%</td>
+                                <td>${d.n_cells ? d.n_cells.toLocaleString() : '-'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        this._expressionData = expr.data;
+        this.createExpressionChart(expr.data);
+    },
+
+    createExpressionChart(data) {
+        const topData = data.slice(0, 30);
+
+        const traces = [];
+        const atlases = [...new Set(topData.map(d => d.atlas))];
+
+        const colors = {
+            'CIMA': '#3498db',
+            'Inflammation': '#e74c3c',
+            'scAtlas_Normal': '#2ecc71',
+            'scAtlas_Cancer': '#9b59b6',
+        };
+
+        atlases.forEach(atlas => {
+            const atlasData = topData.filter(d => d.atlas === atlas);
+            traces.push({
+                type: 'bar',
+                name: atlas,
+                y: atlasData.map(d => d.cell_type),
+                x: atlasData.map(d => d.mean_expression),
+                orientation: 'h',
+                marker: { color: colors[atlas] || '#95a5a6' },
+                text: atlasData.map(d => `${d.mean_expression.toFixed(2)} (${d.pct_expressed.toFixed(0)}%)`),
+                hovertemplate: '<b>%{y}</b><br>Expression: %{x:.3f}<br>%{text}<extra></extra>',
+            });
         });
 
-        if (!data || !data.length) {
-            content.innerHTML = '<div class="no-data">No cell type data available.</div>';
+        const layout = {
+            title: `${this.gene} Expression by Cell Type`,
+            barmode: 'group',
+            xaxis: {
+                title: 'Mean Expression (log-normalized)',
+            },
+            yaxis: {
+                title: '',
+                automargin: true,
+            },
+            height: Math.max(400, topData.length * 20),
+            margin: { l: 200, r: 50, t: 50, b: 50 },
+            legend: { orientation: 'h', y: 1.1 },
+        };
+
+        Plotly.newPlot('expression-chart', traces, layout, { responsive: true });
+    },
+
+    filterExpressionByAtlas() {
+        const atlas = document.getElementById('expr-atlas-filter').value;
+        let filtered = this._expressionData;
+
+        if (atlas !== 'all') {
+            filtered = filtered.filter(d => d.atlas === atlas);
+        }
+
+        this.createExpressionChart(filtered);
+
+        const tbody = document.querySelector('#expression-table tbody');
+        if (tbody) {
+            tbody.innerHTML = filtered.slice(0, 50).map(d => `
+                <tr>
+                    <td>${d.cell_type}</td>
+                    <td><span class="atlas-badge">${d.atlas}</span></td>
+                    <td class="expression-value">${d.mean_expression.toFixed(4)}</td>
+                    <td>${d.pct_expressed.toFixed(1)}%</td>
+                    <td>${d.n_cells ? d.n_cells.toLocaleString() : '-'}</td>
+                </tr>
+            `).join('');
+        }
+    },
+
+    // ==================== Activity Tab (CytoSig/SecAct) ====================
+
+    async loadActivityTab(content, sigType, activityData) {
+        if (!activityData || !activityData.length) {
+            content.innerHTML = `
+                <div class="no-data-panel">
+                    <h3>No ${sigType} Activity</h3>
+                    <p><strong>${this.gene}</strong> is not available as a ${sigType} signature.</p>
+                    <p>${sigType === 'CytoSig' ? 'CytoSig contains 43 major cytokines.' : 'SecAct contains ~1,170 secreted proteins.'}</p>
+                </div>
+            `;
             return;
         }
 
         // Group by atlas
         const byAtlas = {};
-        data.forEach(d => {
+        activityData.forEach(d => {
             if (!byAtlas[d.atlas]) byAtlas[d.atlas] = [];
             byAtlas[d.atlas].push(d);
         });
 
         content.innerHTML = `
             <div class="tab-header">
-                <h2>Cell Type Activity</h2>
-                <p>Activity of ${this.signature} across cell types in each atlas</p>
+                <h2>${this.gene} ${sigType} Activity</h2>
+                <p>Inferred ${sigType === 'CytoSig' ? 'cytokine' : 'secreted protein'} activity by cell type</p>
+                <div class="stats-inline">
+                    <span><strong>${activityData.length}</strong> cell types</span>
+                    <span><strong>${Object.keys(byAtlas).length}</strong> atlases</span>
+                </div>
                 <div class="tab-filters">
-                    <select id="atlas-filter" onchange="GeneDetailPage.filterCellTypesByAtlas()">
+                    <select id="activity-atlas-filter" onchange="GeneDetailPage.filterActivityByAtlas('${sigType}')">
                         <option value="all">All Atlases</option>
-                        ${Object.keys(byAtlas).map(a => `<option value="${a}">${a.toUpperCase()}</option>`).join('')}
+                        ${Object.keys(byAtlas).map(a => `<option value="${a}">${a}</option>`).join('')}
                     </select>
                 </div>
             </div>
             <div class="viz-container">
-                <div id="celltype-chart" class="chart-container"></div>
+                <div id="activity-chart" class="chart-container"></div>
             </div>
             <div class="data-table-container">
-                <table class="data-table" id="celltype-table">
+                <table class="data-table" id="activity-table">
                     <thead>
                         <tr>
                             <th>Cell Type</th>
                             <th>Atlas</th>
-                            <th>Mean Activity</th>
+                            <th>Mean Activity (z-score)</th>
                             <th>N Cells</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${data.slice(0, 50).map(d => `
+                        ${activityData.slice(0, 50).map(d => `
                             <tr>
                                 <td>${d.cell_type}</td>
                                 <td><span class="atlas-badge">${d.atlas}</span></td>
@@ -275,15 +400,12 @@ const GeneDetailPage = {
             </div>
         `;
 
-        // Store data for filtering
-        this._cellTypeData = data;
-
-        // Create chart
-        this.createCellTypeChart(data);
+        this._activityData = activityData;
+        this._activitySigType = sigType;
+        this.createActivityChart(activityData, sigType);
     },
 
-    createCellTypeChart(data) {
-        // Take top 30 for visualization
+    createActivityChart(data, sigType) {
         const topData = data.slice(0, 30);
 
         const traces = [];
@@ -293,7 +415,7 @@ const GeneDetailPage = {
             const atlasData = topData.filter(d => d.atlas === atlas);
             traces.push({
                 type: 'bar',
-                name: atlas.toUpperCase(),
+                name: atlas,
                 y: atlasData.map(d => d.cell_type),
                 x: atlasData.map(d => d.mean_activity),
                 orientation: 'h',
@@ -304,7 +426,7 @@ const GeneDetailPage = {
         });
 
         const layout = {
-            title: `${this.signature} Activity by Cell Type`,
+            title: `${this.gene} ${sigType} Activity by Cell Type`,
             barmode: 'group',
             xaxis: {
                 title: 'Mean Activity (z-score)',
@@ -320,22 +442,20 @@ const GeneDetailPage = {
             legend: { orientation: 'h', y: 1.1 },
         };
 
-        Plotly.newPlot('celltype-chart', traces, layout, { responsive: true });
+        Plotly.newPlot('activity-chart', traces, layout, { responsive: true });
     },
 
-    filterCellTypesByAtlas() {
-        const atlas = document.getElementById('atlas-filter').value;
-        let filtered = this._cellTypeData;
+    filterActivityByAtlas(sigType) {
+        const atlas = document.getElementById('activity-atlas-filter').value;
+        let filtered = this._activityData;
 
         if (atlas !== 'all') {
             filtered = filtered.filter(d => d.atlas === atlas);
         }
 
-        // Update chart
-        this.createCellTypeChart(filtered);
+        this.createActivityChart(filtered, sigType);
 
-        // Update table
-        const tbody = document.querySelector('#celltype-table tbody');
+        const tbody = document.querySelector('#activity-table tbody');
         if (tbody) {
             tbody.innerHTML = filtered.slice(0, 50).map(d => `
                 <tr>
@@ -348,139 +468,85 @@ const GeneDetailPage = {
         }
     },
 
-    // ==================== Tissues Tab ====================
-
-    async loadTissuesTab(content) {
-        const data = await API.get(`/gene/${encodeURIComponent(this.signature)}/tissues`, {
-            signature_type: this.signatureType,
-        });
-
-        if (!data || !data.length) {
-            content.innerHTML = '<div class="no-data">No tissue data available. Tissue data is from scAtlas.</div>';
-            return;
-        }
-
-        content.innerHTML = `
-            <div class="tab-header">
-                <h2>Tissue Activity</h2>
-                <p>Activity of ${this.signature} across organs from scAtlas</p>
-            </div>
-            <div class="viz-container">
-                <div id="tissue-chart" class="chart-container"></div>
-            </div>
-            <div class="data-table-container">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Rank</th>
-                            <th>Organ</th>
-                            <th>Mean Activity</th>
-                            <th>Specificity</th>
-                            <th>N Cells</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${data.map(d => `
-                            <tr>
-                                <td>${d.rank || '-'}</td>
-                                <td>${d.organ}</td>
-                                <td class="${d.mean_activity >= 0 ? 'positive' : 'negative'}">${d.mean_activity.toFixed(4)}</td>
-                                <td>${d.specificity_score ? d.specificity_score.toFixed(4) : '-'}</td>
-                                <td>${d.n_cells ? d.n_cells.toLocaleString() : '-'}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-
-        // Create chart
-        const trace = {
-            type: 'bar',
-            y: data.map(d => d.organ),
-            x: data.map(d => d.mean_activity),
-            orientation: 'h',
-            marker: {
-                color: data.map(d => d.mean_activity >= 0 ? '#2ecc71' : '#e74c3c'),
-            },
-            text: data.map(d => d.mean_activity.toFixed(3)),
-            textposition: 'auto',
-            hovertemplate: '<b>%{y}</b><br>Activity: %{x:.4f}<extra></extra>',
-        };
-
-        const layout = {
-            title: `${this.signature} Activity by Organ`,
-            xaxis: {
-                title: 'Mean Activity (z-score)',
-                zeroline: true,
-                zerolinecolor: '#999',
-            },
-            yaxis: {
-                title: '',
-                automargin: true,
-            },
-            height: Math.max(400, data.length * 25),
-            margin: { l: 150, r: 50, t: 50, b: 50 },
-        };
-
-        Plotly.newPlot('tissue-chart', [trace], layout, { responsive: true });
-    },
-
     // ==================== Diseases Tab ====================
 
     async loadDiseasesTab(content) {
-        const response = await API.get(`/gene/${encodeURIComponent(this.signature)}/diseases`, {
-            signature_type: this.signatureType,
-        });
+        try {
+            // Try CytoSig first, then SecAct
+            let response = await API.get(`/gene/${encodeURIComponent(this.gene)}/diseases`, {
+                signature_type: 'CytoSig',
+            });
 
-        const data = response.data || [];
+            if (!response.data || !response.data.length) {
+                response = await API.get(`/gene/${encodeURIComponent(this.gene)}/diseases`, {
+                    signature_type: 'SecAct',
+                });
+            }
 
-        if (!data.length) {
-            content.innerHTML = '<div class="no-data">No disease data available. Disease data is from the Inflammation Atlas.</div>';
-            return;
-        }
+            const data = response.data || [];
 
-        content.innerHTML = `
-            <div class="tab-header">
-                <h2>Disease Associations</h2>
-                <p>Differential activity of ${this.signature} (disease vs healthy) from the Inflammation Atlas</p>
-                <div class="stats-inline">
-                    <span><strong>${response.n_diseases}</strong> diseases</span>
-                    <span><strong>${response.n_significant}</strong> significant (FDR < 0.05)</span>
+            if (!data.length) {
+                content.innerHTML = `
+                    <div class="no-data-panel">
+                        <h3>No Disease Data</h3>
+                        <p>Disease differential data is not available for <strong>${this.gene}</strong>.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            content.innerHTML = `
+                <div class="tab-header">
+                    <h2>${this.gene} Disease Associations</h2>
+                    <p>Differential activity (disease vs healthy) from the Inflammation Atlas</p>
+                    <div class="stats-inline">
+                        <span><strong>${response.n_diseases}</strong> diseases</span>
+                        <span><strong>${response.n_significant}</strong> significant (FDR < 0.05)</span>
+                    </div>
                 </div>
-            </div>
-            <div class="viz-container">
-                <div id="volcano-chart" class="chart-container"></div>
-            </div>
-            <div class="data-table-container">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Disease</th>
-                            <th>Group</th>
-                            <th>&Delta; Activity</th>
-                            <th>P-value</th>
-                            <th>FDR</th>
-                            <th>Significant</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${data.map(d => `
-                            <tr class="${d.is_significant ? 'significant' : ''}">
-                                <td>${d.disease}</td>
-                                <td>${d.disease_group}</td>
-                                <td class="${d.activity_diff >= 0 ? 'positive' : 'negative'}">${d.activity_diff.toFixed(4)}</td>
-                                <td>${d.p_value < 0.001 ? d.p_value.toExponential(2) : d.p_value.toFixed(4)}</td>
-                                <td>${d.q_value ? (d.q_value < 0.001 ? d.q_value.toExponential(2) : d.q_value.toFixed(4)) : '-'}</td>
-                                <td>${d.is_significant ? '&#10003;' : ''}</td>
+                <div class="viz-container">
+                    <div id="volcano-chart" class="chart-container"></div>
+                </div>
+                <div class="data-table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Disease</th>
+                                <th>Group</th>
+                                <th>&Delta; Activity</th>
+                                <th>P-value</th>
+                                <th>Significant</th>
                             </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
+                        </thead>
+                        <tbody>
+                            ${data.map(d => `
+                                <tr class="${d.is_significant ? 'significant' : ''}">
+                                    <td>${d.disease}</td>
+                                    <td>${d.disease_group}</td>
+                                    <td class="${d.activity_diff >= 0 ? 'positive' : 'negative'}">${d.activity_diff.toFixed(4)}</td>
+                                    <td>${d.p_value < 0.001 ? d.p_value.toExponential(2) : d.p_value.toFixed(4)}</td>
+                                    <td>${d.is_significant ? '&#10003;' : ''}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
 
-        // Create volcano plot
+            // Create volcano plot
+            this.createVolcanoPlot(data);
+
+        } catch (error) {
+            content.innerHTML = `
+                <div class="no-data-panel">
+                    <h3>No Disease Data</h3>
+                    <p>Disease differential data is not available for <strong>${this.gene}</strong>.</p>
+                </div>
+            `;
+        }
+    },
+
+    createVolcanoPlot(data) {
         const sigData = data.filter(d => d.is_significant);
         const nsData = data.filter(d => !d.is_significant);
 
@@ -495,7 +561,7 @@ const GeneDetailPage = {
                 y: nsData.map(d => d.neg_log10_pval || -Math.log10(d.p_value)),
                 text: nsData.map(d => d.disease),
                 marker: { color: '#999', size: 8 },
-                hovertemplate: '<b>%{text}</b><br>&Delta; Activity: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>',
+                hovertemplate: '<b>%{text}</b><br>&Delta; Activity: %{x:.3f}<extra></extra>',
             });
         }
 
@@ -513,29 +579,17 @@ const GeneDetailPage = {
                     color: sigData.map(d => d.activity_diff >= 0 ? '#2ecc71' : '#e74c3c'),
                     size: 12,
                 },
-                hovertemplate: '<b>%{text}</b><br>&Delta; Activity: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>',
+                hovertemplate: '<b>%{text}</b><br>&Delta; Activity: %{x:.3f}<extra></extra>',
             });
         }
 
         const layout = {
-            title: `${this.signature} Disease Volcano Plot`,
-            xaxis: {
-                title: '&Delta; Activity (disease - healthy)',
-                zeroline: true,
-                zerolinecolor: '#999',
-            },
-            yaxis: {
-                title: '-log10(p-value)',
-            },
+            title: `${this.gene} Disease Volcano Plot`,
+            xaxis: { title: '&Delta; Activity (disease - healthy)', zeroline: true },
+            yaxis: { title: '-log10(p-value)' },
             height: 500,
             showlegend: true,
             legend: { orientation: 'h', y: -0.15 },
-            shapes: [{
-                type: 'line',
-                x0: 0, x1: 0,
-                y0: 0, y1: Math.max(...data.map(d => d.neg_log10_pval || -Math.log10(d.p_value))) + 1,
-                line: { color: '#999', dash: 'dot' },
-            }],
         };
 
         Plotly.newPlot('volcano-chart', traces, layout, { responsive: true });
@@ -544,42 +598,50 @@ const GeneDetailPage = {
     // ==================== Correlations Tab ====================
 
     async loadCorrelationsTab(content) {
-        const data = await API.get(`/gene/${encodeURIComponent(this.signature)}/correlations`, {
-            signature_type: this.signatureType,
-        });
+        try {
+            const data = await API.get(`/gene/${encodeURIComponent(this.gene)}/correlations`, {
+                signature_type: this.data.has_cytosig ? 'CytoSig' : 'SecAct',
+            });
 
-        content.innerHTML = `
-            <div class="tab-header">
-                <h2>Correlations</h2>
-                <p>Correlations of ${this.signature} with clinical and molecular variables (from CIMA)</p>
-            </div>
-            <div class="correlation-sections">
-                <div class="correlation-section">
-                    <h3>&#128197; Age Correlations (${data.n_significant_age} significant)</h3>
-                    ${this.renderCorrelationList(data.age, 'age')}
+            content.innerHTML = `
+                <div class="tab-header">
+                    <h2>${this.gene} Correlations</h2>
+                    <p>Correlations with clinical and molecular variables (from CIMA)</p>
                 </div>
-                <div class="correlation-section">
-                    <h3>&#9878; BMI Correlations (${data.n_significant_bmi} significant)</h3>
-                    ${this.renderCorrelationList(data.bmi, 'bmi')}
+                <div class="correlation-sections">
+                    <div class="correlation-section">
+                        <h3>&#128197; Age (${data.n_significant_age} significant)</h3>
+                        ${this.renderCorrelationList(data.age)}
+                    </div>
+                    <div class="correlation-section">
+                        <h3>&#9878; BMI (${data.n_significant_bmi} significant)</h3>
+                        ${this.renderCorrelationList(data.bmi)}
+                    </div>
+                    <div class="correlation-section">
+                        <h3>&#129514; Biochemistry (${data.n_significant_biochem} significant)</h3>
+                        ${this.renderCorrelationList(data.biochemistry)}
+                    </div>
+                    <div class="correlation-section">
+                        <h3>&#9879; Metabolites (${data.n_significant_metabol} significant)</h3>
+                        ${this.renderCorrelationList(data.metabolites)}
+                    </div>
                 </div>
-                <div class="correlation-section">
-                    <h3>&#129514; Biochemistry Correlations (${data.n_significant_biochem} significant)</h3>
-                    ${this.renderCorrelationList(data.biochemistry, 'biochemistry')}
+            `;
+        } catch (error) {
+            content.innerHTML = `
+                <div class="no-data-panel">
+                    <h3>No Correlation Data</h3>
+                    <p>Correlation data is not available for <strong>${this.gene}</strong>.</p>
                 </div>
-                <div class="correlation-section">
-                    <h3>&#9879; Metabolite Correlations (${data.n_significant_metabol} significant)</h3>
-                    ${this.renderCorrelationList(data.metabolites, 'metabolites')}
-                </div>
-            </div>
-        `;
+            `;
+        }
     },
 
-    renderCorrelationList(correlations, category) {
+    renderCorrelationList(correlations) {
         if (!correlations || !correlations.length) {
             return '<p class="no-data">No data available.</p>';
         }
 
-        // Take top 10
         const topCorr = correlations.slice(0, 10);
 
         return `
@@ -590,7 +652,6 @@ const GeneDetailPage = {
                         <div class="correlation-item ${isSignificant ? 'significant' : ''}">
                             <span class="variable">${c.variable}${c.cell_type && c.cell_type !== 'All' ? ` (${c.cell_type})` : ''}</span>
                             <span class="rho ${c.rho >= 0 ? 'positive' : 'negative'}">&rho; = ${c.rho.toFixed(3)}</span>
-                            <span class="pval">p = ${c.p_value < 0.001 ? c.p_value.toExponential(2) : c.p_value.toFixed(4)}</span>
                             ${isSignificant ? '<span class="sig-badge">*</span>' : ''}
                         </div>
                     `;
@@ -598,68 +659,6 @@ const GeneDetailPage = {
             </div>
             ${correlations.length > 10 ? `<p class="more-link">...and ${correlations.length - 10} more</p>` : ''}
         `;
-    },
-
-    // ==================== Cross-Atlas Tab ====================
-
-    async loadCrossAtlasTab(content) {
-        const data = await API.get(`/gene/${encodeURIComponent(this.signature)}/cross-atlas`, {
-            signature_type: this.signatureType,
-        });
-
-        if (!data.atlases || !data.atlases.length) {
-            content.innerHTML = '<div class="no-data">No cross-atlas data available.</div>';
-            return;
-        }
-
-        content.innerHTML = `
-            <div class="tab-header">
-                <h2>Cross-Atlas Comparison</h2>
-                <p>${this.signature} activity across ${data.n_atlases} atlases</p>
-            </div>
-            <div class="viz-container">
-                <div id="crossatlas-chart" class="chart-container"></div>
-            </div>
-            <div class="atlas-cards">
-                ${data.activity_by_atlas.map(a => `
-                    <div class="atlas-card">
-                        <h4>${a.atlas.toUpperCase()}</h4>
-                        <div class="activity-value ${a.mean_activity >= 0 ? 'positive' : 'negative'}">
-                            ${a.mean_activity.toFixed(4)}
-                        </div>
-                        <div class="cell-type">${a.cell_type}</div>
-                    </div>
-                `).join('')}
-            </div>
-            ${data.consistency_score ? `
-                <div class="consistency-score">
-                    <h4>Consistency Score</h4>
-                    <div class="score-value">${data.consistency_score.toFixed(3)}</div>
-                    <p class="score-desc">Mean pairwise correlation of activities</p>
-                </div>
-            ` : ''}
-        `;
-
-        // Create bar chart
-        const trace = {
-            type: 'bar',
-            x: data.activity_by_atlas.map(a => a.atlas.toUpperCase()),
-            y: data.activity_by_atlas.map(a => a.mean_activity),
-            marker: {
-                color: ['#3498db', '#e74c3c', '#2ecc71'],
-            },
-            text: data.activity_by_atlas.map(a => a.mean_activity.toFixed(3)),
-            textposition: 'auto',
-        };
-
-        const layout = {
-            title: `${this.signature} Mean Activity by Atlas`,
-            xaxis: { title: 'Atlas' },
-            yaxis: { title: 'Mean Activity (z-score)', zeroline: true },
-            height: 400,
-        };
-
-        Plotly.newPlot('crossatlas-chart', [trace], layout, { responsive: true });
     },
 };
 

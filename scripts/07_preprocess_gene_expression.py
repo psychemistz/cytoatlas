@@ -82,6 +82,8 @@ def extract_gene_expression(h5ad_path: str, genes: list[str], atlas_name: str) -
     """
     Extract mean gene expression by cell type from an h5ad file.
 
+    Memory-efficient: processes one gene at a time and uses chunked cell reading.
+
     Args:
         h5ad_path: Path to h5ad file
         genes: List of gene names to extract
@@ -90,6 +92,7 @@ def extract_gene_expression(h5ad_path: str, genes: list[str], atlas_name: str) -
     Returns:
         DataFrame with columns: gene, cell_type, mean_expression, pct_expressed, n_cells, atlas
     """
+    import gc
     logger.info(f"Loading {atlas_name} from {h5ad_path}")
 
     # Load in backed mode for memory efficiency
@@ -121,46 +124,72 @@ def extract_gene_expression(h5ad_path: str, genes: list[str], atlas_name: str) -
     cell_types = adata.obs[cell_type_col].unique()
     logger.info(f"Found {len(cell_types)} cell types")
 
+    # Pre-compute cell type indices (memory efficient)
+    cell_type_info = {}
+    for ct in cell_types:
+        mask = (adata.obs[cell_type_col] == ct).values
+        n_cells = mask.sum()
+        if n_cells >= 10:
+            cell_type_info[str(ct)] = {
+                'indices': np.where(mask)[0],
+                'n_cells': int(n_cells)
+            }
+    logger.info(f"Processing {len(cell_type_info)} cell types with >= 10 cells")
+
+    # Build gene index lookup
+    var_names_list = list(adata.var_names)
+
     results = []
 
-    # Process in batches of genes
-    batch_size = 50
-    for i in range(0, len(genes_to_extract), batch_size):
-        batch_genes = genes_to_extract[i:i+batch_size]
-        logger.info(f"Processing genes {i+1}-{min(i+batch_size, len(genes_to_extract))}")
+    # Process ONE gene at a time to minimize memory
+    for gene_idx, gene in enumerate(genes_to_extract):
+        if gene_idx % 5 == 0:
+            logger.info(f"Processing gene {gene_idx+1}/{len(genes_to_extract)}: {gene}")
+            gc.collect()
 
-        # Get gene indices
-        gene_indices = [list(adata.var_names).index(g) for g in batch_genes]
+        gene_col = var_names_list.index(gene)
 
-        # Extract expression matrix for these genes
-        # Read into memory for this batch
-        X_batch = adata.X[:, gene_indices]
-        if hasattr(X_batch, 'toarray'):
-            X_batch = X_batch.toarray()
+        # For each cell type, calculate stats for this gene
+        for ct, info in cell_type_info.items():
+            cell_indices = info['indices']
+            n_cells = info['n_cells']
 
-        # Calculate stats per cell type
-        for ct in cell_types:
-            mask = (adata.obs[cell_type_col] == ct).values
-            n_cells = mask.sum()
+            # Process in smaller chunks
+            chunk_size = 50000
+            total_sum = 0.0
+            total_nonzero = 0
 
-            if n_cells < 10:  # Skip cell types with too few cells
-                continue
+            for start in range(0, len(cell_indices), chunk_size):
+                end = min(start + chunk_size, len(cell_indices))
+                chunk_idx = cell_indices[start:end]
 
-            X_ct = X_batch[mask, :]
+                # Read ONLY this single gene column for these cells
+                X_chunk = adata.X[chunk_idx, gene_col]
 
-            for j, gene in enumerate(batch_genes):
-                expr = X_ct[:, j]
-                mean_expr = float(np.mean(expr))
-                pct_expr = float(np.sum(expr > 0) / len(expr) * 100)
+                # Handle sparse matrix
+                if hasattr(X_chunk, 'toarray'):
+                    X_chunk = X_chunk.toarray().flatten()
+                elif hasattr(X_chunk, 'A1'):
+                    X_chunk = X_chunk.A1
+                else:
+                    X_chunk = np.asarray(X_chunk).flatten()
 
-                results.append({
-                    'gene': gene,
-                    'cell_type': str(ct),
-                    'mean_expression': round(mean_expr, 4),
-                    'pct_expressed': round(pct_expr, 2),
-                    'n_cells': int(n_cells),
-                    'atlas': atlas_name,
-                })
+                total_sum += float(X_chunk.sum())
+                total_nonzero += int((X_chunk > 0).sum())
+
+                del X_chunk
+
+            mean_expr = total_sum / n_cells
+            pct_expr = total_nonzero / n_cells * 100
+
+            results.append({
+                'gene': gene,
+                'cell_type': ct,
+                'mean_expression': round(mean_expr, 4),
+                'pct_expressed': round(pct_expr, 2),
+                'n_cells': n_cells,
+                'atlas': atlas_name,
+            })
 
     df = pd.DataFrame(results)
     logger.info(f"Extracted {len(df)} records from {atlas_name}")
