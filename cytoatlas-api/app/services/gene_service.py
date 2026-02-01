@@ -1,6 +1,7 @@
 """Gene-centric data service for aggregated signature views."""
 
 import math
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +16,10 @@ from app.schemas.gene import (
     GeneCrossAtlasConsistency,
     GeneDiseaseActivity,
     GeneDiseaseActivityResponse,
+    GeneExpressionResponse,
+    GeneExpressionResult,
     GeneOverview,
+    GenePageData,
     GeneStats,
     GeneTissueActivity,
 )
