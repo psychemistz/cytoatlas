@@ -1895,6 +1895,13 @@
             <div class="tab-content" id="tab-differential-analysis">
                 <div class="controls">
                     <div class="control-group">
+                        <label>Signature Type</label>
+                        <select id="diff-sigtype" onchange="updateDifferentialAnalysis()">
+                            <option value="CytoSig">CytoSig (43 cytokines)</option>
+                            <option value="SecAct">SecAct (1,249 proteins)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
                         <label>Cancer Type</label>
                         <select id="diff-cancer-type" onchange="updateDifferentialAnalysis()">
                             <option value="all">All Cancers (Pan-Cancer)</option>
@@ -4355,7 +4362,6 @@
         }
 
         // Differential Analysis (Unified Tissue Comparison)
-        // Note: Only CytoSig is shown (signature type selector removed for simplicity)
         function updateDifferentialAnalysis() {
             const volcanoContainer = document.getElementById('diff-volcano');
             const barContainer = document.getElementById('diff-top-bar');
@@ -4363,6 +4369,9 @@
             if (!volcanoContainer) return;
 
             const adjData = state.data.adjacenttissue;
+
+            // Get signature type from dropdown
+            const sigType = document.getElementById('diff-sigtype')?.value || 'CytoSig';
 
             // Populate cancer type dropdown
             const cancerDropdown = document.getElementById('diff-cancer-type');
@@ -4379,9 +4388,6 @@
             }
             const selectedCancer = cancerDropdown?.value || 'all';
 
-            // Fixed to CytoSig (signature type dropdown removed)
-            const sigType = 'CytoSig';
-
             if (!adjData || !adjData.tumor_vs_adjacent?.length) {
                 [volcanoContainer, barContainer].forEach(c => {
                     if (c) {
@@ -4392,11 +4398,12 @@
                 return;
             }
 
-            // Update description card based on cancer selection
+            // Update description card based on cancer and signature type selection
             const descCard = document.getElementById('diff-description-card');
+            const sigLabel = sigType === 'CytoSig' ? 'cytokine' : 'secreted protein';
             if (descCard) {
                 if (selectedCancer === 'all') {
-                    descCard.innerHTML = `<strong>Differential Analysis:</strong> Compare cytokine activity across tissue types (Pan-Cancer):
+                    descCard.innerHTML = `<strong>Differential Analysis (${sigType}):</strong> Compare ${sigLabel} activity across tissue types (Pan-Cancer):
                     <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
                         <li><strong style="color:#d62728;">Tumor:</strong> Cancer tissue from pan-cancer scAtlas (${adjData.summary?.n_tumor_samples || 147} cell type samples)</li>
                         <li><strong style="color:#ff7f0e;">Adjacent:</strong> Tumor-adjacent normal tissue - sample-matched controls from cancer patients (${adjData.summary?.n_adjacent_samples || 105} samples)</li>
@@ -4408,7 +4415,7 @@
                     const nAdj = cancerStats?.adjacent?.n || 'N/A';
                     const organMap = adjData.cancer_organ_map || {};
                     const matchedOrgan = organMap[selectedCancer] || 'matching organ';
-                    descCard.innerHTML = `<strong>Differential Analysis:</strong> Compare cytokine activity for <strong>${selectedCancer}</strong>:
+                    descCard.innerHTML = `<strong>Differential Analysis (${sigType}):</strong> Compare ${sigLabel} activity for <strong>${selectedCancer}</strong>:
                     <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
                         <li><strong style="color:#d62728;">Tumor:</strong> ${selectedCancer} tumor tissue (${nTumor} samples)</li>
                         <li><strong style="color:#ff7f0e;">Adjacent:</strong> ${selectedCancer} tumor-adjacent normal tissue (${nAdj} samples)</li>
@@ -4446,13 +4453,14 @@
                 if (volcanoSubtitle) {
                     const nSigUp = significantUp.length;
                     const nSigDown = significantDown.length;
+                    const sigTypeLabel = sigType === 'CytoSig' ? 'CytoSig' : 'SecAct';
                     if (selectedCancer === 'all') {
-                        volcanoSubtitle.textContent = `${nSigUp + nSigDown} significant signatures (p<0.05) | Pan-Cancer: ${adjData.summary?.n_tumor_samples || 0} tumor vs ${adjData.summary?.n_adjacent_samples || 0} adjacent samples`;
+                        volcanoSubtitle.textContent = `${sigTypeLabel}: ${nSigUp + nSigDown} significant (p<0.05) | Pan-Cancer: ${adjData.summary?.n_tumor_samples || 0} tumor vs ${adjData.summary?.n_adjacent_samples || 0} adjacent`;
                     } else {
                         const sampleEntry = filtered[0];
                         const nTumor = sampleEntry?.tumor?.n || 'N/A';
                         const nAdj = sampleEntry?.adjacent?.n || 'N/A';
-                        volcanoSubtitle.textContent = `${nSigUp + nSigDown} significant signatures (p<0.05) | ${selectedCancer}: ${nTumor} tumor vs ${nAdj} adjacent samples`;
+                        volcanoSubtitle.textContent = `${sigTypeLabel}: ${nSigUp + nSigDown} significant (p<0.05) | ${selectedCancer}: ${nTumor} tumor vs ${nAdj} adjacent`;
                     }
                 }
 
