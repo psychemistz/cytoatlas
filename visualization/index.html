@@ -9208,24 +9208,30 @@
             }
 
             // Aggregate comparison across all cancer types
+            // Compute activity_diff correctly: mean_exhausted - mean_nonexhausted (z-score difference)
             const sigAggregated = {};
             comparisonData.forEach(d => {
                 if (!sigAggregated[d.signature]) {
-                    sigAggregated[d.signature] = { activity_diff: [], mean_exhausted: [], mean_nonexhausted: [], pvalue: [] };
+                    sigAggregated[d.signature] = { mean_exhausted: [], mean_nonexhausted: [], pvalue: [] };
                 }
-                sigAggregated[d.signature].activity_diff.push(d.activity_diff);
                 sigAggregated[d.signature].mean_exhausted.push(d.mean_exhausted);
                 sigAggregated[d.signature].mean_nonexhausted.push(d.mean_nonexhausted);
                 if (d.pvalue) sigAggregated[d.signature].pvalue.push(d.pvalue);
             });
 
-            const aggregatedList = Object.entries(sigAggregated).map(([sig, vals]) => ({
-                signature: sig,
-                activity_diff: vals.activity_diff.reduce((a, b) => a + b, 0) / vals.activity_diff.length,
-                mean_exhausted: vals.mean_exhausted.reduce((a, b) => a + b, 0) / vals.mean_exhausted.length,
-                mean_nonexhausted: vals.mean_nonexhausted.reduce((a, b) => a + b, 0) / vals.mean_nonexhausted.length,
-                pvalue: vals.pvalue.length > 0 ? vals.pvalue.reduce((a, b) => a + b, 0) / vals.pvalue.length : 1
-            }));
+            const aggregatedList = Object.entries(sigAggregated).map(([sig, vals]) => {
+                const meanExhausted = vals.mean_exhausted.reduce((a, b) => a + b, 0) / vals.mean_exhausted.length;
+                const meanNonexhausted = vals.mean_nonexhausted.reduce((a, b) => a + b, 0) / vals.mean_nonexhausted.length;
+                // Compute activity_diff from means (z-score difference, not stored value which may be wrong)
+                const activityDiff = meanExhausted - meanNonexhausted;
+                return {
+                    signature: sig,
+                    activity_diff: activityDiff,
+                    mean_exhausted: meanExhausted,
+                    mean_nonexhausted: meanNonexhausted,
+                    pvalue: vals.pvalue.length > 0 ? vals.pvalue.reduce((a, b) => a + b, 0) / vals.pvalue.length : 1
+                };
+            });
 
             // Sort by absolute activity_diff
             const sorted = aggregatedList.sort((a, b) => Math.abs(b.activity_diff) - Math.abs(a.activity_diff));
