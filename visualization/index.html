@@ -6719,9 +6719,10 @@
 
             let diseases = [];
             if (diffData && diffData.length > 0) {
-                diseases = [...new Set(diffData.map(d => d.disease))].filter(d => d !== 'healthy').sort();
+                // Filter out 'healthy' and 'All Diseases' (handled by the hardcoded "all" option)
+                diseases = [...new Set(diffData.map(d => d.disease))].filter(d => d !== 'healthy' && d !== 'All Diseases').sort();
             } else if (diseaseData && diseaseData.length > 0) {
-                diseases = [...new Set(diseaseData.map(d => d.disease))].filter(d => d !== 'healthy').sort();
+                diseases = [...new Set(diseaseData.map(d => d.disease))].filter(d => d !== 'healthy' && d !== 'All Diseases').sort();
             }
 
             const select = document.getElementById('inflam-diff-disease');
