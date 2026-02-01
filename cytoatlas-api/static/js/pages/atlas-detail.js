@@ -7164,12 +7164,12 @@ const AtlasDetailPage = {
         // === Activity Bar: top 15 signatures by variance ===
         const barContainer = document.getElementById('caf-activity-bar');
         if (barContainer && subtypes.length > 0) {
-            // Calculate variance per signature across CAF types
+            // Calculate variance per signature across CAF types (use caf_class for grouping)
             const sigStats = {};
             subtypes.forEach(d => {
                 if (!sigStats[d.signature]) sigStats[d.signature] = {};
-                if (!sigStats[d.signature][d.caf_subtype]) sigStats[d.signature][d.caf_subtype] = [];
-                sigStats[d.signature][d.caf_subtype].push(d.mean_activity);
+                if (!sigStats[d.signature][d.caf_class]) sigStats[d.signature][d.caf_class] = [];
+                sigStats[d.signature][d.caf_class].push(d.mean_activity);
             });
 
             const sigVariance = Object.entries(sigStats).map(([sig, cafData]) => {
@@ -7200,6 +7200,8 @@ const AtlasDetailPage = {
                 legend: { orientation: 'h', y: 1.1, x: 0.5, xanchor: 'center' },
                 height: 350
             }, { responsive: true });
+        } else if (barContainer) {
+            barContainer.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No CAF activity data available for this filter.</p>';
         }
 
         // === Proportions Bar ===
@@ -7235,12 +7237,12 @@ const AtlasDetailPage = {
         // === Heatmap: signatures × CAF types ===
         const heatmapContainer = document.getElementById('caf-heatmap');
         if (heatmapContainer && subtypes.length > 0) {
-            // Aggregate by signature and CAF type
+            // Aggregate by signature and CAF type (use caf_class for grouping)
             const sigStats = {};
             subtypes.forEach(d => {
                 if (!sigStats[d.signature]) sigStats[d.signature] = {};
-                if (!sigStats[d.signature][d.caf_subtype]) sigStats[d.signature][d.caf_subtype] = [];
-                sigStats[d.signature][d.caf_subtype].push(d.mean_activity);
+                if (!sigStats[d.signature][d.caf_class]) sigStats[d.signature][d.caf_class] = [];
+                sigStats[d.signature][d.caf_class].push(d.mean_activity);
             });
 
             // Get top 12 signatures by variance
@@ -7271,6 +7273,8 @@ const AtlasDetailPage = {
                 yaxis: { automargin: true },
                 height: 350
             }, { responsive: true });
+        } else if (heatmapContainer) {
+            heatmapContainer.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No heatmap data available for this filter.</p>';
         }
     },
 

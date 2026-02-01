@@ -376,21 +376,49 @@ class ScAtlasService(BaseService):
         """
         data = await self.load_json("caf_signatures.json")
 
-        # Get subtypes data (these don't have signature_type field, filter by matching to signatures list)
+        # Get subtypes data and filter by signature_type
         subtypes = data.get("subtypes", [])
+        subtypes = [r for r in subtypes if r.get("signature_type") == signature_type]
 
-        # Get proportions (no filtering needed)
+        # Get proportions (no filtering needed - these are cell counts)
         proportions = data.get("proportions", [])
+
+        # Compute CAF class proportions per cancer type from subtypes
+        # Group by cancer_type and caf_class
+        caf_class_counts: dict[str, dict[str, int]] = {}
+        for r in subtypes:
+            ct = r.get("cancer_type")
+            caf_class = r.get("caf_class")
+            n_cells = r.get("n_cells", 0)
+            if ct and caf_class:
+                if ct not in caf_class_counts:
+                    caf_class_counts[ct] = {}
+                if caf_class not in caf_class_counts[ct]:
+                    caf_class_counts[ct][caf_class] = 0
+                caf_class_counts[ct][caf_class] += n_cells
+
+        # Convert to proportion format expected by frontend
+        caf_class_proportions = []
+        for ct, class_counts in caf_class_counts.items():
+            total = sum(class_counts.values())
+            if total > 0:
+                for caf_class, count in class_counts.items():
+                    caf_class_proportions.append({
+                        "cancer_type": ct,
+                        "caf_subtype": caf_class,  # Frontend expects caf_subtype
+                        "proportion": count / total,
+                        "n_cells": count,
+                    })
 
         # Get cancer types from subtypes
         cancer_types = sorted(list(set(r.get("cancer_type") for r in subtypes if r.get("cancer_type"))))
 
         return {
             "subtypes": subtypes,
-            "proportions": proportions,
+            "proportions": caf_class_proportions,
             "cancer_types": cancer_types,
             "signatures": data.get("signatures", []),
-            "caf_classes": data.get("caf_classes", ["myCAF", "iCAF", "apCAF"]),
+            "caf_classes": data.get("caf_classes", ["myCAF", "iCAF", "apCAF", "Other"]),
         }
 
     @cached(prefix="scatlas", ttl=3600)
