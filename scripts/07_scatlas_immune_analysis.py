@@ -319,9 +319,11 @@ def load_activity_data():
 # Immune Infiltration Analysis
 # ==============================================================================
 
-def compute_immune_infiltration(meta_df, cytosig_df):
+def compute_immune_infiltration(meta_df, cytosig_df, secact_df=None):
     """
     Compute immune cell infiltration proportions and activities per cancer type.
+
+    Now supports both CytoSig and SecAct signatures with signature_type field.
 
     Enhanced to include:
     - Immune composition within immune cells (not total)
@@ -411,53 +413,63 @@ def compute_immune_infiltration(meta_df, cytosig_df):
         has_treg_annotation = treg_cells > 0 or any('Treg' in str(x) or 'FOXP3' in str(x) for x in ct_meta['cell_type'])
         data_quality = 'good' if n_samples >= 10 and has_cd8_annotation else ('partial' if n_samples >= 5 else 'limited')
 
-        # Mean activity for each signature (immune vs non-immune)
-        ct_samples = ct_meta.index.tolist()
-        ct_activities = cytosig_df[ct_samples].T
-        ct_activities['is_immune'] = ct_meta.loc[ct_samples, 'is_immune'].values
+        # Helper function to process signatures from a dataframe
+        def process_signatures(activity_df, signature_type):
+            ct_samples_valid = [s for s in ct_samples if s in activity_df.columns]
+            if len(ct_samples_valid) == 0:
+                return []
 
-        for sig in cytosig_df.index:
-            immune_act = ct_activities[ct_activities['is_immune']][sig].mean()
-            nonimmune_act = ct_activities[~ct_activities['is_immune']][sig].mean()
+            ct_activities = activity_df[ct_samples_valid].T
+            ct_activities['is_immune'] = ct_meta.loc[ct_samples_valid, 'is_immune'].values
 
-            # Correlation between immune proportion and activity
-            # Using sample-level data
-            sample_props = []
-            sample_acts = []
-            for idx in ct_samples:
-                if idx in cytosig_df.columns:
+            sig_results = []
+            for sig in activity_df.index:
+                immune_act = ct_activities[ct_activities['is_immune']][sig].mean()
+                nonimmune_act = ct_activities[~ct_activities['is_immune']][sig].mean()
+
+                # Correlation between immune proportion and activity
+                sample_props = []
+                sample_acts = []
+                for idx in ct_samples_valid:
                     sample_props.append(1 if ct_meta.loc[idx, 'is_immune'] else 0)
-                    sample_acts.append(cytosig_df.loc[sig, idx])
+                    sample_acts.append(activity_df.loc[sig, idx])
 
-            if len(sample_props) > 5:
-                try:
-                    corr, pval = stats.spearmanr(sample_props, sample_acts)
-                except:
+                if len(sample_props) > 5:
+                    try:
+                        corr, pval = stats.spearmanr(sample_props, sample_acts)
+                    except:
+                        corr, pval = np.nan, np.nan
+                else:
                     corr, pval = np.nan, np.nan
-            else:
-                corr, pval = np.nan, np.nan
 
-            results.append({
-                'cancer_type': cancer,
-                'signature': sig,
-                'immune_proportion': round(immune_prop, 4),
-                'total_cells': int(total_cells),
-                'immune_cells': int(immune_cells),
-                'n_samples': n_samples,
-                'mean_immune_activity': round(immune_act, 4) if not np.isnan(immune_act) else 0,
-                'mean_nonimmune_activity': round(nonimmune_act, 4) if not np.isnan(nonimmune_act) else 0,
-                'immune_enrichment': round(immune_act - nonimmune_act, 4) if not (np.isnan(immune_act) or np.isnan(nonimmune_act)) else 0,
-                'correlation': round(corr, 4) if not np.isnan(corr) else None,
-                'pvalue': round(pval, 6) if not np.isnan(pval) else None,
-                # Clinically relevant ratios
-                'cd8_treg_ratio': round(cd8_treg_ratio, 2) if cd8_treg_ratio != float('inf') else None,
-                't_myeloid_ratio': round(t_myeloid_ratio, 2) if t_myeloid_ratio != float('inf') else None,
-                'data_quality': data_quality,
-                # Immune composition (of total TME)
-                **{f'prop_{k}': round(v, 4) for k, v in immune_composition.items()},
-                # Immune composition WITHIN immune cells
-                **{f'immune_{k}': round(v, 4) for k, v in immune_within.items()}
-            })
+                sig_results.append({
+                    'cancer_type': cancer,
+                    'signature': sig,
+                    'signature_type': signature_type,
+                    'immune_proportion': round(immune_prop, 4),
+                    'total_cells': int(total_cells),
+                    'immune_cells': int(immune_cells),
+                    'n_samples': n_samples,
+                    'mean_immune_activity': round(immune_act, 4) if not np.isnan(immune_act) else 0,
+                    'mean_nonimmune_activity': round(nonimmune_act, 4) if not np.isnan(nonimmune_act) else 0,
+                    'immune_enrichment': round(immune_act - nonimmune_act, 4) if not (np.isnan(immune_act) or np.isnan(nonimmune_act)) else 0,
+                    'correlation': round(corr, 4) if not np.isnan(corr) else None,
+                    'pvalue': round(pval, 6) if not np.isnan(pval) else None,
+                    'cd8_treg_ratio': round(cd8_treg_ratio, 2) if cd8_treg_ratio != float('inf') else None,
+                    't_myeloid_ratio': round(t_myeloid_ratio, 2) if t_myeloid_ratio != float('inf') else None,
+                    'data_quality': data_quality,
+                    **{f'prop_{k}': round(v, 4) for k, v in immune_composition.items()},
+                    **{f'immune_{k}': round(v, 4) for k, v in immune_within.items()}
+                })
+            return sig_results
+
+        # Process CytoSig signatures
+        ct_samples = ct_meta.index.tolist()
+        results.extend(process_signatures(cytosig_df, 'CytoSig'))
+
+        # Process SecAct signatures if provided
+        if secact_df is not None:
+            results.extend(process_signatures(secact_df, 'SecAct'))
 
     log(f"  Generated {len(results)} infiltration records")
     return results
@@ -1132,7 +1144,8 @@ def main():
 
     # Immune Infiltration Analysis
     log("\n--- Immune Infiltration ---")
-    infiltration_data = compute_immune_infiltration(meta_df, cytosig_df)
+    log(f"  Processing CytoSig ({len(cytosig_df)} signatures) + SecAct ({len(secact_df)} signatures)")
+    infiltration_data = compute_immune_infiltration(meta_df, cytosig_df, secact_df)
     composition_data = generate_immune_composition_summary(meta_df)
     tme_summary = generate_tme_summary(meta_df)
     study_data, donor_data, study_meta = compute_study_level_infiltration(meta_df, cytosig_df)
@@ -1144,7 +1157,9 @@ def main():
         'by_study': study_data,
         'by_donor': donor_data,
         'studies': study_meta,
-        'signatures': list(cytosig_df.index),
+        'cytosig_signatures': list(cytosig_df.index),
+        'secact_signatures': list(secact_df.index),
+        'signatures': list(cytosig_df.index) + list(secact_df.index),  # Combined for backward compat
         'cancer_types': list(meta_df['cancerType'].dropna().unique()) if 'cancerType' in meta_df.columns else [],
         'immune_categories': list(IMMUNE_PATTERNS.keys()),
         # Metadata for UI
@@ -1154,14 +1169,47 @@ def main():
 
     # T Cell Exhaustion Analysis
     log("\n--- T Cell Exhaustion ---")
-    exhaustion_state_data, exhaustion_comparison = compute_tcell_exhaustion(meta_df, cytosig_df)
-    exhaustion_subset_data = compute_exhaustion_by_subset(meta_df, cytosig_df)
+
+    # CytoSig exhaustion analysis
+    cytosig_state_data, cytosig_comparison = compute_tcell_exhaustion(meta_df, cytosig_df)
+    cytosig_subset_data = compute_exhaustion_by_subset(meta_df, cytosig_df)
+
+    # Add signature_type field to CytoSig data
+    for d in cytosig_state_data:
+        d['signature_type'] = 'cytosig'
+    for d in cytosig_comparison:
+        d['signature_type'] = 'cytosig'
+    for d in cytosig_subset_data:
+        d['signature_type'] = 'cytosig'
+
+    # SecAct exhaustion analysis (top 100 most variable signatures)
+    # Select top signatures by variance across samples
+    secact_var = secact_df.var(axis=1).sort_values(ascending=False)
+    top_secact = secact_df.loc[secact_var.head(100).index]
+    log(f"  Using top 100 SecAct signatures (of {len(secact_df)})")
+
+    secact_state_data, secact_comparison = compute_tcell_exhaustion(meta_df, top_secact)
+    secact_subset_data = compute_exhaustion_by_subset(meta_df, top_secact)
+
+    # Add signature_type field to SecAct data
+    for d in secact_state_data:
+        d['signature_type'] = 'secact'
+    for d in secact_comparison:
+        d['signature_type'] = 'secact'
+    for d in secact_subset_data:
+        d['signature_type'] = 'secact'
+
+    # Combine data
+    all_state_data = cytosig_state_data + secact_state_data
+    all_comparison = cytosig_comparison + secact_comparison
+    all_subset_data = cytosig_subset_data + secact_subset_data
 
     save_json({
-        'data': exhaustion_state_data,
-        'comparison': exhaustion_comparison,
-        'by_subset': exhaustion_subset_data,
-        'signatures': list(cytosig_df.index),
+        'data': all_state_data,
+        'comparison': all_comparison,
+        'by_subset': all_subset_data,
+        'cytosig_signatures': list(cytosig_df.index),
+        'secact_signatures': list(top_secact.index),
         'exhaustion_states': ['exhausted', 'cytotoxic', 'memory', 'naive', 'other_tcell'],
         'tcell_subsets': ['CD8', 'CD4', 'Treg', 'gdT', 'MAIT']
     }, 'exhaustion.json')

@@ -2704,16 +2704,35 @@ def preprocess_immune_infiltration():
 
 
 def preprocess_exhaustion():
-    """Preprocess T cell exhaustion data."""
+    """Preprocess T cell exhaustion data.
+
+    If exhaustion.json already exists with proper structure (from 07_scatlas_immune_analysis.py),
+    use it directly. Otherwise, fall back to processing the CSV file.
+    """
     print("Processing T cell exhaustion data...")
 
+    # Check if exhaustion.json already exists with proper structure (from 07_scatlas_immune_analysis.py)
+    exhaustion_json_path = OUTPUT_DIR / "exhaustion.json"
+    if exhaustion_json_path.exists():
+        with open(exhaustion_json_path) as f:
+            existing_data = json.load(f)
+        # Check for proper structure with comparison and signature lists
+        if 'comparison' in existing_data and 'cytosig_signatures' in existing_data:
+            print(f"  Using existing exhaustion.json from immune analysis")
+            print(f"  Data records: {len(existing_data.get('data', []))}")
+            print(f"  Comparison records: {len(existing_data.get('comparison', []))}")
+            print(f"  CytoSig signatures: {len(existing_data.get('cytosig_signatures', []))}")
+            print(f"  SecAct signatures: {len(existing_data.get('secact_signatures', []))}")
+            return existing_data
+
+    # Fall back to CSV processing
     exhaustion_path = SCATLAS_DIR / "cancer_tcell_exhaustion.csv"
     if not exhaustion_path.exists():
         print("  cancer_tcell_exhaustion.csv not found - skipping")
         return None
 
     df = pd.read_csv(exhaustion_path)
-    print(f"  Loaded {len(df)} records")
+    print(f"  Loaded {len(df)} records from CSV")
 
     # Filter to significant results for visualization
     if 'qvalue' in df.columns:

@@ -100,14 +100,51 @@ class ScAtlasCancerTypeData(BaseModel):
 
 
 class ScAtlasImmuneInfiltration(BaseModel):
-    """Immune infiltration signature."""
+    """Immune infiltration signature with enrichment analysis."""
 
     cancer_type: str
     signature: str
     signature_type: str
-    infiltration_score: float
-    correlation_with_survival: float | None = None
-    p_value: float | None = None
+    immune_proportion: float
+    total_cells: int
+    immune_cells: int
+    n_samples: int
+    mean_immune_activity: float
+    mean_nonimmune_activity: float
+    immune_enrichment: float
+    correlation: float | None = None
+    pvalue: float | None = None
+    cd8_treg_ratio: float | None = None
+    t_myeloid_ratio: float | None = None
+    data_quality: str = "good"
+    # Immune composition proportions (of total TME)
+    prop_T_cell: float = 0
+    prop_CD8_T: float = 0
+    prop_CD4_T: float = 0
+    prop_Treg: float = 0
+    prop_NK: float = 0
+    prop_ILC: float = 0
+    prop_B_cell: float = 0
+    prop_Macrophage: float = 0
+    prop_Monocyte: float = 0
+    prop_DC: float = 0
+    prop_Neutrophil: float = 0
+    prop_Mast: float = 0
+    prop_Myeloid: float = 0
+    # Immune composition within immune cells
+    immune_T_cell: float = 0
+    immune_CD8_T: float = 0
+    immune_CD4_T: float = 0
+    immune_Treg: float = 0
+    immune_NK: float = 0
+    immune_ILC: float = 0
+    immune_B_cell: float = 0
+    immune_Macrophage: float = 0
+    immune_Monocyte: float = 0
+    immune_DC: float = 0
+    immune_Neutrophil: float = 0
+    immune_Mast: float = 0
+    immune_Myeloid: float = 0
 
 
 class ScAtlasExhaustion(BaseModel):

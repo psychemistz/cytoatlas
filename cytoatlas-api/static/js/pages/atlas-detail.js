@@ -6456,12 +6456,272 @@ const AtlasDetailPage = {
         content.innerHTML = `
             <div class="panel-header">
                 <h3>Immune Infiltration</h3>
-                <p>Immune cell composition in tumor microenvironment</p>
+                <p>Tumor microenvironment composition and immune cell activity across cancer types</p>
+                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 0.5rem; margin: 0.5rem 0;">
+                    <strong>Data Source:</strong> Primary tumor tissue samples only (excludes PBMC/Blood, Adjacent, Metastasis)
+                </div>
             </div>
-            <div id="immune-infiltration-plot" class="plot-container" style="height: 500px;">
-                <p class="loading">Immune infiltration analysis coming soon</p>
+            <div class="controls" style="margin-bottom: 16px; display: flex; gap: 16px; flex-wrap: wrap;">
+                <div class="control-group">
+                    <label for="immune-sig-type" style="font-weight: 500; margin-right: 8px;">Signature Type:</label>
+                    <select id="immune-sig-type" class="filter-select" onchange="AtlasDetailPage.updateImmuneInfiltration()">
+                        <option value="CytoSig">CytoSig (43 cytokines)</option>
+                        <option value="SecAct">SecAct (1,170 secreted proteins)</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="immune-signature" style="font-weight: 500; margin-right: 8px;">Signature:</label>
+                    <select id="immune-signature" class="filter-select" onchange="AtlasDetailPage.updateSignatureHeatmap()">
+                        <option value="">Select a signature...</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- TME Composition -->
+            <div class="viz-container" style="min-height: 350px; margin-bottom: 1rem;">
+                <div class="viz-title">Tumor Microenvironment Composition</div>
+                <div class="viz-subtitle">Breakdown: Malignant cells, Immune cells, Stromal cells</div>
+                <div id="tme-composition" class="plot-container" style="height: 300px;">Loading...</div>
+            </div>
+
+            <div class="two-col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <!-- Immune Cell Composition -->
+                <div class="viz-container" style="min-height: 400px;">
+                    <div class="viz-title">Immune Cell Composition</div>
+                    <div class="viz-subtitle">Breakdown within tumor-infiltrating immune cells</div>
+                    <div id="immune-composition" class="plot-container" style="height: 350px;">Loading...</div>
+                </div>
+
+                <!-- TIL Proportions -->
+                <div class="viz-container" style="min-height: 400px;">
+                    <div class="viz-title">Tumor-Infiltrating Lymphocytes (TIL)</div>
+                    <div class="viz-subtitle">CD8:Treg and T:Myeloid ratios by cancer type</div>
+                    <div id="til-ratios" class="plot-container" style="height: 350px;">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Signature-specific heatmap -->
+            <div class="viz-container" style="min-height: 400px; margin-top: 20px;">
+                <div class="viz-title" id="sig-heatmap-title">Signature Activity by Cancer Type</div>
+                <div class="viz-subtitle" id="sig-heatmap-subtitle">Select a signature above to view immune enrichment across cancer types</div>
+                <div id="sig-activity-heatmap" class="plot-container" style="height: 400px;">
+                    <p style="text-align:center; color:#666; padding:2rem;">Select a signature to view activity heatmap</p>
+                </div>
             </div>
         `;
+
+        // Load immune infiltration data
+        await this.loadImmuneData();
+    },
+
+    immuneData: null,
+
+    async loadImmuneData() {
+        try {
+            const data = await API.get('/scatlas/immune-infiltration-full');
+            if (data) {
+                this.immuneData = data;
+                this.populateSignatureDropdown();
+                this.updateImmuneInfiltration();
+            } else {
+                // Fallback: load from embedded data or show placeholder
+                document.getElementById('tme-composition').innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Loading immune infiltration data...</p>';
+            }
+        } catch (error) {
+            console.error('Failed to load immune data:', error);
+            document.getElementById('tme-composition').innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Failed to load immune infiltration data</p>';
+        }
+    },
+
+    populateSignatureDropdown() {
+        const sigTypeSelect = document.getElementById('immune-sig-type');
+        const sigSelect = document.getElementById('immune-signature');
+        if (!sigSelect || !this.immuneData) return;
+
+        const sigType = sigTypeSelect?.value || 'CytoSig';
+        const signatures = sigType === 'CytoSig'
+            ? (this.immuneData.cytosig_signatures || [])
+            : (this.immuneData.secact_signatures || []);
+
+        sigSelect.innerHTML = '<option value="">Select a signature...</option>';
+        signatures.forEach(sig => {
+            const option = document.createElement('option');
+            option.value = sig;
+            option.textContent = sig;
+            sigSelect.appendChild(option);
+        });
+    },
+
+    updateImmuneInfiltration() {
+        if (!this.immuneData) return;
+
+        // Repopulate signature dropdown when sig type changes
+        this.populateSignatureDropdown();
+
+        // Render TME composition
+        this.renderTMEComposition();
+
+        // Render immune cell composition
+        this.renderImmuneComposition();
+
+        // Render TIL ratios
+        this.renderTILRatios();
+    },
+
+    renderTMEComposition() {
+        const container = document.getElementById('tme-composition');
+        if (!container || !this.immuneData?.tme_summary) return;
+
+        const tme = this.immuneData.tme_summary;
+
+        // Sort by immune proportion
+        const sorted = [...tme].sort((a, b) => b.immune_proportion - a.immune_proportion);
+        const cancerTypes = sorted.map(d => d.cancer_type);
+
+        const traces = [
+            {
+                name: 'Immune',
+                x: cancerTypes,
+                y: sorted.map(d => d.immune_proportion * 100),
+                type: 'bar',
+                marker: { color: '#1f77b4' }
+            },
+            {
+                name: 'Malignant',
+                x: cancerTypes,
+                y: sorted.map(d => d.malignant_proportion * 100),
+                type: 'bar',
+                marker: { color: '#d62728' }
+            },
+            {
+                name: 'Stromal',
+                x: cancerTypes,
+                y: sorted.map(d => d.stromal_proportion * 100),
+                type: 'bar',
+                marker: { color: '#ff7f0e' }
+            }
+        ];
+
+        Plotly.newPlot(container, traces, {
+            barmode: 'stack',
+            xaxis: { title: 'Cancer Type', tickangle: -45 },
+            yaxis: { title: '% of TME', range: [0, 100] },
+            margin: { l: 50, r: 30, t: 30, b: 100 },
+            legend: { orientation: 'h', y: 1.1 },
+            height: 300
+        }, { responsive: true });
+    },
+
+    renderImmuneComposition() {
+        const container = document.getElementById('immune-composition');
+        if (!container || !this.immuneData?.tme_summary) return;
+
+        const tme = this.immuneData.tme_summary;
+        const sorted = [...tme].sort((a, b) => b.immune_proportion - a.immune_proportion);
+        const cancerTypes = sorted.map(d => d.cancer_type);
+
+        const categories = ['T_cell', 'NK', 'B_cell', 'Macrophage', 'Monocyte', 'DC', 'Mast', 'Neutrophil'];
+        const colors = {
+            'T_cell': '#1f77b4', 'NK': '#ff7f0e', 'B_cell': '#9467bd',
+            'Macrophage': '#8c564b', 'Monocyte': '#e377c2', 'DC': '#bcbd22',
+            'Mast': '#7f7f7f', 'Neutrophil': '#17becf'
+        };
+
+        const traces = categories.map(cat => ({
+            name: cat.replace('_', ' '),
+            x: cancerTypes,
+            y: sorted.map(d => (d[`immune_${cat}`] || 0) * 100),
+            type: 'bar',
+            marker: { color: colors[cat] }
+        }));
+
+        Plotly.newPlot(container, traces, {
+            barmode: 'stack',
+            xaxis: { title: 'Cancer Type', tickangle: -45 },
+            yaxis: { title: '% of Immune Cells', range: [0, 100] },
+            margin: { l: 50, r: 30, t: 30, b: 100 },
+            legend: { orientation: 'h', y: 1.15, font: { size: 10 } },
+            height: 350
+        }, { responsive: true });
+    },
+
+    renderTILRatios() {
+        const container = document.getElementById('til-ratios');
+        if (!container || !this.immuneData?.tme_summary) return;
+
+        const tme = this.immuneData.tme_summary.filter(d => d.cd8_treg_ratio && d.cd8_treg_ratio < 50);
+        const sorted = [...tme].sort((a, b) => b.cd8_treg_ratio - a.cd8_treg_ratio);
+        const cancerTypes = sorted.map(d => d.cancer_type);
+
+        const traces = [
+            {
+                name: 'CD8:Treg Ratio',
+                x: cancerTypes,
+                y: sorted.map(d => d.cd8_treg_ratio),
+                type: 'bar',
+                marker: { color: '#2ca02c' },
+                hovertemplate: '%{x}<br>CD8:Treg = %{y:.2f}<extra></extra>'
+            }
+        ];
+
+        Plotly.newPlot(container, traces, {
+            xaxis: { title: 'Cancer Type', tickangle: -45 },
+            yaxis: { title: 'CD8:Treg Ratio' },
+            margin: { l: 50, r: 30, t: 30, b: 100 },
+            height: 350
+        }, { responsive: true });
+    },
+
+    updateSignatureHeatmap() {
+        const sigSelect = document.getElementById('immune-signature');
+        const sigType = document.getElementById('immune-sig-type')?.value || 'CytoSig';
+        const signature = sigSelect?.value;
+
+        if (!signature || !this.immuneData?.data) {
+            return;
+        }
+
+        const container = document.getElementById('sig-activity-heatmap');
+        const title = document.getElementById('sig-heatmap-title');
+        const subtitle = document.getElementById('sig-heatmap-subtitle');
+
+        if (title) title.textContent = `${signature} Activity Across Cancer Types`;
+        if (subtitle) subtitle.textContent = `Immune enrichment: mean activity in immune cells vs non-immune cells`;
+
+        // Filter data for selected signature
+        const sigData = this.immuneData.data.filter(d =>
+            d.signature === signature && d.signature_type === sigType
+        );
+
+        if (sigData.length === 0) {
+            container.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No data available for this signature</p>';
+            return;
+        }
+
+        // Sort by immune enrichment
+        const sorted = [...sigData].sort((a, b) => b.immune_enrichment - a.immune_enrichment);
+
+        const trace = {
+            x: sorted.map(d => d.cancer_type),
+            y: sorted.map(d => d.immune_enrichment),
+            type: 'bar',
+            marker: {
+                color: sorted.map(d => d.immune_enrichment > 0 ? '#1f77b4' : '#d62728')
+            },
+            hovertemplate: '%{x}<br>Enrichment: %{y:.2f}<br>Immune: %{customdata[0]:.2f}<br>Non-immune: %{customdata[1]:.2f}<extra></extra>',
+            customdata: sorted.map(d => [d.mean_immune_activity, d.mean_nonimmune_activity])
+        };
+
+        Plotly.newPlot(container, [trace], {
+            xaxis: { title: 'Cancer Type', tickangle: -45 },
+            yaxis: { title: 'Immune Enrichment (z-score diff)' },
+            margin: { l: 60, r: 30, t: 30, b: 100 },
+            height: 400,
+            shapes: [{
+                type: 'line', x0: -0.5, x1: sorted.length - 0.5, y0: 0, y1: 0,
+                line: { color: 'gray', width: 1, dash: 'dash' }
+            }]
+        }, { responsive: true });
     },
 
     async loadScatlasExhaustion(content) {

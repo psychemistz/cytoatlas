@@ -214,6 +214,26 @@ class ScAtlasService(BaseService):
         )
 
     @cached(prefix="scatlas", ttl=3600)
+    async def get_immune_infiltration_full(self) -> dict:
+        """
+        Get complete immune infiltration data for visualization.
+
+        Returns:
+            Dictionary with data, tme_summary, composition, and signature lists
+        """
+        data = await self.load_json("immune_infiltration.json")
+
+        return {
+            "data": data.get("data", []),
+            "tme_summary": data.get("tme_summary", []),
+            "composition": data.get("composition", []),
+            "cytosig_signatures": data.get("cytosig_signatures", []),
+            "secact_signatures": data.get("secact_signatures", []),
+            "cancer_types": data.get("cancer_types", []),
+            "immune_categories": data.get("immune_categories", []),
+        }
+
+    @cached(prefix="scatlas", ttl=3600)
     async def get_immune_infiltration(
         self,
         signature_type: str = "CytoSig",
@@ -231,7 +251,10 @@ class ScAtlasService(BaseService):
         """
         data = await self.load_json("immune_infiltration.json")
 
-        results = self.filter_by_signature_type(data, signature_type)
+        # Extract data array from the full structure
+        records = data.get("data", []) if isinstance(data, dict) else data
+
+        results = self.filter_by_signature_type(records, signature_type)
 
         if cancer_type:
             results = [r for r in results if r.get("cancer_type") == cancer_type]

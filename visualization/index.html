@@ -1788,7 +1788,7 @@
                 <button class="tab" data-tab="differential-analysis">Differential Analysis</button>
                 <button class="tab" data-tab="immune-infiltration">Immune Infiltration</button>
                 <button class="tab" data-tab="tcell-function">T Cell Function</button>
-                <button class="tab" data-tab="exhaustion">Exhaustion Signatures</button>
+                <button class="tab" data-tab="exhaustion">T Cell Exhaustion</button>
                 <button class="tab" data-tab="caf-classification">CAF Types</button>
             </div>
 
@@ -1987,30 +1987,31 @@
             <div class="tab-content" id="tab-tcell-function">
                 <div class="controls">
                     <div class="control-group">
+                        <label>Signature Type</label>
+                        <select id="tcell-sigtype" onchange="updateTcellFunction()">
+                            <option value="cytosig">CytoSig (43 cytokines)</option>
+                            <option value="secact">SecAct (100 secreted proteins)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
                         <label>Cancer Type</label>
                         <select id="tcell-cancer" onchange="updateTcellFunction()">
                             <option value="all">All Cancers</option>
                         </select>
                     </div>
-                    <div class="control-group">
-                        <label>T Cell Subset</label>
-                        <select id="tcell-subset" onchange="updateTcellFunction()">
-                            <option value="all">All T Cells</option>
-                            <option value="CD8">CD8+ T Cells</option>
-                            <option value="CD4">CD4+ T Cells</option>
-                            <option value="Treg">Regulatory T Cells</option>
-                        </select>
-                    </div>
                 </div>
 
                 <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
-                    <strong>T Cell Functional States:</strong> Based on cell type annotations containing marker genes.
-                    <ul style="margin: 0.5rem 0; padding-left: 1.5rem; font-size: 0.9rem;">
-                        <li><strong>Exhausted (Tex):</strong> PD-1, CTLA-4, TIM-3, LAG-3, TIGIT, CXCL13</li>
-                        <li><strong>Cytotoxic:</strong> GZMB, GZMK, PRF1, GNLY</li>
-                        <li><strong>Memory (Tm/Tem/Tcm):</strong> Memory phenotype markers</li>
-                        <li><strong>Naive (Tn):</strong> CCR7, naive markers</li>
-                    </ul>
+                    <strong>T Cell Functional States:</strong> Grouped by cell type annotations from original studies.
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; margin-top: 0.5rem; font-size: 0.9rem;">
+                        <div><span style="color: #d62728;">●</span> <strong>Exhausted:</strong> Tex, PDCD1+, exhausted, LAG3+, TIGIT+</div>
+                        <div><span style="color: #2ca02c;">●</span> <strong>Cytotoxic:</strong> GZMB+, GZMK+, PRF1+, cytotoxic</div>
+                        <div><span style="color: #1f77b4;">●</span> <strong>Memory:</strong> Tem, Tcm, memory</div>
+                        <div><span style="color: #ff7f0e;">●</span> <strong>Naive:</strong> Tn, naive, CCR7+</div>
+                    </div>
+                    <div style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">
+                        Note: State availability varies by cancer type based on original study annotations.
+                    </div>
                 </div>
 
                 <div class="two-col">
@@ -2027,16 +2028,32 @@
                 </div>
 
                 <div class="viz-container" style="min-height: 400px; margin-top: 1rem;">
-                    <div class="viz-title">Cytokine Activity Comparison Across States</div>
-                    <div class="viz-subtitle">Grouped bar chart showing top differential cytokines by T cell state</div>
+                    <div class="viz-title">Cytokine Activity Distribution by State</div>
+                    <div class="viz-subtitle">Box plots showing activity distribution for top differential signatures</div>
                     <div id="tcell-state-comparison" class="loading">Loading data...</div>
                 </div>
             </div>
 
             <!-- Exhaustion Signatures Tab -->
             <div class="tab-content" id="tab-exhaustion">
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Signature Type</label>
+                        <select id="exhaustion-sigtype" onchange="updateExhaustion()">
+                            <option value="cytosig">CytoSig (43 cytokines)</option>
+                            <option value="secact">SecAct (100 secreted proteins)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Cancer Type</label>
+                        <select id="exhaustion-cancer" onchange="updateExhaustion()">
+                            <option value="all">All Cancers</option>
+                        </select>
+                    </div>
+                </div>
+
                 <div class="card" style="margin-bottom: 1rem; padding: 1rem;">
-                    <strong>Exhausted vs Non-exhausted T cells:</strong> Comparing cytokine activity signatures between dysfunctional and functional T cells.
+                    <strong>Exhausted vs Non-exhausted T cells:</strong> Comparing activity signatures between dysfunctional and functional T cells.
                     <div style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">
                         Non-exhausted = cytotoxic + memory + other T cells
                     </div>
@@ -2758,7 +2775,7 @@
                 ['Normal vs Cancer', 'Matched organ-cancer type comparisons', '13 organ-cancer pairs'],
                 ['Immune Infiltration', 'Immune cell proportions and activity per cancer type', 'Per cancer type'],
                 ['T Cell Function', 'Cytokine activity across T cell functional states', 'Exhausted/Cytotoxic/Memory/Naive'],
-                ['Exhaustion Signatures', 'Exhausted vs non-exhausted T cell signatures', 'Tex vs non-Tex'],
+                ['T Cell Exhaustion', 'Exhausted vs non-exhausted T cell signatures', 'Tex vs non-Tex'],
                 ['CAF Signatures', 'Cancer-associated fibroblast subtype activities', 'Per cancer type'],
                 ['Adjacent Tissue', 'Field effect analysis in tumor-adjacent tissue', 'Per cancer type'],
                 ['Pan-Cancer Signatures', 'Signatures consistent across multiple cancers', 'Cross-cancer']
@@ -9100,8 +9117,8 @@
             }
 
             // Get filter values
+            const sigType = document.getElementById('tcell-sigtype')?.value || 'cytosig';
             const selectedCancer = document.getElementById('tcell-cancer')?.value || 'all';
-            const selectedSubset = document.getElementById('tcell-subset')?.value || 'all';
 
             // Populate cancer dropdown
             const cancerDropdown = document.getElementById('tcell-cancer');
@@ -9115,11 +9132,20 @@
                 });
             }
 
-            // Filter data
+            // Filter data by signature type and cancer type
             let stateData = data.data;
+            if (stateData.length > 0 && stateData[0].signature_type) {
+                stateData = stateData.filter(d => d.signature_type === sigType);
+            }
             if (selectedCancer !== 'all') {
                 stateData = stateData.filter(d => d.cancer_type === selectedCancer);
             }
+
+            // Get signatures for this type (fallback to extracting from data if explicit lists not available)
+            const uniqueSigsFromData = [...new Set(stateData.map(d => d.signature))];
+            const signatures = sigType === 'cytosig'
+                ? (data.cytosig_signatures || data.signatures || uniqueSigsFromData)
+                : (data.secact_signatures || uniqueSigsFromData);
 
             // Aggregate by state and signature
             const stateColors = {
@@ -9152,8 +9178,7 @@
                 stateCells[d.exhaustion_state] += d.n_cells;
             });
 
-            // Calculate mean per state per signature
-            const signatures = data.signatures || [];
+            // Calculate mean per state per signature (use filtered signatures from above)
             const heatmapData = {};
             states.forEach(s => {
                 heatmapData[s] = {};
@@ -9219,25 +9244,38 @@
                 }, { responsive: true });
             }
 
-            // 3. Grouped bar chart - top cytokines by state
+            // 3. Box plots - top cytokines by state
             if (comparisonContainer) {
                 comparisonContainer.classList.remove('loading');
                 Plotly.purge(comparisonContainer);
 
-                const top10Sigs = topSigs.slice(0, 10);
-                const traces = states.map(s => ({
-                    type: 'bar',
-                    name: stateLabels[s],
-                    x: top10Sigs,
-                    y: top10Sigs.map(sig => heatmapData[s][sig]),
-                    marker: { color: stateColors[s] },
-                    hovertemplate: `<b>${stateLabels[s]}</b><br>%{x}: %{y:.2f}<extra></extra>`
-                }));
+                const top6Sigs = topSigs.slice(0, 6);
+                const traces = [];
+
+                // Create box plot traces for each state
+                states.forEach(s => {
+                    top6Sigs.forEach(sig => {
+                        const vals = stateActivity[s][sig] || [];
+                        if (vals.length > 0) {
+                            traces.push({
+                                type: 'box',
+                                name: stateLabels[s],
+                                x: vals.map(() => sig),
+                                y: vals,
+                                marker: { color: stateColors[s] },
+                                boxpoints: false,
+                                legendgroup: s,
+                                showlegend: top6Sigs.indexOf(sig) === 0,
+                                hovertemplate: `<b>${stateLabels[s]}</b><br>${sig}<br>Median: %{y:.2f}<extra></extra>`
+                            });
+                        }
+                    });
+                });
 
                 Plotly.newPlot(comparisonContainer, traces, {
-                    barmode: 'group',
-                    xaxis: { title: 'Cytokine/Secreted Protein', tickangle: 45 },
-                    yaxis: { title: 'Mean Activity (z-score)' },
+                    boxmode: 'group',
+                    xaxis: { title: 'Signature', tickangle: 45 },
+                    yaxis: { title: 'Activity (z-score)' },
                     margin: { l: 60, r: 30, t: 30, b: 100 },
                     legend: { orientation: 'h', y: 1.1 },
                     height: 380
@@ -9245,7 +9283,7 @@
             }
         }
 
-        // scAtlas: Exhaustion Signatures (Exhausted vs Non-exhausted)
+        // scAtlas: T Cell Exhaustion (Exhausted vs Non-exhausted)
         function updateExhaustion() {
             const container1 = document.getElementById('exhaustion-heatmap');
             const container2 = document.getElementById('exhaustion-scatter');
@@ -9263,8 +9301,30 @@
                 return;
             }
 
-            // Use comparison data for log2fc (exhausted vs non-exhausted)
-            const comparisonData = data.comparison || [];
+            // Get filter values
+            const sigType = document.getElementById('exhaustion-sigtype')?.value || 'cytosig';
+            const selectedCancer = document.getElementById('exhaustion-cancer')?.value || 'all';
+
+            // Populate cancer dropdown dynamically
+            const cancerDropdown = document.getElementById('exhaustion-cancer');
+            if (cancerDropdown && cancerDropdown.options.length <= 1) {
+                const cancerTypes = [...new Set(data.comparison.map(d => d.cancer_type))].sort();
+                cancerTypes.forEach(ct => {
+                    const opt = document.createElement('option');
+                    opt.value = ct;
+                    opt.textContent = ct;
+                    cancerDropdown.appendChild(opt);
+                });
+            }
+
+            // Filter comparison data by signature type and cancer type
+            let comparisonData = data.comparison || [];
+            if (comparisonData.length > 0 && comparisonData[0].signature_type) {
+                comparisonData = comparisonData.filter(d => d.signature_type === sigType);
+            }
+            if (selectedCancer !== 'all') {
+                comparisonData = comparisonData.filter(d => d.cancer_type === selectedCancer);
+            }
 
             // Aggregate comparison across all cancer types
             const sigAggregated = {};
@@ -9289,6 +9349,19 @@
             // Sort by absolute log2fc
             const sorted = aggregatedList.sort((a, b) => Math.abs(b.log2fc) - Math.abs(a.log2fc));
 
+            // Update titles based on selection
+            const sigLabel = sigType === 'cytosig' ? 'CytoSig' : 'SecAct';
+            const cancerLabel = selectedCancer === 'all' ? 'All Cancers' : selectedCancer;
+            const title1El = container1?.closest('.viz-container')?.querySelector('.viz-title');
+            const title2El = container2?.closest('.viz-container')?.querySelector('.viz-title');
+            const subtitle1El = container1?.closest('.viz-container')?.querySelector('.viz-subtitle');
+            const subtitle2El = container2?.closest('.viz-container')?.querySelector('.viz-subtitle');
+
+            if (title1El) title1El.textContent = `Differential ${sigLabel} Activity`;
+            if (subtitle1El) subtitle1El.textContent = `Log2 FC (Exhausted vs Non-exhausted) - ${cancerLabel}`;
+            if (title2El) title2El.textContent = `${sigLabel} Activity Correlation`;
+            if (subtitle2El) subtitle2El.textContent = `Mean activity comparison - ${cancerLabel}`;
+
             // 1. Bar chart - exhausted vs non-exhausted activity
             if (container1) {
                 container1.classList.remove('loading');
@@ -9304,15 +9377,27 @@
                     marker: {
                         color: top20.map(d => d.log2fc > 0 ? '#d62728' : '#2ca02c')
                     },
-                    text: top20.map(d => d.log2fc.toFixed(3)),
+                    text: top20.map(d => d.log2fc.toFixed(2)),
                     textposition: 'auto',
-                    hovertemplate: '<b>%{y}</b><br>Log2FC: %{x:.3f}<br>P-value: %{customdata:.2e}<extra></extra>',
-                    customdata: top20.map(d => d.pvalue)
+                    textfont: { size: 10 },
+                    hovertemplate: top20.map(d => {
+                        const direction = d.log2fc > 0 ? 'Higher in Exhausted' : 'Higher in Functional';
+                        return `<b>${d.signature}</b><br>Log2FC: ${d.log2fc.toFixed(3)}<br>${direction}<br>P-value: ${d.pvalue.toExponential(2)}<extra></extra>`;
+                    })
                 }], {
-                    xaxis: { title: 'Log2 Fold Change (Exhausted / Non-exhausted)', zeroline: true },
+                    xaxis: { title: '← Higher in Functional    Log2FC    Higher in Exhausted →', zeroline: true, zerolinewidth: 2 },
                     yaxis: { automargin: true },
-                    margin: { l: 100, r: 30, t: 30, b: 50 },
-                    height: 500
+                    margin: { l: 100, r: 30, t: 30, b: 60 },
+                    height: 500,
+                    annotations: [{
+                        x: -0.5, y: 1.02, xref: 'paper', yref: 'paper',
+                        text: '<span style="color:#2ca02c">■</span> Functional T cells',
+                        showarrow: false, font: { size: 10 }, xanchor: 'left'
+                    }, {
+                        x: 0.5, y: 1.02, xref: 'paper', yref: 'paper',
+                        text: '<span style="color:#d62728">■</span> Exhausted T cells',
+                        showarrow: false, font: { size: 10 }, xanchor: 'left'
+                    }]
                 }, { responsive: true });
             }
 
@@ -9321,16 +9406,25 @@
                 container2.classList.remove('loading');
                 Plotly.purge(container2);
 
+                if (aggregatedList.length === 0) {
+                    container2.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No data available for selected filters.</p>';
+                    return;
+                }
+
+                // For SecAct (many signatures), only show labels for top differential
+                const showLabels = sigType === 'cytosig' || aggregatedList.length <= 50;
+                const topLabeled = sorted.slice(0, 10).map(d => d.signature);
+
                 Plotly.newPlot(container2, [{
                     type: 'scatter',
-                    mode: 'markers+text',
+                    mode: showLabels ? 'markers+text' : 'markers',
                     x: aggregatedList.map(d => d.mean_nonexhausted),
                     y: aggregatedList.map(d => d.mean_exhausted),
                     text: aggregatedList.map(d => d.signature),
                     textposition: 'top center',
                     textfont: { size: 8 },
                     marker: {
-                        size: 8,
+                        size: showLabels ? 8 : 10,
                         color: aggregatedList.map(d => d.log2fc),
                         colorscale: [[0, '#2ca02c'], [0.5, '#f5f5f5'], [1, '#d62728']],
                         cmin: -1,
@@ -9345,7 +9439,20 @@
                     shapes: [{
                         type: 'line', x0: -3, y0: -3, x1: 3, y1: 3,
                         line: { dash: 'dash', color: '#ccc' }
-                    }]
+                    }],
+                    annotations: showLabels ? [] : topLabeled.map(sig => {
+                        const d = aggregatedList.find(x => x.signature === sig);
+                        return {
+                            x: d.mean_nonexhausted,
+                            y: d.mean_exhausted,
+                            text: sig,
+                            showarrow: true,
+                            arrowhead: 0,
+                            ax: 20,
+                            ay: -20,
+                            font: { size: 9 }
+                        };
+                    })
                 }, { responsive: true });
             }
         }

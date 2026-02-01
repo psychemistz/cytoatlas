@@ -191,6 +191,23 @@ async def get_cancer_type_by_name(
 
 
 # Immune Infiltration
+@router.get("/immune-infiltration-full")
+async def get_immune_infiltration_full(
+    service: ScAtlasService = Depends(get_scatlas_service),
+) -> dict:
+    """
+    Get complete immune infiltration data including TME composition and signatures.
+
+    Returns all data needed for the immune infiltration visualization:
+    - data: Per-signature infiltration records
+    - tme_summary: TME composition per cancer type
+    - composition: Immune cell composition
+    - cytosig_signatures: List of CytoSig signatures
+    - secact_signatures: List of SecAct signatures
+    """
+    return await service.get_immune_infiltration_full()
+
+
 @router.get("/immune-infiltration", response_model=list[ScAtlasImmuneInfiltration])
 async def get_immune_infiltration(
     signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
