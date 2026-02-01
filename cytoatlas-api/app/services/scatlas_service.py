@@ -384,12 +384,22 @@ class ScAtlasService(BaseService):
         proportions = data.get("proportions", [])
 
         # Compute CAF class proportions per cancer type from subtypes
-        # Group by cancer_type and caf_class
+        # Each (cancer_type, caf_subtype) has multiple rows (one per signature) with same n_cells
+        # Only count unique (cancer_type, caf_subtype) combinations once
+        seen_subtypes: set[tuple[str, str]] = set()
         caf_class_counts: dict[str, dict[str, int]] = {}
         for r in subtypes:
             ct = r.get("cancer_type")
+            caf_subtype = r.get("caf_subtype")  # actual cell subtype name
             caf_class = r.get("caf_class")
             n_cells = r.get("n_cells", 0)
+
+            # Skip if we've already counted this cell subtype
+            key = (ct, caf_subtype)
+            if key in seen_subtypes:
+                continue
+            seen_subtypes.add(key)
+
             if ct and caf_class:
                 if ct not in caf_class_counts:
                     caf_class_counts[ct] = {}
