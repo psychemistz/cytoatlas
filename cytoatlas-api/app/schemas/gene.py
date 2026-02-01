@@ -5,6 +5,17 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class GeneExpressionResult(BaseModel):
+    """Gene expression by cell type."""
+
+    gene: str
+    cell_type: str
+    atlas: str
+    mean_expression: float = Field(description="Mean log-normalized expression")
+    pct_expressed: float = Field(description="Percent of cells expressing the gene")
+    n_cells: int | None = None
+
+
 class GeneStats(BaseModel):
     """Summary statistics for a gene/signature."""
 
@@ -15,6 +26,7 @@ class GeneStats(BaseModel):
     n_correlations: int = Field(description="Number of significant correlations")
     top_cell_type: str | None = Field(default=None, description="Cell type with highest activity")
     top_tissue: str | None = Field(default=None, description="Tissue with highest activity")
+    has_expression: bool = Field(default=False, description="Whether gene expression data is available")
 
 
 class GeneOverview(BaseModel):
@@ -131,3 +143,27 @@ class GeneDiseaseActivityResponse(BaseModel):
     disease_groups: list[str]
     n_diseases: int
     n_significant: int
+
+
+class GeneExpressionResponse(BaseModel):
+    """Response for gene expression endpoint."""
+
+    gene: str
+    data: list[GeneExpressionResult]
+    atlases: list[str]
+    n_cell_types: int
+    max_expression: float
+    top_cell_type: str | None = None
+
+
+class GenePageData(BaseModel):
+    """Complete data for gene detail page."""
+
+    gene: str
+    has_expression: bool = False
+    has_cytosig: bool = False
+    has_secact: bool = False
+    expression: GeneExpressionResponse | None = None
+    cytosig_activity: list[GeneCellTypeActivity] = Field(default_factory=list)
+    secact_activity: list[GeneCellTypeActivity] = Field(default_factory=list)
+    atlases: list[str] = Field(default_factory=list)
