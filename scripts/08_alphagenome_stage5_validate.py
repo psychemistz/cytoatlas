@@ -53,10 +53,19 @@ def parse_args():
 
 # GTEx data paths
 GTEX_DIR = INPUT_DIR / 'gtex_data'
-GTEX_URL = 'https://storage.googleapis.com/gtex_analysis_v8/single_tissue_qtl_data/GTEx_Analysis_v8_eQTL/Whole_Blood.v8.signif_variant_gene_pairs.txt.gz'
+
+# Supported GTEx file names (in order of preference)
+GTEX_FILES = [
+    'Whole_Blood.v8.signif_variant_gene_pairs.txt.gz',  # Significant only (~50 MB)
+    'Whole_Blood.nominal.allpairs.txt.gz',               # All associations (large)
+    'Whole-Blood.nominal.allpairs.txt.gz',               # Alternative naming
+]
 
 # Matching parameters
 POSITION_TOLERANCE = 0  # Exact position match required
+
+# P-value threshold for filtering all-pairs file
+PVAL_THRESHOLD = 1e-5  # More lenient than FDR to capture more matches
 
 
 def log(msg: str):
@@ -64,57 +73,95 @@ def log(msg: str):
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
-def download_gtex_eqtls() -> Path:
-    """Download GTEx v8 whole blood eQTLs if not present."""
+def find_gtex_file() -> Tuple[Path, bool]:
+    """
+    Find available GTEx file.
+
+    Returns:
+        (path, is_allpairs) - path to file and whether it's the all-pairs format
+    """
     GTEX_DIR.mkdir(parents=True, exist_ok=True)
-    local_path = GTEX_DIR / 'Whole_Blood.v8.signif_variant_gene_pairs.txt.gz'
 
-    if local_path.exists():
-        log(f"GTEx data already exists: {local_path}")
-        return local_path
+    for filename in GTEX_FILES:
+        local_path = GTEX_DIR / filename
+        if local_path.exists():
+            is_allpairs = 'allpairs' in filename.lower()
+            log(f"Found GTEx file: {local_path}")
+            if is_allpairs:
+                log(f"  (all-pairs format - will filter by p-value < {PVAL_THRESHOLD})")
+            return local_path, is_allpairs
 
-    log(f"Downloading GTEx v8 whole blood eQTLs...")
-    log(f"  URL: {GTEX_URL}")
-
-    try:
-        urllib.request.urlretrieve(GTEX_URL, local_path)
-        log(f"  Downloaded: {local_path}")
-    except Exception as e:
-        log(f"  ERROR downloading: {e}")
-        log("  Please download manually and place in gtex_data/")
-        raise
-
-    return local_path
+    return None, False
 
 
-def load_gtex_eqtls(gtex_path: Path, target_genes: set) -> pd.DataFrame:
+def download_gtex_eqtls() -> Path:
+    """Find or download GTEx v8 whole blood eQTLs."""
+    gtex_path, is_allpairs = find_gtex_file()
+
+    if gtex_path is not None:
+        return gtex_path, is_allpairs
+
+    log("GTEx data not found. Please download one of these files:")
+    for f in GTEX_FILES:
+        log(f"  - {f}")
+    log(f"Place in: {GTEX_DIR}/")
+    raise FileNotFoundError("GTEx data not found")
+
+
+def load_gtex_eqtls(gtex_path: Path, target_genes: set, is_allpairs: bool = False) -> pd.DataFrame:
     """
     Load GTEx eQTLs, filtering to target genes.
 
-    GTEx format:
+    GTEx signif_variant_gene_pairs format:
     - variant_id: chr1_123456_A_G_b38
     - gene_id: ENSG00000123456.1
     - tss_distance: 12345
     - pval_nominal: 1e-10
     - slope: 0.5
     - slope_se: 0.1
+
+    GTEx nominal.allpairs format:
+    - variant_id: chr1_123456_A_G_b38
+    - gene_id: ENSG00000123456.1
+    - tss_distance: 12345
+    - ma_samples: 10
+    - ma_count: 20
+    - maf: 0.1
+    - pval_nominal: 1e-10
+    - slope: 0.5
+    - slope_se: 0.1
     """
     log(f"Loading GTEx eQTLs: {gtex_path}")
+    if is_allpairs:
+        log(f"  Filtering to p-value < {PVAL_THRESHOLD}")
 
     # Read in chunks to handle large file
     chunks = []
-    chunk_size = 100000
+    chunk_size = 500000
+    total_rows = 0
 
     with gzip.open(gtex_path, 'rt') as f:
         reader = pd.read_csv(f, sep='\t', chunksize=chunk_size)
 
-        for chunk in reader:
-            # Filter to target genes (by gene symbol in gene_id column if available)
-            # GTEx uses ENSG IDs, so we need gene mapping
-            chunks.append(chunk)
+        for i, chunk in enumerate(reader):
+            total_rows += len(chunk)
+
+            # For all-pairs file, filter by p-value to reduce size
+            if is_allpairs and 'pval_nominal' in chunk.columns:
+                chunk = chunk[chunk['pval_nominal'] < PVAL_THRESHOLD]
+
+            if len(chunk) > 0:
+                chunks.append(chunk)
+
+            if (i + 1) % 10 == 0:
+                log(f"  Processed {total_rows:,} rows, kept {sum(len(c) for c in chunks):,}")
+
+    if not chunks:
+        log("  WARNING: No GTEx records passed filtering")
+        return pd.DataFrame()
 
     gtex_df = pd.concat(chunks, ignore_index=True)
-    log(f"  Loaded {len(gtex_df):,} GTEx eQTLs")
+    log(f"  Total: {total_rows:,} rows, kept {len(gtex_df):,} GTEx eQTLs")
 
     return gtex_df
 
@@ -400,8 +447,8 @@ def main():
 
     # Download/load GTEx data
     try:
-        gtex_path = download_gtex_eqtls()
-        gtex_df = load_gtex_eqtls(gtex_path, target_genes)
+        gtex_path, is_allpairs = download_gtex_eqtls()
+        gtex_df = load_gtex_eqtls(gtex_path, target_genes, is_allpairs=is_allpairs)
     except Exception as e:
         log(f"ERROR: Could not load GTEx data: {e}")
         log("\nCreating mock GTEx data for pipeline testing...")
