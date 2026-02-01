@@ -203,12 +203,23 @@ def match_variants(
     cima_matched = cima_df[cima_df['pos_key'].isin(common_positions)].copy()
     gtex_matched = gtex_df[gtex_df['pos_key'].isin(common_positions)].copy()
 
+    # Prepare gtex subset with renamed columns
+    gtex_subset = gtex_matched[['pos_key', 'gene_id', 'slope', 'slope_se', 'pval_nominal',
+                                 'ref', 'alt']].copy()
+    gtex_subset = gtex_subset.rename(columns={
+        'gene_id': 'gtex_gene_id',
+        'slope': 'gtex_slope',
+        'slope_se': 'gtex_slope_se',
+        'pval_nominal': 'gtex_pval',
+        'ref': 'gtex_ref',
+        'alt': 'gtex_alt',
+    })
+
     # Merge on position key
     merged = cima_matched.merge(
-        gtex_matched[['pos_key', 'gene_id', 'slope', 'slope_se', 'pval_nominal']],
+        gtex_subset,
         on='pos_key',
-        how='inner',
-        suffixes=('_cima', '_gtex')
+        how='inner'
     )
 
     log(f"  Matched variant-gene pairs: {len(merged)}")
@@ -216,13 +227,13 @@ def match_variants(
     # Check allele concordance
     # Note: May need to flip effect direction if alleles are swapped
     merged['alleles_match'] = (
-        (merged['REF'] == merged['ref']) & (merged['ALT'] == merged['alt'])
+        (merged['REF'] == merged['gtex_ref']) & (merged['ALT'] == merged['gtex_alt'])
     ) | (
-        (merged['REF'] == merged['alt']) & (merged['ALT'] == merged['ref'])
+        (merged['REF'] == merged['gtex_alt']) & (merged['ALT'] == merged['gtex_ref'])
     )
 
     merged['alleles_flipped'] = (
-        (merged['REF'] == merged['alt']) & (merged['ALT'] == merged['ref'])
+        (merged['REF'] == merged['gtex_alt']) & (merged['ALT'] == merged['gtex_ref'])
     )
 
     log(f"  Exact allele matches: {merged['alleles_match'].sum()}")
@@ -240,7 +251,7 @@ def compute_concordance(matched_df: pd.DataFrame) -> Dict[str, float]:
 
     # Get effect sizes
     cima_beta = matched_df['eqtl_beta'].values
-    gtex_beta = matched_df['slope'].values
+    gtex_beta = matched_df['gtex_slope'].values
 
     # Flip GTEx effect if alleles are swapped
     gtex_beta_adj = gtex_beta.copy()
