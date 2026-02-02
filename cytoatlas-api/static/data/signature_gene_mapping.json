@@ -1,0 +1,327 @@
+{
+  "description": "Mapping between signature names used in CytoSig/SecAct and official HGNC gene symbols",
+  "generated": "2026-02-02",
+  "cytosig_mapping": {
+    "Activin A": {
+      "hgnc_symbol": "INHBA",
+      "hgnc_id": "HGNC:6066",
+      "notes": "Activin A is a homodimer of INHBA (inhibin beta A subunit)"
+    },
+    "BDNF": {
+      "hgnc_symbol": "BDNF",
+      "hgnc_id": "HGNC:1033",
+      "notes": "Direct match"
+    },
+    "BMP2": {
+      "hgnc_symbol": "BMP2",
+      "hgnc_id": "HGNC:1069",
+      "notes": "Direct match"
+    },
+    "BMP4": {
+      "hgnc_symbol": "BMP4",
+      "hgnc_id": "HGNC:1071",
+      "notes": "Direct match"
+    },
+    "BMP6": {
+      "hgnc_symbol": "BMP6",
+      "hgnc_id": "HGNC:1073",
+      "notes": "Direct match"
+    },
+    "CD40L": {
+      "hgnc_symbol": "CD40LG",
+      "hgnc_id": "HGNC:11935",
+      "notes": "CD40 ligand; also known as TNFSF5, CD154"
+    },
+    "CXCL12": {
+      "hgnc_symbol": "CXCL12",
+      "hgnc_id": "HGNC:10672",
+      "notes": "Direct match; also known as SDF1"
+    },
+    "EGF": {
+      "hgnc_symbol": "EGF",
+      "hgnc_id": "HGNC:3229",
+      "notes": "Direct match"
+    },
+    "FGF2": {
+      "hgnc_symbol": "FGF2",
+      "hgnc_id": "HGNC:3676",
+      "notes": "Direct match; also known as bFGF"
+    },
+    "GCSF": {
+      "hgnc_symbol": "CSF3",
+      "hgnc_id": "HGNC:2438",
+      "notes": "Granulocyte colony-stimulating factor"
+    },
+    "GDF11": {
+      "hgnc_symbol": "GDF11",
+      "hgnc_id": "HGNC:4216",
+      "notes": "Direct match"
+    },
+    "GMCSF": {
+      "hgnc_symbol": "CSF2",
+      "hgnc_id": "HGNC:2435",
+      "notes": "Granulocyte-macrophage colony-stimulating factor"
+    },
+    "HGF": {
+      "hgnc_symbol": "HGF",
+      "hgnc_id": "HGNC:4893",
+      "notes": "Direct match"
+    },
+    "IFN1": {
+      "hgnc_symbol": "IFNA1",
+      "hgnc_id": "HGNC:5417",
+      "notes": "Mapped to IFNA1; represents Type I interferon response (composite of multiple IFN-alpha/beta genes)"
+    },
+    "IFNG": {
+      "hgnc_symbol": "IFNG",
+      "hgnc_id": "HGNC:5438",
+      "notes": "Direct match; Type II interferon"
+    },
+    "IFNL": {
+      "hgnc_symbol": "IFNL1",
+      "hgnc_id": "HGNC:18363",
+      "notes": "Mapped to IFNL1; represents Type III interferon response (IL-29)"
+    },
+    "IL10": {
+      "hgnc_symbol": "IL10",
+      "hgnc_id": "HGNC:5962",
+      "notes": "Direct match"
+    },
+    "IL12": {
+      "hgnc_symbol": "IL12A",
+      "hgnc_id": "HGNC:5969",
+      "notes": "Mapped to IL12A (p35 subunit); IL-12 is a heterodimer of IL12A + IL12B"
+    },
+    "IL13": {
+      "hgnc_symbol": "IL13",
+      "hgnc_id": "HGNC:5973",
+      "notes": "Direct match"
+    },
+    "IL15": {
+      "hgnc_symbol": "IL15",
+      "hgnc_id": "HGNC:5977",
+      "notes": "Direct match"
+    },
+    "IL17A": {
+      "hgnc_symbol": "IL17A",
+      "hgnc_id": "HGNC:5981",
+      "notes": "Direct match"
+    },
+    "IL1A": {
+      "hgnc_symbol": "IL1A",
+      "hgnc_id": "HGNC:5991",
+      "notes": "Direct match"
+    },
+    "IL1B": {
+      "hgnc_symbol": "IL1B",
+      "hgnc_id": "HGNC:5992",
+      "notes": "Direct match"
+    },
+    "IL2": {
+      "hgnc_symbol": "IL2",
+      "hgnc_id": "HGNC:6001",
+      "notes": "Direct match"
+    },
+    "IL21": {
+      "hgnc_symbol": "IL21",
+      "hgnc_id": "HGNC:6005",
+      "notes": "Direct match"
+    },
+    "IL22": {
+      "hgnc_symbol": "IL22",
+      "hgnc_id": "HGNC:14900",
+      "notes": "Direct match"
+    },
+    "IL27": {
+      "hgnc_symbol": "IL27",
+      "hgnc_id": "HGNC:19157",
+      "notes": "Mapped to IL27 (p28 subunit); IL-27 is a heterodimer of IL27 + EBI3"
+    },
+    "IL3": {
+      "hgnc_symbol": "IL3",
+      "hgnc_id": "HGNC:6011",
+      "notes": "Direct match"
+    },
+    "IL36": {
+      "hgnc_symbol": "IL36A",
+      "hgnc_id": "HGNC:15561",
+      "notes": "Mapped to IL36A; IL-36 family includes IL36A, IL36B, IL36G (agonists) and IL36RN (antagonist)"
+    },
+    "IL4": {
+      "hgnc_symbol": "IL4",
+      "hgnc_id": "HGNC:6014",
+      "notes": "Direct match"
+    },
+    "IL6": {
+      "hgnc_symbol": "IL6",
+      "hgnc_id": "HGNC:6018",
+      "notes": "Direct match"
+    },
+    "LIF": {
+      "hgnc_symbol": "LIF",
+      "hgnc_id": "HGNC:6596",
+      "notes": "Direct match; Leukemia inhibitory factor"
+    },
+    "LTA": {
+      "hgnc_symbol": "LTA",
+      "hgnc_id": "HGNC:6709",
+      "notes": "Direct match; Lymphotoxin alpha (TNF-beta)"
+    },
+    "MCSF": {
+      "hgnc_symbol": "CSF1",
+      "hgnc_id": "HGNC:2432",
+      "notes": "Macrophage colony-stimulating factor"
+    },
+    "NO": {
+      "hgnc_symbol": "NOS1",
+      "hgnc_id": "HGNC:7872",
+      "notes": "Mapped to NOS1 (neuronal nitric oxide synthase); NO is produced by NOS1, NOS2, NOS3"
+    },
+    "OSM": {
+      "hgnc_symbol": "OSM",
+      "hgnc_id": "HGNC:8506",
+      "notes": "Direct match; Oncostatin M"
+    },
+    "TGFB1": {
+      "hgnc_symbol": "TGFB1",
+      "hgnc_id": "HGNC:11766",
+      "notes": "Direct match"
+    },
+    "TGFB3": {
+      "hgnc_symbol": "TGFB3",
+      "hgnc_id": "HGNC:11769",
+      "notes": "Direct match"
+    },
+    "TNFA": {
+      "hgnc_symbol": "TNF",
+      "hgnc_id": "HGNC:11892",
+      "notes": "Official HGNC symbol is TNF (not TNFA)"
+    },
+    "TRAIL": {
+      "hgnc_symbol": "TNFSF10",
+      "hgnc_id": "HGNC:11925",
+      "notes": "TNF-related apoptosis-inducing ligand"
+    },
+    "TWEAK": {
+      "hgnc_symbol": "TNFSF12",
+      "hgnc_id": "HGNC:11927",
+      "notes": "TNF-like weak inducer of apoptosis"
+    },
+    "VEGFA": {
+      "hgnc_symbol": "VEGFA",
+      "hgnc_id": "HGNC:12680",
+      "notes": "Direct match"
+    },
+    "WNT3A": {
+      "hgnc_symbol": "WNT3A",
+      "hgnc_id": "HGNC:15983",
+      "notes": "Direct match"
+    }
+  },
+  "secact_notes": "SecAct signatures (1,170 proteins) use official HGNC gene symbols directly. No mapping required.",
+  "signature_to_hgnc": {
+    "Activin A": "INHBA",
+    "BDNF": "BDNF",
+    "BMP2": "BMP2",
+    "BMP4": "BMP4",
+    "BMP6": "BMP6",
+    "CD40L": "CD40LG",
+    "CXCL12": "CXCL12",
+    "EGF": "EGF",
+    "FGF2": "FGF2",
+    "GCSF": "CSF3",
+    "GDF11": "GDF11",
+    "GMCSF": "CSF2",
+    "HGF": "HGF",
+    "IFN1": "IFNA1",
+    "IFNG": "IFNG",
+    "IFNL": "IFNL1",
+    "IL10": "IL10",
+    "IL12": "IL12A",
+    "IL13": "IL13",
+    "IL15": "IL15",
+    "IL17A": "IL17A",
+    "IL1A": "IL1A",
+    "IL1B": "IL1B",
+    "IL2": "IL2",
+    "IL21": "IL21",
+    "IL22": "IL22",
+    "IL27": "IL27",
+    "IL3": "IL3",
+    "IL36": "IL36A",
+    "IL4": "IL4",
+    "IL6": "IL6",
+    "LIF": "LIF",
+    "LTA": "LTA",
+    "MCSF": "CSF1",
+    "NO": "NOS1",
+    "OSM": "OSM",
+    "TGFB1": "TGFB1",
+    "TGFB3": "TGFB3",
+    "TNFA": "TNF",
+    "TRAIL": "TNFSF10",
+    "TWEAK": "TNFSF12",
+    "VEGFA": "VEGFA",
+    "WNT3A": "WNT3A"
+  },
+  "hgnc_to_signature": {
+    "INHBA": "Activin A",
+    "BDNF": "BDNF",
+    "BMP2": "BMP2",
+    "BMP4": "BMP4",
+    "BMP6": "BMP6",
+    "CD40LG": "CD40L",
+    "CXCL12": "CXCL12",
+    "EGF": "EGF",
+    "FGF2": "FGF2",
+    "CSF3": "GCSF",
+    "GDF11": "GDF11",
+    "CSF2": "GMCSF",
+    "HGF": "HGF",
+    "IFNA1": "IFN1",
+    "IFNG": "IFNG",
+    "IFNL1": "IFNL",
+    "IL10": "IL10",
+    "IL12A": "IL12",
+    "IL13": "IL13",
+    "IL15": "IL15",
+    "IL17A": "IL17A",
+    "IL1A": "IL1A",
+    "IL1B": "IL1B",
+    "IL2": "IL2",
+    "IL21": "IL21",
+    "IL22": "IL22",
+    "IL27": "IL27",
+    "IL3": "IL3",
+    "IL36A": "IL36",
+    "IL4": "IL4",
+    "IL6": "IL6",
+    "LIF": "LIF",
+    "LTA": "LTA",
+    "CSF1": "MCSF",
+    "NOS1": "NO",
+    "OSM": "OSM",
+    "TGFB1": "TGFB1",
+    "TGFB3": "TGFB3",
+    "TNF": "TNFA",
+    "TNFSF10": "TRAIL",
+    "TNFSF12": "TWEAK",
+    "VEGFA": "VEGFA",
+    "WNT3A": "WNT3A"
+  },
+  "mapping_requiring_rename": [
+    {"signature": "Activin A", "hgnc": "INHBA"},
+    {"signature": "CD40L", "hgnc": "CD40LG"},
+    {"signature": "GCSF", "hgnc": "CSF3"},
+    {"signature": "GMCSF", "hgnc": "CSF2"},
+    {"signature": "IFN1", "hgnc": "IFNA1"},
+    {"signature": "IFNL", "hgnc": "IFNL1"},
+    {"signature": "IL12", "hgnc": "IL12A"},
+    {"signature": "IL36", "hgnc": "IL36A"},
+    {"signature": "MCSF", "hgnc": "CSF1"},
+    {"signature": "NO", "hgnc": "NOS1"},
+    {"signature": "TNFA", "hgnc": "TNF"},
+    {"signature": "TRAIL", "hgnc": "TNFSF10"},
+    {"signature": "TWEAK", "hgnc": "TNFSF12"}
+  ]
+}

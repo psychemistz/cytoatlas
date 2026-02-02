@@ -282,12 +282,12 @@
       "signature_name": "MCSF"
     },
     "NO": {
-      "hgnc_symbol": "NOS2",
-      "entrez_id": "4843",
-      "uniprot_id": "P35228",
-      "ensembl_id": "ENSG00000007171",
-      "hgnc_id": "HGNC:7873",
-      "description": "Nitric oxide (from inducible NOS) is a signaling molecule with antimicrobial effects. In cancer, iNOS has dual roles: low NO levels can promote tumor growth and angiogenesis, while high levels from M1 macrophages are tumoricidal. iNOS expression in the tumor microenvironment correlates with MDSC immunosuppression, and NOS inhibitors are being explored to enhance immunotherapy.",
+      "hgnc_symbol": "NOS1",
+      "entrez_id": "4842",
+      "uniprot_id": "P29475",
+      "ensembl_id": "ENSG00000089250",
+      "hgnc_id": "HGNC:7872",
+      "description": "Nitric oxide synthase 1 (neuronal NOS) produces nitric oxide, a signaling molecule with diverse biological functions. In cancer, NO has dual roles: low levels can promote tumor growth, angiogenesis and immune evasion, while high levels from activated immune cells are tumoricidal. NOS1 is expressed in neurons and some tumor types, and NOS inhibitors are being explored to modulate tumor microenvironment and enhance immunotherapy.",
       "signature_name": "NO"
     },
     "OSM": {

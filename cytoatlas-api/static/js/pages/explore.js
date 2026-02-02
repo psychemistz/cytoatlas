@@ -90,7 +90,7 @@ const ExplorePage = {
                 display_name: 'scAtlas',
                 description: 'Human tissue reference atlas',
                 n_cells: 6400000,
-                n_samples: null,
+                n_samples: 781,  // 317 normal + 464 cancer donors
                 n_cell_types: 213,
                 source_type: 'builtin',
                 validation_grade: 'B',

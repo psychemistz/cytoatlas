@@ -438,19 +438,30 @@ const AtlasDetailPage = {
                     // Sort by activity
                     proteinData.sort((a, b) => b.mean_activity - a.mean_activity);
 
-                    const cellTypes = proteinData.map(d => d.cell_type);
-                    const activities = proteinData.map(d => d.mean_activity);
-                    const colors = activities.map(v => v >= 0 ? '#ef4444' : '#2563eb');
+                    // Get top 15 and bottom 15 cell types
+                    const topN = 15;
+                    const top = proteinData.slice(0, topN);
+                    const bottom = proteinData.slice(-topN);
+
+                    // Combine: top (highest) then bottom (lowest) - highest appears at bottom of chart
+                    const combined = [...top, ...bottom.filter(d => !top.includes(d))];
+
+                    const cellTypes = combined.map(d => d.cell_type);
+                    const activities = combined.map(d => d.mean_activity);
 
                     Plotly.newPlot('cima-activity-profile', [{
                         type: 'bar',
                         x: activities,
                         y: cellTypes,
                         orientation: 'h',
-                        marker: { color: colors },
+                        marker: {
+                            color: activities,
+                            colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
+                            cmid: 0
+                        },
                         hovertemplate: '<b>%{y}</b><br>Activity: %{x:.3f}<extra></extra>',
                     }], {
-                        title: `${protein} [${this.signatureType}] Activity Across Cell Types`,
+                        title: `${protein} [${this.signatureType}] Activity (Top & Bottom 15)`,
                         xaxis: { title: 'Activity (z-score)', zeroline: true, zerolinecolor: '#888' },
                         yaxis: { title: '', automargin: true },
                         margin: { l: 150, r: 20, t: 40, b: 40 },
@@ -709,7 +720,7 @@ const AtlasDetailPage = {
 
         const y = combined.map(d => d.signature);
         const x = combined.map(d => d.rho);
-        const colors = x.map(v => v >= 0 ? '#ef4444' : '#2563eb');
+        const colors = x.map(v => v >= 0 ? '#b2182b' : '#2166ac');
 
         Plotly.newPlot(containerId, [{
             type: 'bar',
@@ -2939,30 +2950,37 @@ const AtlasDetailPage = {
         const filtered = data.filter(d => d.signature === signature);
         filtered.sort((a, b) => b.mean_activity - a.mean_activity);
 
-        // Take top 30 cell types
-        const top30 = filtered.slice(0, 30);
-
-        if (top30.length === 0) {
+        if (filtered.length === 0) {
             container.innerHTML = `<p class="loading">No data available for '${signature}' [${sigType}]</p>`;
             return;
         }
 
+        // Get top 15 and bottom 15 cell types
+        const topN = 15;
+        const top = filtered.slice(0, topN);
+        const bottom = filtered.slice(-topN);
+
+        // Combine: top (highest) then bottom (lowest) - highest appears at bottom of chart
+        const combined = [...top, ...bottom.filter(d => !top.includes(d))];
+
+        const activities = combined.map(d => d.mean_activity);
+
         Plotly.newPlot(container, [{
-            y: top30.map(d => d.cell_type),
-            x: top30.map(d => d.mean_activity),
+            y: combined.map(d => d.cell_type),
+            x: activities,
             type: 'bar',
             orientation: 'h',
             marker: {
-                color: top30.map(d => d.mean_activity),
+                color: activities,
                 colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
                 cmid: 0
             },
             hovertemplate: '<b>%{y}</b><br>Activity: %{x:.2f}<br>Samples: %{customdata}<extra></extra>',
-            customdata: top30.map(d => d.n_samples || 'N/A')
+            customdata: combined.map(d => d.n_samples || 'N/A')
         }], {
-            title: `${signature} [${sigType}] Activity`,
+            title: `${signature} [${sigType}] Activity (Top & Bottom 15)`,
             margin: { l: 180, r: 30, t: 40, b: 50 },
-            xaxis: { title: 'Mean Activity (z-score)' },
+            xaxis: { title: 'Mean Activity (z-score)', zeroline: true, zerolinecolor: '#888' },
             height: 450,
             font: { family: 'Inter, sans-serif' }
         }, { responsive: true });
@@ -5517,40 +5535,35 @@ const AtlasDetailPage = {
     async loadScatlasCelltypes(content) {
         const sigLabel = this.signatureType === 'CytoSig' ? 'cytokine' : 'protein';
         content.innerHTML = `
+            <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+                <div class="control-group">
+                    <label>Organ</label>
+                    <select id="scatlas-organ-filter" class="filter-select" onchange="AtlasDetailPage.updateScatlasCelltypeBar(); AtlasDetailPage.updateScatlasCelltypeHeatmap();">
+                        <option value="">All Organs</option>
+                    </select>
+                </div>
+                <div class="control-group" style="position: relative;">
+                    <label>Search Signature</label>
+                    <input type="text" id="scatlas-ct-protein-search" class="search-input"
+                           placeholder="Type to search (e.g., IFNG, IL6)"
+                           value="IFNG"
+                           style="width: 180px;">
+                    <div id="scatlas-ct-suggestions" style="position: absolute; top: 100%; left: 0; width: 180px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                </div>
+            </div>
+
             <div class="viz-grid">
                 <div class="sub-panel">
                     <div class="panel-header">
-                        <h3>Cell Type Activity Profile <span class="badge">${this.signatureType}</span></h3>
-                        <p>Search and view activity of a specific ${sigLabel} across cell types</p>
-                    </div>
-                    <div class="controls" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
-                        <div class="control-group">
-                            <label>Organ</label>
-                            <select id="scatlas-organ-filter" class="filter-select" onchange="AtlasDetailPage.updateScatlasCelltypeBar(); AtlasDetailPage.updateScatlasCelltypeHeatmap();">
-                                <option value="">All Organs</option>
-                            </select>
-                        </div>
-                        <div class="control-group">
-                            <label>${this.signatureType === 'CytoSig' ? 'Cytokine' : 'Protein'}</label>
-                            <select id="scatlas-ct-protein-dropdown" class="filter-select" style="width: 150px;" onchange="AtlasDetailPage.updateScatlasCelltypeBar();">
-                                <option value="IFNG">IFNG</option>
-                            </select>
-                        </div>
-                        <div class="control-group" style="position: relative;">
-                            <label>Search</label>
-                            <input type="text" id="scatlas-ct-protein-search" class="filter-select"
-                                   placeholder="Type to search..." style="width: 140px;" autocomplete="off"
-                                   oninput="AtlasDetailPage.showScatlasCelltypeSuggestions()"
-                                   onkeyup="if(event.key==='Enter') AtlasDetailPage.updateScatlasCelltypeBar()">
-                            <div id="scatlas-ct-suggestions" style="position: absolute; top: 100%; left: 0; width: 140px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
-                        </div>
+                        <h3>Cell Type Activity Profile</h3>
+                        <p>Mean ${sigLabel} activity across cell types</p>
                     </div>
                     <div id="scatlas-celltype-bar" class="plot-container" style="height: 450px;"></div>
                 </div>
                 <div class="sub-panel">
                     <div class="panel-header">
-                        <h3>Activity Heatmap <span class="badge">${this.signatureType}</span></h3>
-                        <p>Mean ${this.signatureType} activity z-scores across cell types</p>
+                        <h3>Activity Heatmap</h3>
+                        <p>Top variable cell types × signatures</p>
                     </div>
                     <div id="scatlas-celltype-heatmap" class="plot-container" style="height: 500px;"></div>
                 </div>
@@ -5561,6 +5574,13 @@ const AtlasDetailPage = {
         this.scatlasCelltypeData = await API.get('/scatlas/celltype-signatures', { signature_type: this.signatureType });
 
         if (this.scatlasCelltypeData) {
+            // Store signatures for autocomplete
+            this.scatlasCTSignatures = {
+                [this.signatureType]: this.signatureType === 'CytoSig'
+                    ? this.scatlasCelltypeData.cytosig_signatures
+                    : this.scatlasCelltypeData.secact_signatures
+            };
+
             // Populate organ dropdown
             const organSelect = document.getElementById('scatlas-organ-filter');
             if (organSelect && this.scatlasCelltypeData.organs) {
@@ -5568,14 +5588,8 @@ const AtlasDetailPage = {
                     this.scatlasCelltypeData.organs.map(o => `<option value="${o}">${o}</option>`).join('');
             }
 
-            // Populate protein dropdown
-            const proteinSelect = document.getElementById('scatlas-ct-protein-dropdown');
-            const signatures = this.signatureType === 'CytoSig'
-                ? this.scatlasCelltypeData.cytosig_signatures
-                : this.scatlasCelltypeData.secact_signatures;
-            if (proteinSelect && signatures) {
-                proteinSelect.innerHTML = signatures.map(s => `<option value="${s}">${s}</option>`).join('');
-            }
+            // Set up autocomplete
+            this.setupScatlasCTAutocomplete();
 
             // Render visualizations
             this.updateScatlasCelltypeBar();
@@ -5586,56 +5600,54 @@ const AtlasDetailPage = {
         }
     },
 
+    setupScatlasCTAutocomplete() {
+        const input = document.getElementById('scatlas-ct-protein-search');
+        const suggestionsDiv = document.getElementById('scatlas-ct-suggestions');
+        if (!input || !suggestionsDiv) return;
+
+        input.addEventListener('focus', () => this.showScatlasCelltypeSuggestions());
+        input.addEventListener('input', () => this.showScatlasCelltypeSuggestions());
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                suggestionsDiv.style.display = 'none';
+                this.updateScatlasCelltypeBar();
+            }
+        });
+        input.addEventListener('blur', () => {
+            setTimeout(() => { suggestionsDiv.style.display = 'none'; }, 200);
+        });
+    },
+
     showScatlasCelltypeSuggestions() {
         const input = document.getElementById('scatlas-ct-protein-search');
-        const div = document.getElementById('scatlas-ct-suggestions');
-        const dropdown = document.getElementById('scatlas-ct-protein-dropdown');
-        if (!input || !div || !this.scatlasCelltypeData) return;
+        const suggestionsDiv = document.getElementById('scatlas-ct-suggestions');
+        if (!input || !suggestionsDiv) return;
 
+        const sigType = this.signatureType;
+        const signatures = this.scatlasCTSignatures?.[sigType] || [];
         const query = input.value.toLowerCase();
-        const signatures = this.signatureType === 'CytoSig'
-            ? this.scatlasCelltypeData.cytosig_signatures
-            : this.scatlasCelltypeData.secact_signatures;
 
-        if (!signatures) return;
+        const filtered = signatures.filter(s => s.toLowerCase().includes(query)).slice(0, 15);
 
-        const filtered = signatures.filter(s => s.toLowerCase().includes(query));
-
-        // Auto-update dropdown to show filtered options
-        if (dropdown && query) {
-            dropdown.innerHTML = filtered.map(s => `<option value="${s}">${s}</option>`).join('');
-
-            // Auto-select if exact match or single result
-            const exactMatch = filtered.find(s => s.toLowerCase() === query);
-            if (exactMatch) {
-                dropdown.value = exactMatch;
-            } else if (filtered.length === 1) {
-                dropdown.value = filtered[0];
-            }
-        }
-
-        // Show suggestions dropdown
-        const suggestions = filtered.slice(0, 15);
-        if (suggestions.length === 0 || !query) {
-            div.style.display = 'none';
+        if (filtered.length === 0) {
+            suggestionsDiv.style.display = 'none';
             return;
         }
 
-        div.innerHTML = suggestions.map(s =>
-            `<div style="padding:6px 10px;cursor:pointer;border-bottom:1px solid #eee"
-                 onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'"
+        suggestionsDiv.innerHTML = filtered.map(s =>
+            `<div style="padding: 6px 10px; cursor: pointer; border-bottom: 1px solid #eee;"
+                 onmouseover="this.style.background='#f0f0f0'"
+                 onmouseout="this.style.background='white'"
                  onclick="AtlasDetailPage.selectScatlasCelltypeSig('${s}')">${s}</div>`
         ).join('');
-        div.style.display = 'block';
+        suggestionsDiv.style.display = 'block';
     },
 
     selectScatlasCelltypeSig(sig) {
         const input = document.getElementById('scatlas-ct-protein-search');
-        const dropdown = document.getElementById('scatlas-ct-protein-dropdown');
-        const div = document.getElementById('scatlas-ct-suggestions');
+        const suggestionsDiv = document.getElementById('scatlas-ct-suggestions');
         if (input) input.value = sig;
-        if (dropdown) dropdown.value = sig;
-        if (div) div.style.display = 'none';
+        if (suggestionsDiv) suggestionsDiv.style.display = 'none';
         this.updateScatlasCelltypeBar();
     },
 
@@ -5650,8 +5662,7 @@ const AtlasDetailPage = {
         }
 
         const organFilter = document.getElementById('scatlas-organ-filter')?.value || '';
-        const searchInput = document.getElementById('scatlas-ct-protein-search')?.value?.trim();
-        const signature = searchInput || document.getElementById('scatlas-ct-protein-dropdown')?.value || 'IFNG';
+        const signature = document.getElementById('scatlas-ct-protein-search')?.value || 'IFNG';
 
         // Filter data by signature type and signature
         let data = ctData.data.filter(d => d.signature_type === this.signatureType && d.signature === signature);
@@ -5676,33 +5687,38 @@ const AtlasDetailPage = {
             cellTypeMap[d.cell_type].count += 1;
         });
 
-        const barData = Object.entries(cellTypeMap)
+        const allData = Object.entries(cellTypeMap)
             .map(([ct, v]) => ({ cell_type: ct, mean: v.sum / v.count }))
-            .sort((a, b) => b.mean - a.mean)
-            .slice(0, 25);
+            .sort((a, b) => b.mean - a.mean);
 
-        // Update subtitle
-        const subtitle = document.getElementById('scatlas-celltype-bar-subtitle');
-        if (subtitle) {
-            const organText = organFilter ? ` in ${organFilter}` : ' across all organs';
-            subtitle.textContent = `${signature} activity${organText} (top 25 cell types)`;
-        }
+        // Get top 15 and bottom 15 cell types
+        const topN = 15;
+        const top = allData.slice(0, topN);
+        const bottom = allData.slice(-topN);
+
+        // Combine: top (highest) then bottom (lowest) - highest appears at bottom of chart
+        const barData = [...top, ...bottom.filter(d => !top.includes(d))];
 
         Plotly.purge(container);
+
+        const activities = barData.map(d => d.mean);
 
         Plotly.newPlot(container, [{
             type: 'bar',
             orientation: 'h',
             y: barData.map(d => d.cell_type),
-            x: barData.map(d => d.mean),
+            x: activities,
             marker: {
-                color: barData.map(d => d.mean >= 0 ? '#1f77b4' : '#d62728')
+                color: activities,
+                colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
+                cmid: 0
             },
             hovertemplate: '<b>%{y}</b><br>Activity: %{x:.3f}<extra></extra>'
         }], {
-            xaxis: { title: `${signature} Activity (z-score)`, zeroline: true },
+            title: `${signature} Activity (Top & Bottom 15)`,
+            xaxis: { title: 'Activity (z-score)', zeroline: true, zerolinecolor: '#888' },
             yaxis: { automargin: true, tickfont: { size: 10 } },
-            margin: { l: 150, r: 30, t: 20, b: 50 },
+            margin: { l: 150, r: 30, t: 40, b: 50 },
             height: 460,
             font: { family: 'Inter, sans-serif' }
         }, { responsive: true });
@@ -7784,7 +7800,7 @@ const AtlasDetailPage = {
                     mode: 'markers',
                     type: 'scatter',
                     marker: {
-                        color: x.map(v => v > 0 ? '#ef4444' : '#2563eb'),
+                        color: x.map(v => v > 0 ? '#b2182b' : '#2166ac'),
                         size: 8,
                     },
                     hovertemplate: '%{text}<br>Δ Activity: %{x:.2f}<br>-log10(p): %{y:.2f}<extra></extra>',

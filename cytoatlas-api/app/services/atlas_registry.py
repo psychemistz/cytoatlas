@@ -134,7 +134,7 @@ class AtlasRegistry:
             data_dir=str(settings.viz_data_path),
             atlas_type=AtlasType.TISSUE,
             n_cells=6400000,
-            n_samples=0,  # Sample count varies
+            n_samples=781,  # 317 normal + 464 cancer donors
             n_cell_types=100,
             has_cytosig=True,
             has_secact=True,

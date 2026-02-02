@@ -85,7 +85,7 @@ const HomePage = {
                 display_name: 'scAtlas',
                 description: 'Human tissue reference atlas with normal organs and pan-cancer immune profiling',
                 n_cells: 6400000,
-                n_samples: 756,
+                n_samples: 781,  // 317 normal + 464 cancer donors
                 n_cell_types: 213,
                 source_type: 'builtin',
                 validation_grade: 'B',
