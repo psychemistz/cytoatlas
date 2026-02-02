@@ -160,6 +160,9 @@ class GenePageData(BaseModel):
     """Complete data for gene detail page."""
 
     gene: str
+    hgnc_symbol: str | None = None
+    cytosig_name: str | None = None
+    description: str | None = None
     has_expression: bool = False
     has_cytosig: bool = False
     has_secact: bool = False

@@ -307,6 +307,38 @@ const GeneDetailPage = {
         const summaryEl = document.getElementById('gene-summary');
         if (!summaryEl || !this.data) return;
 
+        // Update title with HGNC symbol if different from query
+        const titleEl = document.getElementById('gene-title');
+        if (titleEl && this.data.hgnc_symbol && this.data.hgnc_symbol !== this.gene) {
+            const hgncNote = titleEl.querySelector('.hgnc-symbol-note');
+            if (hgncNote) {
+                hgncNote.textContent = `HGNC: ${this.data.hgnc_symbol}`;
+            } else {
+                const h1 = titleEl.querySelector('h1');
+                if (h1) {
+                    h1.insertAdjacentHTML('afterend', `<span class="hgnc-symbol-note">HGNC: ${this.data.hgnc_symbol}</span>`);
+                }
+            }
+        }
+
+        // Update description from API if available
+        const descEl = document.querySelector('.gene-description p');
+        if (this.data.description) {
+            if (descEl) {
+                descEl.textContent = this.data.description;
+            } else {
+                const headerEl = document.querySelector('.gene-header');
+                const geneTitleEl = document.getElementById('gene-title');
+                if (headerEl && geneTitleEl) {
+                    geneTitleEl.insertAdjacentHTML('afterend', `
+                        <div class="gene-description">
+                            <p>${this.data.description}</p>
+                        </div>
+                    `);
+                }
+            }
+        }
+
         const badges = [];
         if (this.data.has_expression) badges.push('<span class="data-badge expression">Expression</span>');
         if (this.data.has_cytosig) badges.push('<span class="data-badge cytosig">CytoSig</span>');

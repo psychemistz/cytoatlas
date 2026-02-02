@@ -44,9 +44,9 @@ OUTPUT_DIR = Path('/vf/users/parks34/projects/2secactpy/visualization/data')
 SAMPLE_SIZE = 2000
 
 # Atlas-specific cell type column preferences
-# Use finer annotations where available (cell_type has 27 types vs cell_type_l1 has 6)
+# Use finer annotations where available
 ATLAS_CELLTYPE_COLS = {
-    'CIMA': ['cell_type', 'cell_type_l1'],  # Prefer finer 'cell_type' (27 types)
+    'CIMA': ['cell_type_l2', 'cell_type_l1'],  # cell_type_l2 has 27 types, l1 has 6
     'Inflammation': ['Level1', 'Level2', 'cell_type'],
     'scAtlas': ['cellType1', 'cellType2', 'cell_type'],
 }

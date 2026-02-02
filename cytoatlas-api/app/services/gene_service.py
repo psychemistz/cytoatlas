@@ -1,5 +1,6 @@
 """Gene-centric data service for aggregated signature views."""
 
+import json
 import math
 from pathlib import Path
 from typing import Any
@@ -27,32 +28,131 @@ from app.services.base import BaseService
 
 settings = get_settings()
 
-# Mapping from HGNC gene symbols to CytoSig signature names
-# CytoSig uses different naming conventions for some signatures
-HGNC_TO_CYTOSIG = {
-    'TNF': 'TNFA',      # TNF alpha
-    'IFNA1': 'IFN1',    # Type I interferon
-    'IFNB1': 'IFN1',    # Type I interferon
-    'IFNL1': 'IFNL',    # Type III interferon (lambda)
-    'CSF3': 'GCSF',     # Granulocyte colony-stimulating factor
-    'CSF2': 'GMCSF',    # Granulocyte-macrophage CSF
-    'CSF1': 'MCSF',     # Macrophage CSF
-    'TGFB2': 'TGFB1',   # TGF-beta (CytoSig may combine)
-    'IL12A': 'IL12',    # IL-12 subunit
-    'IL12B': 'IL12',    # IL-12 subunit
-    'TNFSF10': 'TRAIL', # TRAIL
-    'TNFSF12': 'TWEAK', # TWEAK
-    'LTA': 'LTA',       # Lymphotoxin alpha (same name)
-}
+# Load comprehensive gene mapping from JSON file
+_GENE_MAPPING = None
+_CYTOSIG_TO_HGNC = {}
+_HGNC_TO_CYTOSIG = {}
+_GENE_DESCRIPTIONS = {}
 
-# Reverse mapping for display (CytoSig name -> HGNC symbol)
-CYTOSIG_TO_HGNC = {v: k for k, v in HGNC_TO_CYTOSIG.items()}
-# Handle special cases where multiple HGNC map to one CytoSig
-CYTOSIG_TO_HGNC['IFN1'] = 'IFNA1'
-CYTOSIG_TO_HGNC['GCSF'] = 'CSF3'
-CYTOSIG_TO_HGNC['GMCSF'] = 'CSF2'
-CYTOSIG_TO_HGNC['MCSF'] = 'CSF1'
-CYTOSIG_TO_HGNC['IL12'] = 'IL12A'
+
+def _load_gene_mapping():
+    """Load gene mapping from JSON file on first use."""
+    global _GENE_MAPPING, _CYTOSIG_TO_HGNC, _HGNC_TO_CYTOSIG, _GENE_DESCRIPTIONS
+
+    if _GENE_MAPPING is not None:
+        return
+
+    mapping_path = Path(__file__).parent.parent.parent / "static" / "data" / "signature_gene_mapping.json"
+
+    try:
+        with open(mapping_path) as f:
+            _GENE_MAPPING = json.load(f)
+
+        # Build forward mapping: CytoSig name -> HGNC symbol
+        _CYTOSIG_TO_HGNC = _GENE_MAPPING.get("signature_to_hgnc", {})
+
+        # Build reverse mapping: HGNC symbol -> CytoSig name
+        _HGNC_TO_CYTOSIG = _GENE_MAPPING.get("hgnc_to_signature", {})
+
+        # Build descriptions from cytosig_mapping
+        for sig_name, info in _GENE_MAPPING.get("cytosig_mapping", {}).items():
+            _GENE_DESCRIPTIONS[sig_name] = info.get("notes", "")
+            hgnc = info.get("hgnc_symbol")
+            if hgnc:
+                _GENE_DESCRIPTIONS[hgnc] = info.get("notes", "")
+
+    except FileNotFoundError:
+        # Fallback to hardcoded mapping
+        _HGNC_TO_CYTOSIG = {
+            'TNF': 'TNFA', 'IFNA1': 'IFN1', 'IFNB1': 'IFN1', 'IFNL1': 'IFNL',
+            'CSF3': 'GCSF', 'CSF2': 'GMCSF', 'CSF1': 'MCSF',
+            'IL12A': 'IL12', 'IL12B': 'IL12', 'TNFSF10': 'TRAIL', 'TNFSF12': 'TWEAK',
+            'INHBA': 'Activin A', 'CD40LG': 'CD40L', 'NOS1': 'NO', 'IL36A': 'IL36',
+        }
+        _CYTOSIG_TO_HGNC = {v: k for k, v in _HGNC_TO_CYTOSIG.items()}
+        _CYTOSIG_TO_HGNC['IFN1'] = 'IFNA1'
+        _GENE_MAPPING = {}
+
+
+def get_all_names(query: str) -> dict:
+    """
+    Get all name variants for a gene/signature query.
+
+    Returns dict with:
+        - hgnc: HGNC symbol (for expression, SecAct)
+        - cytosig: CytoSig signature name (for CytoSig activity)
+        - display: Primary display name
+        - description: Gene description/notes
+    """
+    _load_gene_mapping()
+
+    query_upper = query.upper()
+    query_title = query.title()
+
+    # Check if it's a CytoSig name (case-insensitive lookup)
+    cytosig_name = None
+    hgnc_name = None
+
+    # Try exact CytoSig match first
+    for sig in _CYTOSIG_TO_HGNC:
+        if sig.upper() == query_upper:
+            cytosig_name = sig
+            hgnc_name = _CYTOSIG_TO_HGNC.get(sig)
+            break
+
+    # If not found, try as HGNC symbol
+    if cytosig_name is None:
+        for hgnc, sig in _HGNC_TO_CYTOSIG.items():
+            if hgnc.upper() == query_upper:
+                hgnc_name = hgnc
+                cytosig_name = sig
+                break
+
+    # If still not found, assume it's an HGNC symbol (for SecAct or expression)
+    if hgnc_name is None:
+        hgnc_name = query_upper
+
+    # Get description
+    description = _GENE_DESCRIPTIONS.get(cytosig_name, "") or _GENE_DESCRIPTIONS.get(hgnc_name, "")
+
+    return {
+        "hgnc": hgnc_name,
+        "cytosig": cytosig_name,
+        "display": cytosig_name or hgnc_name,
+        "description": description,
+    }
+
+
+def get_signature_names(signature: str, signature_type: str) -> list[str]:
+    """
+    Get all possible signature names to search for in data files.
+
+    For CytoSig: returns both HGNC and CytoSig names
+    For SecAct: returns HGNC name (SecAct uses HGNC symbols)
+    """
+    _load_gene_mapping()
+
+    names = get_all_names(signature)
+    sig_names = [signature]
+
+    if signature_type == "CytoSig":
+        # Add CytoSig name if different
+        if names["cytosig"] and names["cytosig"] != signature:
+            sig_names.append(names["cytosig"])
+        # Also add HGNC if different (for cases where data uses HGNC)
+        if names["hgnc"] and names["hgnc"] != signature and names["hgnc"] not in sig_names:
+            sig_names.append(names["hgnc"])
+    else:
+        # SecAct uses HGNC names
+        if names["hgnc"] and names["hgnc"] != signature:
+            sig_names.append(names["hgnc"])
+
+    return sig_names
+
+
+# Keep legacy mappings for backward compatibility
+HGNC_TO_CYTOSIG = {}
+CYTOSIG_TO_HGNC = {}
 
 
 class GeneService(BaseService):
@@ -215,13 +315,8 @@ class GeneService(BaseService):
         """
         results = []
 
-        # For CytoSig, map HGNC symbol to CytoSig signature name if needed
-        sig_names = [signature]
-        if signature_type == "CytoSig" and signature in HGNC_TO_CYTOSIG:
-            sig_names.append(HGNC_TO_CYTOSIG[signature])
-        # Also check reverse mapping (if user searches by CytoSig name)
-        if signature_type == "CytoSig" and signature in CYTOSIG_TO_HGNC:
-            sig_names.append(CYTOSIG_TO_HGNC[signature])
+        # Get all possible signature names (HGNC + CytoSig variants)
+        sig_names = get_signature_names(signature, signature_type)
 
         # CIMA data
         if atlas is None or atlas.lower() == "cima":
@@ -307,10 +402,8 @@ class GeneService(BaseService):
         """
         results = []
 
-        # Build list of signature names to search (handles HGNC to CytoSig mapping)
-        sig_names = [signature]
-        if signature_type == "CytoSig" and signature in HGNC_TO_CYTOSIG:
-            sig_names.append(HGNC_TO_CYTOSIG[signature])
+        # Get all possible signature names (HGNC + CytoSig variants)
+        sig_names = get_signature_names(signature, signature_type)
 
         try:
             organs_data = await self.load_json("scatlas_organs.json")
@@ -353,10 +446,8 @@ class GeneService(BaseService):
         results = []
         disease_groups = set()
 
-        # Build list of signature names to search (handles HGNC to CytoSig mapping)
-        sig_names = [signature]
-        if signature_type == "CytoSig" and signature in HGNC_TO_CYTOSIG:
-            sig_names.append(HGNC_TO_CYTOSIG[signature])
+        # Get all possible signature names (HGNC + CytoSig variants)
+        sig_names = get_signature_names(signature, signature_type)
 
         try:
             diff_data = await self.load_json("inflammation_differential.json")
@@ -436,10 +527,8 @@ class GeneService(BaseService):
         biochem_results = []
         metabol_results = []
 
-        # Build list of signature names to search (handles HGNC to CytoSig mapping)
-        sig_names = [signature]
-        if signature_type == "CytoSig" and signature in HGNC_TO_CYTOSIG:
-            sig_names.append(HGNC_TO_CYTOSIG[signature])
+        # Get all possible signature names (HGNC + CytoSig variants)
+        sig_names = get_signature_names(signature, signature_type)
 
         # Load CIMA correlations (age, bmi, biochemistry)
         try:
@@ -659,7 +748,7 @@ class GeneService(BaseService):
         Get gene expression data by cell type across atlases.
 
         Args:
-            gene: Gene symbol (e.g., IFNG, TNF)
+            gene: Gene symbol (e.g., IFNG, TNF, or Activin A)
 
         Returns:
             Gene expression response or None if not available
@@ -668,24 +757,32 @@ class GeneService(BaseService):
 
         results = []
 
-        # Try to load from individual gene file first
-        gene_file = self.viz_data_path / "genes" / f"{gene}.json"
+        # Get all name variants - expression data uses HGNC symbols
+        names = get_all_names(gene)
+        gene_names = [gene]
+        if names["hgnc"] and names["hgnc"] != gene:
+            gene_names.append(names["hgnc"])
+        if names["cytosig"] and names["cytosig"] != gene and names["cytosig"] not in gene_names:
+            gene_names.append(names["cytosig"])
 
-        try:
-            if gene_file.exists():
-                with open(gene_file) as f:
-                    data = json.load(f)
-                for r in data:
-                    results.append(GeneExpressionResult(
-                        gene=r.get("gene"),
-                        cell_type=r.get("cell_type"),
-                        atlas=r.get("atlas"),
-                        mean_expression=self._safe_float(r.get("mean_expression")),
-                        pct_expressed=self._safe_float(r.get("pct_expressed")),
-                        n_cells=r.get("n_cells"),
-                    ))
-        except (FileNotFoundError, Exception):
-            pass
+        # Try to load from individual gene file first (try all name variants)
+        for gene_name in gene_names:
+            gene_file = self.viz_data_path / "genes" / f"{gene_name}.json"
+            try:
+                if gene_file.exists():
+                    with open(gene_file) as f:
+                        data = json.load(f)
+                    for r in data:
+                        results.append(GeneExpressionResult(
+                            gene=r.get("gene"),
+                            cell_type=r.get("cell_type"),
+                            atlas=r.get("atlas"),
+                            mean_expression=self._safe_float(r.get("mean_expression")),
+                            pct_expressed=self._safe_float(r.get("pct_expressed")),
+                            n_cells=r.get("n_cells"),
+                        ))
+            except (FileNotFoundError, Exception):
+                pass
 
         # Load from multiple atlas expression files
         expression_files = [
@@ -698,7 +795,7 @@ class GeneService(BaseService):
             try:
                 all_data = await self.load_json(filename)
                 for r in all_data:
-                    if r.get("gene") == gene:
+                    if r.get("gene") in gene_names:
                         results.append(GeneExpressionResult(
                             gene=r.get("gene"),
                             cell_type=r.get("cell_type"),
@@ -749,18 +846,21 @@ class GeneService(BaseService):
         Get complete gene page data including expression and activity.
 
         Args:
-            gene: Gene symbol (e.g., IFNG, TNF)
+            gene: Gene symbol (e.g., IFNG, TNF, or Activin A)
 
         Returns:
             Complete gene page data
         """
-        # Get gene expression
+        # Get name mappings and description
+        names = get_all_names(gene)
+
+        # Get gene expression (uses HGNC name)
         expression = await self.get_gene_expression(gene)
 
-        # Get CytoSig activity (use gene name as signature)
+        # Get CytoSig activity (handles mapping automatically)
         cytosig_activity = await self.get_cell_type_activity(gene, "CytoSig")
 
-        # Get SecAct activity
+        # Get SecAct activity (uses HGNC name)
         secact_activity = await self.get_cell_type_activity(gene, "SecAct")
 
         # Determine available atlases
@@ -774,6 +874,9 @@ class GeneService(BaseService):
 
         return GenePageData(
             gene=gene,
+            hgnc_symbol=names.get("hgnc"),
+            cytosig_name=names.get("cytosig"),
+            description=names.get("description"),
             has_expression=expression is not None and len(expression.data) > 0,
             has_cytosig=len(cytosig_activity) > 0,
             has_secact=len(secact_activity) > 0,
