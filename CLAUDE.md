@@ -271,7 +271,48 @@ claude -r  # Resume specific session
 ### Before Complex Tasks
 1. Use `/plan` mode for multi-step implementations
 2. Break large tasks into smaller units (A→A1→A2→A3 not A→B directly)
-3. For parallel work, consider git worktrees
+3. For parallel work, use git worktrees (see below)
+
+## Git Worktrees (Parallel Development)
+
+Run multiple Claude sessions simultaneously on different branches:
+
+| Worktree | Branch | Purpose | Alias |
+|----------|--------|---------|-------|
+| `2secactpy` | master | Main development | `cyt` |
+| `2secactpy-api-dev` | api-dev | API backend work | `cyt-api` |
+| `2secactpy-frontend` | frontend | Frontend/visualization | `cyt-fe` |
+| `2secactpy-pipeline` | pipeline | Data analysis scripts | `cyt-pipe` |
+| `2secactpy-hotfix` | hotfix | Urgent fixes | `cyt-fix` |
+
+### Quick Start
+```bash
+# Open terminal tabs and run parallel Claude sessions:
+c-api    # Terminal 1: API development
+c-fe     # Terminal 2: Frontend work
+c-pipe   # Terminal 3: Pipeline scripts
+
+# Or navigate without starting Claude:
+cyt-api  # cd to API worktree
+cyt-fe   # cd to frontend worktree
+```
+
+### Workflow
+1. Each worktree is an independent working directory with its own branch
+2. Changes in one worktree don't affect others until merged
+3. Merge completed work back to master:
+   ```bash
+   cyt              # Go to main repo
+   git merge api-dev --no-ff -m "Merge API improvements"
+   git push
+   ```
+
+### Management
+```bash
+git worktree list              # Show all worktrees
+git worktree remove <path>     # Remove a worktree
+git worktree prune             # Clean up stale entries
+```
 
 ### Context Management
 - Use `/compact` proactively before auto-compaction kicks in

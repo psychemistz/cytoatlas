@@ -616,118 +616,48 @@ def compute_meta_analysis():
 
     meta_results = []
 
-    # === CIMA Age Correlations ===
+    # === CIMA Age Correlations (CytoSig + SecAct) ===
     cima_age_path = RESULTS_DIR / 'cima' / 'CIMA_correlation_age.csv'
     if cima_age_path.exists():
         age_corr = pd.read_csv(cima_age_path)
-        age_corr = age_corr[age_corr['signature'] == 'CytoSig']
 
-        for _, row in age_corr.iterrows():
-            n = row['n']
-            rho = row['rho']
-            z = np.arctanh(rho) if abs(rho) < 1 else 0
-            se = 1 / np.sqrt(n - 3) if n > 3 else 0.5
+        for sig_type in ['CytoSig', 'SecAct']:
+            sig_corr = age_corr[age_corr['signature'] == sig_type]
+            for _, row in sig_corr.iterrows():
+                n = row['n']
+                rho = row['rho']
+                z = np.arctanh(rho) if abs(rho) < 1 else 0
+                se = 1 / np.sqrt(n - 3) if n > 3 else 0.5
 
-            meta_results.append({
-                'analysis': 'age',
-                'signature': row['protein'],
-                'atlas': 'CIMA',
-                'effect': float(rho),
-                'se': float(se),
-                'pvalue': float(row['pvalue']),
-                'n': int(n),
-            })
+                meta_results.append({
+                    'analysis': 'age',
+                    'signature': row['protein'],
+                    'sig_type': sig_type,
+                    'atlas': 'CIMA',
+                    'effect': float(rho),
+                    'se': float(se),
+                    'pvalue': float(row['pvalue']),
+                    'n': int(n),
+                })
+            log(f"  CIMA age correlations ({sig_type}): {len(sig_corr)}")
 
-    # === Inflammation Age Correlations ===
+    # === Inflammation Age Correlations (CytoSig + SecAct) ===
     # Compute from h5ad if sample metadata is available
     inflam_meta_path = Path('/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_ATLAS_afterQC_sampleMetadata.csv')
-    inflam_h5ad_path = RESULTS_DIR / 'inflammation' / 'main_CytoSig_pseudobulk.h5ad'
 
-    if inflam_meta_path.exists() and inflam_h5ad_path.exists():
-        log("  Computing Inflammation age correlations...")
-        try:
-            sample_meta = pd.read_csv(inflam_meta_path)
-            meta_age = sample_meta[['sampleID', 'age']].dropna()
+    if inflam_meta_path.exists():
+        sample_meta = pd.read_csv(inflam_meta_path)
+        meta_age = sample_meta[['sampleID', 'age']].dropna()
 
-            if len(meta_age) >= 10:
-                inflam_adata = ad.read_h5ad(inflam_h5ad_path)
-                activity_df = pd.DataFrame(
-                    inflam_adata.X,
-                    index=inflam_adata.obs_names,
-                    columns=inflam_adata.var_names
-                )
-                var_info = inflam_adata.var[['sample', 'n_cells']].copy()
+        for sig_type in ['CytoSig', 'SecAct']:
+            inflam_h5ad_path = RESULTS_DIR / 'inflammation' / f'main_{sig_type}_pseudobulk.h5ad'
+            if not inflam_h5ad_path.exists():
+                log(f"  Skipping Inflammation {sig_type} age (no pseudobulk file)")
+                continue
 
-                # Aggregate to sample level (weighted mean)
-                sample_activity = {}
-                for sample in var_info['sample'].unique():
-                    sample_cols = var_info[var_info['sample'] == sample].index
-                    weights = var_info.loc[sample_cols, 'n_cells'].values
-                    total_weight = weights.sum()
-                    if total_weight > 0:
-                        weighted_mean = (activity_df[sample_cols] * weights).sum(axis=1) / total_weight
-                        sample_activity[sample] = weighted_mean
-
-                sample_activity_df = pd.DataFrame(sample_activity).T
-
-                # Compute correlations with age
-                for sig in sample_activity_df.columns:
-                    merged = meta_age.merge(
-                        sample_activity_df[[sig]].reset_index().rename(columns={'index': 'sampleID', sig: 'activity'}),
-                        on='sampleID', how='inner'
-                    )
-                    if len(merged) >= 10:
-                        rho, pval = stats.spearmanr(merged['age'], merged['activity'])
-                        n = len(merged)
-                        se = 1 / np.sqrt(n - 3) if n > 3 else 0.5
-
-                        meta_results.append({
-                            'analysis': 'age',
-                            'signature': sig,
-                            'atlas': 'Inflammation',
-                            'effect': float(rho),
-                            'se': float(se),
-                            'pvalue': float(pval),
-                            'n': int(n),
-                        })
-
-                log(f"  Inflammation age correlations: {len([r for r in meta_results if r['atlas'] == 'Inflammation' and r['analysis'] == 'age'])}")
-        except Exception as e:
-            log(f"  Warning: Could not compute Inflammation correlations: {e}")
-
-    # === CIMA BMI Correlations ===
-    cima_bmi_path = RESULTS_DIR / 'cima' / 'CIMA_correlation_bmi.csv'
-    if cima_bmi_path.exists():
-        bmi_corr = pd.read_csv(cima_bmi_path)
-        bmi_corr = bmi_corr[bmi_corr['signature'] == 'CytoSig']
-
-        for _, row in bmi_corr.iterrows():
-            n = row['n']
-            rho = row['rho']
-            z = np.arctanh(rho) if abs(rho) < 1 else 0
-            se = 1 / np.sqrt(n - 3) if n > 3 else 0.5
-
-            meta_results.append({
-                'analysis': 'bmi',
-                'signature': row['protein'],
-                'atlas': 'CIMA',
-                'effect': float(rho),
-                'se': float(se),
-                'pvalue': float(row['pvalue']),
-                'n': int(n),
-            })
-
-        log(f"  CIMA BMI correlations: {len([r for r in meta_results if r['atlas'] == 'CIMA' and r['analysis'] == 'bmi'])}")
-
-    # === Inflammation BMI Correlations ===
-    if inflam_meta_path.exists() and inflam_h5ad_path.exists():
-        log("  Computing Inflammation BMI correlations...")
-        try:
-            sample_meta = pd.read_csv(inflam_meta_path)
-            meta_bmi = sample_meta[['sampleID', 'BMI']].dropna()
-
-            if len(meta_bmi) >= 10:
-                if 'inflam_adata' not in dir():
+            log(f"  Computing Inflammation age correlations ({sig_type})...")
+            try:
+                if len(meta_age) >= 10:
                     inflam_adata = ad.read_h5ad(inflam_h5ad_path)
                     activity_df = pd.DataFrame(
                         inflam_adata.X,
@@ -748,30 +678,119 @@ def compute_meta_analysis():
 
                     sample_activity_df = pd.DataFrame(sample_activity).T
 
-                # Compute correlations with BMI
-                for sig in sample_activity_df.columns:
-                    merged = meta_bmi.merge(
-                        sample_activity_df[[sig]].reset_index().rename(columns={'index': 'sampleID', sig: 'activity'}),
-                        on='sampleID', how='inner'
+                    # Compute correlations with age
+                    count = 0
+                    for sig in sample_activity_df.columns:
+                        merged = meta_age.merge(
+                            sample_activity_df[[sig]].reset_index().rename(columns={'index': 'sampleID', sig: 'activity'}),
+                            on='sampleID', how='inner'
+                        )
+                        if len(merged) >= 10:
+                            rho, pval = stats.spearmanr(merged['age'], merged['activity'])
+                            n = len(merged)
+                            se = 1 / np.sqrt(n - 3) if n > 3 else 0.5
+
+                            meta_results.append({
+                                'analysis': 'age',
+                                'signature': sig,
+                                'sig_type': sig_type,
+                                'atlas': 'Inflammation',
+                                'effect': float(rho),
+                                'se': float(se),
+                                'pvalue': float(pval),
+                                'n': int(n),
+                            })
+                            count += 1
+
+                    log(f"  Inflammation age correlations ({sig_type}): {count}")
+            except Exception as e:
+                log(f"  Warning: Could not compute Inflammation {sig_type} correlations: {e}")
+
+    # === CIMA BMI Correlations (CytoSig + SecAct) ===
+    cima_bmi_path = RESULTS_DIR / 'cima' / 'CIMA_correlation_bmi.csv'
+    if cima_bmi_path.exists():
+        bmi_corr = pd.read_csv(cima_bmi_path)
+
+        for sig_type in ['CytoSig', 'SecAct']:
+            sig_corr = bmi_corr[bmi_corr['signature'] == sig_type]
+            for _, row in sig_corr.iterrows():
+                n = row['n']
+                rho = row['rho']
+                z = np.arctanh(rho) if abs(rho) < 1 else 0
+                se = 1 / np.sqrt(n - 3) if n > 3 else 0.5
+
+                meta_results.append({
+                    'analysis': 'bmi',
+                    'signature': row['protein'],
+                    'sig_type': sig_type,
+                    'atlas': 'CIMA',
+                    'effect': float(rho),
+                    'se': float(se),
+                    'pvalue': float(row['pvalue']),
+                    'n': int(n),
+                })
+            log(f"  CIMA BMI correlations ({sig_type}): {len(sig_corr)}")
+
+    # === Inflammation BMI Correlations (CytoSig + SecAct) ===
+    if inflam_meta_path.exists():
+        meta_bmi = sample_meta[['sampleID', 'BMI']].dropna()
+
+        for sig_type in ['CytoSig', 'SecAct']:
+            inflam_h5ad_path = RESULTS_DIR / 'inflammation' / f'main_{sig_type}_pseudobulk.h5ad'
+            if not inflam_h5ad_path.exists():
+                log(f"  Skipping Inflammation {sig_type} BMI (no pseudobulk file)")
+                continue
+
+            log(f"  Computing Inflammation BMI correlations ({sig_type})...")
+            try:
+                if len(meta_bmi) >= 10:
+                    inflam_adata = ad.read_h5ad(inflam_h5ad_path)
+                    activity_df = pd.DataFrame(
+                        inflam_adata.X,
+                        index=inflam_adata.obs_names,
+                        columns=inflam_adata.var_names
                     )
-                    if len(merged) >= 10:
-                        rho, pval = stats.spearmanr(merged['BMI'], merged['activity'])
-                        n = len(merged)
-                        se = 1 / np.sqrt(n - 3) if n > 3 else 0.5
+                    var_info = inflam_adata.var[['sample', 'n_cells']].copy()
 
-                        meta_results.append({
-                            'analysis': 'bmi',
-                            'signature': sig,
-                            'atlas': 'Inflammation',
-                            'effect': float(rho),
-                            'se': float(se),
-                            'pvalue': float(pval),
-                            'n': int(n),
-                        })
+                    # Aggregate to sample level (weighted mean)
+                    sample_activity = {}
+                    for sample in var_info['sample'].unique():
+                        sample_cols = var_info[var_info['sample'] == sample].index
+                        weights = var_info.loc[sample_cols, 'n_cells'].values
+                        total_weight = weights.sum()
+                        if total_weight > 0:
+                            weighted_mean = (activity_df[sample_cols] * weights).sum(axis=1) / total_weight
+                            sample_activity[sample] = weighted_mean
 
-                log(f"  Inflammation BMI correlations: {len([r for r in meta_results if r['atlas'] == 'Inflammation' and r['analysis'] == 'bmi'])}")
-        except Exception as e:
-            log(f"  Warning: Could not compute Inflammation BMI correlations: {e}")
+                    sample_activity_df = pd.DataFrame(sample_activity).T
+
+                    # Compute correlations with BMI
+                    count = 0
+                    for sig in sample_activity_df.columns:
+                        merged = meta_bmi.merge(
+                            sample_activity_df[[sig]].reset_index().rename(columns={'index': 'sampleID', sig: 'activity'}),
+                            on='sampleID', how='inner'
+                        )
+                        if len(merged) >= 10:
+                            rho, pval = stats.spearmanr(merged['BMI'], merged['activity'])
+                            n = len(merged)
+                            se = 1 / np.sqrt(n - 3) if n > 3 else 0.5
+
+                            meta_results.append({
+                                'analysis': 'bmi',
+                                'signature': sig,
+                                'sig_type': sig_type,
+                                'atlas': 'Inflammation',
+                                'effect': float(rho),
+                                'se': float(se),
+                                'pvalue': float(pval),
+                                'n': int(n),
+                            })
+                            count += 1
+
+                    log(f"  Inflammation BMI correlations ({sig_type}): {count}")
+            except Exception as e:
+                log(f"  Warning: Could not compute Inflammation {sig_type} BMI correlations: {e}")
 
     # === CIMA Sex Differences ===
     cima_diff_path = RESULTS_DIR / 'cima' / 'CIMA_differential_demographics.csv'
@@ -787,6 +806,7 @@ def compute_meta_analysis():
             meta_results.append({
                 'analysis': 'sex',
                 'signature': row['protein'],
+                'sig_type': 'CytoSig',
                 'atlas': 'CIMA',
                 'effect': float(median_diff),
                 'se': float(se),
@@ -797,53 +817,60 @@ def compute_meta_analysis():
     meta_df = pd.DataFrame(meta_results)
 
     # === Compute pooled effects and I² for signatures with multiple atlases ===
+    # Group by analysis type, signature type, AND signature name
     if len(meta_df) > 0:
         pooled_results = []
         for analysis_type in meta_df['analysis'].unique():
             analysis_df = meta_df[meta_df['analysis'] == analysis_type]
-            signatures = analysis_df['signature'].unique()
 
-            for sig in signatures:
-                sig_data = analysis_df[analysis_df['signature'] == sig]
-                n_atlases = len(sig_data)
+            # Get unique sig_types
+            sig_types = analysis_df['sig_type'].unique() if 'sig_type' in analysis_df.columns else ['CytoSig']
 
-                if n_atlases == 1:
-                    # Single study - no pooling possible
-                    row = sig_data.iloc[0]
-                    pooled_results.append({
-                        **row.to_dict(),
-                        'I2': 0.0,
-                        'pooled_effect': row['effect'],
-                        'pooled_se': row['se'],
-                        'ci_low': row['effect'] - 1.96 * row['se'],
-                        'ci_high': row['effect'] + 1.96 * row['se'],
-                        'n_atlases': 1
-                    })
-                else:
-                    # Fixed-effects meta-analysis
-                    effects = sig_data['effect'].values
-                    ses = sig_data['se'].values
-                    weights = 1 / (ses ** 2)
+            for sig_type in sig_types:
+                type_df = analysis_df[analysis_df['sig_type'] == sig_type] if 'sig_type' in analysis_df.columns else analysis_df
+                signatures = type_df['signature'].unique()
 
-                    pooled_effect = np.sum(weights * effects) / np.sum(weights)
-                    pooled_se = np.sqrt(1 / np.sum(weights))
+                for sig in signatures:
+                    sig_data = type_df[type_df['signature'] == sig]
+                    n_atlases = len(sig_data)
 
-                    # Q statistic and I²
-                    Q = np.sum(weights * (effects - pooled_effect) ** 2)
-                    df = n_atlases - 1
-                    I2 = max(0, (Q - df) / Q * 100) if Q > 0 else 0
-
-                    # Add individual atlas results
-                    for _, row in sig_data.iterrows():
+                    if n_atlases == 1:
+                        # Single study - no pooling possible
+                        row = sig_data.iloc[0]
                         pooled_results.append({
                             **row.to_dict(),
-                            'I2': I2,
-                            'pooled_effect': pooled_effect,
-                            'pooled_se': pooled_se,
-                            'ci_low': pooled_effect - 1.96 * pooled_se,
-                            'ci_high': pooled_effect + 1.96 * pooled_se,
-                            'n_atlases': n_atlases
+                            'I2': 0.0,
+                            'pooled_effect': row['effect'],
+                            'pooled_se': row['se'],
+                            'ci_low': row['effect'] - 1.96 * row['se'],
+                            'ci_high': row['effect'] + 1.96 * row['se'],
+                            'n_atlases': 1
                         })
+                    else:
+                        # Fixed-effects meta-analysis
+                        effects = sig_data['effect'].values
+                        ses = sig_data['se'].values
+                        weights = 1 / (ses ** 2)
+
+                        pooled_effect = np.sum(weights * effects) / np.sum(weights)
+                        pooled_se = np.sqrt(1 / np.sum(weights))
+
+                        # Q statistic and I²
+                        Q = np.sum(weights * (effects - pooled_effect) ** 2)
+                        df = n_atlases - 1
+                        I2 = max(0, (Q - df) / Q * 100) if Q > 0 else 0
+
+                        # Add individual atlas results
+                        for _, row in sig_data.iterrows():
+                            pooled_results.append({
+                                **row.to_dict(),
+                                'I2': I2,
+                                'pooled_effect': pooled_effect,
+                                'pooled_se': pooled_se,
+                                'ci_low': pooled_effect - 1.96 * pooled_se,
+                                'ci_high': pooled_effect + 1.96 * pooled_se,
+                                'n_atlases': n_atlases
+                            })
 
         meta_df = pd.DataFrame(pooled_results)
 

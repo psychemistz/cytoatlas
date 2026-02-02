@@ -2419,6 +2419,13 @@
                             <option value="bmi">BMI Correlation</option>
                         </select>
                     </div>
+                    <div class="control-group">
+                        <label>Signature Type</label>
+                        <select id="meta-sig-type">
+                            <option value="CytoSig">CytoSig (43 cytokines)</option>
+                            <option value="SecAct">SecAct (1,170 proteins)</option>
+                        </select>
+                    </div>
                 </div>
 
                 <!-- Replication Summary -->
@@ -11249,6 +11256,7 @@
 
             // Get dropdown values
             const analysisType = document.getElementById('meta-analysis-type')?.value || 'age';
+            const sigType = document.getElementById('meta-sig-type')?.value || 'CytoSig';
 
             // Use real meta-analysis data - filter for 2+ atlases only
             const realMetaData = state.data.crossatlas?.meta_analysis;
@@ -11265,8 +11273,10 @@
                 return;
             }
 
-            // Filter for signatures with data from 2+ atlases
-            const multiAtlasData = realMetaData[analysisType].filter(d => d.n_atlases >= 2);
+            // Filter for signatures with data from 2+ atlases AND matching sig_type
+            const multiAtlasData = realMetaData[analysisType].filter(d =>
+                d.n_atlases >= 2 && (d.sig_type === sigType || (!d.sig_type && sigType === 'CytoSig'))
+            );
 
             // Group by signature
             const sigGroups = {};
@@ -12024,6 +12034,7 @@
             document.getElementById('mapping-level')?.addEventListener('change', updateCelltypeMapping);
             document.getElementById('mapping-lineage')?.addEventListener('change', updateCelltypeMapping);
             document.getElementById('meta-analysis-type')?.addEventListener('change', updateMetaAnalysis);
+            document.getElementById('meta-sig-type')?.addEventListener('change', updateMetaAnalysis);
 
             // Cross-Atlas Signature Correlation
             document.getElementById('sigcorr-sig-type')?.addEventListener('change', updateSignatureCorrelation);
