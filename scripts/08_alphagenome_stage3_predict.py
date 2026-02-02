@@ -74,11 +74,13 @@ def log(msg: str):
 
 
 class CheckpointManager:
-    """Manage checkpoints for resumable processing."""
+    """Manage checkpoints for resumable processing with prediction storage."""
 
     def __init__(self, checkpoint_path: Path):
         self.checkpoint_path = checkpoint_path
+        self.predictions_path = checkpoint_path.parent / 'stage3_predictions_checkpoint.json'
         self.data = self.load()
+        self.predictions = self.load_predictions()
 
     def load(self) -> Dict[str, Any]:
         """Load checkpoint from disk."""
@@ -92,20 +94,39 @@ class CheckpointManager:
             'errors': [],
         }
 
+    def load_predictions(self) -> Dict[str, Dict]:
+        """Load predictions from separate file."""
+        if self.predictions_path.exists():
+            try:
+                with open(self.predictions_path, 'r') as f:
+                    return json.load(f)
+            except Exception as e:
+                log(f"  Warning: Could not load predictions checkpoint: {e}")
+        return {}
+
     def save(self):
         """Save checkpoint to disk."""
         self.data['last_updated'] = datetime.now().isoformat()
+        self.data['n_predictions'] = len(self.predictions)
         with open(self.checkpoint_path, 'w') as f:
             json.dump(self.data, f, indent=2)
+
+    def save_predictions(self):
+        """Save predictions to separate file."""
+        with open(self.predictions_path, 'w') as f:
+            json.dump(self.predictions, f)
+        log(f"  Predictions checkpoint saved ({len(self.predictions)} variants)")
 
     def is_processed(self, variant_id: str) -> bool:
         """Check if variant has been processed."""
         return variant_id in self.data['processed_variants']
 
-    def mark_processed(self, variant_id: str, index: int):
-        """Mark variant as processed."""
+    def mark_processed(self, variant_id: str, index: int, prediction: Dict = None):
+        """Mark variant as processed and store prediction."""
         self.data['processed_variants'].append(variant_id)
         self.data['last_index'] = index
+        if prediction is not None:
+            self.predictions[variant_id] = prediction
 
     def add_error(self, variant_id: str, error: str):
         """Record an error."""
@@ -211,7 +232,8 @@ def run_real_predictions(
     variants_df: pd.DataFrame,
     checkpoint: CheckpointManager,
     api_key: str,
-    resume: bool = False
+    resume: bool = False,
+    output_dir: Path = None
 ) -> Dict[str, Dict]:
     """
     Run real AlphaGenome predictions using the API.
@@ -221,6 +243,7 @@ def run_real_predictions(
         checkpoint: CheckpointManager for resumable processing
         api_key: AlphaGenome API key
         resume: Whether to resume from checkpoint
+        output_dir: Directory for intermediate h5ad saves
 
     Returns:
         Dictionary mapping variant_id to predictions
@@ -243,11 +266,14 @@ def run_real_predictions(
     ]
     log(f"  Requesting output types: {[o.name for o in requested_outputs]}")
 
-    predictions = {}
+    # Start with existing predictions from checkpoint if resuming
+    predictions = checkpoint.predictions.copy() if resume else {}
     start_idx = checkpoint.data['last_index'] + 1 if resume else 0
     total = len(variants_df)
 
     log(f"\nProcessing {total - start_idx} variants...")
+    if resume and len(predictions) > 0:
+        log(f"  Loaded {len(predictions)} predictions from checkpoint")
     if start_idx > 0:
         log(f"  Resuming from index {start_idx}")
 
@@ -266,6 +292,7 @@ def run_real_predictions(
 
         log(f"  [{idx + 1}/{total}] {variant_id} - {chrom}:{pos} {ref}>{alt}")
 
+        pred = None
         try:
             # Create variant object
             variant = genome.Variant(
@@ -300,15 +327,27 @@ def run_real_predictions(
             checkpoint.add_error(variant_id, error_msg)
             log(f"    ERROR: {error_msg[:100]}")
 
-        # Update checkpoint
-        checkpoint.mark_processed(variant_id, idx)
+        # Update checkpoint with prediction
+        checkpoint.mark_processed(variant_id, idx, pred)
 
-        # Save checkpoint periodically
+        # Save checkpoint and predictions periodically
         if (idx + 1) % CHECKPOINT_INTERVAL == 0:
             checkpoint.save()
+            checkpoint.save_predictions()
             log(f"  Checkpoint saved at index {idx + 1}")
 
+            # Save intermediate h5ad every 1000 variants
+            if output_dir and (idx + 1) % 1000 == 0:
+                intermediate_path = output_dir / f'stage3_predictions_intermediate.h5ad'
+                try:
+                    save_predictions_h5ad(variants_df, predictions, intermediate_path)
+                    log(f"  Intermediate h5ad saved ({len(predictions)} variants)")
+                except Exception as e:
+                    log(f"  Warning: Could not save intermediate h5ad: {e}")
+
+    # Final save
     checkpoint.save()
+    checkpoint.save_predictions()
     return predictions
 
 
@@ -448,6 +487,10 @@ def main():
                        help='Maximum variants to process (for testing)')
     parser.add_argument('--api-key', type=str, default=None,
                        help='AlphaGenome API key (or set ALPHAGENOME_API_KEY env var)')
+    parser.add_argument('--reset', action='store_true',
+                       help='Reset checkpoint and start fresh (use when predictions were lost)')
+    parser.add_argument('--output-suffix', type=str, default='',
+                       help='Suffix for output files (e.g., "_v2" for parallel runs)')
     args = parser.parse_args()
 
     log("=" * 60)
@@ -465,13 +508,30 @@ def main():
         variants_df = variants_df.head(args.max_variants)
         log(f"  Limited to {len(variants_df)} variants for testing")
 
+    # Output suffix for parallel runs
+    suffix = args.output_suffix
+
     # Initialize checkpoint
-    checkpoint_path = OUTPUT_DIR / 'stage3_checkpoint.json'
+    checkpoint_path = OUTPUT_DIR / f'stage3_checkpoint{suffix}.json'
+
+    # Handle reset
+    if args.reset:
+        log("\nResetting checkpoint (starting fresh)...")
+        if checkpoint_path.exists():
+            checkpoint_path.unlink()
+        predictions_ckpt = OUTPUT_DIR / f'stage3_predictions_checkpoint{suffix}.json'
+        if predictions_ckpt.exists():
+            predictions_ckpt.unlink()
+        log("  Checkpoint files removed")
+
     checkpoint = CheckpointManager(checkpoint_path)
+    # Update predictions path with suffix
+    checkpoint.predictions_path = OUTPUT_DIR / f'stage3_predictions_checkpoint{suffix}.json'
 
     if args.resume:
         log(f"\nResuming from checkpoint...")
         log(f"  Previously processed: {len(checkpoint.data['processed_variants'])}")
+        log(f"  Saved predictions: {len(checkpoint.predictions)}")
         log(f"  Errors: {len(checkpoint.data['errors'])}")
 
     # Get API key
@@ -484,7 +544,7 @@ def main():
         log(f"\nUsing AlphaGenome API...")
         try:
             predictions = run_real_predictions(
-                variants_df, checkpoint, api_key, args.resume
+                variants_df, checkpoint, api_key, args.resume, OUTPUT_DIR
             )
         except Exception as e:
             log(f"\nERROR with AlphaGenome API: {e}")
@@ -499,7 +559,7 @@ def main():
     log(f"\nCompleted predictions for {len(predictions)} variants")
 
     # Save predictions to h5ad
-    output_path = OUTPUT_DIR / 'stage3_predictions.h5ad'
+    output_path = OUTPUT_DIR / f'stage3_predictions{suffix}.h5ad'
     save_predictions_h5ad(variants_df, predictions, output_path)
 
     # Update checkpoint with completion info

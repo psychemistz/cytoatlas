@@ -22,6 +22,7 @@
 #   sbatch run_alphagenome.sh --stage 1     # Run specific stage
 #   sbatch run_alphagenome.sh --mock        # Use mock predictions (testing)
 #   sbatch run_alphagenome.sh --resume      # Resume Stage 3 from checkpoint
+#   sbatch run_alphagenome.sh --reset       # Reset checkpoint (start fresh)
 ###############################################################################
 
 set -e
@@ -30,7 +31,9 @@ set -e
 STAGE=""
 MOCK=""
 RESUME=""
+RESET=""
 MAX_VARIANTS=""
+OUTPUT_SUFFIX=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -46,8 +49,16 @@ while [[ $# -gt 0 ]]; do
             RESUME="--resume"
             shift
             ;;
+        --reset)
+            RESET="--reset"
+            shift
+            ;;
         --max-variants)
             MAX_VARIANTS="--max-variants $2"
+            shift 2
+            ;;
+        --output-suffix)
+            OUTPUT_SUFFIX="--output-suffix $2"
             shift 2
             ;;
         *)
@@ -83,6 +94,7 @@ echo "SLURM Job ID: ${SLURM_JOB_ID:-local}"
 echo "Stage: ${STAGE:-all}"
 echo "Mock mode: ${MOCK:-no}"
 echo "Resume: ${RESUME:-no}"
+echo "Reset: ${RESET:-no}"
 echo ""
 
 # Stage 1: Filter eQTLs
@@ -102,7 +114,7 @@ run_stage2() {
 # Stage 3: AlphaGenome predictions
 run_stage3() {
     echo "[$(date +%H:%M:%S)] === STAGE 3: AlphaGenome predictions ==="
-    python scripts/08_alphagenome_stage3_predict.py $MOCK $RESUME $MAX_VARIANTS
+    python scripts/08_alphagenome_stage3_predict.py $MOCK $RESUME $RESET $MAX_VARIANTS $OUTPUT_SUFFIX
     echo ""
 }
 
