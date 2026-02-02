@@ -151,10 +151,30 @@ def compute_activity_for_celltype(
     Returns:
         Activity DataFrame and metadata dict
     """
-    # Find overlapping genes
+    # Find overlapping genes - handle Ensembl ID vs gene symbol mismatch
     sig_genes = set(signature_df.index)
     data_genes = set(adata.var_names)
+
+    # Try direct match first
     overlap_genes = list(sig_genes & data_genes)
+
+    # If no direct overlap, check for symbol column (Ensembl ID -> gene symbol mapping)
+    gene_symbol_map = None
+    if len(overlap_genes) < MIN_GENES_OVERLAP and 'symbol' in adata.var.columns:
+        log(f"      [DEBUG] Direct overlap: {len(overlap_genes)}, trying symbol column...")
+        # Build symbol -> ensembl mapping
+        symbol_to_ensembl = {}
+        for ensembl_id, row in adata.var.iterrows():
+            symbol = row.get('symbol', '')
+            if symbol and pd.notna(symbol):
+                symbol_to_ensembl[symbol] = ensembl_id
+
+        # Find overlap using symbols
+        overlap_symbols = list(sig_genes & set(symbol_to_ensembl.keys()))
+        if len(overlap_symbols) >= MIN_GENES_OVERLAP:
+            overlap_genes = overlap_symbols
+            gene_symbol_map = symbol_to_ensembl
+            log(f"      [DEBUG] Symbol-based overlap: {len(overlap_genes)} genes")
 
     log(f"      [DEBUG] Signature genes: {len(sig_genes)}, Data genes: {len(data_genes)}, Overlap: {len(overlap_genes)}")
 
@@ -171,8 +191,13 @@ def compute_activity_for_celltype(
 
     cytokines = signature_df.columns.tolist()
 
-    # Get gene indices in adata
-    gene_idx = [list(adata.var_names).index(g) for g in overlap_genes]
+    # Get gene indices in adata (handle symbol mapping if needed)
+    if gene_symbol_map:
+        # Map symbols to Ensembl IDs, then to indices
+        ensembl_ids = [gene_symbol_map[g] for g in overlap_genes]
+        gene_idx = [list(adata.var_names).index(e) for e in ensembl_ids]
+    else:
+        gene_idx = [list(adata.var_names).index(g) for g in overlap_genes]
 
     if mode == 'pseudobulk':
         # Aggregate by sample
