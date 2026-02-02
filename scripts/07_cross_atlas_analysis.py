@@ -695,6 +695,84 @@ def compute_meta_analysis():
         except Exception as e:
             log(f"  Warning: Could not compute Inflammation correlations: {e}")
 
+    # === CIMA BMI Correlations ===
+    cima_bmi_path = RESULTS_DIR / 'cima' / 'CIMA_correlation_bmi.csv'
+    if cima_bmi_path.exists():
+        bmi_corr = pd.read_csv(cima_bmi_path)
+        bmi_corr = bmi_corr[bmi_corr['signature'] == 'CytoSig']
+
+        for _, row in bmi_corr.iterrows():
+            n = row['n']
+            rho = row['rho']
+            z = np.arctanh(rho) if abs(rho) < 1 else 0
+            se = 1 / np.sqrt(n - 3) if n > 3 else 0.5
+
+            meta_results.append({
+                'analysis': 'bmi',
+                'signature': row['protein'],
+                'atlas': 'CIMA',
+                'effect': float(rho),
+                'se': float(se),
+                'pvalue': float(row['pvalue']),
+                'n': int(n),
+            })
+
+        log(f"  CIMA BMI correlations: {len([r for r in meta_results if r['atlas'] == 'CIMA' and r['analysis'] == 'bmi'])}")
+
+    # === Inflammation BMI Correlations ===
+    if inflam_meta_path.exists() and inflam_h5ad_path.exists():
+        log("  Computing Inflammation BMI correlations...")
+        try:
+            sample_meta = pd.read_csv(inflam_meta_path)
+            meta_bmi = sample_meta[['sampleID', 'BMI']].dropna()
+
+            if len(meta_bmi) >= 10:
+                if 'inflam_adata' not in dir():
+                    inflam_adata = ad.read_h5ad(inflam_h5ad_path)
+                    activity_df = pd.DataFrame(
+                        inflam_adata.X,
+                        index=inflam_adata.obs_names,
+                        columns=inflam_adata.var_names
+                    )
+                    var_info = inflam_adata.var[['sample', 'n_cells']].copy()
+
+                    # Aggregate to sample level (weighted mean)
+                    sample_activity = {}
+                    for sample in var_info['sample'].unique():
+                        sample_cols = var_info[var_info['sample'] == sample].index
+                        weights = var_info.loc[sample_cols, 'n_cells'].values
+                        total_weight = weights.sum()
+                        if total_weight > 0:
+                            weighted_mean = (activity_df[sample_cols] * weights).sum(axis=1) / total_weight
+                            sample_activity[sample] = weighted_mean
+
+                    sample_activity_df = pd.DataFrame(sample_activity).T
+
+                # Compute correlations with BMI
+                for sig in sample_activity_df.columns:
+                    merged = meta_bmi.merge(
+                        sample_activity_df[[sig]].reset_index().rename(columns={'index': 'sampleID', sig: 'activity'}),
+                        on='sampleID', how='inner'
+                    )
+                    if len(merged) >= 10:
+                        rho, pval = stats.spearmanr(merged['BMI'], merged['activity'])
+                        n = len(merged)
+                        se = 1 / np.sqrt(n - 3) if n > 3 else 0.5
+
+                        meta_results.append({
+                            'analysis': 'bmi',
+                            'signature': sig,
+                            'atlas': 'Inflammation',
+                            'effect': float(rho),
+                            'se': float(se),
+                            'pvalue': float(pval),
+                            'n': int(n),
+                        })
+
+                log(f"  Inflammation BMI correlations: {len([r for r in meta_results if r['atlas'] == 'Inflammation' and r['analysis'] == 'bmi'])}")
+        except Exception as e:
+            log(f"  Warning: Could not compute Inflammation BMI correlations: {e}")
+
     # === CIMA Sex Differences ===
     cima_diff_path = RESULTS_DIR / 'cima' / 'CIMA_differential_demographics.csv'
     if cima_diff_path.exists():
@@ -773,6 +851,7 @@ def compute_meta_analysis():
 
     log(f"  Total meta-analysis records: {len(meta_df)}")
     log(f"  Age effects: {len(meta_df[meta_df['analysis'] == 'age'])} records")
+    log(f"  BMI effects: {len(meta_df[meta_df['analysis'] == 'bmi'])} records")
     log(f"  Sex effects: {len(meta_df[meta_df['analysis'] == 'sex'])} records")
     log(f"  Multi-atlas signatures: {len(meta_df[meta_df['n_atlases'] > 1]['signature'].unique()) if 'n_atlases' in meta_df.columns else 0}")
 

@@ -2416,6 +2416,7 @@
                         <label>Analysis Type</label>
                         <select id="meta-analysis-type">
                             <option value="age">Age Correlation</option>
+                            <option value="bmi">BMI Correlation</option>
                         </select>
                     </div>
                 </div>
@@ -2440,14 +2441,14 @@
                         </div>
                         <div style="flex: 1; min-width: 200px; text-align: left; padding-left: 1rem; border-left: 2px solid #a5d6a7;">
                             <div style="font-size: 0.9rem; color: #333;"><strong>Cross-Atlas Replication</strong></div>
-                            <div style="font-size: 0.8rem; color: #666; margin-top: 0.25rem;">Shows signatures with age correlation data from multiple atlases (CIMA + Inflammation). Only replicated associations are displayed.</div>
+                            <div style="font-size: 0.8rem; color: #666; margin-top: 0.25rem;" id="meta-description">Shows signatures with correlation data from multiple atlases (CIMA + Inflammation). Only replicated associations are displayed.</div>
                         </div>
                     </div>
                 </div>
 
                 <div class="two-col">
                     <div class="viz-container" style="min-height: 500px;">
-                        <div class="viz-title">Replicated Age Associations</div>
+                        <div class="viz-title" id="meta-forest-title">Replicated Associations</div>
                         <div class="viz-subtitle">Forest plot showing effect sizes from each atlas and pooled estimate</div>
                         <div id="meta-forest" class="loading">Loading...</div>
                     </div>
@@ -11311,6 +11312,15 @@
             document.getElementById('meta-consistent-count').textContent = consistentCount;
             document.getElementById('meta-significant-count').textContent = significantCount;
 
+            // Update title and description based on analysis type
+            const analysisLabels = {
+                'age': { title: 'Replicated Age Associations', desc: 'age correlation' },
+                'bmi': { title: 'Replicated BMI Associations', desc: 'BMI correlation' }
+            };
+            const label = analysisLabels[analysisType] || { title: 'Replicated Associations', desc: 'correlation' };
+            document.getElementById('meta-forest-title').textContent = label.title;
+            document.getElementById('meta-description').textContent = `Shows signatures with ${label.desc} data from multiple atlases (CIMA + Inflammation). Only replicated associations are displayed.`;
+
             // Sort by absolute pooled effect for visualization
             const sortedMeta = [...metaData].sort((a, b) => Math.abs(b.pooled.effect) - Math.abs(a.pooled.effect)).slice(0, 20);
 
@@ -11331,6 +11341,10 @@
                 sortedMeta.forEach((meta, sigIdx) => {
                     // Add individual study effects
                     meta.effects.forEach((e, i) => {
+                        // Compute individual CI from effect ± 1.96 * se
+                        const indCiLow = e.effect - 1.96 * e.se;
+                        const indCiHigh = e.effect + 1.96 * e.se;
+
                         yLabels.push(`${meta.signature} - ${e.atlas}`);
                         traces.push({
                             type: 'scatter',
@@ -11341,12 +11355,12 @@
                             error_x: {
                                 type: 'data',
                                 symmetric: false,
-                                array: [e.ci_high - e.effect],
-                                arrayminus: [e.effect - e.ci_low]
+                                array: [indCiHigh - e.effect],
+                                arrayminus: [e.effect - indCiLow]
                             },
                             showlegend: sigIdx === 0,
                             name: e.atlas,
-                            hovertemplate: `<b>${meta.signature} - ${e.atlas}</b><br>Effect: ${e.effect.toFixed(2)} [${e.ci_low.toFixed(2)}, ${e.ci_high.toFixed(2)}]<extra></extra>`
+                            hovertemplate: `<b>${meta.signature} - ${e.atlas}</b><br>Effect: ${e.effect.toFixed(2)} [${indCiLow.toFixed(2)}, ${indCiHigh.toFixed(2)}]<extra></extra>`
                         });
                         yPos++;
                     });
