@@ -2425,6 +2425,15 @@ h3 .badge {
     font-size: 2rem;
 }
 
+.hgnc-symbol-note {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+}
+
 .external-links {
     display: flex;
     flex-wrap: wrap;

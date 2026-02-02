@@ -1,0 +1,541 @@
+{
+  "cytosig": {
+    "Activin A": {
+      "hgnc_symbol": "INHBA",
+      "description": "Activin A (Inhibin subunit beta A) is a TGF-beta superfamily member that regulates cell proliferation, differentiation, and apoptosis. It plays roles in reproductive biology, embryonic development, and inflammation."
+    },
+    "BDNF": {
+      "hgnc_symbol": "BDNF",
+      "description": "Brain-derived neurotrophic factor supports neuronal survival, growth, and synaptic plasticity. It is critical for learning, memory, and has been implicated in depression and neurodegenerative diseases."
+    },
+    "BMP2": {
+      "hgnc_symbol": "BMP2",
+      "description": "Bone morphogenetic protein 2 induces bone and cartilage formation. It plays key roles in skeletal development, fracture healing, and has therapeutic applications in orthopedic surgery."
+    },
+    "BMP4": {
+      "hgnc_symbol": "BMP4",
+      "description": "Bone morphogenetic protein 4 regulates embryonic development, including neural, bone, and tooth formation. It is important for ventral mesoderm patterning and hematopoiesis."
+    },
+    "BMP6": {
+      "hgnc_symbol": "BMP6",
+      "description": "Bone morphogenetic protein 6 regulates iron homeostasis through hepcidin induction. It also plays roles in bone development, chondrocyte differentiation, and ovarian function."
+    },
+    "CD40L": {
+      "hgnc_symbol": "CD40LG",
+      "description": "CD40 ligand (CD154) is expressed on activated T cells and binds CD40 on antigen-presenting cells. It is essential for T cell-dependent B cell activation, immunoglobulin class switching, and germinal center formation."
+    },
+    "CXCL12": {
+      "hgnc_symbol": "CXCL12",
+      "description": "C-X-C motif chemokine ligand 12 (SDF-1) is a homeostatic chemokine that attracts lymphocytes and stem cells. It regulates hematopoiesis, organogenesis, and is involved in cancer metastasis."
+    },
+    "EGF": {
+      "hgnc_symbol": "EGF",
+      "description": "Epidermal growth factor stimulates cell proliferation and differentiation by binding EGFR. It promotes wound healing, tissue regeneration, and is implicated in cancer progression."
+    },
+    "FGF2": {
+      "hgnc_symbol": "FGF2",
+      "description": "Fibroblast growth factor 2 (basic FGF) promotes angiogenesis, wound healing, and tissue repair. It supports stem cell self-renewal and is involved in tumor growth and metastasis."
+    },
+    "GCSF": {
+      "hgnc_symbol": "CSF3",
+      "description": "Granulocyte colony-stimulating factor stimulates neutrophil production and mobilizes hematopoietic stem cells. It is used clinically to treat neutropenia after chemotherapy."
+    },
+    "GDF11": {
+      "hgnc_symbol": "GDF11",
+      "description": "Growth differentiation factor 11 is a TGF-beta family member that regulates anterior-posterior patterning during development. It has been studied for potential anti-aging effects."
+    },
+    "GMCSF": {
+      "hgnc_symbol": "CSF2",
+      "description": "Granulocyte-macrophage colony-stimulating factor promotes myeloid cell differentiation and activation. It is important in inflammation and is targeted in autoimmune disease therapy."
+    },
+    "HGF": {
+      "hgnc_symbol": "HGF",
+      "description": "Hepatocyte growth factor promotes cell proliferation, motility, and morphogenesis. It is important in liver regeneration, wound healing, and is implicated in cancer invasion and metastasis."
+    },
+    "IFN1": {
+      "hgnc_symbol": "IFNA1",
+      "description": "Type I interferons (IFN-alpha/beta) are produced in response to viral infection. They induce antiviral states, activate immune cells, and regulate adaptive immune responses."
+    },
+    "IFNG": {
+      "hgnc_symbol": "IFNG",
+      "description": "Interferon gamma (IFN-γ) is a key cytokine for innate and adaptive immunity. It activates macrophages, enhances antigen presentation, and promotes Th1 responses against intracellular pathogens."
+    },
+    "IFNL": {
+      "hgnc_symbol": "IFNL1",
+      "description": "Type III interferons (IFN-lambda) provide antiviral protection at epithelial barriers. They have similar functions to type I IFN but with more restricted receptor expression."
+    },
+    "IL10": {
+      "hgnc_symbol": "IL10",
+      "description": "Interleukin-10 is an anti-inflammatory cytokine that limits immune responses. It inhibits pro-inflammatory cytokine production and is important for preventing autoimmunity and tissue damage."
+    },
+    "IL12": {
+      "hgnc_symbol": "IL12A",
+      "description": "Interleukin-12 promotes Th1 differentiation and IFN-γ production by T and NK cells. It is critical for cell-mediated immunity against intracellular pathogens and tumors."
+    },
+    "IL13": {
+      "hgnc_symbol": "IL13",
+      "description": "Interleukin-13 promotes Th2 responses, IgE production, and mucus secretion. It is central to allergic inflammation and is a therapeutic target in asthma and atopic dermatitis."
+    },
+    "IL15": {
+      "hgnc_symbol": "IL15",
+      "description": "Interleukin-15 supports NK cell and memory CD8 T cell development and homeostasis. It shares receptor components with IL-2 and is being developed for cancer immunotherapy."
+    },
+    "IL17A": {
+      "hgnc_symbol": "IL17A",
+      "description": "Interleukin-17A is the signature cytokine of Th17 cells. It promotes neutrophil recruitment and antimicrobial defense at mucosal surfaces, and is implicated in autoimmune diseases like psoriasis."
+    },
+    "IL1A": {
+      "hgnc_symbol": "IL1A",
+      "description": "Interleukin-1 alpha is a pro-inflammatory cytokine and alarmin released from damaged cells. It activates inflammation and can signal both extracellularly and intracellularly."
+    },
+    "IL1B": {
+      "hgnc_symbol": "IL1B",
+      "description": "Interleukin-1 beta is a potent pro-inflammatory cytokine activated by inflammasomes. It induces fever, activates endothelium, and is a key mediator in autoinflammatory diseases."
+    },
+    "IL2": {
+      "hgnc_symbol": "IL2",
+      "description": "Interleukin-2 is essential for T cell proliferation, survival, and differentiation. It promotes both effector and regulatory T cell responses and is used in cancer immunotherapy."
+    },
+    "IL21": {
+      "hgnc_symbol": "IL21",
+      "description": "Interleukin-21 regulates B cell differentiation, germinal center formation, and plasma cell development. It also enhances NK cell and CD8 T cell cytotoxicity."
+    },
+    "IL22": {
+      "hgnc_symbol": "IL22",
+      "description": "Interleukin-22 promotes epithelial barrier function and antimicrobial defense. Produced by Th17/Th22 cells, it protects mucosal surfaces but can drive pathology in psoriasis."
+    },
+    "IL27": {
+      "hgnc_symbol": "IL27",
+      "description": "Interleukin-27 has both pro- and anti-inflammatory functions. It promotes Th1 responses, inhibits Th17 development, and induces IL-10 production by regulatory T cells."
+    },
+    "IL3": {
+      "hgnc_symbol": "IL3",
+      "description": "Interleukin-3 (multi-CSF) supports the growth and differentiation of multiple hematopoietic lineages. It is produced by activated T cells and promotes mast cell and basophil development."
+    },
+    "IL36": {
+      "hgnc_symbol": "IL36A",
+      "description": "IL-36 cytokines (IL-36α/β/γ) are IL-1 family members that promote inflammation in skin and lungs. They are implicated in psoriasis and other inflammatory skin conditions."
+    },
+    "IL4": {
+      "hgnc_symbol": "IL4",
+      "description": "Interleukin-4 drives Th2 differentiation and IgE class switching. It promotes alternative macrophage activation and is central to allergic responses and helminth immunity."
+    },
+    "IL6": {
+      "hgnc_symbol": "IL6",
+      "description": "Interleukin-6 is a pleiotropic cytokine with both pro- and anti-inflammatory effects. It regulates acute phase responses, immune regulation, and is elevated in inflammatory conditions."
+    },
+    "LIF": {
+      "hgnc_symbol": "LIF",
+      "description": "Leukemia inhibitory factor is an IL-6 family cytokine that maintains stem cell pluripotency. It regulates implantation, inflammation, and neuronal development."
+    },
+    "LTA": {
+      "hgnc_symbol": "LTA",
+      "description": "Lymphotoxin alpha (TNF-beta) is produced by lymphocytes and forms complexes with LTB. It is essential for lymphoid organ development and antimicrobial defense."
+    },
+    "MCSF": {
+      "hgnc_symbol": "CSF1",
+      "description": "Macrophage colony-stimulating factor promotes monocyte survival, proliferation, and differentiation into macrophages. It is important in osteoclast development and tissue macrophage homeostasis."
+    },
+    "NO": {
+      "hgnc_symbol": "NOS2",
+      "description": "Nitric oxide (from inducible NOS) is a gaseous signaling molecule with antimicrobial and vasodilatory effects. It is produced by activated macrophages and contributes to pathogen killing."
+    },
+    "OSM": {
+      "hgnc_symbol": "OSM",
+      "description": "Oncostatin M is an IL-6 family cytokine that regulates cell growth, inflammation, and hematopoiesis. It is involved in liver regeneration, bone metabolism, and inflammatory diseases."
+    },
+    "TGFB1": {
+      "hgnc_symbol": "TGFB1",
+      "description": "Transforming growth factor beta 1 regulates cell growth, differentiation, and immune function. It promotes regulatory T cell development and has both immunosuppressive and pro-fibrotic effects."
+    },
+    "TGFB3": {
+      "hgnc_symbol": "TGFB3",
+      "description": "Transforming growth factor beta 3 is important in palatogenesis and wound healing. It promotes scarless healing and is involved in cardiovascular development."
+    },
+    "TNFA": {
+      "hgnc_symbol": "TNF",
+      "description": "Tumor necrosis factor alpha is a pro-inflammatory cytokine produced mainly by macrophages. It regulates immune cells, induces fever, apoptosis, and is targeted in autoimmune disease therapy."
+    },
+    "TRAIL": {
+      "hgnc_symbol": "TNFSF10",
+      "description": "TNF-related apoptosis-inducing ligand selectively induces apoptosis in tumor cells. It is being developed as a cancer therapeutic due to its tumor-selective cytotoxicity."
+    },
+    "TWEAK": {
+      "hgnc_symbol": "TNFSF12",
+      "description": "TNF-like weak inducer of apoptosis regulates cell survival, proliferation, and inflammation. It is involved in tissue repair, angiogenesis, and inflammatory diseases."
+    },
+    "VEGFA": {
+      "hgnc_symbol": "VEGFA",
+      "description": "Vascular endothelial growth factor A promotes angiogenesis and vascular permeability. It is key in development, wound healing, and tumor growth, and is targeted in cancer therapy."
+    },
+    "WNT3A": {
+      "hgnc_symbol": "WNT3A",
+      "description": "Wnt3a activates canonical Wnt/beta-catenin signaling, regulating cell proliferation, differentiation, and stem cell maintenance. It is important in embryonic development and tissue homeostasis."
+    }
+  },
+  "secact_common": {
+    "CCL2": {
+      "hgnc_symbol": "CCL2",
+      "description": "C-C motif chemokine ligand 2 (MCP-1) recruits monocytes, memory T cells, and dendritic cells to sites of inflammation. It is a key mediator in atherosclerosis and inflammatory diseases."
+    },
+    "CCL3": {
+      "hgnc_symbol": "CCL3",
+      "description": "C-C motif chemokine ligand 3 (MIP-1α) attracts monocytes and T cells. It is produced during acute inflammation and viral infections and plays roles in HIV pathogenesis."
+    },
+    "CCL4": {
+      "hgnc_symbol": "CCL4",
+      "description": "C-C motif chemokine ligand 4 (MIP-1β) recruits NK cells, monocytes, and other immune cells. It is a natural ligand for CCR5 and has anti-HIV activity."
+    },
+    "CCL5": {
+      "hgnc_symbol": "CCL5",
+      "description": "C-C motif chemokine ligand 5 (RANTES) attracts T cells, eosinophils, and basophils. It plays roles in allergic inflammation, viral infections, and cancer progression."
+    },
+    "CCL7": {
+      "hgnc_symbol": "CCL7",
+      "description": "C-C motif chemokine ligand 7 (MCP-3) recruits monocytes, eosinophils, and basophils. It is involved in allergic inflammation and wound healing responses."
+    },
+    "CCL8": {
+      "hgnc_symbol": "CCL8",
+      "description": "C-C motif chemokine ligand 8 (MCP-2) attracts monocytes, lymphocytes, and eosinophils. It is induced by inflammatory stimuli and contributes to chronic inflammation."
+    },
+    "CCL11": {
+      "hgnc_symbol": "CCL11",
+      "description": "C-C motif chemokine ligand 11 (Eotaxin-1) is a potent eosinophil chemoattractant. It plays key roles in allergic diseases including asthma and atopic dermatitis."
+    },
+    "CCL17": {
+      "hgnc_symbol": "CCL17",
+      "description": "C-C motif chemokine ligand 17 (TARC) attracts Th2 cells and regulatory T cells. It is elevated in atopic dermatitis and serves as a disease activity biomarker."
+    },
+    "CCL19": {
+      "hgnc_symbol": "CCL19",
+      "description": "C-C motif chemokine ligand 19 (MIP-3β) guides T cells and dendritic cells to lymph nodes. It is constitutively expressed in secondary lymphoid organs."
+    },
+    "CCL20": {
+      "hgnc_symbol": "CCL20",
+      "description": "C-C motif chemokine ligand 20 (MIP-3α) recruits CCR6+ cells including Th17 cells and dendritic cells. It is important in mucosal immunity and autoimmune diseases."
+    },
+    "CCL21": {
+      "hgnc_symbol": "CCL21",
+      "description": "C-C motif chemokine ligand 21 (SLC) guides naive T cells and dendritic cells to lymph nodes. It is expressed by lymphatic endothelial cells and stromal cells."
+    },
+    "CCL22": {
+      "hgnc_symbol": "CCL22",
+      "description": "C-C motif chemokine ligand 22 (MDC) attracts Th2 cells and regulatory T cells. It is produced by dendritic cells and macrophages and elevated in allergic diseases."
+    },
+    "CXCL1": {
+      "hgnc_symbol": "CXCL1",
+      "description": "C-X-C motif chemokine ligand 1 (GROα) is a potent neutrophil chemoattractant. It promotes angiogenesis and is involved in wound healing and tumor progression."
+    },
+    "CXCL2": {
+      "hgnc_symbol": "CXCL2",
+      "description": "C-X-C motif chemokine ligand 2 (GROβ) recruits neutrophils to sites of inflammation. It is produced by monocytes and macrophages during acute inflammation."
+    },
+    "CXCL3": {
+      "hgnc_symbol": "CXCL3",
+      "description": "C-X-C motif chemokine ligand 3 (GROγ) attracts neutrophils and promotes angiogenesis. It is induced by inflammatory cytokines and growth factors."
+    },
+    "CXCL5": {
+      "hgnc_symbol": "CXCL5",
+      "description": "C-X-C motif chemokine ligand 5 (ENA-78) recruits neutrophils and promotes angiogenesis. It is involved in inflammatory bowel disease and tumor progression."
+    },
+    "CXCL6": {
+      "hgnc_symbol": "CXCL6",
+      "description": "C-X-C motif chemokine ligand 6 (GCP-2) attracts neutrophils with antimicrobial activity. It is produced by epithelial cells and fibroblasts during inflammation."
+    },
+    "CXCL8": {
+      "hgnc_symbol": "CXCL8",
+      "description": "Interleukin-8 (CXCL8) is a major neutrophil chemoattractant. It promotes neutrophil recruitment, activation, and degranulation during acute inflammation and infection."
+    },
+    "CXCL9": {
+      "hgnc_symbol": "CXCL9",
+      "description": "C-X-C motif chemokine ligand 9 (MIG) attracts activated T cells. It is induced by IFN-γ and promotes Th1 responses and antitumor immunity."
+    },
+    "CXCL10": {
+      "hgnc_symbol": "CXCL10",
+      "description": "C-X-C motif chemokine ligand 10 (IP-10) attracts activated T cells and NK cells. Induced by IFN-γ, it promotes Th1 responses and antiviral immunity."
+    },
+    "CXCL11": {
+      "hgnc_symbol": "CXCL11",
+      "description": "C-X-C motif chemokine ligand 11 (I-TAC) attracts activated T cells via CXCR3. It is induced by IFN-γ and IFN-β and promotes Th1-type inflammation."
+    },
+    "CXCL13": {
+      "hgnc_symbol": "CXCL13",
+      "description": "C-X-C motif chemokine ligand 13 (BCA-1) attracts B cells to lymphoid follicles. It is essential for germinal center formation and is elevated in autoimmune diseases."
+    },
+    "CXCL14": {
+      "hgnc_symbol": "CXCL14",
+      "description": "C-X-C motif chemokine ligand 14 (BRAK) has antimicrobial activity and regulates immune cell trafficking. It is constitutively expressed in epithelial tissues."
+    },
+    "CXCL16": {
+      "hgnc_symbol": "CXCL16",
+      "description": "C-X-C motif chemokine ligand 16 exists in membrane-bound and soluble forms. It functions as a scavenger receptor and chemoattractant for CXCR6+ cells."
+    },
+    "IL18": {
+      "hgnc_symbol": "IL18",
+      "description": "Interleukin-18 synergizes with IL-12 to induce IFN-γ production. It activates NK cells and Th1 responses and is activated by inflammasomes."
+    },
+    "IL23A": {
+      "hgnc_symbol": "IL23A",
+      "description": "Interleukin-23 (p19 subunit) maintains Th17 cell responses. It is important in mucosal immunity and implicated in autoimmune diseases like psoriasis."
+    },
+    "IL33": {
+      "hgnc_symbol": "IL33",
+      "description": "Interleukin-33 is an alarmin released from damaged epithelial cells. It activates ILC2s, mast cells, and Th2 responses and is involved in allergic inflammation."
+    },
+    "TSLP": {
+      "hgnc_symbol": "TSLP",
+      "description": "Thymic stromal lymphopoietin is an epithelial cytokine that promotes Th2 inflammation. It is a key initiator of allergic responses in asthma and atopic dermatitis."
+    },
+    "FLT3LG": {
+      "hgnc_symbol": "FLT3LG",
+      "description": "Fms-related tyrosine kinase 3 ligand promotes dendritic cell development and expansion. It is used therapeutically to enhance dendritic cell vaccines."
+    },
+    "KITLG": {
+      "hgnc_symbol": "KITLG",
+      "description": "Kit ligand (Stem Cell Factor) supports hematopoietic stem cells, mast cells, and melanocytes. It is essential for normal hematopoiesis and gametogenesis."
+    },
+    "PDGFA": {
+      "hgnc_symbol": "PDGFA",
+      "description": "Platelet-derived growth factor A promotes mesenchymal cell proliferation and migration. It is important in wound healing, development, and fibrotic diseases."
+    },
+    "PDGFB": {
+      "hgnc_symbol": "PDGFB",
+      "description": "Platelet-derived growth factor B promotes cell proliferation, migration, and angiogenesis. It is involved in wound healing, atherosclerosis, and cancer progression."
+    },
+    "SPP1": {
+      "hgnc_symbol": "SPP1",
+      "description": "Osteopontin (SPP1) is a multifunctional protein involved in bone metabolism, immune regulation, and tumor progression. It promotes inflammation and cell survival."
+    },
+    "SERPINE1": {
+      "hgnc_symbol": "SERPINE1",
+      "description": "Plasminogen activator inhibitor 1 (PAI-1) regulates fibrinolysis and extracellular matrix remodeling. It is elevated in obesity, cardiovascular disease, and cancer."
+    },
+    "MMP2": {
+      "hgnc_symbol": "MMP2",
+      "description": "Matrix metalloproteinase 2 (Gelatinase A) degrades type IV collagen in basement membranes. It is important in tissue remodeling, angiogenesis, and tumor invasion."
+    },
+    "MMP9": {
+      "hgnc_symbol": "MMP9",
+      "description": "Matrix metalloproteinase 9 (Gelatinase B) is secreted by neutrophils and macrophages. It degrades extracellular matrix and is involved in inflammation and metastasis."
+    },
+    "TIMP1": {
+      "hgnc_symbol": "TIMP1",
+      "description": "Tissue inhibitor of metalloproteinases 1 inhibits MMPs and regulates matrix remodeling. It has roles in cell growth, apoptosis, and is elevated in fibrosis."
+    },
+    "TIMP2": {
+      "hgnc_symbol": "TIMP2",
+      "description": "Tissue inhibitor of metalloproteinases 2 regulates MMP activity and matrix turnover. It is involved in cell proliferation and has anti-angiogenic properties."
+    },
+    "ANGPT1": {
+      "hgnc_symbol": "ANGPT1",
+      "description": "Angiopoietin 1 stabilizes blood vessels and promotes endothelial survival. It signals through Tie2 receptor and is important in vascular development."
+    },
+    "ANGPT2": {
+      "hgnc_symbol": "ANGPT2",
+      "description": "Angiopoietin 2 destabilizes vessels and promotes angiogenesis in the presence of VEGF. It is elevated in cancer, sepsis, and inflammatory conditions."
+    },
+    "EPO": {
+      "hgnc_symbol": "EPO",
+      "description": "Erythropoietin stimulates red blood cell production in response to hypoxia. It is used therapeutically for anemia in chronic kidney disease and cancer."
+    },
+    "THPO": {
+      "hgnc_symbol": "THPO",
+      "description": "Thrombopoietin regulates platelet production by megakaryocytes. It is essential for platelet homeostasis and is used to treat thrombocytopenia."
+    },
+    "GH1": {
+      "hgnc_symbol": "GH1",
+      "description": "Growth hormone stimulates growth, cell reproduction, and metabolism. It acts through IGF-1 and is used therapeutically for growth disorders."
+    },
+    "IGF1": {
+      "hgnc_symbol": "IGF1",
+      "description": "Insulin-like growth factor 1 mediates many effects of growth hormone. It promotes cell growth, differentiation, and survival and is implicated in aging and cancer."
+    },
+    "IGF2": {
+      "hgnc_symbol": "IGF2",
+      "description": "Insulin-like growth factor 2 is important in fetal growth and development. It is an imprinted gene and overexpression is associated with certain cancers."
+    },
+    "INS": {
+      "hgnc_symbol": "INS",
+      "description": "Insulin regulates glucose uptake and metabolism. It is essential for blood glucose control, and deficiency or resistance causes diabetes mellitus."
+    },
+    "LEP": {
+      "hgnc_symbol": "LEP",
+      "description": "Leptin is secreted by adipocytes and regulates energy balance and appetite. It signals satiety to the brain and is involved in immunity and reproduction."
+    },
+    "ADIPOQ": {
+      "hgnc_symbol": "ADIPOQ",
+      "description": "Adiponectin is an adipokine with insulin-sensitizing and anti-inflammatory properties. Low levels are associated with obesity, diabetes, and cardiovascular disease."
+    },
+    "RETN": {
+      "hgnc_symbol": "RETN",
+      "description": "Resistin is an adipokine linked to insulin resistance and inflammation. It is elevated in obesity and may contribute to metabolic syndrome."
+    },
+    "PRL": {
+      "hgnc_symbol": "PRL",
+      "description": "Prolactin primarily regulates lactation but also has immunomodulatory functions. It promotes T cell proliferation and is elevated in some autoimmune diseases."
+    },
+    "GDF15": {
+      "hgnc_symbol": "GDF15",
+      "description": "Growth differentiation factor 15 is a stress-responsive cytokine that regulates appetite and energy metabolism. It is elevated in cancer, heart failure, and aging."
+    },
+    "PTH": {
+      "hgnc_symbol": "PTH",
+      "description": "Parathyroid hormone regulates calcium and phosphate homeostasis. It promotes bone resorption and is used therapeutically for osteoporosis."
+    },
+    "CALCA": {
+      "hgnc_symbol": "CALCA",
+      "description": "Calcitonin gene-related peptide (CGRP) is a potent vasodilator and neurotransmitter. It is involved in migraine pathophysiology and is targeted by new migraine drugs."
+    },
+    "POMC": {
+      "hgnc_symbol": "POMC",
+      "description": "Pro-opiomelanocortin is a precursor for ACTH, MSH, and beta-endorphin. It regulates stress response, pigmentation, and energy homeostasis."
+    },
+    "SAA1": {
+      "hgnc_symbol": "SAA1",
+      "description": "Serum amyloid A1 is a major acute phase protein produced during inflammation. Chronic elevation can lead to amyloidosis in inflammatory diseases."
+    },
+    "CRP": {
+      "hgnc_symbol": "CRP",
+      "description": "C-reactive protein is an acute phase protein and inflammatory biomarker. It activates complement and is used clinically to monitor inflammation and infection."
+    },
+    "LBP": {
+      "hgnc_symbol": "LBP",
+      "description": "Lipopolysaccharide binding protein facilitates LPS recognition by CD14 and TLR4. It is an acute phase protein important in antibacterial host defense."
+    },
+    "HP": {
+      "hgnc_symbol": "HP",
+      "description": "Haptoglobin binds free hemoglobin to prevent oxidative damage. It is an acute phase protein elevated during inflammation and decreased in hemolysis."
+    },
+    "FN1": {
+      "hgnc_symbol": "FN1",
+      "description": "Fibronectin is a glycoprotein that connects cells to extracellular matrix. It is important in wound healing, embryonic development, and cell migration."
+    },
+    "LGALS3": {
+      "hgnc_symbol": "LGALS3",
+      "description": "Galectin-3 regulates cell adhesion, inflammation, and fibrosis. It is elevated in heart failure and is a biomarker for cardiovascular disease."
+    },
+    "B2M": {
+      "hgnc_symbol": "B2M",
+      "description": "Beta-2 microglobulin is a component of MHC class I molecules. It is a marker of immune activation and elevated in inflammatory and malignant conditions."
+    },
+    "APOE": {
+      "hgnc_symbol": "APOE",
+      "description": "Apolipoprotein E mediates lipid transport and metabolism. The APOE4 allele is a major genetic risk factor for Alzheimer's disease."
+    },
+    "APOA1": {
+      "hgnc_symbol": "APOA1",
+      "description": "Apolipoprotein A1 is the major protein component of HDL. It promotes cholesterol efflux and has anti-inflammatory and anti-atherosclerotic properties."
+    },
+    "PLG": {
+      "hgnc_symbol": "PLG",
+      "description": "Plasminogen is converted to plasmin, which degrades fibrin clots. It is essential for fibrinolysis and tissue remodeling processes."
+    },
+    "F2": {
+      "hgnc_symbol": "F2",
+      "description": "Prothrombin (Factor II) is converted to thrombin, which converts fibrinogen to fibrin. It is essential for blood clotting and wound healing."
+    },
+    "PROC": {
+      "hgnc_symbol": "PROC",
+      "description": "Protein C is an anticoagulant that inactivates factors Va and VIIIa. Deficiency leads to thrombophilia and increased clotting risk."
+    },
+    "PROS1": {
+      "hgnc_symbol": "PROS1",
+      "description": "Protein S is a cofactor for activated protein C in anticoagulation. It also has direct anti-inflammatory effects independent of coagulation."
+    },
+    "ANXA1": {
+      "hgnc_symbol": "ANXA1",
+      "description": "Annexin A1 has anti-inflammatory and pro-resolving properties. It mediates glucocorticoid effects and promotes resolution of inflammation."
+    },
+    "S100A8": {
+      "hgnc_symbol": "S100A8",
+      "description": "S100A8 (Calgranulin A) forms a complex with S100A9 called calprotectin. It is released by neutrophils and is a biomarker for inflammatory diseases."
+    },
+    "S100A9": {
+      "hgnc_symbol": "S100A9",
+      "description": "S100A9 (Calgranulin B) forms calprotectin with S100A8. It activates TLR4 and RAGE and is elevated in infections and autoimmune diseases."
+    },
+    "S100A12": {
+      "hgnc_symbol": "S100A12",
+      "description": "S100A12 (Calgranulin C) is a proinflammatory alarmin released by granulocytes. It is elevated in inflammatory diseases and infections."
+    },
+    "HMGB1": {
+      "hgnc_symbol": "HMGB1",
+      "description": "High mobility group box 1 is a nuclear protein and alarmin. When released extracellularly, it promotes inflammation through TLR4 and RAGE signaling."
+    },
+    "LCN2": {
+      "hgnc_symbol": "LCN2",
+      "description": "Lipocalin 2 (NGAL) sequesters iron to limit bacterial growth. It is an acute phase protein and biomarker for kidney injury."
+    },
+    "CHI3L1": {
+      "hgnc_symbol": "CHI3L1",
+      "description": "Chitinase 3-like 1 (YKL-40) is involved in inflammation and tissue remodeling. It is elevated in asthma, liver fibrosis, and various cancers."
+    },
+    "CTLA4": {
+      "hgnc_symbol": "CTLA4",
+      "description": "Cytotoxic T-lymphocyte associated protein 4 is an immune checkpoint that inhibits T cell activation. It is targeted by checkpoint inhibitor immunotherapy."
+    },
+    "PDCD1": {
+      "hgnc_symbol": "PDCD1",
+      "description": "Programmed cell death protein 1 (PD-1) is an immune checkpoint receptor on T cells. Anti-PD-1 antibodies are used in cancer immunotherapy."
+    },
+    "CD274": {
+      "hgnc_symbol": "CD274",
+      "description": "PD-L1 (CD274) is a ligand for PD-1 expressed by tumor cells and immune cells. It suppresses T cell activity and is targeted in cancer immunotherapy."
+    },
+    "FASLG": {
+      "hgnc_symbol": "FASLG",
+      "description": "Fas ligand induces apoptosis through Fas receptor. It is important in immune homeostasis, cytotoxic killing, and immune privilege."
+    },
+    "PRF1": {
+      "hgnc_symbol": "PRF1",
+      "description": "Perforin forms pores in target cell membranes allowing granzyme entry. It is essential for cytotoxic T cell and NK cell-mediated killing."
+    },
+    "GZMA": {
+      "hgnc_symbol": "GZMA",
+      "description": "Granzyme A is a serine protease that induces caspase-independent cell death. It is released by cytotoxic lymphocytes to kill target cells."
+    },
+    "GZMB": {
+      "hgnc_symbol": "GZMB",
+      "description": "Granzyme B is a serine protease that activates caspases and induces apoptosis. It is the major effector molecule of cytotoxic lymphocytes."
+    },
+    "TREM2": {
+      "hgnc_symbol": "TREM2",
+      "description": "Triggering receptor expressed on myeloid cells 2 regulates microglial function. Variants are associated with Alzheimer's disease risk."
+    },
+    "CD163": {
+      "hgnc_symbol": "CD163",
+      "description": "CD163 is a hemoglobin-haptoglobin scavenger receptor on macrophages. Soluble CD163 is elevated in inflammatory conditions and liver disease."
+    },
+    "MRC1": {
+      "hgnc_symbol": "MRC1",
+      "description": "Mannose receptor C type 1 (CD206) is expressed on alternatively activated macrophages. It mediates pathogen recognition and antigen uptake."
+    },
+    "CLEC7A": {
+      "hgnc_symbol": "CLEC7A",
+      "description": "Dectin-1 is a pattern recognition receptor that recognizes fungal beta-glucans. It activates antifungal immune responses in macrophages and dendritic cells."
+    },
+    "ICAM1": {
+      "hgnc_symbol": "ICAM1",
+      "description": "Intercellular adhesion molecule 1 mediates leukocyte adhesion and transmigration. It is upregulated on endothelium during inflammation."
+    },
+    "VCAM1": {
+      "hgnc_symbol": "VCAM1",
+      "description": "Vascular cell adhesion molecule 1 mediates leukocyte adhesion to endothelium. It is important in inflammatory cell recruitment and atherosclerosis."
+    },
+    "SELE": {
+      "hgnc_symbol": "SELE",
+      "description": "E-selectin is expressed on activated endothelium and mediates leukocyte rolling. It is important for neutrophil recruitment during inflammation."
+    },
+    "SELP": {
+      "hgnc_symbol": "SELP",
+      "description": "P-selectin is expressed on activated endothelium and platelets. It mediates initial leukocyte rolling and platelet-leukocyte interactions."
+    }
+  },
+  "metadata": {
+    "cytosig_count": 43,
+    "secact_count": 1170,
+    "descriptions_count": 43,
+    "secact_common_count": 88,
+    "last_updated": "2026-02-02"
+  }
+}
