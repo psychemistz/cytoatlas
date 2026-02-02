@@ -205,8 +205,16 @@ def compute_activity_for_celltype(
 
         expr_matrix = np.array(sample_expr)
 
+        # Handle NaN values
+        if np.any(np.isnan(expr_matrix)):
+            expr_matrix = np.nan_to_num(expr_matrix, nan=0.0)
+
         # Z-score normalize
         expr_matrix = (expr_matrix - expr_matrix.mean(axis=0)) / (expr_matrix.std(axis=0) + 1e-6)
+
+        # Handle any NaN from z-scoring
+        if np.any(np.isnan(expr_matrix)):
+            expr_matrix = np.nan_to_num(expr_matrix, nan=0.0)
 
         # Compute activity
         activity = infer_activity_ridge(expr_matrix, sig_subset)
@@ -247,10 +255,18 @@ def compute_activity_for_celltype(
             else:
                 expr = np.asarray(X_batch)
 
+            # Handle NaN values - replace with 0
+            if np.any(np.isnan(expr)):
+                expr = np.nan_to_num(expr, nan=0.0)
+
             # Z-score normalize per cell
             row_mean = expr.mean(axis=1, keepdims=True)
             row_std = expr.std(axis=1, keepdims=True) + 1e-6
             expr = (expr - row_mean) / row_std
+
+            # Handle any NaN from z-scoring (e.g., zero variance rows)
+            if np.any(np.isnan(expr)):
+                expr = np.nan_to_num(expr, nan=0.0)
 
             # Compute activity
             activity = infer_activity_ridge(expr, sig_subset)
@@ -515,8 +531,8 @@ def main():
 
     parser = argparse.ArgumentParser(description='Cell-type-aware cytokine activity inference')
     parser.add_argument('--atlas', type=str, default='all',
-                       choices=['all', 'cima', 'inflammation', 'scatlas_normal', 'scatlas_cancer'],
-                       help='Atlas to process')
+                       choices=['all', 'cima', 'inflammation', 'scatlas', 'scatlas_normal', 'scatlas_cancer'],
+                       help='Atlas to process (scatlas = both normal and cancer)')
     parser.add_argument('--mode', type=str, default='pseudobulk',
                        choices=['pseudobulk', 'singlecell', 'both'],
                        help='Processing mode')
@@ -545,10 +561,10 @@ def main():
         if args.atlas in ['all', 'inflammation']:
             process_inflammation(mode)
 
-        if args.atlas in ['all', 'scatlas_normal']:
+        if args.atlas in ['all', 'scatlas', 'scatlas_normal']:
             process_scatlas_normal(mode)
 
-        if args.atlas in ['all', 'scatlas_cancer']:
+        if args.atlas in ['all', 'scatlas', 'scatlas_cancer']:
             process_scatlas_cancer(mode)
 
     log("\n" + "=" * 60)
