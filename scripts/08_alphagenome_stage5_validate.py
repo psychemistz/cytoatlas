@@ -51,11 +51,17 @@ def parse_args():
                         help='Suffix for output files (e.g., "_test")')
     return parser.parse_args()
 
-# GTEx data paths
-GTEX_DIR = INPUT_DIR / 'gtex_data'
+# GTEx data paths - check both possible locations
+GTEX_DIR = Path('/data/parks34/projects/2secactpy/results/alphagenome/gtex_data')
+if not GTEX_DIR.exists():
+    GTEX_DIR = INPUT_DIR / 'gtex_data'
 
 # Supported GTEx file names (in order of preference)
 GTEX_FILES = [
+    # V10/V11 parquet format (preferred)
+    'GTEx_Analysis_v10_eQTL_updated/Whole_Blood.v10.eQTLs.signif_pairs.parquet',
+    'GTEx_Analysis_v11_eQTL_updated/Whole_Blood.v11.eQTLs.signif_pairs.parquet',
+    # V8 text format
     'Whole_Blood.v8.signif_variant_gene_pairs.txt.gz',  # Significant only (~50 MB)
     'Whole_Blood.nominal.allpairs.txt.gz',               # All associations (large)
     'Whole-Blood.nominal.allpairs.txt.gz',               # Alternative naming
@@ -73,12 +79,12 @@ def log(msg: str):
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
-def find_gtex_file() -> Tuple[Path, bool]:
+def find_gtex_file() -> Tuple[Path, bool, bool]:
     """
     Find available GTEx file.
 
     Returns:
-        (path, is_allpairs) - path to file and whether it's the all-pairs format
+        (path, is_allpairs, is_parquet) - path to file, whether it's all-pairs format, and whether it's parquet
     """
     GTEX_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -86,20 +92,23 @@ def find_gtex_file() -> Tuple[Path, bool]:
         local_path = GTEX_DIR / filename
         if local_path.exists():
             is_allpairs = 'allpairs' in filename.lower()
+            is_parquet = filename.endswith('.parquet')
             log(f"Found GTEx file: {local_path}")
+            if is_parquet:
+                log(f"  (parquet format - V10/V11)")
             if is_allpairs:
                 log(f"  (all-pairs format - will filter by p-value < {PVAL_THRESHOLD})")
-            return local_path, is_allpairs
+            return local_path, is_allpairs, is_parquet
 
-    return None, False
+    return None, False, False
 
 
-def download_gtex_eqtls() -> Path:
-    """Find or download GTEx v8 whole blood eQTLs."""
-    gtex_path, is_allpairs = find_gtex_file()
+def download_gtex_eqtls() -> Tuple[Path, bool, bool]:
+    """Find or download GTEx whole blood eQTLs."""
+    gtex_path, is_allpairs, is_parquet = find_gtex_file()
 
     if gtex_path is not None:
-        return gtex_path, is_allpairs
+        return gtex_path, is_allpairs, is_parquet
 
     log("GTEx data not found. Please download one of these files:")
     for f in GTEX_FILES:
@@ -108,11 +117,11 @@ def download_gtex_eqtls() -> Path:
     raise FileNotFoundError("GTEx data not found")
 
 
-def load_gtex_eqtls(gtex_path: Path, target_genes: set, is_allpairs: bool = False) -> pd.DataFrame:
+def load_gtex_eqtls(gtex_path: Path, target_genes: set, is_allpairs: bool = False, is_parquet: bool = False) -> pd.DataFrame:
     """
     Load GTEx eQTLs, filtering to target genes.
 
-    GTEx signif_variant_gene_pairs format:
+    GTEx signif_variant_gene_pairs format (V8 txt.gz):
     - variant_id: chr1_123456_A_G_b38
     - gene_id: ENSG00000123456.1
     - tss_distance: 12345
@@ -120,18 +129,23 @@ def load_gtex_eqtls(gtex_path: Path, target_genes: set, is_allpairs: bool = Fals
     - slope: 0.5
     - slope_se: 0.1
 
-    GTEx nominal.allpairs format:
+    GTEx V10/V11 parquet format:
     - variant_id: chr1_123456_A_G_b38
     - gene_id: ENSG00000123456.1
-    - tss_distance: 12345
-    - ma_samples: 10
-    - ma_count: 20
-    - maf: 0.1
-    - pval_nominal: 1e-10
-    - slope: 0.5
-    - slope_se: 0.1
+    - tss_distance, af, ma_samples, ma_count
+    - pval_nominal, slope, slope_se
+    - pval_nominal_threshold, min_pval_nominal, pval_beta
     """
     log(f"Loading GTEx eQTLs: {gtex_path}")
+
+    if is_parquet:
+        # Load parquet file directly
+        log("  Reading parquet format...")
+        gtex_df = pd.read_parquet(gtex_path)
+        log(f"  Loaded {len(gtex_df):,} GTEx eQTLs")
+        return gtex_df
+
+    # Handle gzip text format
     if is_allpairs:
         log(f"  Filtering to p-value < {PVAL_THRESHOLD}")
 
@@ -447,8 +461,8 @@ def main():
 
     # Download/load GTEx data
     try:
-        gtex_path, is_allpairs = download_gtex_eqtls()
-        gtex_df = load_gtex_eqtls(gtex_path, target_genes, is_allpairs=is_allpairs)
+        gtex_path, is_allpairs, is_parquet = download_gtex_eqtls()
+        gtex_df = load_gtex_eqtls(gtex_path, target_genes, is_allpairs=is_allpairs, is_parquet=is_parquet)
     except Exception as e:
         log(f"ERROR: Could not load GTEx data: {e}")
         log("\nCreating mock GTEx data for pipeline testing...")

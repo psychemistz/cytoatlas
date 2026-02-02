@@ -4,15 +4,15 @@
 
 Use AlphaGenome API to prioritize regulatory variants from CIMA immune cell cis-eQTLs affecting cytokine/secreted protein expression.
 
-## Status Summary (Updated 2026-02-01 20:15)
+## Status Summary (Updated 2026-02-02 15:00)
 
 | Stage | Status | Actual Output |
 |-------|--------|---------------|
 | Stage 1 | ✅ COMPLETE | 48,627 cytokine eQTLs → 29,816 unique variants |
 | Stage 2 | ✅ COMPLETE | 29,816 variants formatted (SNV/indel) |
-| Stage 3 | 🔄 RUNNING | Job 10659620: 2,100/29,816 (~7%), ETA ~110h |
+| Stage 3 | 🔄 RUNNING | Job 10659620: 6,500/29,816 (~22%), ETA ~95h |
 | Stage 4 | ⚠️ MOCK ONLY | Existing output from simulated data - needs re-run |
-| Stage 5 | ⚠️ MOCK ONLY | Existing output from simulated data - needs re-run |
+| Stage 5 | ✅ GTEx READY | GTEx V10 downloaded (2,985,690 Whole Blood eQTLs) |
 
 ### ⚠️ Critical: Mock vs Real Data
 
@@ -174,7 +174,7 @@ results/alphagenome/
   stage5_gtex_matched.csv              ⚠️ MOCK DATA - needs re-run
   stage5_validation_metrics.json       ⚠️ MOCK DATA - needs re-run
   stage5_report.md                     ⚠️ MOCK DATA - needs re-run
-  gtex_data/                           ❌ EMPTY - manual download needed
+  gtex_data/                           ✅ V10 parquet (2,985,690 eQTLs)
 ```
 
 ## SLURM Job
@@ -199,15 +199,16 @@ results/alphagenome/
 | Chromatin data | ATAC, H3K27ac, etc. | **Not available** |
 | Mechanism classification | Enhancer/promoter/TF | Limited (RNA-only) |
 
-## GTEx Data Download (Manual)
+## GTEx Data Download ✅ COMPLETE
 
-HPC proxy blocks external downloads. On local machine:
-```bash
-wget "https://storage.gtexportal.org/public/GTEx_Analysis_v8/single_tissue_qtl_data/GTEx_Analysis_v8_eQTL.tar"
-tar -xvf GTEx_Analysis_v8_eQTL.tar --wildcards '*/Whole_Blood*signif*'
-scp GTEx_Analysis_v8_eQTL/Whole_Blood.v8.signif_variant_gene_pairs.txt.gz \
-  parks34@biowulf.nih.gov:/vf/users/parks34/projects/2secactpy/results/alphagenome/gtex_data/
+GTEx V10 eQTL data downloaded and extracted:
 ```
+/data/parks34/projects/2secactpy/results/alphagenome/gtex_data/
+  GTEx_Analysis_v10_eQTL_updated/
+    Whole_Blood.v10.eQTLs.signif_pairs.parquet  # 2,985,690 eQTLs
+```
+
+Stage 5 script updated to support V10 parquet format.
 
 ## Next Steps
 
@@ -217,11 +218,11 @@ scp GTEx_Analysis_v8_eQTL/Whole_Blood.v8.signif_variant_gene_pairs.txt.gz \
    python3 -c "import json; d=json.load(open('results/alphagenome/stage3_checkpoint.json')); print(f'Processed: {len(d[\"processed_variants\"])}/29816')"
    ```
 
-2. **Wait for Stage 3 completion** (~4-5 days from now)
+2. **Wait for Stage 3 completion** (~4 days remaining, ETA Feb 6)
 
-3. **Download GTEx data** manually and transfer to HPC (can do now)
+3. ~~**Download GTEx data**~~ ✅ COMPLETE - V10 parquet downloaded
 
-4. **Re-run Stage 4** on real predictions:
+4. **Re-run Stage 4** on real predictions (after Stage 3 completes):
    ```bash
    python scripts/08_alphagenome_stage4_interpret.py
    ```
