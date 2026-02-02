@@ -189,14 +189,14 @@ class GeneService(BaseService):
         results = []
 
         # CIMA data
-        if atlas is None or atlas == "cima":
+        if atlas is None or atlas.lower() == "cima":
             try:
                 cima_data = await self.load_json("cima_celltype.json")
                 for r in cima_data:
                     if r.get("signature") == signature and r.get("signature_type") == signature_type:
                         results.append(GeneCellTypeActivity(
                             cell_type=r.get("cell_type"),
-                            atlas="cima",
+                            atlas="CIMA",
                             signature=signature,
                             signature_type=signature_type,
                             mean_activity=self._safe_float(r.get("mean_activity")),
@@ -208,14 +208,14 @@ class GeneService(BaseService):
                 pass
 
         # Inflammation data
-        if atlas is None or atlas == "inflammation":
+        if atlas is None or atlas.lower() == "inflammation":
             try:
                 inflam_data = await self.load_json("inflammation_celltype.json")
                 for r in inflam_data:
                     if r.get("signature") == signature and r.get("signature_type") == signature_type:
                         results.append(GeneCellTypeActivity(
                             cell_type=r.get("cell_type"),
-                            atlas="inflammation",
+                            atlas="Inflammation",
                             signature=signature,
                             signature_type=signature_type,
                             mean_activity=self._safe_float(r.get("mean_activity")),
@@ -227,7 +227,7 @@ class GeneService(BaseService):
                 pass
 
         # scAtlas data (cell types within organs)
-        if atlas is None or atlas == "scatlas":
+        if atlas is None or atlas.lower() == "scatlas":
             try:
                 scatlas_data = await self.load_json("scatlas_celltypes.json")
                 # scatlas_celltypes.json has nested structure with "data" key
@@ -238,7 +238,7 @@ class GeneService(BaseService):
                         ct_name = f"{r.get('cell_type')} ({r.get('organ')})" if r.get("organ") else r.get("cell_type")
                         results.append(GeneCellTypeActivity(
                             cell_type=ct_name,
-                            atlas="scatlas",
+                            atlas="scAtlas",
                             signature=signature,
                             signature_type=signature_type,
                             mean_activity=self._safe_float(r.get("mean_activity")),
@@ -521,25 +521,25 @@ class GeneService(BaseService):
             if sig_data:
                 # Add atlas data
                 if sig_data.get("cima_mean") is not None:
-                    atlases.append("cima")
+                    atlases.append("CIMA")
                     activity_by_atlas.append(GeneCrossAtlasActivity(
-                        atlas="cima",
+                        atlas="CIMA",
                         cell_type="All",
                         mean_activity=self._safe_float(sig_data.get("cima_mean")),
                         n_cells=None,
                     ))
                 if sig_data.get("inflammation_mean") is not None:
-                    atlases.append("inflammation")
+                    atlases.append("Inflammation")
                     activity_by_atlas.append(GeneCrossAtlasActivity(
-                        atlas="inflammation",
+                        atlas="Inflammation",
                         cell_type="All",
                         mean_activity=self._safe_float(sig_data.get("inflammation_mean")),
                         n_cells=None,
                     ))
                 if sig_data.get("scatlas_mean") is not None:
-                    atlases.append("scatlas")
+                    atlases.append("scAtlas")
                     activity_by_atlas.append(GeneCrossAtlasActivity(
-                        atlas="scatlas",
+                        atlas="scAtlas",
                         cell_type="All",
                         mean_activity=self._safe_float(sig_data.get("scatlas_mean")),
                         n_cells=None,
