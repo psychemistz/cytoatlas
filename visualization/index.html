@@ -2192,8 +2192,8 @@
             <div class="tabs">
                 <button class="tab active" data-tab="atlas-overview">Overview</button>
                 <button class="tab" data-tab="celltype-mapping">Cell Type Mapping</button>
-                <button class="tab" data-tab="conserved-signatures">Conserved</button>
                 <button class="tab" data-tab="atlas-comparison">Atlas Comparison</button>
+                <button class="tab" data-tab="conserved-signatures">Conserved</button>
                 <button class="tab" data-tab="meta-analysis">Meta-Analysis</button>
                 <button class="tab" data-tab="signature-correlation">Signature Matrix</button>
                 <button class="tab" data-tab="pathway-enrichment">Pathways</button>
@@ -2325,9 +2325,8 @@
                     <div class="control-group">
                         <label>View</label>
                         <select id="atlas-comp-view">
-                            <option value="scatter">Cell Type Aggregated</option>
-                            <option value="resampled">Bootstrap CIs</option>
-                            <option value="concordance">Prediction Concordance</option>
+                            <option value="scatter">Pseudobulk Mean</option>
+                            <option value="singlecell">Single-cell Mean</option>
                         </select>
                     </div>
                 </div>
@@ -10102,29 +10101,22 @@
             const diffSubtitle = document.getElementById('atlas-diff-subtitle');
 
             if (viewType === 'scatter') {
-                if (scatterTitle) scatterTitle.textContent = 'Cell Type Aggregated Activity';
-                if (scatterSubtitle) scatterSubtitle.textContent = `${level === 'coarse' ? 'Coarse (8 lineages)' : 'Fine (~21 types)'}: Mean activity per cell type`;
+                if (scatterTitle) scatterTitle.textContent = 'Pseudobulk Aggregated Activity';
+                if (scatterSubtitle) scatterSubtitle.textContent = `${level === 'coarse' ? 'Coarse (8 lineages)' : 'Fine (~21 types)'}: Mean activity per cell type (sample-weighted)`;
                 if (diffTitle) diffTitle.textContent = 'Per-Cell Type Correlation';
                 if (diffSubtitle) diffSubtitle.textContent = 'Cross-atlas correlation breakdown by harmonized cell type';
-            } else if (viewType === 'resampled') {
-                if (scatterTitle) scatterTitle.textContent = 'Bootstrap Confidence Intervals';
-                if (scatterSubtitle) scatterSubtitle.textContent = 'Activity differences with 95% CI from pseudobulk resampling';
-                if (diffTitle) diffTitle.textContent = 'Significant Differences';
-                if (diffSubtitle) diffSubtitle.textContent = 'Signatures with CI not crossing zero';
-            } else if (viewType === 'concordance') {
-                if (scatterTitle) scatterTitle.textContent = 'Prediction Concordance';
-                if (scatterSubtitle) scatterSubtitle.textContent = 'Cell type classification accuracy using signature profiles';
-                if (diffTitle) diffTitle.textContent = 'Per-Cell Type Accuracy';
-                if (diffSubtitle) diffSubtitle.textContent = 'Classification accuracy by harmonized cell type';
+            } else if (viewType === 'singlecell') {
+                if (scatterTitle) scatterTitle.textContent = 'Single-cell Mean Activity';
+                if (scatterSubtitle) scatterSubtitle.textContent = 'Direct mean of individual cell activities (cell-weighted, 50K cells sampled)';
+                if (diffTitle) diffTitle.textContent = 'Per-Cell Type Comparison';
+                if (diffSubtitle) diffSubtitle.textContent = 'Mean activity per harmonized cell type from single cells';
             }
 
             // Render based on view type
             if (viewType === 'scatter') {
                 renderAtlasScatter(container1, container2, compData, level, labels);
-            } else if (viewType === 'resampled') {
-                renderBootstrapCI(container1, container2, compData, labels);
-            } else if (viewType === 'concordance') {
-                renderPredictionConcordance(container1, container2, compData, labels);
+            } else if (viewType === 'singlecell') {
+                renderSinglecellMean(container1, container2, compData, labels);
             }
 
             // Update summary
@@ -10282,14 +10274,14 @@
             }
         }
 
-        // Render bootstrap CI view
-        function renderBootstrapCI(container1, container2, compData, labels) {
-            const resampledData = compData?.pseudobulk_resampled;
+        // Render single-cell mean activity comparison
+        function renderSinglecellMean(container1, container2, compData, labels) {
+            const scData = compData?.singlecell_mean;
 
-            if (!resampledData || !resampledData.data || resampledData.data.length === 0) {
+            if (!scData || !scData.data || scData.data.length === 0) {
                 if (container1) {
                     container1.classList.remove('loading');
-                    container1.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Bootstrap resampled data not available.</p>';
+                    container1.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Single-cell mean activity data not available. This requires joining activity data with original h5ad files.</p>';
                 }
                 if (container2) {
                     container2.classList.remove('loading');
@@ -10298,76 +10290,244 @@
                 return;
             }
 
-            const data = resampledData.data;
+            const plotData = scData.data;
+            const correlation = scData.overall_correlation;
 
-            // Group by signature, get max |diff| entry per signature
-            const sigData = {};
-            data.forEach(d => {
-                if (!sigData[d.signature] || Math.abs(d.mean_diff) > Math.abs(sigData[d.signature].mean_diff)) {
-                    sigData[d.signature] = d;
-                }
-            });
-            const uniqueData = Object.values(sigData).sort((a, b) => b.mean_diff - a.mean_diff);
-
-            // Forest plot in container1
+            // Left panel: Scatter plot of single-cell means
             if (container1) {
                 container1.classList.remove('loading');
                 Plotly.purge(container1);
 
-                const top15 = uniqueData.slice(0, 15);
-                const bottom15 = uniqueData.slice(-15).reverse();
-                const display = [...top15, ...bottom15.filter(d => !top15.includes(d))].slice(0, 25);
+                const xData = plotData.map(d => d.x);
+                const yData = plotData.map(d => d.y);
 
-                const traces = [{
+                const xMin = Math.min(...xData), xMax = Math.max(...xData);
+                const yMin = Math.min(...yData), yMax = Math.max(...yData);
+                const padding = 0.2;
+
+                const titleText = `Spearman r = ${correlation?.toFixed(3) || 'N/A'} (n=${plotData.length})`;
+
+                // Color by cell type
+                const cellTypes = [...new Set(plotData.map(d => d.cell_type))];
+                const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
+
+                const traces = cellTypes.map(ct => {
+                    const ctData = plotData.filter(d => d.cell_type === ct);
+                    return {
+                        type: 'scatter',
+                        mode: 'markers',
+                        name: ct,
+                        x: ctData.map(d => d.x),
+                        y: ctData.map(d => d.y),
+                        text: ctData.map(d => `${d.signature}<br>${d.n_cells_x} vs ${d.n_cells_y} cells`),
+                        marker: {
+                            size: 8,
+                            color: colorScale(ct),
+                            opacity: 0.7
+                        },
+                        hovertemplate: '<b>%{text}</b><br>' + labels.x + ': %{x:.2f}<br>' + labels.y + ': %{y:.2f}<extra>' + ct + '</extra>'
+                    };
+                });
+
+                // Add diagonal line
+                traces.push({
                     type: 'scatter',
-                    mode: 'markers',
-                    x: display.map(d => d.mean_diff),
-                    y: display.map(d => d.signature),
-                    error_x: {
-                        type: 'data',
-                        symmetric: false,
-                        array: display.map(d => d.ci_high - d.mean_diff),
-                        arrayminus: display.map(d => d.mean_diff - d.ci_low)
-                    },
-                    marker: {
-                        size: 8,
-                        color: display.map(d => (d.ci_low > 0 || d.ci_high < 0) ? '#1f77b4' : '#aaa')
-                    },
-                    hovertemplate: '<b>%{y}</b><br>Δ: %{x:.3f}<br>95% CI: [%{customdata[0]:.3f}, %{customdata[1]:.3f}]<extra></extra>',
-                    customdata: display.map(d => [d.ci_low, d.ci_high])
-                }];
+                    mode: 'lines',
+                    x: [Math.min(xMin, yMin) - padding, Math.max(xMax, yMax) + padding],
+                    y: [Math.min(xMin, yMin) - padding, Math.max(xMax, yMax) + padding],
+                    line: { dash: 'dash', color: '#ccc' },
+                    showlegend: false,
+                    hoverinfo: 'skip'
+                });
 
                 Plotly.newPlot(container1, traces, {
-                    xaxis: { title: `Δ Activity (${labels.y} − ${labels.x})`, zeroline: true, zerolinecolor: '#000', zerolinewidth: 2 },
-                    yaxis: { automargin: true },
-                    margin: { l: 100, r: 30, t: 40, b: 50 },
+                    xaxis: { title: `${labels.x} Mean Activity (z-score)`, zeroline: true },
+                    yaxis: { title: `${labels.y} Mean Activity (z-score)`, zeroline: true },
+                    margin: { l: 60, r: 30, t: 50, b: 60 },
+                    title: { text: titleText, font: { size: 12 } },
                     height: 430,
-                    title: { text: `Bootstrap 95% CI (n=${resampledData.n_bootstrap} iterations)`, font: { size: 12 } }
+                    legend: { orientation: 'h', y: -0.2 }
                 }, { responsive: true });
             }
 
-            // Significant differences in container2
+            // Right panel: Per-cell type mean comparison (bar chart)
             if (container2) {
                 container2.classList.remove('loading');
                 Plotly.purge(container2);
 
-                // Filter significant (CI doesn't cross zero)
-                const significant = uniqueData.filter(d => d.ci_low > 0 || d.ci_high < 0);
-                const sigUp = significant.filter(d => d.mean_diff > 0).length;
-                const sigDown = significant.filter(d => d.mean_diff < 0).length;
+                // Compute mean of means per cell type
+                const cellTypeStats = {};
+                plotData.forEach(d => {
+                    if (!cellTypeStats[d.cell_type]) {
+                        cellTypeStats[d.cell_type] = { x: [], y: [], n_x: 0, n_y: 0 };
+                    }
+                    cellTypeStats[d.cell_type].x.push(d.x);
+                    cellTypeStats[d.cell_type].y.push(d.y);
+                    cellTypeStats[d.cell_type].n_x = d.n_cells_x;
+                    cellTypeStats[d.cell_type].n_y = d.n_cells_y;
+                });
+
+                const ctNames = Object.keys(cellTypeStats).sort();
+                const xMeans = ctNames.map(ct => {
+                    const vals = cellTypeStats[ct].x;
+                    return vals.reduce((a, b) => a + b, 0) / vals.length;
+                });
+                const yMeans = ctNames.map(ct => {
+                    const vals = cellTypeStats[ct].y;
+                    return vals.reduce((a, b) => a + b, 0) / vals.length;
+                });
 
                 Plotly.newPlot(container2, [{
                     type: 'bar',
-                    x: [`Higher in ${labels.y}`, `Higher in ${labels.x}`],
-                    y: [sigUp, sigDown],
-                    marker: { color: ['#d62728', '#2ca02c'] },
-                    text: [sigUp, sigDown],
-                    textposition: 'auto'
+                    name: labels.x,
+                    x: ctNames,
+                    y: xMeans,
+                    marker: { color: '#1f77b4' },
+                    text: ctNames.map(ct => `${cellTypeStats[ct].n_x} cells`),
+                    hovertemplate: '<b>%{x}</b><br>Mean: %{y:.2f}<br>%{text}<extra>' + labels.x + '</extra>'
+                }, {
+                    type: 'bar',
+                    name: labels.y,
+                    x: ctNames,
+                    y: yMeans,
+                    marker: { color: '#ff7f0e' },
+                    text: ctNames.map(ct => `${cellTypeStats[ct].n_y} cells`),
+                    hovertemplate: '<b>%{x}</b><br>Mean: %{y:.2f}<br>%{text}<extra>' + labels.y + '</extra>'
                 }], {
-                    yaxis: { title: 'Number of Significant Signatures' },
-                    margin: { l: 60, r: 30, t: 40, b: 80 },
+                    barmode: 'group',
+                    xaxis: { title: 'Cell Type', tickangle: -45 },
+                    yaxis: { title: 'Mean Activity (z-score)' },
+                    margin: { l: 60, r: 30, t: 40, b: 100 },
                     height: 430,
-                    title: { text: `Significant Differences (${significant.length}/${uniqueData.length})`, font: { size: 12 } }
+                    legend: { orientation: 'h', y: 1.1 },
+                    title: { text: `Per-Cell Type Mean (${scData.n_cells_atlas1 || '?'} vs ${scData.n_cells_atlas2 || '?'} cells)`, font: { size: 12 } }
+                }, { responsive: true });
+            }
+        }
+
+        // Render signature agreement view (similarity-focused)
+        function renderSignatureAgreement(container1, container2, compData, labels) {
+            const agreementData = compData?.signature_agreement;
+
+            if (!agreementData || !agreementData.equivalence || agreementData.n === 0) {
+                if (container1) {
+                    container1.classList.remove('loading');
+                    container1.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">Signature agreement data not available.</p>';
+                }
+                if (container2) {
+                    container2.classList.remove('loading');
+                    container2.innerHTML = '';
+                }
+                return;
+            }
+
+            const equiv = agreementData.equivalence;
+            const celltypeData = agreementData.celltype_agreement || [];
+
+            // Left panel: Equivalence summary - stacked bar showing % within bounds
+            if (container1) {
+                container1.classList.remove('loading');
+                Plotly.purge(container1);
+
+                // Create gauge-like visualization for equivalence
+                const bounds = ['±0.5', '±1.0', '±2.0', '±3.0'];
+                const values = [
+                    equiv.within_0_5 * 100,
+                    equiv.within_1_0 * 100,
+                    equiv.within_2_0 * 100,
+                    equiv.within_3_0 * 100
+                ];
+
+                // Interpretation colors: green = high agreement
+                const colors = values.map(v => {
+                    if (v >= 80) return '#2ca02c';  // Excellent
+                    if (v >= 60) return '#98df8a';  // Good
+                    if (v >= 40) return '#ffbb78';  // Moderate
+                    return '#d62728';  // Poor
+                });
+
+                const traces = [{
+                    type: 'bar',
+                    x: bounds,
+                    y: values,
+                    marker: { color: colors },
+                    text: values.map(v => `${v.toFixed(1)}%`),
+                    textposition: 'auto',
+                    hovertemplate: '<b>Within %{x} z-score</b><br>%{y:.1f}% of signatures<extra></extra>'
+                }];
+
+                // Add reference lines
+                const shapes = [
+                    { type: 'line', x0: -0.5, x1: 3.5, y0: 80, y1: 80, line: { dash: 'dash', color: '#2ca02c', width: 1 } },
+                    { type: 'line', x0: -0.5, x1: 3.5, y0: 60, y1: 60, line: { dash: 'dot', color: '#666', width: 1 } }
+                ];
+
+                const ccc = agreementData.overall_ccc;
+                const cccText = ccc !== null ? `CCC = ${ccc.toFixed(3)}` : '';
+                const dirAgree = agreementData.direction_agreement;
+                const dirText = dirAgree !== null ? `, ${(dirAgree * 100).toFixed(0)}% same direction` : '';
+
+                Plotly.newPlot(container1, traces, {
+                    xaxis: { title: 'Equivalence Bound (z-score)' },
+                    yaxis: { title: '% Signatures Within Bound', range: [0, 105] },
+                    margin: { l: 60, r: 30, t: 50, b: 60 },
+                    height: 430,
+                    shapes: shapes,
+                    annotations: [
+                        { x: 3.2, y: 82, text: 'Excellent', showarrow: false, font: { size: 10, color: '#2ca02c' } },
+                        { x: 3.2, y: 62, text: 'Good', showarrow: false, font: { size: 10, color: '#666' } }
+                    ],
+                    title: { text: `Overall Agreement: ${cccText}${dirText}`, font: { size: 12 } }
+                }, { responsive: true });
+            }
+
+            // Right panel: Per-cell type CCC bar chart
+            if (container2) {
+                container2.classList.remove('loading');
+                Plotly.purge(container2);
+
+                if (celltypeData.length === 0) {
+                    container2.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No cell type data available.</p>';
+                    return;
+                }
+
+                // Sort by CCC descending
+                const sortedData = [...celltypeData]
+                    .filter(d => d.ccc !== null)
+                    .sort((a, b) => b.ccc - a.ccc);
+
+                const cellTypes = sortedData.map(d => d.cell_type);
+                const cccValues = sortedData.map(d => d.ccc);
+
+                // Color by CCC value
+                const barColors = cccValues.map(v => {
+                    if (v >= 0.9) return '#1a5f1a';   // Excellent
+                    if (v >= 0.7) return '#2ca02c';   // Good
+                    if (v >= 0.5) return '#98df8a';   // Moderate
+                    if (v >= 0.3) return '#ffbb78';   // Fair
+                    return '#d62728';   // Poor
+                });
+
+                Plotly.newPlot(container2, [{
+                    type: 'bar',
+                    x: cccValues,
+                    y: cellTypes,
+                    orientation: 'h',
+                    marker: { color: barColors },
+                    text: cccValues.map(v => v.toFixed(2)),
+                    textposition: 'auto',
+                    hovertemplate: '<b>%{y}</b><br>CCC: %{x:.3f}<br>%{customdata}<extra></extra>',
+                    customdata: sortedData.map(d => `${(d.equiv_1_0 * 100).toFixed(0)}% within ±1.0`)
+                }], {
+                    xaxis: { title: "Lin's Concordance (CCC)", range: [0, 1.05] },
+                    yaxis: { automargin: true },
+                    margin: { l: 120, r: 30, t: 40, b: 50 },
+                    height: 430,
+                    shapes: [
+                        { type: 'line', x0: 0.9, x1: 0.9, y0: -0.5, y1: cellTypes.length - 0.5, line: { dash: 'dash', color: '#1a5f1a', width: 1 } },
+                        { type: 'line', x0: 0.7, x1: 0.7, y0: -0.5, y1: cellTypes.length - 0.5, line: { dash: 'dot', color: '#2ca02c', width: 1 } }
+                    ],
+                    title: { text: `Per-Cell Type Agreement (n=${celltypeData.length})`, font: { size: 12 } }
                 }, { responsive: true });
             }
         }
@@ -10473,17 +10633,13 @@
 
             if (viewType === 'scatter' && aggData) {
                 html += `${labels.x} vs ${labels.y} | `;
-                html += `<span style="color:#1f77b4">r = ${aggData.correlation?.toFixed(3) || 'N/A'}</span> | `;
+                html += `<span style="color:#1f77b4">Spearman r = ${aggData.correlation?.toFixed(3) || 'N/A'}</span> | `;
                 html += `${aggData.n_celltypes || '?'} cell types × ${aggData.n_signatures || '?'} signatures = ${aggData.n || 0} data points`;
-            } else if (viewType === 'resampled' && compData.pseudobulk_resampled) {
-                const resamp = compData.pseudobulk_resampled;
-                html += `Bootstrap resampling: ${resamp.n_bootstrap || 50} iterations | `;
-                html += `${resamp.n || 0} signature × cell type pairs tested`;
-            } else if (viewType === 'concordance' && compData.prediction_concordance) {
-                const conc = compData.prediction_concordance;
-                html += `Train on ${labels.x}, predict ${labels.y} cell types | `;
-                html += `<span style="color:#2ca02c">Accuracy: ${(conc.overall_accuracy * 100).toFixed(1)}%</span> | `;
-                html += `${conc.n_samples} samples`;
+            } else if (viewType === 'singlecell' && compData.singlecell_mean) {
+                const sc = compData.singlecell_mean;
+                html += `<span style="color:#1f77b4">Spearman r = ${sc.overall_correlation?.toFixed(3) || 'N/A'}</span> | `;
+                html += `${sc.n_cells_atlas1?.toLocaleString() || '?'} vs ${sc.n_cells_atlas2?.toLocaleString() || '?'} cells sampled | `;
+                html += `${sc.n_celltypes || '?'} cell types × ${sc.n_signatures || '?'} signatures`;
             }
 
             summaryDiv.innerHTML = html;

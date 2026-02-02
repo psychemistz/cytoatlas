@@ -464,28 +464,54 @@ def compute_celltype_aggregated_comparison(atlas1: str, atlas2: str, sig_type: s
     }
 
 
-def compute_pseudobulk_resampled_comparison(atlas1: str, atlas2: str, sig_type: str,
-                                             level: str = 'coarse',
-                                             n_bootstrap: int = 100) -> dict:
+def compute_lins_ccc(x: np.ndarray, y: np.ndarray) -> float:
     """
-    Compute pseudobulk comparison with bootstrap resampling.
+    Compute Lin's Concordance Correlation Coefficient.
 
-    For each harmonized cell type:
-    1. Get all samples from both atlases
-    2. Bootstrap resample to get matched sample sizes
-    3. Compute mean and CI for activity differences
+    CCC measures both precision (correlation) and accuracy (bias).
+    CCC = 1 means perfect agreement, CCC = 0 means no agreement.
+    """
+    x = np.asarray(x)
+    y = np.asarray(y)
+
+    # Remove NaN pairs
+    mask = ~(np.isnan(x) | np.isnan(y))
+    x, y = x[mask], y[mask]
+
+    if len(x) < 3:
+        return np.nan
+
+    mean_x, mean_y = np.mean(x), np.mean(y)
+    var_x, var_y = np.var(x, ddof=1), np.var(y, ddof=1)
+    cov_xy = np.cov(x, y, ddof=1)[0, 1]
+
+    # Lin's CCC formula
+    ccc = (2 * cov_xy) / (var_x + var_y + (mean_x - mean_y)**2)
+
+    return float(ccc)
+
+
+def compute_signature_agreement(atlas1: str, atlas2: str, sig_type: str,
+                                 level: str = 'coarse') -> dict:
+    """
+    Compute signature agreement metrics focusing on SIMILARITY between atlases.
+
+    Metrics computed:
+    1. Lin's Concordance Correlation Coefficient (CCC) - overall and per cell type
+    2. Equivalence: % of signatures within ±0.5, ±1.0, ±2.0 z-score bounds
+    3. Rank agreement: % of signatures with same direction (both positive or both negative)
 
     Returns:
-        dict with resampled comparison statistics
+        dict with agreement metrics
     """
-    print(f"\n  Computing resampled pseudobulk comparison: {atlas1} vs {atlas2}")
+    print(f"\n  Computing signature agreement: {atlas1} vs {atlas2}")
 
     # Load data
     act1, meta1 = load_pseudobulk_data(atlas1, sig_type)
     act2, meta2 = load_pseudobulk_data(atlas2, sig_type)
 
     if act1 is None or act2 is None:
-        return {'data': [], 'n': 0}
+        return {'celltype_agreement': [], 'equivalence': {}, 'overall_ccc': None, 'n': 0}
 
     # Get mapping
     mapping1 = get_coarse_mapping(atlas1) if level == 'coarse' else get_fine_mapping(atlas1)
@@ -502,54 +528,126 @@ def compute_pseudobulk_resampled_comparison(atlas1: str, atlas2: str, sig_type: 
         common_sigs = set(combined_var.nlargest(100).index)
 
     common_sigs = sorted(common_sigs)
+    common_types = sorted(common_types)
 
-    print(f"    Common types: {len(common_types)}, Running {n_bootstrap} bootstrap iterations...")
+    print(f"    Common types: {len(common_types)}, Common signatures: {len(common_sigs)}")
 
-    resampled_data = []
+    # Collect all paired values for overall metrics
+    all_x, all_y = [], []
+    all_diffs = []
 
-    for ct in sorted(common_types):
+    # Per-cell type agreement
+    celltype_agreement = []
+
+    for ct in common_types:
         mask1 = meta1['harmonized'] == ct
         mask2 = meta2['harmonized'] == ct
 
-        samples1 = act1.loc[mask1, common_sigs]
-        samples2 = act2.loc[mask2, common_sigs]
-
-        n1, n2 = len(samples1), len(samples2)
-        if n1 < 2 or n2 < 2:
+        if mask1.sum() == 0 or mask2.sum() == 0:
             continue
 
-        # Bootstrap
-        n_resample = min(n1, n2)
+        mean1 = act1.loc[mask1, common_sigs].mean()
+        mean2 = act2.loc[mask2, common_sigs].mean()
 
-        for sig in common_sigs:
-            boot_diffs = []
+        x_vals = mean1.values
+        y_vals = mean2.values
 
-            for _ in range(n_bootstrap):
-                idx1 = np.random.choice(n1, n_resample, replace=True)
-                idx2 = np.random.choice(n2, n_resample, replace=True)
+        # Remove NaN
+        valid_mask = ~(np.isnan(x_vals) | np.isnan(y_vals))
+        x_clean = x_vals[valid_mask]
+        y_clean = y_vals[valid_mask]
 
-                mean1 = samples1.iloc[idx1][sig].mean()
-                mean2 = samples2.iloc[idx2][sig].mean()
-                boot_diffs.append(mean2 - mean1)
+        if len(x_clean) < 3:
+            continue
 
-            boot_diffs = np.array(boot_diffs)
+        all_x.extend(x_clean)
+        all_y.extend(y_clean)
 
-            resampled_data.append({
-                'signature': sig,
-                'cell_type': ct,
-                'mean_diff': float(np.mean(boot_diffs)),
-                'ci_low': float(np.percentile(boot_diffs, 2.5)),
-                'ci_high': float(np.percentile(boot_diffs, 97.5)),
-                'x_mean': float(samples1[sig].mean()),
-                'y_mean': float(samples2[sig].mean()),
-                'n_x': n1,
-                'n_y': n2
-            })
+        diffs = np.abs(x_clean - y_clean)
+        all_diffs.extend(diffs)
+
+        # Per-cell type CCC
+        ccc = compute_lins_ccc(x_clean, y_clean)
+
+        # Spearman correlation for this cell type
+        if len(x_clean) > 2:
+            r, _ = stats.spearmanr(x_clean, y_clean)
+        else:
+            r = np.nan
+
+        # Direction agreement: % where both have same sign
+        same_direction = np.sum((x_clean > 0) == (y_clean > 0)) / len(x_clean)
+
+        # Equivalence for this cell type
+        equiv_0_5 = np.sum(diffs <= 0.5) / len(diffs)
+        equiv_1_0 = np.sum(diffs <= 1.0) / len(diffs)
+        equiv_2_0 = np.sum(diffs <= 2.0) / len(diffs)
+
+        celltype_agreement.append({
+            'cell_type': ct,
+            'ccc': float(ccc) if not np.isnan(ccc) else None,
+            'spearman_r': float(r) if not np.isnan(r) else None,
+            'direction_agreement': float(same_direction),
+            'equiv_0_5': float(equiv_0_5),
+            'equiv_1_0': float(equiv_1_0),
+            'equiv_2_0': float(equiv_2_0),
+            'n_signatures': len(x_clean),
+            'mean_abs_diff': float(np.mean(diffs)),
+            'median_abs_diff': float(np.median(diffs))
+        })
+
+    # Overall metrics
+    all_x = np.array(all_x)
+    all_y = np.array(all_y)
+    all_diffs = np.array(all_diffs)
+
+    if len(all_x) > 0:
+        overall_ccc = compute_lins_ccc(all_x, all_y)
+        overall_spearman, _ = stats.spearmanr(all_x, all_y) if len(all_x) > 2 else (np.nan, np.nan)
+
+        # Equivalence bounds
+        equivalence = {
+            'within_0_5': float(np.sum(all_diffs <= 0.5) / len(all_diffs)),
+            'within_1_0': float(np.sum(all_diffs <= 1.0) / len(all_diffs)),
+            'within_2_0': float(np.sum(all_diffs <= 2.0) / len(all_diffs)),
+            'within_3_0': float(np.sum(all_diffs <= 3.0) / len(all_diffs)),
+            'mean_abs_diff': float(np.mean(all_diffs)),
+            'median_abs_diff': float(np.median(all_diffs))
+        }
+
+        # Direction agreement overall
+        direction_agreement = float(np.sum((all_x > 0) == (all_y > 0)) / len(all_x))
+
+        # Difference distribution for histogram
+        diff_distribution = {
+            'bins': [-4, -3, -2, -1, -0.5, 0.5, 1, 2, 3, 4],
+            'counts': []
+        }
+        bins = diff_distribution['bins']
+        signed_diffs = all_y - all_x
+        for i in range(len(bins) - 1):
+            count = np.sum((signed_diffs >= bins[i]) & (signed_diffs < bins[i+1]))
+            diff_distribution['counts'].append(int(count))
+        # Add overflow bins
+        diff_distribution['below'] = int(np.sum(signed_diffs < bins[0]))
+        diff_distribution['above'] = int(np.sum(signed_diffs >= bins[-1]))
+    else:
+        overall_ccc = None
+        overall_spearman = None
+        equivalence = {}
+        direction_agreement = None
+        diff_distribution = {}
 
     return {
-        'data': resampled_data,
-        'n': len(resampled_data),
-        'n_bootstrap': n_bootstrap
+        'celltype_agreement': celltype_agreement,
+        'equivalence': equivalence,
+        'diff_distribution': diff_distribution,
+        'overall_ccc': float(overall_ccc) if overall_ccc and not np.isnan(overall_ccc) else None,
+        'overall_spearman': float(overall_spearman) if overall_spearman and not np.isnan(overall_spearman) else None,
+        'direction_agreement': direction_agreement,
+        'n': len(all_x),
+        'n_celltypes': len(celltype_agreement),
+        'n_signatures': len(common_sigs)
     }
 
 
@@ -656,6 +754,180 @@ def compute_singlecell_comparison(atlas1: str, atlas2: str, sig_type: str,
     return {
         'data': sc_data,
         'n': len(sc_data)
+    }
+
+
+# Original h5ad files with cell type metadata
+ORIGINAL_H5AD = {
+    'cima': Path('/data/Jiang_Lab/Data/Seongyong/CIMA/Cell_Atlas/CIMA_RNA_6484974cells_36326genes_compressed.h5ad'),
+    'inflammation': Path('/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_ATLAS_main_afterQC.h5ad'),
+    'scatlas': Path('/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/igt_s9_fine_counts.h5ad'),
+}
+
+# Cell type column names in original h5ad files
+CELLTYPE_COLUMNS = {
+    'cima': 'cell_type_l2',  # Level 2 matches pseudobulk granularity
+    'inflammation': 'Level2',
+    'scatlas': 'cellType1',
+}
+
+
+def compute_singlecell_mean_activity(atlas1: str, atlas2: str, sig_type: str,
+                                      n_cells: int = 50000) -> dict:
+    """
+    Compute single-cell mean activity comparison between atlases.
+
+    For each atlas:
+    1. Sample cells from single-cell activity h5ad
+    2. Get cell type from original h5ad (by matching cell index)
+    3. Map to harmonized cell types
+    4. Compute mean activity per harmonized cell type
+
+    Returns comparison data for scatter plot.
+    """
+    print(f"\n  Computing single-cell mean activity: {atlas1} vs {atlas2}")
+
+    def load_singlecell_with_celltype(atlas: str, sig_type: str, n_sample: int) -> tuple:
+        """Load single-cell activity with cell type metadata."""
+        # Activity file
+        key = f'{sig_type.lower()}_sc'
+        act_path = DATA_FILES.get(atlas, {}).get(key)
+        if not act_path or not act_path.exists():
+            print(f"    [SKIP] Activity file not found for {atlas}")
+            return None, None
+
+        # Original h5ad for cell type
+        orig_path = ORIGINAL_H5AD.get(atlas)
+        if not orig_path or not orig_path.exists():
+            print(f"    [SKIP] Original h5ad not found for {atlas}")
+            return None, None
+
+        ct_col = CELLTYPE_COLUMNS.get(atlas)
+
+        print(f"    Loading {atlas} single-cell data...")
+
+        try:
+            # Load activity h5ad
+            act_adata = ad.read_h5ad(act_path, backed='r')
+            n_total = act_adata.n_obs
+        except Exception as e:
+            print(f"    [ERROR] Failed to load activity h5ad: {e}")
+            return None, None
+
+        # Sample cell indices
+        np.random.seed(42)
+        sample_idx = np.random.choice(n_total, min(n_sample, n_total), replace=False)
+        sample_idx = np.sort(sample_idx)
+
+        # Load activity for sampled cells
+        X = act_adata.X[sample_idx, :]
+        if hasattr(X, 'toarray'):
+            X = X.toarray()
+
+        # Get signature names
+        if '_index' in act_adata.var.columns:
+            signatures = list(act_adata.var['_index'].values)
+        else:
+            signatures = list(act_adata.var_names)
+
+        act_df = pd.DataFrame(X, columns=signatures)
+
+        # Load cell type for sampled cells from original h5ad
+        print(f"    Loading cell types from original h5ad...")
+        orig_adata = ad.read_h5ad(orig_path, backed='r')
+
+        # Get cell type column
+        if ct_col in orig_adata.obs.columns:
+            # For backed mode, need to load just the column
+            cell_types = orig_adata.obs[ct_col].iloc[sample_idx].values
+        else:
+            print(f"    [WARN] Cell type column {ct_col} not found")
+            return None, None
+
+        meta_df = pd.DataFrame({'cell_type': cell_types})
+
+        print(f"    Loaded {len(act_df)} cells, {len(signatures)} signatures")
+
+        return act_df, meta_df
+
+    # Load data for both atlases
+    act1, meta1 = load_singlecell_with_celltype(atlas1, sig_type, n_cells)
+    act2, meta2 = load_singlecell_with_celltype(atlas2, sig_type, n_cells)
+
+    if act1 is None or act2 is None:
+        return {'data': [], 'n': 0, 'overall_correlation': None}
+
+    # Get mappings
+    mapping1 = get_coarse_mapping(atlas1)
+    mapping2 = get_coarse_mapping(atlas2)
+
+    # Map cell types
+    meta1['harmonized'] = meta1['cell_type'].map(mapping1)
+    meta2['harmonized'] = meta2['cell_type'].map(mapping2)
+
+    # Get common types and signatures
+    common_types = set(meta1['harmonized'].dropna().unique()) & set(meta2['harmonized'].dropna().unique())
+    common_sigs = set(act1.columns) & set(act2.columns)
+
+    if sig_type == 'SecAct':
+        # Limit to top 50 most variable
+        combined_var = act1[list(common_sigs)].var() + act2[list(common_sigs)].var()
+        common_sigs = set(combined_var.nlargest(50).index)
+
+    common_sigs = sorted(common_sigs)
+    common_types = sorted(common_types)
+
+    print(f"    Common types: {len(common_types)}, Common signatures: {len(common_sigs)}")
+
+    # Compute mean activity per cell type
+    comparison_data = []
+    all_x, all_y = [], []
+
+    for ct in common_types:
+        mask1 = meta1['harmonized'] == ct
+        mask2 = meta2['harmonized'] == ct
+
+        n1, n2 = mask1.sum(), mask2.sum()
+        if n1 < 10 or n2 < 10:
+            continue
+
+        mean1 = act1.loc[mask1, common_sigs].mean()
+        mean2 = act2.loc[mask2, common_sigs].mean()
+
+        for sig in common_sigs:
+            x_val = float(mean1[sig])
+            y_val = float(mean2[sig])
+
+            if np.isnan(x_val) or np.isnan(y_val):
+                continue
+
+            comparison_data.append({
+                'signature': sig,
+                'cell_type': ct,
+                'x': x_val,
+                'y': y_val,
+                'n_cells_x': int(n1),
+                'n_cells_y': int(n2)
+            })
+
+            all_x.append(x_val)
+            all_y.append(y_val)
+
+    # Compute overall correlation
+    if len(all_x) > 2:
+        r, p = stats.spearmanr(all_x, all_y)
+    else:
+        r, p = np.nan, np.nan
+
+    return {
+        'data': comparison_data,
+        'n': len(comparison_data),
+        'n_celltypes': len(common_types),
+        'n_signatures': len(common_sigs),
+        'overall_correlation': float(r) if not np.isnan(r) else None,
+        'overall_pvalue': float(p) if not np.isnan(p) else None,
+        'n_cells_atlas1': int(meta1['harmonized'].notna().sum()),
+        'n_cells_atlas2': int(meta2['harmonized'].notna().sum())
     }
 
 
@@ -794,23 +1066,16 @@ def main():
             results[sig_key][pair_key]['celltype_aggregated_fine'] = \
                 compute_celltype_aggregated_comparison(atlas1, atlas2, sig_type, level='fine')
 
-            # 3. Pseudobulk resampled comparison (if available)
-            if DATA_FILES.get(atlas1, {}).get(f'{sig_key}_pb') and \
-               DATA_FILES.get(atlas2, {}).get(f'{sig_key}_pb'):
-                results[sig_key][pair_key]['pseudobulk_resampled'] = \
-                    compute_pseudobulk_resampled_comparison(atlas1, atlas2, sig_type,
-                                                            level='coarse', n_bootstrap=50)
+            # 3. Single-cell mean activity comparison (CytoSig only for now)
+            # Join activity data with cell type from original h5ad files
+            # Skip SecAct single-cell due to file size/corruption issues
+            if sig_type == 'CytoSig' and \
+               DATA_FILES.get(atlas1, {}).get(f'{sig_key}_sc') and \
+               DATA_FILES.get(atlas2, {}).get(f'{sig_key}_sc'):
+                results[sig_key][pair_key]['singlecell_mean'] = \
+                    compute_singlecell_mean_activity(atlas1, atlas2, sig_type, n_cells=50000)
             else:
-                results[sig_key][pair_key]['pseudobulk_resampled'] = {'data': [], 'n': 0}
-
-            # 4. Single-cell comparison (skip for now - metadata not in singlecell h5ad)
-            # The singlecell h5ad files don't contain cell type metadata
-            # Would need to join with original h5ad files to get cell type
-            results[sig_key][pair_key]['singlecell'] = {'data': [], 'n': 0, 'note': 'Metadata not available in singlecell h5ad'}
-
-            # 5. Prediction concordance
-            results[sig_key][pair_key]['prediction_concordance'] = \
-                compute_prediction_concordance(atlas1, atlas2, sig_type)
+                results[sig_key][pair_key]['singlecell_mean'] = {'data': [], 'n': 0}
 
     # Save results
     print("\n" + "=" * 70)
