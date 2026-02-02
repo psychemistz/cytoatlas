@@ -46,7 +46,8 @@ SAMPLE_SIZE = 2000
 def get_cell_type_column(adata):
     """Find the cell type column."""
     for col in ['cell_type', 'cell_type_l1', 'celltype', 'CellType', 'cell_type_fine',
-                'cellType1', 'cellType2', 'ann1', 'majorCluster']:
+                'cellType1', 'cellType2', 'ann1', 'majorCluster',
+                'Level1', 'Level2']:  # Inflammation Atlas uses Level1/Level2
         if col in adata.obs.columns:
             return col
     return None
