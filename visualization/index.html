@@ -2628,6 +2628,18 @@
 
             <h4>Meta-Analysis</h4>
             <p>Fixed-effects meta-analysis combines effect sizes across atlases using inverse-variance weighting. Heterogeneity was assessed using the I² statistic (Higgins et al., 2003):</p>
+            <div style="background: #f8f9fa; padding: 1rem; border-radius: 4px; margin: 1rem 0; font-family: 'Times New Roman', serif;">
+                <p style="text-align: center; font-size: 1.1rem; margin: 0;">
+                    I² = max(0, (Q − df) / Q) × 100%
+                </p>
+                <p style="text-align: center; font-size: 0.85rem; color: #666; margin-top: 0.5rem;">
+                    where Q = Σ w<sub>i</sub>(θ<sub>i</sub> − θ̄)<sup>2</sup> is Cochran's Q statistic,<br>
+                    w<sub>i</sub> = 1/SE<sub>i</sub>² is the inverse-variance weight,<br>
+                    θ<sub>i</sub> is the effect size from atlas i, θ̄ is the pooled estimate,<br>
+                    and df = k − 1 (k = number of atlases)
+                </p>
+            </div>
+            <p>I² represents the percentage of variability due to true heterogeneity rather than sampling error:</p>
             <ul>
                 <li>I² &lt; 25%: Low heterogeneity (consistent effects)</li>
                 <li>I² 25-50%: Moderate heterogeneity</li>
