@@ -854,14 +854,18 @@ class GeneService(BaseService):
         # Get name mappings and description
         names = get_all_names(gene)
 
+        # Use HGNC symbol as canonical name for lookups
+        # This ensures we always get all data (expression uses HGNC, SecAct uses HGNC)
+        canonical = names.get("hgnc") or gene
+
         # Get gene expression (uses HGNC name)
-        expression = await self.get_gene_expression(gene)
+        expression = await self.get_gene_expression(canonical)
 
         # Get CytoSig activity (handles mapping automatically)
-        cytosig_activity = await self.get_cell_type_activity(gene, "CytoSig")
+        cytosig_activity = await self.get_cell_type_activity(canonical, "CytoSig")
 
         # Get SecAct activity (uses HGNC name)
-        secact_activity = await self.get_cell_type_activity(gene, "SecAct")
+        secact_activity = await self.get_cell_type_activity(canonical, "SecAct")
 
         # Determine available atlases
         atlases = set()
@@ -872,8 +876,11 @@ class GeneService(BaseService):
         for r in secact_activity:
             atlases.add(r.atlas)
 
+        # Determine if redirect is needed (if queried by CytoSig name but HGNC is different)
+        redirect_to = canonical if canonical != gene else None
+
         return GenePageData(
-            gene=gene,
+            gene=canonical,  # Return canonical HGNC name
             hgnc_symbol=names.get("hgnc"),
             cytosig_name=names.get("cytosig"),
             description=names.get("description"),
@@ -884,6 +891,7 @@ class GeneService(BaseService):
             cytosig_activity=cytosig_activity,
             secact_activity=secact_activity,
             atlases=sorted(list(atlases)),
+            redirect_to=redirect_to,
         )
 
     async def get_available_genes(self) -> list[str]:

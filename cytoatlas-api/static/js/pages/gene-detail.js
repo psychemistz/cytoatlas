@@ -280,6 +280,20 @@ const GeneDetailPage = {
             // Load complete gene page data
             this.data = await API.get(`/gene/${encodeURIComponent(this.gene)}/full`);
 
+            // Handle redirect to canonical HGNC name
+            if (this.data.redirect_to && this.data.redirect_to !== this.gene) {
+                // Update URL without reloading page
+                const newUrl = `/gene/${encodeURIComponent(this.data.redirect_to)}`;
+                history.replaceState({}, '', newUrl);
+
+                // Update gene name
+                this.gene = this.data.redirect_to;
+
+                // Update page title
+                const h1 = document.querySelector('.gene-title h1');
+                if (h1) h1.textContent = this.gene;
+            }
+
             this.updateSummary();
             this.updateTabs();
             await this.loadTabContent(this.activeTab);
@@ -764,7 +778,7 @@ const GeneDetailPage = {
                                     <td>${d.disease}</td>
                                     <td>${d.disease_group}</td>
                                     <td class="${d.activity_diff >= 0 ? 'positive' : 'negative'}">${d.activity_diff.toFixed(4)}</td>
-                                    <td>${d.p_value < 0.001 ? d.p_value.toExponential(2) : d.p_value.toFixed(4)}</td>
+                                    <td>${d.pvalue < 0.001 ? d.pvalue.toExponential(2) : d.pvalue.toFixed(4)}</td>
                                     <td>${d.is_significant ? '&#10003;' : ''}</td>
                                 </tr>
                             `).join('')}
@@ -798,7 +812,7 @@ const GeneDetailPage = {
                 mode: 'markers',
                 name: 'Not Significant',
                 x: nsData.map(d => d.activity_diff),
-                y: nsData.map(d => d.neg_log10_pval || -Math.log10(d.p_value)),
+                y: nsData.map(d => d.neg_log10_pval || -Math.log10(d.pvalue)),
                 text: nsData.map(d => d.disease),
                 marker: { color: '#999', size: 8 },
                 hovertemplate: '<b>%{text}</b><br>&Delta; Activity: %{x:.3f}<extra></extra>',
@@ -811,7 +825,7 @@ const GeneDetailPage = {
                 mode: 'markers+text',
                 name: 'Significant (FDR < 0.05)',
                 x: sigData.map(d => d.activity_diff),
-                y: sigData.map(d => d.neg_log10_pval || -Math.log10(d.p_value)),
+                y: sigData.map(d => d.neg_log10_pval || -Math.log10(d.pvalue)),
                 text: sigData.map(d => d.disease),
                 textposition: 'top center',
                 textfont: { size: 10 },

@@ -163,6 +163,7 @@ class GenePageData(BaseModel):
     hgnc_symbol: str | None = None
     cytosig_name: str | None = None
     description: str | None = None
+    redirect_to: str | None = Field(default=None, description="Canonical HGNC name if different from query")
     has_expression: bool = False
     has_cytosig: bool = False
     has_secact: bool = False
