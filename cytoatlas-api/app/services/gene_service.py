@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.core.cache import cached
 from app.schemas.gene import (
+    BoxPlotStats,
+    GeneBoxPlotData,
     GeneCellTypeActivity,
     GeneCorrelationResult,
     GeneCorrelations,
@@ -381,25 +383,40 @@ class GeneService(BaseService):
             except FileNotFoundError:
                 pass
 
-        # scAtlas data (cell types within organs)
+        # scAtlas data (cell types within organs) - aggregate by cell type
         if atlas is None or atlas.lower() == "scatlas":
             try:
                 scatlas_data = await self.load_json("scatlas_celltypes.json")
                 # scatlas_celltypes.json has nested structure with "data" key
                 data_list = scatlas_data.get("data", scatlas_data) if isinstance(scatlas_data, dict) else scatlas_data
+
+                # Aggregate by cell type (weighted mean across organs)
+                ct_aggregates = {}
                 for r in data_list:
                     if r.get("signature") in sig_names and r.get("signature_type") == signature_type:
-                        # For scAtlas, include organ in cell type name
-                        ct_name = f"{r.get('cell_type')} ({r.get('organ')})" if r.get("organ") else r.get("cell_type")
+                        ct_name = r.get("cell_type")
+                        n_cells = r.get("n_cells", 0)
+                        mean_act = self._safe_float(r.get("mean_activity"))
+
+                        if ct_name not in ct_aggregates:
+                            ct_aggregates[ct_name] = {"sum_weighted": 0.0, "total_cells": 0}
+
+                        ct_aggregates[ct_name]["sum_weighted"] += mean_act * n_cells
+                        ct_aggregates[ct_name]["total_cells"] += n_cells
+
+                # Create results with weighted mean
+                for ct_name, agg in ct_aggregates.items():
+                    if agg["total_cells"] > 0:
+                        weighted_mean = agg["sum_weighted"] / agg["total_cells"]
                         results.append(GeneCellTypeActivity(
                             cell_type=ct_name,
                             atlas="scAtlas",
                             signature=signature,
                             signature_type=signature_type,
-                            mean_activity=self._safe_float(r.get("mean_activity")),
+                            mean_activity=weighted_mean,
                             std_activity=None,
                             n_samples=None,
-                            n_cells=r.get("n_cells"),
+                            n_cells=agg["total_cells"],
                         ))
             except FileNotFoundError:
                 pass
@@ -904,6 +921,11 @@ class GeneService(BaseService):
         # Determine if redirect is needed (if queried by CytoSig name but HGNC is different)
         redirect_to = canonical if canonical != gene else None
 
+        # Load box plot data if available
+        expression_boxplot = await self.get_boxplot_data(canonical, "expression")
+        cytosig_boxplot = await self.get_boxplot_data(canonical, "CytoSig")
+        secact_boxplot = await self.get_boxplot_data(canonical, "SecAct")
+
         return GenePageData(
             gene=canonical,  # Return canonical HGNC name
             hgnc_symbol=names.get("hgnc"),
@@ -917,6 +939,9 @@ class GeneService(BaseService):
             secact_activity=secact_activity,
             atlases=sorted(list(atlases)),
             redirect_to=redirect_to,
+            expression_boxplot=expression_boxplot,
+            cytosig_boxplot=cytosig_boxplot,
+            secact_boxplot=secact_boxplot,
         )
 
     async def get_available_genes(self) -> list[str]:
@@ -963,3 +988,125 @@ class GeneService(BaseService):
             "has_secact": has_secact,
             "exists": has_expression or has_cytosig or has_secact,
         }
+
+    @cached(prefix="gene_boxplot", ttl=3600)
+    async def get_boxplot_data(
+        self,
+        gene: str,
+        data_type: str,  # "expression", "CytoSig", or "SecAct"
+    ) -> GeneBoxPlotData | None:
+        """
+        Get box plot data (quartiles) for a gene.
+
+        Args:
+            gene: Gene symbol (e.g., IFNG, TNF)
+            data_type: "expression", "CytoSig", or "SecAct"
+
+        Returns:
+            Box plot data with quartiles per cell type
+        """
+        import json
+
+        results = []
+
+        # Get all name variants
+        names = get_all_names(gene)
+        gene_names = [gene]
+        if names["hgnc"] and names["hgnc"] != gene:
+            gene_names.append(names["hgnc"])
+        if names["cytosig"] and names["cytosig"] != gene and names["cytosig"] not in gene_names:
+            gene_names.append(names["cytosig"])
+
+        # Try to load from per-gene boxplot file
+        boxplot_dir = self.viz_data_path / "boxplot"
+        suffix = "_expression" if data_type == "expression" else "_activity"
+
+        for gene_name in gene_names:
+            safe_name = gene_name.replace("/", "_").replace("\\", "_").replace(" ", "_")
+            boxplot_file = boxplot_dir / f"{safe_name}{suffix}.json"
+
+            try:
+                if boxplot_file.exists():
+                    with open(boxplot_file) as f:
+                        data = json.load(f)
+
+                    # Filter by data_type if activity file
+                    for r in data:
+                        # For activity files, filter by signature_type
+                        if data_type != "expression":
+                            if r.get("signature_type") != data_type:
+                                continue
+
+                        # Normalize atlas name to match activity data naming
+                        atlas = r.get("atlas")
+                        if atlas in ("scAtlas_Normal", "scAtlas_Cancer"):
+                            atlas = "scAtlas"
+
+                        results.append(BoxPlotStats(
+                            cell_type=r.get("cell_type"),
+                            atlas=atlas,
+                            min=self._safe_float(r.get("min")),
+                            q1=self._safe_float(r.get("q1")),
+                            median=self._safe_float(r.get("median")),
+                            q3=self._safe_float(r.get("q3")),
+                            max=self._safe_float(r.get("max")),
+                            mean=self._safe_float(r.get("mean")),
+                            std=self._safe_float(r.get("std")),
+                            n=r.get("n", 0),
+                            pct_expressed=self._safe_float(r.get("pct_expressed")) if r.get("pct_expressed") else None,
+                        ))
+            except (FileNotFoundError, Exception):
+                pass
+
+        # Also try loading from combined boxplot files
+        if not results:
+            combined_file = "expression_boxplot.json" if data_type == "expression" else "activity_boxplot.json"
+            try:
+                all_data = await self.load_json(combined_file)
+                for r in all_data:
+                    # Check if gene matches
+                    gene_key = "gene" if data_type == "expression" else "signature"
+                    if r.get(gene_key) not in gene_names:
+                        continue
+
+                    # For activity, also filter by signature_type
+                    if data_type != "expression" and r.get("signature_type") != data_type:
+                        continue
+
+                    # Normalize atlas name to match activity data naming
+                    atlas = r.get("atlas")
+                    if atlas in ("scAtlas_Normal", "scAtlas_Cancer"):
+                        atlas = "scAtlas"
+
+                    results.append(BoxPlotStats(
+                        cell_type=r.get("cell_type"),
+                        atlas=atlas,
+                        min=self._safe_float(r.get("min")),
+                        q1=self._safe_float(r.get("q1")),
+                        median=self._safe_float(r.get("median")),
+                        q3=self._safe_float(r.get("q3")),
+                        max=self._safe_float(r.get("max")),
+                        mean=self._safe_float(r.get("mean")),
+                        std=self._safe_float(r.get("std")),
+                        n=r.get("n", 0),
+                        pct_expressed=self._safe_float(r.get("pct_expressed")) if r.get("pct_expressed") else None,
+                    ))
+            except (FileNotFoundError, Exception):
+                pass
+
+        if not results:
+            return None
+
+        # Sort by median descending
+        results.sort(key=lambda x: x.median, reverse=True)
+
+        atlases = sorted(list(set(r.atlas for r in results)))
+        n_cell_types = len(set(r.cell_type for r in results))
+
+        return GeneBoxPlotData(
+            gene=gene,
+            data_type=data_type,
+            data=results,
+            atlases=atlases,
+            n_cell_types=n_cell_types,
+        )

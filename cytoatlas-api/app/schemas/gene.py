@@ -156,6 +156,32 @@ class GeneExpressionResponse(BaseModel):
     top_cell_type: str | None = None
 
 
+class BoxPlotStats(BaseModel):
+    """Box plot statistics for a single cell type."""
+
+    cell_type: str
+    atlas: str
+    min: float
+    q1: float
+    median: float
+    q3: float
+    max: float
+    mean: float
+    std: float
+    n: int
+    pct_expressed: float | None = None  # Only for expression data
+
+
+class GeneBoxPlotData(BaseModel):
+    """Box plot data for expression or activity."""
+
+    gene: str
+    data_type: Literal["expression", "CytoSig", "SecAct"]
+    data: list[BoxPlotStats]
+    atlases: list[str]
+    n_cell_types: int
+
+
 class GenePageData(BaseModel):
     """Complete data for gene detail page."""
 
@@ -171,3 +197,7 @@ class GenePageData(BaseModel):
     cytosig_activity: list[GeneCellTypeActivity] = Field(default_factory=list)
     secact_activity: list[GeneCellTypeActivity] = Field(default_factory=list)
     atlases: list[str] = Field(default_factory=list)
+    # Box plot data
+    expression_boxplot: GeneBoxPlotData | None = None
+    cytosig_boxplot: GeneBoxPlotData | None = None
+    secact_boxplot: GeneBoxPlotData | None = None

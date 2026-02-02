@@ -168,7 +168,7 @@ class SearchService(BaseService):
                 except Exception as e:
                     logger.warning(f"Failed to load {organ_file}: {e}")
 
-        # Load gene mapping to add HGNC aliases and descriptions
+        # Load gene mapping to add HGNC aliases
         mapping_path = Path(__file__).parent.parent.parent / "static" / "data" / "signature_gene_mapping.json"
         gene_mapping = {}
         if mapping_path.exists():
@@ -178,6 +178,21 @@ class SearchService(BaseService):
                 logger.info("Loaded gene mapping for search aliases")
             except Exception as e:
                 logger.warning(f"Failed to load gene mapping: {e}")
+
+        # Load gene_info.json for detailed descriptions (overrides mapping notes)
+        gene_info_path = Path(__file__).parent.parent.parent / "static" / "data" / "gene_info.json"
+        gene_info = {}
+        if gene_info_path.exists():
+            try:
+                with open(gene_info_path) as f:
+                    gene_info = json.load(f)
+                logger.info("Loaded gene_info.json for descriptions")
+            except Exception as e:
+                logger.warning(f"Failed to load gene_info: {e}")
+
+        # Build lookup for gene_info descriptions
+        cytosig_info = gene_info.get("cytosig", {})
+        secact_info = gene_info.get("secact", {})
 
         # Enhance cytokine entities with HGNC symbols and descriptions
         cytosig_mapping = gene_mapping.get("cytosig_mapping", {})
@@ -191,11 +206,16 @@ class SearchService(BaseService):
                 # Get mapping info
                 mapping_info = cytosig_mapping.get(sig_name, {})
                 hgnc_symbol = mapping_info.get("hgnc_symbol") or sig_to_hgnc.get(sig_name)
-                notes = mapping_info.get("notes", "")
 
-                # Update description if we have notes
-                if notes and notes != "Direct match":
-                    entity["description"] = notes
+                # Get description from gene_info (preferred) or fallback to mapping notes
+                info_entry = cytosig_info.get(sig_name, {})
+                description = info_entry.get("description", "")
+                if not description:
+                    notes = mapping_info.get("notes", "")
+                    if notes and notes != "Direct match":
+                        description = notes
+                if description:
+                    entity["description"] = description
 
                 # Add HGNC symbol as alias
                 if hgnc_symbol and hgnc_symbol != sig_name:
@@ -219,10 +239,15 @@ class SearchService(BaseService):
                         entity["aliases"].append(cytosig_name)
                         entity["aliases"].append(cytosig_name.lower())
 
-                # Get description from mapping
-                mapping_info = cytosig_mapping.get(cytosig_name, {})
-                if mapping_info.get("notes"):
-                    entity["description"] = mapping_info["notes"]
+                # Get description from gene_info (preferred)
+                # Try secact first, then cytosig, then fallback to mapping notes
+                info_entry = secact_info.get(hgnc_symbol, {})
+                description = info_entry.get("description", "")
+                if not description and cytosig_name:
+                    info_entry = cytosig_info.get(cytosig_name, {})
+                    description = info_entry.get("description", "")
+                if description:
+                    entity["description"] = description
 
                 entity["hgnc_symbol"] = hgnc_symbol
 
@@ -231,12 +256,18 @@ class SearchService(BaseService):
         for hgnc_symbol, cytosig_name in hgnc_to_sig.items():
             gene_entity_id = f"gene:{hgnc_symbol}"
             if gene_entity_id not in index["entities"]:
-                mapping_info = cytosig_mapping.get(cytosig_name, {})
+                # Get description from gene_info (preferred)
+                info_entry = cytosig_info.get(cytosig_name, {})
+                description = info_entry.get("description", "")
+                if not description:
+                    # Fallback to generic description
+                    description = f"Gene encoding {cytosig_name}"
+
                 index["entities"][gene_entity_id] = {
                     "id": gene_entity_id,
                     "name": hgnc_symbol,
                     "type": "gene",
-                    "description": mapping_info.get("notes", f"Gene encoding {cytosig_name}"),
+                    "description": description,
                     "aliases": [cytosig_name, cytosig_name.lower(), hgnc_symbol.lower()],
                     "atlases": [],
                     "hgnc_symbol": hgnc_symbol,

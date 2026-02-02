@@ -78,7 +78,7 @@ def aggregate_by_tissue_celltype(
     adata: ad.AnnData,
     tissue_col: str,
     celltype_col: str,
-    min_cells: int = 50,
+    min_cells: int = 10,
     extra_cols: List[str] = None,
     group_cols: List[str] = None,
     chunk_size: int = 50000

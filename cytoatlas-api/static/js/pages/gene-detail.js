@@ -11,8 +11,8 @@ const GeneDetailPage = {
 
     tabs: [
         { id: 'expression', label: 'Expression', icon: '&#129516;' },
-        { id: 'cytosig', label: 'CytoSig (Pseudobulk)', icon: '&#128300;' },
-        { id: 'secact', label: 'SecAct (Pseudobulk)', icon: '&#9898;' },
+        { id: 'cytosig', label: 'CytoSig', icon: '&#128300;' },
+        { id: 'secact', label: 'SecAct', icon: '&#9898;' },
         { id: 'diseases', label: 'Diseases', icon: '&#129658;' },
         { id: 'correlations', label: 'Correlations', icon: '&#128200;' },
     ],
@@ -294,6 +294,7 @@ const GeneDetailPage = {
                 if (h1) h1.textContent = this.gene;
             }
 
+            this.computeUnifiedCellTypes();
             this.updateSummary();
             this.updateTabs();
             await this.loadTabContent(this.activeTab);
@@ -312,6 +313,97 @@ const GeneDetailPage = {
                 `;
             }
         }
+    },
+
+    /**
+     * Compute unified cell type list across expression and activity data
+     */
+    computeUnifiedCellTypes() {
+        if (!this.data) return;
+
+        // Collect all cell types with their max values from all data sources
+        const cellTypeScores = {};
+
+        // From expression data
+        if (this.data.expression && this.data.expression.data) {
+            this.data.expression.data.forEach(d => {
+                if (!cellTypeScores[d.cell_type]) {
+                    cellTypeScores[d.cell_type] = { expression: 0, cytosig: 0, secact: 0 };
+                }
+                cellTypeScores[d.cell_type].expression = Math.max(
+                    cellTypeScores[d.cell_type].expression,
+                    d.mean_expression || 0
+                );
+            });
+        }
+
+        // From CytoSig activity
+        if (this.data.cytosig_activity) {
+            this.data.cytosig_activity.forEach(d => {
+                if (!cellTypeScores[d.cell_type]) {
+                    cellTypeScores[d.cell_type] = { expression: 0, cytosig: 0, secact: 0 };
+                }
+                cellTypeScores[d.cell_type].cytosig = Math.max(
+                    cellTypeScores[d.cell_type].cytosig,
+                    Math.abs(d.mean_activity) || 0
+                );
+            });
+        }
+
+        // From SecAct activity
+        if (this.data.secact_activity) {
+            this.data.secact_activity.forEach(d => {
+                if (!cellTypeScores[d.cell_type]) {
+                    cellTypeScores[d.cell_type] = { expression: 0, cytosig: 0, secact: 0 };
+                }
+                cellTypeScores[d.cell_type].secact = Math.max(
+                    cellTypeScores[d.cell_type].secact,
+                    Math.abs(d.mean_activity) || 0
+                );
+            });
+        }
+
+        // Group cell types by atlas and get top from each for balanced representation
+        const atlasCellTypes = {};
+
+        // Determine which atlas each cell type belongs to (from activity data)
+        if (this.data.cytosig_activity) {
+            this.data.cytosig_activity.forEach(d => {
+                const atlas = d.atlas;
+                if (!atlasCellTypes[atlas]) atlasCellTypes[atlas] = new Set();
+                atlasCellTypes[atlas].add(d.cell_type);
+            });
+        }
+
+        // Sort cell types within each atlas by activity score
+        const maxCytosig = Math.max(...Object.keys(cellTypeScores).map(ct => cellTypeScores[ct].cytosig)) || 1;
+        const maxSecact = Math.max(...Object.keys(cellTypeScores).map(ct => cellTypeScores[ct].secact)) || 1;
+
+        const scoreCell = (ct) => {
+            const s = cellTypeScores[ct] || { cytosig: 0, secact: 0 };
+            return (s.cytosig / maxCytosig) + (s.secact / maxSecact);
+        };
+
+        // Get top cell types from each atlas
+        const atlases = Object.keys(atlasCellTypes);
+        const perAtlas = Math.ceil(30 / Math.max(atlases.length, 1));
+
+        const selectedCellTypes = [];
+        atlases.forEach(atlas => {
+            const cts = Array.from(atlasCellTypes[atlas])
+                .filter(ct => cellTypeScores[ct])
+                .sort((a, b) => scoreCell(b) - scoreCell(a))
+                .slice(0, perAtlas);
+            selectedCellTypes.push(...cts);
+        });
+
+        // Sort final list by score and take top 30
+        const sortedCellTypes = selectedCellTypes
+            .sort((a, b) => scoreCell(b) - scoreCell(a))
+            .slice(0, 30);
+
+        // Store unified cell types (balanced across atlases)
+        this._unifiedCellTypes = sortedCellTypes;
     },
 
     /**
@@ -361,7 +453,7 @@ const GeneDetailPage = {
         summaryEl.innerHTML = `
             <div class="data-availability">
                 <span class="label">Available data:</span>
-                ${badges.length ? badges.join('') : '<span class="no-data">No data available</span>'}
+                ${badges.length ? badges.join(', ') : '<span class="no-data">No data available</span>'}
             </div>
             <div class="atlas-info">
                 <span class="label">Atlases:</span>
@@ -519,63 +611,297 @@ const GeneDetailPage = {
         `;
 
         this._expressionData = expr.data;
-        this.createExpressionChart(expr.data);
+        this.createExpressionChart(expr.data, this.data.expression_boxplot);
     },
 
-    createExpressionChart(data) {
-        const topData = data.slice(0, 30);
+    createExpressionChart(data, boxplotData = null) {
+        // Check if showing single atlas (filtered) or all atlases
+        const atlasesInData = [...new Set(data.map(d => d.atlas))];
+        const isSingleAtlas = atlasesInData.length === 1;
 
-        const traces = [];
-        const atlases = [...new Set(topData.map(d => d.atlas))];
+        // For single atlas view, derive cell types from filtered data (not unified)
+        // For all atlases view, use unified cell types for consistency
+        const topCellTypes = isSingleAtlas
+            ? [...new Set(data.map(d => d.cell_type))].slice(0, 30)
+            : (this._unifiedCellTypes || [...new Set(data.map(d => d.cell_type))].slice(0, 30));
+
+        // Filter to only cell types present in this data
+        const availableCellTypes = topCellTypes.filter(ct => data.some(d => d.cell_type === ct));
 
         const colors = {
             'CIMA': '#3498db',
             'Inflammation': '#e74c3c',
+            'scAtlas': '#2ecc71',
             'scAtlas_Normal': '#2ecc71',
             'scAtlas_Cancer': '#9b59b6',
         };
 
+        // Check if we have box plot data
+        if (boxplotData && boxplotData.data && boxplotData.data.length > 0) {
+            // Filter to only cell types that have boxplot data
+            const boxplotCellTypes = new Set(boxplotData.data.map(d => d.cell_type));
+            const cellTypesWithBoxplot = availableCellTypes.filter(ct => boxplotCellTypes.has(ct));
+
+            if (cellTypesWithBoxplot.length > 0) {
+                this.createBoxPlotChart('expression-chart', boxplotData.data, cellTypesWithBoxplot, colors,
+                    `${this.gene} Expression by Cell Type`, 'Expression (log-normalized)');
+                return;
+            }
+        }
+
+        // Fall back to bar chart
+        const atlasOrder = ['CIMA', 'Inflammation', 'scAtlas'];
+        const atlases = atlasOrder.filter(a => data.some(d => d.atlas === a));
+
+        // Sort cell types based on atlas count
+        let orderedCellTypes;
+        if (atlases.length === 1) {
+            // Single atlas: sort by mean expression (descending)
+            const atlas = atlases[0];
+            orderedCellTypes = [...availableCellTypes].sort((a, b) => {
+                const aData = data.find(d => d.cell_type === a && d.atlas === atlas);
+                const bData = data.find(d => d.cell_type === b && d.atlas === atlas);
+                return (bData?.mean_expression || 0) - (aData?.mean_expression || 0);
+            });
+        } else {
+            // Multiple atlases: group by atlas, sort within each group
+            orderedCellTypes = [];
+            atlases.forEach(atlas => {
+                const atlasCellTypes = availableCellTypes
+                    .filter(ct => data.some(d => d.cell_type === ct && d.atlas === atlas))
+                    .sort((a, b) => {
+                        const aData = data.find(d => d.cell_type === a && d.atlas === atlas);
+                        const bData = data.find(d => d.cell_type === b && d.atlas === atlas);
+                        return (bData?.mean_expression || 0) - (aData?.mean_expression || 0);
+                    });
+                orderedCellTypes.push(...atlasCellTypes);
+            });
+            orderedCellTypes = [...new Set(orderedCellTypes)];
+        }
+
+        // Create horizontal grouped bar chart
+        const traces = [];
         atlases.forEach(atlas => {
-            const atlasData = topData.filter(d => d.atlas === atlas);
+            const yValues = [];
+            const xValues = [];
+            orderedCellTypes.forEach(ct => {
+                const match = data.find(d => d.cell_type === ct && d.atlas === atlas);
+                yValues.push(ct);
+                xValues.push(match ? match.mean_expression : null);
+            });
             traces.push({
                 type: 'bar',
                 name: atlas,
-                y: atlasData.map(d => d.cell_type),
-                x: atlasData.map(d => d.mean_expression),
+                x: xValues,
+                y: yValues,
                 orientation: 'h',
                 marker: { color: colors[atlas] || '#95a5a6' },
-                text: atlasData.map(d => `${d.mean_expression.toFixed(2)} (${d.pct_expressed.toFixed(0)}%)`),
-                hovertemplate: '<b>%{y}</b><br>Expression: %{x:.3f}<br>%{text}<extra></extra>',
+                hovertemplate: '<b>%{y}</b><br>%{x:.3f}<extra>' + atlas + '</extra>',
             });
         });
 
         const layout = {
             title: `${this.gene} Expression by Cell Type`,
-            barmode: 'group',
             xaxis: {
                 title: 'Mean Expression (log-normalized)',
+                zeroline: true,
             },
             yaxis: {
                 title: '',
                 automargin: true,
+                categoryorder: 'array',
+                categoryarray: [...orderedCellTypes].reverse(),
             },
-            height: Math.max(400, topData.length * 20),
-            margin: { l: 200, r: 50, t: 50, b: 50 },
+            height: Math.max(400, orderedCellTypes.length * 25),
+            margin: { l: 180, r: 50, t: 50, b: 50 },
+            barmode: 'group',
             legend: { orientation: 'h', y: 1.1 },
         };
 
         Plotly.newPlot('expression-chart', traces, layout, { responsive: true });
     },
 
+    /**
+     * Create a box plot chart using Plotly with pre-computed statistics
+     * Uses shapes to draw boxes since Plotly doesn't directly support pre-computed quartiles
+     */
+    createBoxPlotChart(containerId, boxData, cellTypes, colors, title, xAxisTitle) {
+        // Filter boxData to only include specified cell types
+        const filteredData = boxData.filter(d => cellTypes.includes(d.cell_type));
+
+        // Get unique atlases in preferred order
+        const atlasOrder = ['CIMA', 'Inflammation', 'scAtlas'];
+        const atlases = atlasOrder.filter(a => filteredData.some(d => d.atlas === a));
+
+        // Sort cell types based on atlas count
+        let orderedCellTypes;
+        if (atlases.length === 1) {
+            // Single atlas: sort by median activity (descending)
+            const atlas = atlases[0];
+            orderedCellTypes = [...cellTypes].sort((a, b) => {
+                const aData = filteredData.find(d => d.cell_type === a && d.atlas === atlas);
+                const bData = filteredData.find(d => d.cell_type === b && d.atlas === atlas);
+                return (bData?.median || 0) - (aData?.median || 0);
+            });
+        } else {
+            // Multiple atlases: group by atlas, sort within each group by median
+            orderedCellTypes = [];
+            atlases.forEach(atlas => {
+                const atlasCellTypes = cellTypes
+                    .filter(ct => filteredData.some(d => d.cell_type === ct && d.atlas === atlas))
+                    .sort((a, b) => {
+                        const aData = filteredData.find(d => d.cell_type === a && d.atlas === atlas);
+                        const bData = filteredData.find(d => d.cell_type === b && d.atlas === atlas);
+                        return (bData?.median || 0) - (aData?.median || 0);
+                    });
+                orderedCellTypes.push(...atlasCellTypes);
+            });
+            // Remove duplicates while preserving order
+            orderedCellTypes = [...new Set(orderedCellTypes)];
+        }
+
+        // Create traces using scatter for box visualization
+        const traces = [];
+        const boxWidth = 0.3;
+        const atlasOffsets = {};
+        atlases.forEach((atlas, i) => {
+            atlasOffsets[atlas] = (i - (atlases.length - 1) / 2) * boxWidth;
+        });
+
+        // Create y-axis positions for cell types (using ordered list)
+        const yPositions = {};
+        orderedCellTypes.forEach((ct, i) => {
+            yPositions[ct] = i;
+        });
+
+        atlases.forEach(atlas => {
+            const atlasData = filteredData.filter(d => d.atlas === atlas);
+            const color = colors[atlas] || '#95a5a6';
+
+            // Arrays for box elements
+            const boxX = [];  // x positions for boxes (median line)
+            const boxY = [];  // y positions
+            const q1Values = [];
+            const q3Values = [];
+            const medianValues = [];
+            const minValues = [];
+            const maxValues = [];
+            const hoverTexts = [];
+
+            atlasData.forEach(d => {
+                if (!(d.cell_type in yPositions)) return;
+
+                const yPos = yPositions[d.cell_type] + atlasOffsets[atlas];
+                boxY.push(yPos);
+                q1Values.push(d.q1);
+                q3Values.push(d.q3);
+                medianValues.push(d.median);
+                minValues.push(d.min);
+                maxValues.push(d.max);
+                hoverTexts.push(
+                    `<b>${d.cell_type}</b><br>` +
+                    `Atlas: ${atlas}<br>` +
+                    `Median: ${d.median.toFixed(3)}<br>` +
+                    `IQR: ${d.q1.toFixed(3)} - ${d.q3.toFixed(3)}<br>` +
+                    `Range: ${d.min.toFixed(3)} - ${d.max.toFixed(3)}<br>` +
+                    `n=${d.n}`
+                );
+            });
+
+            // Draw whiskers (min to max line)
+            traces.push({
+                type: 'scatter',
+                mode: 'lines',
+                x: minValues.flatMap((min, i) => [min, maxValues[i], null]),
+                y: boxY.flatMap(y => [y, y, null]),
+                line: { color: color, width: 1 },
+                showlegend: false,
+                legendgroup: atlas,
+                hoverinfo: 'skip',
+            });
+
+            // Draw boxes (IQR rectangles) using filled area
+            boxY.forEach((y, i) => {
+                traces.push({
+                    type: 'scatter',
+                    mode: 'lines',
+                    x: [q1Values[i], q3Values[i], q3Values[i], q1Values[i], q1Values[i]],
+                    y: [y - boxWidth/3, y - boxWidth/3, y + boxWidth/3, y + boxWidth/3, y - boxWidth/3],
+                    fill: 'toself',
+                    fillcolor: color + '80',  // Add transparency
+                    line: { color: color, width: 1 },
+                    showlegend: i === 0,
+                    legendgroup: atlas,
+                    name: atlas,
+                    text: hoverTexts[i],
+                    hoverinfo: 'text',
+                });
+            });
+
+            // Draw median lines
+            traces.push({
+                type: 'scatter',
+                mode: 'lines',
+                x: medianValues.flatMap((med, i) => [med, med, null]),
+                y: boxY.flatMap(y => [y - boxWidth/3, y + boxWidth/3, null]),
+                line: { color: '#000', width: 2 },
+                showlegend: false,
+                legendgroup: atlas,
+                hoverinfo: 'skip',
+            });
+
+            // Draw whisker caps
+            traces.push({
+                type: 'scatter',
+                mode: 'lines',
+                x: minValues.flatMap((min, i) => [min, min, null, maxValues[i], maxValues[i], null]),
+                y: boxY.flatMap(y => [y - boxWidth/4, y + boxWidth/4, null, y - boxWidth/4, y + boxWidth/4, null]),
+                line: { color: color, width: 1 },
+                showlegend: false,
+                legendgroup: atlas,
+                hoverinfo: 'skip',
+            });
+        });
+
+        const layout = {
+            title: title,
+            xaxis: {
+                title: xAxisTitle,
+                zeroline: true,
+                zerolinecolor: '#ccc',
+            },
+            yaxis: {
+                title: '',
+                tickmode: 'array',
+                tickvals: orderedCellTypes.map((ct, i) => i),
+                ticktext: orderedCellTypes,
+                automargin: true,
+            },
+            height: Math.max(400, orderedCellTypes.length * 35),
+            margin: { l: 180, r: 50, t: 50, b: 50 },
+            legend: { orientation: 'h', y: 1.1 },
+            hovermode: 'closest',
+        };
+
+        Plotly.newPlot(containerId, traces, layout, { responsive: true });
+    },
+
     filterExpressionByAtlas() {
         const atlas = document.getElementById('expr-atlas-filter').value;
         let filtered = this._expressionData;
+        let filteredBoxplot = this.data.expression_boxplot;
 
         if (atlas !== 'all') {
             filtered = filtered.filter(d => d.atlas === atlas);
+            if (filteredBoxplot && filteredBoxplot.data) {
+                filteredBoxplot = {
+                    ...filteredBoxplot,
+                    data: filteredBoxplot.data.filter(d => d.atlas === atlas),
+                };
+            }
         }
 
-        this.createExpressionChart(filtered);
+        this.createExpressionChart(filtered, filteredBoxplot);
 
         const tbody = document.querySelector('#expression-table tbody');
         if (tbody) {
@@ -627,6 +953,25 @@ const GeneDetailPage = {
                     </select>
                 </div>
             </div>
+
+            <div class="method-explanation">
+                <details>
+                    <summary><strong>Pseudobulk Method</strong> - How activity is computed</summary>
+                    <div class="method-content">
+                        <strong>Pseudobulk</strong> aggregates cells by cell type and sample before computing activity.
+                        This reduces noise from technical variation and dropout, providing robust cell-type-level estimates.
+                        <ul>
+                            <li><strong>Step 1:</strong> Group cells by (cell_type, sample_id)</li>
+                            <li><strong>Step 2:</strong> Sum raw counts within each group</li>
+                            <li><strong>Step 3:</strong> Normalize to CPM and log-transform</li>
+                            <li><strong>Step 4:</strong> Apply ridge regression with ${sigType} signature matrix</li>
+                            <li><strong>Step 5:</strong> Z-score normalize activity values</li>
+                        </ul>
+                        <em>Best for:</em> Comparing cell types, identifying signature-producing cell populations.
+                    </div>
+                </details>
+            </div>
+
             <div class="viz-container">
                 <div id="activity-chart" class="chart-container"></div>
             </div>
@@ -656,32 +1001,98 @@ const GeneDetailPage = {
 
         this._activityData = activityData;
         this._activitySigType = sigType;
-        this.createActivityChart(activityData, sigType);
+        const boxplotData = sigType === 'CytoSig' ? this.data.cytosig_boxplot : this.data.secact_boxplot;
+        this.createActivityChart(activityData, sigType, boxplotData);
     },
 
-    createActivityChart(data, sigType) {
-        const topData = data.slice(0, 30);
+    createActivityChart(data, sigType, boxplotData = null) {
+        // Check if showing single atlas (filtered) or all atlases
+        const atlasesInData = [...new Set(data.map(d => d.atlas))];
+        const isSingleAtlas = atlasesInData.length === 1;
 
+        // For single atlas view, derive cell types from filtered data (not unified)
+        // For all atlases view, use unified cell types for consistency
+        const topCellTypes = isSingleAtlas
+            ? [...new Set(data.map(d => d.cell_type))].slice(0, 30)
+            : (this._unifiedCellTypes || [...new Set(data.map(d => d.cell_type))].slice(0, 30));
+
+        // Filter to only cell types present in this data
+        const availableCellTypes = topCellTypes.filter(ct => data.some(d => d.cell_type === ct));
+
+        const colors = {
+            'CIMA': '#3498db',
+            'Inflammation': '#e74c3c',
+            'scAtlas': '#2ecc71',
+            'scAtlas_Normal': '#2ecc71',
+            'scAtlas_Cancer': '#9b59b6',
+        };
+
+        // Check if we have box plot data
+        if (boxplotData && boxplotData.data && boxplotData.data.length > 0) {
+            // Filter to only cell types that have boxplot data
+            const boxplotCellTypes = new Set(boxplotData.data.map(d => d.cell_type));
+            const cellTypesWithBoxplot = availableCellTypes.filter(ct => boxplotCellTypes.has(ct));
+
+            if (cellTypesWithBoxplot.length > 0) {
+                this.createBoxPlotChart('activity-chart', boxplotData.data, cellTypesWithBoxplot, colors,
+                    `${this.gene} ${sigType} Activity by Cell Type`, 'Activity (z-score)');
+                return;
+            }
+        }
+
+        // Fall back to bar chart
+        const atlasOrder = ['CIMA', 'Inflammation', 'scAtlas'];
+        const atlases = atlasOrder.filter(a => data.some(d => d.atlas === a));
+
+        // Sort cell types based on atlas count
+        let orderedCellTypes;
+        if (atlases.length === 1) {
+            // Single atlas: sort by mean activity (descending)
+            const atlas = atlases[0];
+            orderedCellTypes = [...availableCellTypes].sort((a, b) => {
+                const aData = data.find(d => d.cell_type === a && d.atlas === atlas);
+                const bData = data.find(d => d.cell_type === b && d.atlas === atlas);
+                return (bData?.mean_activity || 0) - (aData?.mean_activity || 0);
+            });
+        } else {
+            // Multiple atlases: group by atlas, sort within each group
+            orderedCellTypes = [];
+            atlases.forEach(atlas => {
+                const atlasCellTypes = availableCellTypes
+                    .filter(ct => data.some(d => d.cell_type === ct && d.atlas === atlas))
+                    .sort((a, b) => {
+                        const aData = data.find(d => d.cell_type === a && d.atlas === atlas);
+                        const bData = data.find(d => d.cell_type === b && d.atlas === atlas);
+                        return (bData?.mean_activity || 0) - (aData?.mean_activity || 0);
+                    });
+                orderedCellTypes.push(...atlasCellTypes);
+            });
+            orderedCellTypes = [...new Set(orderedCellTypes)];
+        }
+
+        // Create horizontal grouped bar chart
         const traces = [];
-        const atlases = [...new Set(topData.map(d => d.atlas))];
-
         atlases.forEach(atlas => {
-            const atlasData = topData.filter(d => d.atlas === atlas);
+            const yValues = [];
+            const xValues = [];
+            orderedCellTypes.forEach(ct => {
+                const match = data.find(d => d.cell_type === ct && d.atlas === atlas);
+                yValues.push(ct);
+                xValues.push(match ? match.mean_activity : null);
+            });
             traces.push({
                 type: 'bar',
                 name: atlas,
-                y: atlasData.map(d => d.cell_type),
-                x: atlasData.map(d => d.mean_activity),
+                x: xValues,
+                y: yValues,
                 orientation: 'h',
-                text: atlasData.map(d => d.mean_activity.toFixed(3)),
-                textposition: 'auto',
-                hovertemplate: '<b>%{y}</b><br>Activity: %{x:.4f}<extra></extra>',
+                marker: { color: colors[atlas] || '#95a5a6' },
+                hovertemplate: '<b>%{y}</b><br>%{x:.4f}<extra>' + atlas + '</extra>',
             });
         });
 
         const layout = {
             title: `${this.gene} ${sigType} Activity by Cell Type`,
-            barmode: 'group',
             xaxis: {
                 title: 'Mean Activity (z-score)',
                 zeroline: true,
@@ -690,9 +1101,12 @@ const GeneDetailPage = {
             yaxis: {
                 title: '',
                 automargin: true,
+                categoryorder: 'array',
+                categoryarray: [...orderedCellTypes].reverse(),
             },
-            height: Math.max(400, topData.length * 20),
-            margin: { l: 200, r: 50, t: 50, b: 50 },
+            height: Math.max(400, orderedCellTypes.length * 25),
+            margin: { l: 180, r: 50, t: 50, b: 50 },
+            barmode: 'group',
             legend: { orientation: 'h', y: 1.1 },
         };
 
@@ -702,12 +1116,19 @@ const GeneDetailPage = {
     filterActivityByAtlas(sigType) {
         const atlas = document.getElementById('activity-atlas-filter').value;
         let filtered = this._activityData;
+        let boxplotData = sigType === 'CytoSig' ? this.data.cytosig_boxplot : this.data.secact_boxplot;
 
         if (atlas !== 'all') {
             filtered = filtered.filter(d => d.atlas === atlas);
+            if (boxplotData && boxplotData.data) {
+                boxplotData = {
+                    ...boxplotData,
+                    data: boxplotData.data.filter(d => d.atlas === atlas),
+                };
+            }
         }
 
-        this.createActivityChart(filtered, sigType);
+        this.createActivityChart(filtered, sigType, boxplotData);
 
         const tbody = document.querySelector('#activity-table tbody');
         if (tbody) {
@@ -857,30 +1278,93 @@ const GeneDetailPage = {
                 signature_type: this.data.has_cytosig ? 'CytoSig' : 'SecAct',
             });
 
+            // Combine all correlations for visualization
+            const allCorrelations = [
+                ...(data.age || []).map(c => ({ ...c, category: 'Age' })),
+                ...(data.bmi || []).map(c => ({ ...c, category: 'BMI' })),
+                ...(data.biochemistry || []).map(c => ({ ...c, category: 'Biochemistry' })),
+                ...(data.metabolites || []).map(c => ({ ...c, category: 'Metabolites' })),
+            ];
+
+            // Calculate significant count from actual data (handles both q_value and qvalue field names)
+            const totalSignificant = allCorrelations.filter(c => {
+                const qval = c.q_value ?? c.qvalue;
+                return qval != null && qval < 0.05;
+            }).length;
+
             content.innerHTML = `
                 <div class="tab-header">
                     <h2>${this.gene} Correlations</h2>
-                    <p>Correlations with clinical and molecular variables (from CIMA)</p>
+                    <p>Correlations with clinical and molecular variables (Spearman rho, from CIMA atlas)</p>
+                    <div class="stats-inline">
+                        <span><strong>${allCorrelations.length}</strong> total correlations</span>
+                        <span><strong>${totalSignificant}</strong> significant (FDR < 0.05)</span>
+                    </div>
+                    <div class="tab-filters">
+                        <select id="corr-category-filter" onchange="GeneDetailPage.filterCorrelationsByCategory()">
+                            <option value="all">All Categories</option>
+                            <option value="Age">Age</option>
+                            <option value="BMI">BMI</option>
+                            <option value="Biochemistry">Biochemistry</option>
+                            <option value="Metabolites">Metabolites</option>
+                        </select>
+                        <label class="filter-checkbox">
+                            <input type="checkbox" id="corr-sig-only" onchange="GeneDetailPage.filterCorrelationsByCategory()">
+                            Show significant only
+                        </label>
+                    </div>
                 </div>
-                <div class="correlation-sections">
-                    <div class="correlation-section">
-                        <h3>&#128197; Age (${data.n_significant_age} significant)</h3>
-                        ${this.renderCorrelationList(data.age)}
-                    </div>
-                    <div class="correlation-section">
-                        <h3>&#9878; BMI (${data.n_significant_bmi} significant)</h3>
-                        ${this.renderCorrelationList(data.bmi)}
-                    </div>
-                    <div class="correlation-section">
-                        <h3>&#129514; Biochemistry (${data.n_significant_biochem} significant)</h3>
-                        ${this.renderCorrelationList(data.biochemistry)}
-                    </div>
-                    <div class="correlation-section">
-                        <h3>&#9879; Metabolites (${data.n_significant_metabol} significant)</h3>
-                        ${this.renderCorrelationList(data.metabolites)}
-                    </div>
+                <div class="viz-container">
+                    <div id="correlation-chart" class="chart-container"></div>
+                </div>
+                <div class="data-table-container">
+                    <table class="data-table" id="correlation-table">
+                        <thead>
+                            <tr>
+                                <th>Variable</th>
+                                <th>Category</th>
+                                <th>Cell Type</th>
+                                <th>Spearman &rho;</th>
+                                <th>P-value</th>
+                                <th>Q-value (FDR)</th>
+                                <th>Sig</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${allCorrelations
+                                .sort((a, b) => {
+                                    // Sort by significance first, then by absolute rho
+                                    const qvalA = a.q_value ?? a.qvalue ?? 1;
+                                    const qvalB = b.q_value ?? b.qvalue ?? 1;
+                                    const sigA = qvalA < 0.05 ? 1 : 0;
+                                    const sigB = qvalB < 0.05 ? 1 : 0;
+                                    if (sigA !== sigB) return sigB - sigA;
+                                    return Math.abs(b.rho || 0) - Math.abs(a.rho || 0);
+                                })
+                                .slice(0, 50).map(c => {
+                                const qval = c.q_value ?? c.qvalue;
+                                const isSignificant = qval != null && qval < 0.05;
+                                const pval = c.p_value || c.pvalue;
+                                return `
+                                    <tr class="${isSignificant ? 'significant' : ''}">
+                                        <td>${c.variable || c.measure || '-'}</td>
+                                        <td>${c.category}</td>
+                                        <td>${c.cell_type || 'All'}</td>
+                                        <td class="${c.rho >= 0 ? 'positive' : 'negative'}">${c.rho ? c.rho.toFixed(4) : '-'}</td>
+                                        <td>${pval ? (pval < 0.001 ? pval.toExponential(2) : pval.toFixed(4)) : '-'}</td>
+                                        <td>${qval != null ? (qval < 0.001 ? qval.toExponential(2) : qval.toFixed(4)) : '-'}</td>
+                                        <td>${isSignificant ? '&#10003;' : ''}</td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
                 </div>
             `;
+
+            this._correlationData = allCorrelations;
+            this.createCorrelationChart(allCorrelations);
+
         } catch (error) {
             content.innerHTML = `
                 <div class="no-data-panel">
@@ -891,28 +1375,111 @@ const GeneDetailPage = {
         }
     },
 
-    renderCorrelationList(correlations) {
-        if (!correlations || !correlations.length) {
-            return '<p class="no-data">No data available.</p>';
+    createCorrelationChart(data) {
+        const colors = {
+            'Age': '#3498db',
+            'BMI': '#e74c3c',
+            'Biochemistry': '#2ecc71',
+            'Metabolites': '#9b59b6',
+        };
+
+        // Sort by absolute rho and get top variables
+        const sortedData = [...data].sort((a, b) => Math.abs(b.rho || 0) - Math.abs(a.rho || 0));
+        const topData = sortedData.slice(0, 30);
+
+        // Create horizontal bar chart with color by category
+        const trace = {
+            type: 'bar',
+            x: topData.map(d => d.rho || 0),
+            y: topData.map(d => `${d.variable || d.measure}${d.cell_type && d.cell_type !== 'All' ? ` (${d.cell_type})` : ''}`),
+            orientation: 'h',
+            marker: {
+                color: topData.map(d => colors[d.category] || '#95a5a6'),
+            },
+            text: topData.map(d => d.category),
+            hovertemplate: '<b>%{y}</b><br>ρ = %{x:.4f}<br>%{text}<extra></extra>',
+        };
+
+        // Create legend entries for categories
+        const legendTraces = Object.keys(colors).map(cat => ({
+            type: 'bar',
+            x: [null],
+            y: [null],
+            name: cat,
+            marker: { color: colors[cat] },
+            showlegend: true,
+        }));
+
+        const layout = {
+            title: `${this.gene} Top Correlations`,
+            xaxis: {
+                title: 'Spearman ρ',
+                zeroline: true,
+                zerolinecolor: '#999',
+                range: [-1, 1],
+            },
+            yaxis: {
+                title: '',
+                automargin: true,
+            },
+            height: Math.max(400, topData.length * 22),
+            margin: { l: 200, r: 50, t: 50, b: 50 },
+            legend: { orientation: 'h', y: 1.1 },
+            showlegend: true,
+        };
+
+        Plotly.newPlot('correlation-chart', [trace, ...legendTraces], layout, { responsive: true });
+    },
+
+    filterCorrelationsByCategory() {
+        const category = document.getElementById('corr-category-filter').value;
+        const sigOnly = document.getElementById('corr-sig-only').checked;
+
+        let filtered = this._correlationData;
+
+        if (category !== 'all') {
+            filtered = filtered.filter(c => c.category === category);
         }
 
-        const topCorr = correlations.slice(0, 10);
+        if (sigOnly) {
+            filtered = filtered.filter(c => {
+                const qval = c.q_value ?? c.qvalue;
+                return qval != null && qval < 0.05;
+            });
+        }
 
-        return `
-            <div class="correlation-list">
-                ${topCorr.map(c => {
-                    const isSignificant = c.q_value && c.q_value < 0.05;
-                    return `
-                        <div class="correlation-item ${isSignificant ? 'significant' : ''}">
-                            <span class="variable">${c.variable}${c.cell_type && c.cell_type !== 'All' ? ` (${c.cell_type})` : ''}</span>
-                            <span class="rho ${c.rho >= 0 ? 'positive' : 'negative'}">&rho; = ${c.rho.toFixed(3)}</span>
-                            ${isSignificant ? '<span class="sig-badge">*</span>' : ''}
-                        </div>
-                    `;
-                }).join('')}
-            </div>
-            ${correlations.length > 10 ? `<p class="more-link">...and ${correlations.length - 10} more</p>` : ''}
-        `;
+        this.createCorrelationChart(filtered);
+
+        // Update table
+        const tbody = document.querySelector('#correlation-table tbody');
+        if (tbody) {
+            // Sort by significance first, then by absolute rho
+            const sorted = [...filtered].sort((a, b) => {
+                const qvalA = a.q_value ?? a.qvalue ?? 1;
+                const qvalB = b.q_value ?? b.qvalue ?? 1;
+                const sigA = qvalA < 0.05 ? 1 : 0;
+                const sigB = qvalB < 0.05 ? 1 : 0;
+                if (sigA !== sigB) return sigB - sigA;
+                return Math.abs(b.rho || 0) - Math.abs(a.rho || 0);
+            });
+
+            tbody.innerHTML = sorted.slice(0, 50).map(c => {
+                const qval = c.q_value ?? c.qvalue;
+                const isSignificant = qval != null && qval < 0.05;
+                const pval = c.p_value || c.pvalue;
+                return `
+                    <tr class="${isSignificant ? 'significant' : ''}">
+                        <td>${c.variable || c.measure || '-'}</td>
+                        <td>${c.category}</td>
+                        <td>${c.cell_type || 'All'}</td>
+                        <td class="${c.rho >= 0 ? 'positive' : 'negative'}">${c.rho ? c.rho.toFixed(4) : '-'}</td>
+                        <td>${pval ? (pval < 0.001 ? pval.toExponential(2) : pval.toFixed(4)) : '-'}</td>
+                        <td>${qval != null ? (qval < 0.001 ? qval.toExponential(2) : qval.toFixed(4)) : '-'}</td>
+                        <td>${isSignificant ? '&#10003;' : ''}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
     },
 };
 
