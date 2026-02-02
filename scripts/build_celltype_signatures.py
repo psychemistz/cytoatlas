@@ -35,6 +35,11 @@ INPUT_DIR = Path('/data/parks34/projects/0sigdiscov/moran_i/results/cytosig')
 OUTPUT_DIR = Path('/data/parks34/projects/2secactpy/results/celltype_signatures')
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
+# Minimum number of experiments required per cell type to include in signatures
+MIN_EXPERIMENTS_PER_CELLTYPE = 5
+# Minimum number of experiments required per cytokine within a cell type
+MIN_EXPERIMENTS_PER_SIGNATURE = 3
+
 # ==============================================================================
 # Cell Type Semantic Mapping
 # ==============================================================================
@@ -636,8 +641,14 @@ def build_celltype_signatures(meta: pd.DataFrame, diff: pd.DataFrame,
 
     For each (cell_type, cytokine) pair, average the differential expression
     across all experiments matching that combination.
+
+    Filters:
+    - Cell types with < MIN_EXPERIMENTS_PER_CELLTYPE total experiments are excluded
+    - Cytokine signatures with < MIN_EXPERIMENTS_PER_SIGNATURE experiments are excluded
     """
     print("\nBuilding cell-type-specific signatures...")
+    print(f"  Minimum experiments per cell type: {MIN_EXPERIMENTS_PER_CELLTYPE}")
+    print(f"  Minimum experiments per signature: {MIN_EXPERIMENTS_PER_SIGNATURE}")
 
     # Add canonical cell type to meta
     raw_to_canonical = dict(zip(mapping['raw_celltype'], mapping['canonical_celltype']))
@@ -647,17 +658,26 @@ def build_celltype_signatures(meta: pd.DataFrame, diff: pd.DataFrame,
     cytokines = meta['Treatment'].unique()
     cytokines = [c for c in cytokines if c != 'Condition' and pd.notna(c)]
 
-    celltypes = [ct for ct in mapping['canonical_celltype'].unique()
-                 if ct != 'Unknown' and pd.notna(ct)]
+    # Filter cell types by minimum experiment count
+    celltype_counts = meta[meta['canonical_celltype'] != 'Unknown']['canonical_celltype'].value_counts()
+    celltypes = [ct for ct in celltype_counts.index
+                 if celltype_counts[ct] >= MIN_EXPERIMENTS_PER_CELLTYPE]
 
-    print(f"  {len(cytokines)} cytokines, {len(celltypes)} cell types")
+    excluded_celltypes = [ct for ct in celltype_counts.index
+                          if celltype_counts[ct] < MIN_EXPERIMENTS_PER_CELLTYPE]
+    if excluded_celltypes:
+        print(f"  Excluded {len(excluded_celltypes)} cell types with < {MIN_EXPERIMENTS_PER_CELLTYPE} experiments:")
+        for ct in excluded_celltypes[:10]:
+            print(f"    - {ct} ({celltype_counts[ct]} experiments)")
+        if len(excluded_celltypes) > 10:
+            print(f"    ... and {len(excluded_celltypes) - 10} more")
+
+    print(f"  {len(cytokines)} cytokines, {len(celltypes)} cell types (after filtering)")
 
     # Build signatures for each cell type
     signatures = {}
 
     for celltype in celltypes:
-        print(f"  Processing {celltype}...")
-
         # Get experiments for this cell type
         ct_meta = meta[meta['canonical_celltype'] == celltype]
 
@@ -675,7 +695,8 @@ def build_celltype_signatures(meta: pd.DataFrame, diff: pd.DataFrame,
             # Get matching columns from diff matrix
             matching_cols = [col for col in exp_ids if col in diff.columns]
 
-            if len(matching_cols) == 0:
+            # Filter by minimum experiments per signature
+            if len(matching_cols) < MIN_EXPERIMENTS_PER_SIGNATURE:
                 continue
 
             # Average expression across experiments
