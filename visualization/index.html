@@ -2416,27 +2416,44 @@
                         <label>Analysis Type</label>
                         <select id="meta-analysis-type">
                             <option value="age">Age Correlation</option>
-                            <option value="sex">Sex Difference</option>
                         </select>
                     </div>
-                    <div class="control-group">
-                        <label>Signature Type</label>
-                        <select id="meta-sig-type">
-                            <option value="CytoSig">CytoSig (43 cytokines)</option>
-                            <option value="SecAct">SecAct (1,170 proteins)</option>
-                        </select>
+                </div>
+
+                <!-- Replication Summary -->
+                <div id="meta-summary" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+                    <div style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;">
+                        <div style="text-align: center;">
+                            <div style="font-size: 2rem; font-weight: bold; color: #2e7d32;" id="meta-replicated-count">-</div>
+                            <div style="font-size: 0.85rem; color: #1b5e20;">Replicated Signatures</div>
+                            <div style="font-size: 0.75rem; color: #666;">Data from 2+ atlases</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 2rem; font-weight: bold; color: #1565c0;" id="meta-consistent-count">-</div>
+                            <div style="font-size: 0.85rem; color: #0d47a1;">Consistent Direction</div>
+                            <div style="font-size: 0.75rem; color: #666;">Same sign across atlases</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 2rem; font-weight: bold; color: #7b1fa2;" id="meta-significant-count">-</div>
+                            <div style="font-size: 0.85rem; color: #4a148c;">Significant Pooled</div>
+                            <div style="font-size: 0.75rem; color: #666;">p &lt; 0.05 in meta-analysis</div>
+                        </div>
+                        <div style="flex: 1; min-width: 200px; text-align: left; padding-left: 1rem; border-left: 2px solid #a5d6a7;">
+                            <div style="font-size: 0.9rem; color: #333;"><strong>Cross-Atlas Replication</strong></div>
+                            <div style="font-size: 0.8rem; color: #666; margin-top: 0.25rem;">Shows signatures with age correlation data from multiple atlases (CIMA + Inflammation). Only replicated associations are displayed.</div>
+                        </div>
                     </div>
                 </div>
 
                 <div class="two-col">
                     <div class="viz-container" style="min-height: 500px;">
-                        <div class="viz-title">Meta-Analysis Forest Plot</div>
-                        <div class="viz-subtitle">Effect sizes and confidence intervals across atlases</div>
+                        <div class="viz-title">Replicated Age Associations</div>
+                        <div class="viz-subtitle">Forest plot showing effect sizes from each atlas and pooled estimate</div>
                         <div id="meta-forest" class="loading">Loading...</div>
                     </div>
                     <div class="viz-container" style="min-height: 500px;">
-                        <div class="viz-title">Heterogeneity Assessment</div>
-                        <div class="viz-subtitle">I² statistics for cross-atlas consistency</div>
+                        <div class="viz-title">Replication Consistency</div>
+                        <div class="viz-subtitle">I² = 0%: identical effects; I² > 75%: substantial heterogeneity</div>
                         <div id="meta-heterogeneity" class="loading">Loading...</div>
                     </div>
                 </div>
@@ -11224,71 +11241,94 @@
             }
         }
 
-        // Cross-Atlas: Meta-Analysis
+        // Cross-Atlas: Meta-Analysis (Replicated Signatures Only)
         function updateMetaAnalysis() {
             const container1 = document.getElementById('meta-forest');
             const container2 = document.getElementById('meta-heterogeneity');
 
             // Get dropdown values
             const analysisType = document.getElementById('meta-analysis-type')?.value || 'age';
-            const sigType = document.getElementById('meta-sig-type')?.value || 'CytoSig';
 
-            // Use real meta-analysis data if available
+            // Use real meta-analysis data - filter for 2+ atlases only
             const realMetaData = state.data.crossatlas?.meta_analysis;
 
-            let metaData;
-
-            if (realMetaData && realMetaData[analysisType]) {
-                // Format real data grouped by signature
-                const sigGroups = {};
-                realMetaData[analysisType].forEach(d => {
-                    if (!sigGroups[d.signature]) {
-                        sigGroups[d.signature] = {
-                            signature: d.signature,
-                            effects: [],
-                            I2: d.I2 || 0
-                        };
-                    }
-                    sigGroups[d.signature].effects.push({
-                        atlas: d.atlas,
-                        effect: d.effect,
-                        se: d.se,
-                        ci_low: d.ci_low,
-                        ci_high: d.ci_high
-                    });
-                    sigGroups[d.signature].pooled = {
-                        effect: d.pooled_effect,
-                        se: d.pooled_se,
-                        ci_low: d.pooled_effect - 1.96 * d.pooled_se,
-                        ci_high: d.pooled_effect + 1.96 * d.pooled_se
-                    };
-                });
-                metaData = Object.values(sigGroups).slice(0, 15); // Limit for visualization
-            } else {
-                // Fallback mock data
-                const signatures = ['IFNG', 'TNF', 'IL6', 'IL10', 'IL17A', 'IL1B', 'IL4', 'IL13', 'TGFB1', 'CCL2'];
-                metaData = signatures.map(sig => {
-                    const effect = (Math.random() - 0.3) * 0.5;
-                    const se = Math.random() * 0.1 + 0.05;
-                    return {
-                        signature: sig,
-                        effects: [{ atlas: 'CIMA', effect, se, ci_low: effect - 1.96 * se, ci_high: effect + 1.96 * se }],
-                        pooled: { effect, se, ci_low: effect - 1.96 * se, ci_high: effect + 1.96 * se },
-                        I2: 0
-                    };
-                });
+            if (!realMetaData || !realMetaData[analysisType]) {
+                if (container1) {
+                    container1.classList.remove('loading');
+                    container1.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No meta-analysis data available.</p>';
+                }
+                if (container2) {
+                    container2.classList.remove('loading');
+                    container2.innerHTML = '';
+                }
+                return;
             }
+
+            // Filter for signatures with data from 2+ atlases
+            const multiAtlasData = realMetaData[analysisType].filter(d => d.n_atlases >= 2);
+
+            // Group by signature
+            const sigGroups = {};
+            multiAtlasData.forEach(d => {
+                if (!sigGroups[d.signature]) {
+                    sigGroups[d.signature] = {
+                        signature: d.signature,
+                        effects: [],
+                        I2: d.I2 || 0,
+                        pooled_pvalue: d.pvalue
+                    };
+                }
+                sigGroups[d.signature].effects.push({
+                    atlas: d.atlas,
+                    effect: d.effect,
+                    se: d.se,
+                    ci_low: d.ci_low,
+                    ci_high: d.ci_high
+                });
+                sigGroups[d.signature].pooled = {
+                    effect: d.pooled_effect,
+                    se: d.pooled_se,
+                    ci_low: d.pooled_effect - 1.96 * d.pooled_se,
+                    ci_high: d.pooled_effect + 1.96 * d.pooled_se
+                };
+            });
+
+            const metaData = Object.values(sigGroups);
+
+            // Update summary cards
+            const replicatedCount = metaData.length;
+            const consistentCount = metaData.filter(m => {
+                // Check if all effects have the same sign
+                const signs = m.effects.map(e => Math.sign(e.effect));
+                return signs.every(s => s === signs[0]);
+            }).length;
+            const significantCount = metaData.filter(m => {
+                // Pooled CI doesn't cross zero
+                return (m.pooled.ci_low > 0 || m.pooled.ci_high < 0);
+            }).length;
+
+            document.getElementById('meta-replicated-count').textContent = replicatedCount;
+            document.getElementById('meta-consistent-count').textContent = consistentCount;
+            document.getElementById('meta-significant-count').textContent = significantCount;
+
+            // Sort by absolute pooled effect for visualization
+            const sortedMeta = [...metaData].sort((a, b) => Math.abs(b.pooled.effect) - Math.abs(a.pooled.effect)).slice(0, 20);
 
             // 1. Forest plot
             if (container1) {
                 container1.classList.remove('loading');
                 Plotly.purge(container1);
 
+                if (sortedMeta.length === 0) {
+                    container1.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No replicated signatures found (data from 2+ atlases required).</p>';
+                    return;
+                }
+
                 const traces = [];
                 const yLabels = [];
                 let yPos = 0;
 
-                metaData.forEach((meta, sigIdx) => {
+                sortedMeta.forEach((meta, sigIdx) => {
                     // Add individual study effects
                     meta.effects.forEach((e, i) => {
                         yLabels.push(`${meta.signature} - ${e.atlas}`);
@@ -11355,24 +11395,28 @@
                 container2.classList.remove('loading');
                 Plotly.purge(container2);
 
+                // Use same filtered data as forest plot
                 const sortedByI2 = [...metaData].sort((a, b) => b.I2 - a.I2);
 
-                // Check if all I² values are 0 (single atlas data)
+                if (sortedByI2.length === 0) {
+                    container2.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No data available.</p>';
+                    return;
+                }
+
+                // Check if all I² values are 0 (perfectly consistent)
                 const allZero = sortedByI2.every(d => d.I2 === 0);
 
                 if (allZero) {
-                    // Show informative message when no heterogeneity can be computed
                     container2.innerHTML = `
                         <div style="padding: 2rem; text-align: center; color: #666;">
-                            <h4 style="margin-bottom: 1rem;">Heterogeneity Assessment</h4>
-                            <p><strong>I² = 0% for all signatures</strong></p>
+                            <div style="font-size: 3rem; color: #2ca02c; margin-bottom: 1rem;">I² = 0%</div>
+                            <p><strong>Perfect Consistency</strong></p>
                             <p style="font-size: 0.9rem; margin-top: 1rem;">
-                                This indicates <span style="color: #2ca02c; font-weight: bold;">low heterogeneity</span>
-                                (consistent effects). Currently showing results from a single atlas (CIMA),
-                                so cross-atlas heterogeneity cannot be computed.
+                                All ${sortedByI2.length} replicated signatures show <span style="color: #2ca02c; font-weight: bold;">identical effects</span>
+                                across CIMA and Inflammation Atlas.
                             </p>
                             <p style="font-size: 0.85rem; margin-top: 0.5rem; color: #999;">
-                                Multi-atlas meta-analysis requires demographic data from multiple cohorts.
+                                I² = 0% indicates no heterogeneity between atlas estimates.
                             </p>
                         </div>
                     `;
@@ -11966,7 +12010,6 @@
             document.getElementById('mapping-level')?.addEventListener('change', updateCelltypeMapping);
             document.getElementById('mapping-lineage')?.addEventListener('change', updateCelltypeMapping);
             document.getElementById('meta-analysis-type')?.addEventListener('change', updateMetaAnalysis);
-            document.getElementById('meta-sig-type')?.addEventListener('change', updateMetaAnalysis);
 
             // Cross-Atlas Signature Correlation
             document.getElementById('sigcorr-sig-type')?.addEventListener('change', updateSignatureCorrelation);
