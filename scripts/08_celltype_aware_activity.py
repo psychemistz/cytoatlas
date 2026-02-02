@@ -16,6 +16,7 @@ Date: 2026-02-02
 
 import os
 import sys
+import gc
 import json
 import warnings
 import numpy as np
@@ -187,11 +188,14 @@ def compute_activity_for_celltype(
             if len(sample_cells) < 10:  # Skip samples with too few cells
                 continue
 
-            # Get expression data
-            if sparse.issparse(adata.X):
-                expr = np.asarray(adata.X[sample_cells][:, gene_idx].mean(axis=0)).flatten()
+            # Get expression data - handle backed mode, sparse, and dense
+            X_sample = adata.X[sample_cells][:, gene_idx]
+            if sparse.issparse(X_sample):
+                expr = np.asarray(X_sample.mean(axis=0)).flatten()
+            elif hasattr(X_sample, 'toarray'):
+                expr = np.asarray(X_sample.toarray().mean(axis=0)).flatten()
             else:
-                expr = adata.X[sample_cells][:, gene_idx].mean(axis=0)
+                expr = np.asarray(X_sample).mean(axis=0).flatten()
 
             sample_expr.append(expr)
             sample_ids.append(sample)
@@ -234,14 +238,19 @@ def compute_activity_for_celltype(
             batch_end = min(batch_start + batch_size, n_cells)
             batch_cells = cells_idx[batch_start:batch_end]
 
-            # Get expression data
-            if sparse.issparse(adata.X):
-                expr = np.asarray(adata.X[batch_cells][:, gene_idx].todense())
+            # Get expression data - handle backed mode, sparse, and dense
+            X_batch = adata.X[batch_cells][:, gene_idx]
+            if sparse.issparse(X_batch):
+                expr = np.asarray(X_batch.toarray())
+            elif hasattr(X_batch, 'todense'):
+                expr = np.asarray(X_batch.todense())
             else:
-                expr = adata.X[batch_cells][:, gene_idx]
+                expr = np.asarray(X_batch)
 
             # Z-score normalize per cell
-            expr = (expr - expr.mean(axis=1, keepdims=True)) / (expr.std(axis=1, keepdims=True) + 1e-6)
+            row_mean = expr.mean(axis=1, keepdims=True)
+            row_std = expr.std(axis=1, keepdims=True) + 1e-6
+            expr = (expr - row_mean) / row_std
 
             # Compute activity
             activity = infer_activity_ridge(expr, sig_subset)
@@ -297,9 +306,9 @@ def process_atlas(
     """
     log(f"Processing {atlas_name} ({mode} mode)...")
 
-    # Load data
+    # Load data - always use backed mode for memory efficiency
     log(f"  Loading {h5ad_path.name}...")
-    adata = sc.read_h5ad(h5ad_path, backed='r' if mode == 'singlecell' else None)
+    adata = sc.read_h5ad(h5ad_path, backed='r')
     log(f"  Loaded: {adata.n_obs:,} cells, {adata.n_vars:,} genes")
 
     # Get cell types
@@ -357,6 +366,9 @@ def process_atlas(
                 log(f"      → {metadata['n_samples']} samples")
             else:
                 log(f"      → {metadata['n_cells']:,} cells processed")
+
+        # Free memory after each cell type
+        gc.collect()
 
     # Close backed file
     if hasattr(adata, 'file') and adata.file is not None:
