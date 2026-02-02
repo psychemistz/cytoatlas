@@ -2275,13 +2275,6 @@
                         </select>
                     </div>
                     <div class="control-group">
-                        <label>Conservation View</label>
-                        <select id="conserved-view">
-                            <option value="celltype_aware">Cell-type Aware (pattern correlation)</option>
-                            <option value="celltype_agnostic">Cell-type Agnostic (mean activity)</option>
-                        </select>
-                    </div>
-                    <div class="control-group">
                         <label>Filter</label>
                         <select id="conserved-filter">
                             <option value="all">All signatures</option>
@@ -2291,11 +2284,6 @@
                             <option value="insufficient_data">Insufficient data (1 pair only)</option>
                         </select>
                     </div>
-                </div>
-
-                <!-- View Description -->
-                <div id="conserved-view-description" style="background: #e3f2fd; padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.9rem;">
-                    <strong>Cell-type Aware:</strong> Measures whether signatures show consistent cell-type patterns across atlases (e.g., IFNG high in CD8 T cells in both CIMA and Inflammation Atlas).
                 </div>
 
                 <!-- Summary Cards -->
@@ -10025,21 +10013,18 @@
 
         // Cross-Atlas: Conserved Signatures
         // Shows cross-atlas correlation reliability for each signature.
-        // Two views: Cell-type Aware (pattern correlation) and Cell-type Agnostic (mean activity).
+        // Measures whether signatures show consistent cell-type patterns across atlases.
         function updateConservedSignatures() {
             const heatmapContainer = document.getElementById('conserved-heatmap');
             const tableContainer = document.getElementById('conserved-table');
             const pairCorrelationsContainer = document.getElementById('conserved-pair-correlations');
-            const viewDescription = document.getElementById('conserved-view-description');
 
             // Get dropdown values
             const sigType = document.getElementById('conserved-sig-type')?.value || 'cytosig';
-            const viewType = document.getElementById('conserved-view')?.value || 'celltype_aware';
             const filterType = document.getElementById('conserved-filter')?.value || 'all';
 
             // Use signature_reliability data from cross_atlas.json
             const reliabilityData = state.data.crossatlas?.signature_reliability?.[sigType];
-            const conservedData = state.data.crossatlas?.conserved;
 
             if (!reliabilityData) {
                 if (heatmapContainer) {
@@ -10052,70 +10037,35 @@
                 return;
             }
 
-            // Update view description
-            if (viewDescription) {
-                if (viewType === 'celltype_aware') {
-                    viewDescription.innerHTML = '<strong>Cell-type Aware:</strong> Measures whether signatures show consistent cell-type patterns across atlases (e.g., IFNG high in CD8 T cells in both CIMA and Inflammation Atlas).';
-                    viewDescription.style.background = '#e3f2fd';
-                } else {
-                    viewDescription.innerHTML = '<strong>Cell-type Agnostic:</strong> Compares overall mean activity levels across atlases, regardless of cell type distribution (e.g., is IFNG generally active/inactive at similar levels?).';
-                    viewDescription.style.background = '#fff3e0';
-                }
-            }
-
-            // Update summary cards (same for both views - based on cell-type aware categorization)
+            // Update summary cards
             const summary = reliabilityData.summary || {};
             document.getElementById('conserved-highly-count').textContent = summary.highly_conserved || 0;
             document.getElementById('conserved-moderate-count').textContent = summary.moderately_conserved || 0;
             document.getElementById('conserved-specific-count').textContent = summary.atlas_specific || 0;
             document.getElementById('conserved-insufficient-count').textContent = summary.insufficient_data || 0;
 
-            // Update titles based on view
-            const heatmapTitle = document.getElementById('conserved-heatmap-title');
-            const heatmapSubtitle = document.getElementById('conserved-heatmap-subtitle');
-            const corrTitle = document.getElementById('conserved-corr-title');
-            const corrSubtitle = document.getElementById('conserved-corr-subtitle');
-
-            if (viewType === 'celltype_aware') {
-                if (heatmapTitle) heatmapTitle.textContent = 'Per-Signature Cross-Atlas Correlation';
-                if (heatmapSubtitle) heatmapSubtitle.textContent = 'Correlation of activity patterns across cell types between atlases';
-                if (corrTitle) corrTitle.textContent = 'Cross-Atlas Pattern Correlation';
-                if (corrSubtitle) corrSubtitle.textContent = 'Overall cell-type pattern correlation between atlas pairs';
-            } else {
-                if (heatmapTitle) heatmapTitle.textContent = 'Per-Signature Mean Activity Comparison';
-                if (heatmapSubtitle) heatmapSubtitle.textContent = 'Mean activity (z-score) for each signature in each atlas';
-                if (corrTitle) corrTitle.textContent = 'Cross-Atlas Mean Activity Correlation';
-                if (corrSubtitle) corrSubtitle.textContent = 'Correlation of mean activity levels across signatures';
-            }
-
             // Update pair correlations display
             if (pairCorrelationsContainer) {
-                const pairCorr = viewType === 'celltype_aware'
-                    ? (reliabilityData.pair_correlations || {})
-                    : (reliabilityData.agnostic_pair_correlations || {});
+                const pairCorr = reliabilityData.pair_correlations || {};
                 const pairLabels = {
                     'cima_vs_inflammation': 'CIMA vs Inflammation',
                     'cima_vs_scatlas': 'CIMA vs scAtlas',
                     'inflammation_vs_scatlas': 'Inflammation vs scAtlas'
                 };
 
-                if (Object.keys(pairCorr).length === 0) {
-                    pairCorrelationsContainer.innerHTML = '<p style="color: #666; text-align: center;">No correlation data available for this view.</p>';
-                } else {
-                    let pairHtml = '';
-                    for (const [pairKey, data] of Object.entries(pairCorr)) {
-                        const r = data.correlation || 0;
-                        const color = r > 0.7 ? '#2e7d32' : r > 0.5 ? '#e65100' : '#c2185b';
-                        pairHtml += `
-                            <div style="text-align: center; min-width: 150px;">
-                                <div style="font-size: 1.5rem; font-weight: bold; color: ${color};">r = ${r.toFixed(2)}</div>
-                                <div style="font-size: 0.85rem; color: #666;">${pairLabels[pairKey] || pairKey}</div>
-                                <div style="font-size: 0.75rem; color: #999;">n = ${data.n || 0} ${viewType === 'celltype_aware' ? 'points' : 'signatures'}</div>
-                            </div>
-                        `;
-                    }
-                    pairCorrelationsContainer.innerHTML = pairHtml;
+                let pairHtml = '';
+                for (const [pairKey, data] of Object.entries(pairCorr)) {
+                    const r = data.correlation || 0;
+                    const color = r > 0.7 ? '#2e7d32' : r > 0.5 ? '#e65100' : '#c2185b';
+                    pairHtml += `
+                        <div style="text-align: center; min-width: 150px;">
+                            <div style="font-size: 1.5rem; font-weight: bold; color: ${color};">r = ${r.toFixed(2)}</div>
+                            <div style="font-size: 0.85rem; color: #666;">${pairLabels[pairKey] || pairKey}</div>
+                            <div style="font-size: 0.75rem; color: #999;">n = ${data.n || 0} points</div>
+                        </div>
+                    `;
                 }
+                pairCorrelationsContainer.innerHTML = pairHtml;
             }
 
             // Render category distribution chart
@@ -10153,15 +10103,14 @@
                 signatures = signatures.filter(s => s.category === filterType);
             }
 
-            // Render visualization based on view type
+            // Render heatmap of correlation coefficients
             if (heatmapContainer) {
                 heatmapContainer.classList.remove('loading');
                 Plotly.purge(heatmapContainer);
 
                 if (signatures.length === 0) {
                     heatmapContainer.innerHTML = `<p style="text-align:center; color:#666; padding:2rem;">No signatures match the current filter.</p>`;
-                } else if (viewType === 'celltype_aware') {
-                    // Cell-type aware: heatmap of correlation coefficients
+                } else {
                     const displaySigs = signatures.slice(0, 50);
                     const pairKeys = ['cima_vs_inflammation', 'cima_vs_scatlas', 'inflammation_vs_scatlas'];
                     const pairLabels = ['CIMA-Inflam', 'CIMA-scAtlas', 'Inflam-scAtlas'];
@@ -10208,57 +10157,6 @@
                         margin: { l: 100, r: 80, t: 50, b: 60 },
                         height: 450
                     }, { responsive: true });
-                } else {
-                    // Cell-type agnostic: heatmap of mean activity values
-                    const sigsWithMeans = signatures.filter(s => s.atlas_means && Object.keys(s.atlas_means).length >= 2);
-                    const displaySigs = sigsWithMeans.slice(0, 50);
-
-                    if (displaySigs.length === 0) {
-                        heatmapContainer.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No signatures with mean activity data in 2+ atlases.</p>';
-                    } else {
-                        const atlasKeys = ['cima', 'inflammation', 'scatlas'];
-                        const atlasLabels = ['CIMA', 'Inflammation', 'scAtlas'];
-
-                        const zData = [];
-                        const yLabels = [];
-                        const hoverText = [];
-
-                        for (const sig of displaySigs) {
-                            const row = [];
-                            const hoverRow = [];
-                            yLabels.push(sig.signature);
-                            for (const atlasKey of atlasKeys) {
-                                const mean = sig.atlas_means?.[atlasKey];
-                                if (mean !== undefined) {
-                                    row.push(mean);
-                                    hoverRow.push(`${sig.signature}<br>${atlasKey}<br>Mean activity: ${mean.toFixed(2)}`);
-                                } else {
-                                    row.push(null);
-                                    hoverRow.push(`${sig.signature}<br>${atlasKey}<br>No data`);
-                                }
-                            }
-                            zData.push(row);
-                            hoverText.push(hoverRow);
-                        }
-
-                        Plotly.newPlot(heatmapContainer, [{
-                            type: 'heatmap',
-                            z: zData,
-                            x: atlasLabels,
-                            y: yLabels,
-                            text: hoverText,
-                            hoverinfo: 'text',
-                            colorscale: 'RdBu',
-                            zmid: 0,
-                            colorbar: { title: 'Mean Activity (z)', titleside: 'right' }
-                        }], {
-                            title: { text: `Mean Activity Across Atlases (${sigType.toUpperCase()}, ${displaySigs.length} signatures)`, font: { size: 14 } },
-                            xaxis: { title: 'Atlas', side: 'bottom' },
-                            yaxis: { automargin: true, autorange: 'reversed' },
-                            margin: { l: 100, r: 80, t: 50, b: 60 },
-                            height: 450
-                        }, { responsive: true });
-                    }
                 }
             }
 
@@ -10287,7 +10185,7 @@
                             <thead>
                                 <tr style="background: #f5f5f5; position: sticky; top: 0;">
                                     <th style="padding: 8px; text-align: left; border-bottom: 2px solid #ddd;">Signature</th>
-                                    <th style="padding: 8px; text-align: center; border-bottom: 2px solid #ddd;">${viewType === 'celltype_aware' ? 'Mean r' : 'Cross-Atlas SD'}</th>
+                                    <th style="padding: 8px; text-align: center; border-bottom: 2px solid #ddd;">Mean r</th>
                                     <th style="padding: 8px; text-align: center; border-bottom: 2px solid #ddd;">Category</th>
                                 </tr>
                             </thead>
@@ -10298,37 +10196,21 @@
                         const category = sig.category || 'unknown';
                         const color = categoryColors[category];
                         const label = categoryLabels[category];
+                        const meanR = sig.mean_correlation || 0;
 
-                        let valueDisplay, detailsHtml;
-                        if (viewType === 'celltype_aware') {
-                            const meanR = sig.mean_correlation || 0;
-                            valueDisplay = meanR.toFixed(2);
-                            const corrDetails = [];
-                            for (const [pairKey, data] of Object.entries(sig.correlations || {})) {
-                                const shortPair = pairKey.replace('cima_vs_', 'C-').replace('inflammation_vs_', 'I-').replace('inflammation', 'I').replace('scatlas', 'S');
-                                corrDetails.push(`${shortPair}: ${data.r.toFixed(2)}`);
-                            }
-                            detailsHtml = corrDetails.join(' | ');
-                        } else {
-                            const std = sig.std_across_atlases || 0;
-                            valueDisplay = std.toFixed(2);
-                            const meanDetails = [];
-                            if (sig.atlas_means) {
-                                for (const [atlas, mean] of Object.entries(sig.atlas_means)) {
-                                    const shortAtlas = atlas.charAt(0).toUpperCase();
-                                    meanDetails.push(`${shortAtlas}: ${mean.toFixed(1)}`);
-                                }
-                            }
-                            detailsHtml = meanDetails.join(' | ') || 'No data';
+                        const corrDetails = [];
+                        for (const [pairKey, data] of Object.entries(sig.correlations || {})) {
+                            const shortPair = pairKey.replace('cima_vs_', 'C-').replace('inflammation_vs_', 'I-').replace('inflammation', 'I').replace('scatlas', 'S');
+                            corrDetails.push(`${shortPair}: ${data.r.toFixed(2)}`);
                         }
 
                         tableHtml += `
                             <tr style="border-bottom: 1px solid #eee;">
                                 <td style="padding: 8px;">
                                     <strong>${sig.signature}</strong>
-                                    <div style="font-size: 0.75rem; color: #999;">${detailsHtml}</div>
+                                    <div style="font-size: 0.75rem; color: #999;">${corrDetails.join(' | ')}</div>
                                 </td>
-                                <td style="padding: 8px; text-align: center; font-weight: bold; color: ${color};">${valueDisplay}</td>
+                                <td style="padding: 8px; text-align: center; font-weight: bold; color: ${color};">${meanR.toFixed(2)}</td>
                                 <td style="padding: 8px; text-align: center;">
                                     <span style="background: ${color}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem;">${label}</span>
                                 </td>
@@ -11984,7 +11866,6 @@
 
             // Cross-Atlas panels
             document.getElementById('conserved-sig-type')?.addEventListener('change', updateConservedSignatures);
-            document.getElementById('conserved-view')?.addEventListener('change', updateConservedSignatures);
             document.getElementById('conserved-filter')?.addEventListener('change', updateConservedSignatures);
             document.getElementById('atlas-comparison-type')?.addEventListener('change', updateAtlasComparison);
             document.getElementById('atlas-comp-sig-type')?.addEventListener('change', updateAtlasComparison);
