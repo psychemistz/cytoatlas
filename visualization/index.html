@@ -10081,6 +10081,7 @@
                 ];
                 const colors = ['#2e7d32', '#e65100', '#c2185b', '#9e9e9e'];
 
+                const maxVal = Math.max(...values, 1);
                 Plotly.newPlot(categoryChartContainer, [{
                     type: 'bar',
                     x: categories,
@@ -10090,10 +10091,10 @@
                     textposition: 'outside',
                     hovertemplate: '<b>%{x}</b><br>%{y} signatures<extra></extra>'
                 }], {
-                    margin: { t: 10, b: 50, l: 40, r: 20 },
-                    yaxis: { title: 'Count', rangemode: 'tozero' },
+                    margin: { t: 30, b: 50, l: 40, r: 20 },
+                    yaxis: { title: 'Count', range: [0, maxVal * 1.2] },
                     xaxis: { tickangle: -20 },
-                    height: 150
+                    height: 160
                 }, { responsive: true, displayModeBar: false });
             }
 
