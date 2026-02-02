@@ -8,6 +8,30 @@ const GeneDetailPage = {
     activeTab: 'expression',
     data: null,
 
+    // Brief gene descriptions for common cytokines and immune genes
+    geneDescriptions: {
+        'IFNG': 'Interferon gamma (IFN-γ) is a key cytokine for innate and adaptive immunity. It activates macrophages, enhances antigen presentation, and promotes Th1 responses. Critical for defense against viral and intracellular bacterial infections.',
+        'TNF': 'Tumor necrosis factor (TNF-α) is a pro-inflammatory cytokine produced mainly by macrophages. It regulates immune cells, induces fever, apoptosis, and inflammation. Implicated in autoimmune diseases like rheumatoid arthritis.',
+        'IL6': 'Interleukin-6 is a pleiotropic cytokine with both pro- and anti-inflammatory effects. It regulates immune responses, acute phase reactions, and hematopoiesis. Elevated in inflammatory conditions and COVID-19.',
+        'IL17A': 'Interleukin-17A is the signature cytokine of Th17 cells. It promotes neutrophil recruitment and antimicrobial defense at mucosal surfaces. Implicated in autoimmune diseases like psoriasis and multiple sclerosis.',
+        'IL10': 'Interleukin-10 is an anti-inflammatory cytokine that limits immune responses. It inhibits pro-inflammatory cytokine production and antigen presentation. Important for preventing autoimmunity and tissue damage.',
+        'TGFB1': 'Transforming growth factor beta 1 regulates cell growth, differentiation, and immune function. It promotes regulatory T cell development and has both immunosuppressive and pro-fibrotic effects.',
+        'IL1B': 'Interleukin-1 beta is a potent pro-inflammatory cytokine. It induces fever, activates endothelium, and promotes inflammation. Key mediator in autoinflammatory diseases and inflammasome activation.',
+        'IL2': 'Interleukin-2 is essential for T cell proliferation and survival. It promotes both effector and regulatory T cell responses. Used therapeutically in cancer immunotherapy.',
+        'IL4': 'Interleukin-4 drives Th2 differentiation and IgE class switching. It promotes alternative macrophage activation and is central to allergic responses and helminth immunity.',
+        'IL12A': 'Interleukin-12 (p35 subunit) promotes Th1 differentiation and IFN-γ production. Critical for cell-mediated immunity against intracellular pathogens.',
+        'IL12B': 'Interleukin-12 (p40 subunit) shared with IL-23. Promotes Th1 responses and NK cell activation. Target for treatment of psoriasis and inflammatory bowel disease.',
+        'IL23A': 'Interleukin-23 (p19 subunit) maintains Th17 cell responses. Important in mucosal immunity and implicated in autoimmune diseases like psoriasis and Crohn\'s disease.',
+        'CCL2': 'C-C motif chemokine ligand 2 (MCP-1) recruits monocytes, memory T cells, and dendritic cells. Key mediator of inflammation and monocyte trafficking to tissues.',
+        'CXCL10': 'C-X-C motif chemokine ligand 10 (IP-10) attracts activated T cells and NK cells. Induced by IFN-γ, it promotes Th1 responses and antiviral immunity.',
+        'CXCL8': 'Interleukin-8 (CXCL8) is a major neutrophil chemoattractant. It promotes neutrophil recruitment, activation, and degranulation during acute inflammation.',
+        'IL18': 'Interleukin-18 synergizes with IL-12 to induce IFN-γ production. It activates NK cells and Th1 responses. Involved in inflammasome-mediated inflammation.',
+        'IL21': 'Interleukin-21 regulates B cell differentiation, germinal center formation, and plasma cell development. It also enhances NK cell and CD8 T cell cytotoxicity.',
+        'IL22': 'Interleukin-22 promotes epithelial barrier function and antimicrobial defense. Produced by Th17/Th22 cells, it protects mucosal surfaces but can drive pathology in psoriasis.',
+        'VEGFA': 'Vascular endothelial growth factor A promotes angiogenesis and vascular permeability. Key regulator of blood vessel formation in development, wound healing, and tumors.',
+        'CSF2': 'Granulocyte-macrophage colony-stimulating factor (GM-CSF) promotes myeloid cell differentiation and activation. Implicated in inflammatory diseases and used therapeutically.',
+    },
+
     tabs: [
         { id: 'expression', label: 'Gene Expression', icon: '&#129516;' },
         { id: 'cytosig', label: 'CytoSig Activity', icon: '&#128300;' },
@@ -28,10 +52,50 @@ const GeneDetailPage = {
     },
 
     /**
+     * Get external database links for a gene
+     */
+    getExternalLinks(gene) {
+        return [
+            {
+                name: 'NCBI Gene',
+                url: `https://www.ncbi.nlm.nih.gov/gene/?term=${encodeURIComponent(gene)}[sym]+AND+human[orgn]`,
+                icon: '🔬',
+            },
+            {
+                name: 'UniProt',
+                url: `https://www.uniprot.org/uniprotkb?query=${encodeURIComponent(gene)}+AND+organism_id:9606`,
+                icon: '🧬',
+            },
+            {
+                name: 'GeneCards',
+                url: `https://www.genecards.org/cgi-bin/carddisp.pl?gene=${encodeURIComponent(gene)}`,
+                icon: '📋',
+            },
+            {
+                name: 'Ensembl',
+                url: `https://www.ensembl.org/Human/Search/Results?q=${encodeURIComponent(gene)};site=ensembl;facet_species=Human`,
+                icon: '🌐',
+            },
+            {
+                name: 'HGNC',
+                url: `https://www.genenames.org/tools/search/#!/?query=${encodeURIComponent(gene)}`,
+                icon: '🏷️',
+            },
+            {
+                name: 'GO',
+                url: `https://amigo.geneontology.org/amigo/search/bioentity?q=${encodeURIComponent(gene)}`,
+                icon: '🔗',
+            },
+        ];
+    },
+
+    /**
      * Render the page template
      */
     render() {
         const app = document.getElementById('app');
+        const description = this.geneDescriptions[this.gene] || null;
+        const externalLinks = this.getExternalLinks(this.gene);
 
         app.innerHTML = `
             <div class="gene-detail-page">
@@ -41,7 +105,21 @@ const GeneDetailPage = {
                     </div>
                     <div id="gene-title" class="gene-title">
                         <h1>${this.gene}</h1>
+                        <div class="external-links">
+                            ${externalLinks.map(link => `
+                                <a href="${link.url}" target="_blank" rel="noopener noreferrer"
+                                   class="external-link" title="View in ${link.name}">
+                                    <span class="link-icon">${link.icon}</span>
+                                    <span class="link-name">${link.name}</span>
+                                </a>
+                            `).join('')}
+                        </div>
                     </div>
+                    ${description ? `
+                        <div class="gene-description">
+                            <p>${description}</p>
+                        </div>
+                    ` : ''}
                     <div id="gene-summary" class="gene-summary">
                         <div class="loading"><div class="spinner"></div>Loading gene data...</div>
                     </div>

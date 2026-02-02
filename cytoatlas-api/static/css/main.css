@@ -1335,6 +1335,92 @@ main {
     border-color: var(--primary);
 }
 
+/* Search page - simplified gene search */
+.search-bar-large {
+    max-width: 700px;
+    margin: 0 auto;
+}
+
+.search-bar-large input {
+    font-size: 1.25rem;
+    padding: var(--spacing-lg);
+}
+
+.btn-large {
+    padding: var(--spacing-md) var(--spacing-xl);
+    font-size: 1.1rem;
+}
+
+.search-examples {
+    text-align: center;
+    margin: var(--spacing-xl) 0;
+}
+
+.search-examples p {
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-md);
+}
+
+.example-genes {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--spacing-sm);
+}
+
+.gene-link {
+    display: inline-block;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    color: var(--primary);
+    font-weight: 600;
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.gene-link:hover {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
+}
+
+.search-info {
+    max-width: 600px;
+    margin: var(--spacing-2xl) auto 0;
+}
+
+.info-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-xl);
+}
+
+.info-card h3 {
+    margin: 0 0 var(--spacing-md) 0;
+    color: var(--text-primary);
+}
+
+.info-card ul {
+    margin: 0;
+    padding-left: var(--spacing-lg);
+}
+
+.info-card li {
+    margin-bottom: var(--spacing-sm);
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.info-card li strong {
+    color: var(--text-primary);
+}
+
 .search-type-cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -2328,6 +2414,7 @@ h3 .badge {
 
 .gene-title {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--spacing-md);
     margin-bottom: var(--spacing-md);
@@ -2336,6 +2423,56 @@ h3 .badge {
 .gene-title h1 {
     margin: 0;
     font-size: 2rem;
+}
+
+.external-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    margin-left: auto;
+}
+
+.external-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.external-link:hover {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+
+.external-link .link-icon {
+    font-size: 0.85rem;
+}
+
+.external-link .link-name {
+    font-weight: 500;
+}
+
+.gene-description {
+    background: var(--bg-secondary);
+    border-left: 4px solid var(--primary);
+    padding: var(--spacing-md) var(--spacing-lg);
+    margin-bottom: var(--spacing-md);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.gene-description p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.6;
 }
 
 .signature-type-badge {
