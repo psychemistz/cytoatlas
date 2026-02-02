@@ -156,7 +156,10 @@ def compute_activity_for_celltype(
     data_genes = set(adata.var_names)
     overlap_genes = list(sig_genes & data_genes)
 
+    log(f"      [DEBUG] Signature genes: {len(sig_genes)}, Data genes: {len(data_genes)}, Overlap: {len(overlap_genes)}")
+
     if len(overlap_genes) < MIN_GENES_OVERLAP:
+        log(f"      [DEBUG] SKIP: Insufficient gene overlap ({len(overlap_genes)} < {MIN_GENES_OVERLAP})")
         return None, {'error': f'Insufficient gene overlap: {len(overlap_genes)}'}
 
     # Subset to overlapping genes
@@ -174,23 +177,29 @@ def compute_activity_for_celltype(
     if mode == 'pseudobulk':
         # Aggregate by sample
         cells_idx = np.where(cell_mask)[0]
+        log(f"      [DEBUG] Total cells for this type: {len(cells_idx)}")
 
         if sample_col in adata.obs.columns:
             samples = adata.obs.iloc[cells_idx][sample_col].values
+            log(f"      [DEBUG] Sample column '{sample_col}' found")
         else:
             samples = np.array(['all'] * len(cells_idx))
+            log(f"      [DEBUG] Sample column '{sample_col}' NOT FOUND - using 'all'")
 
         unique_samples = np.unique(samples)
+        log(f"      [DEBUG] Unique samples: {len(unique_samples)}")
 
         # Compute mean expression per sample
         sample_expr = []
         sample_ids = []
+        skipped_small = 0
 
         for sample in unique_samples:
             sample_mask = samples == sample
             sample_cells = cells_idx[sample_mask]
 
             if len(sample_cells) < 10:  # Skip samples with too few cells
+                skipped_small += 1
                 continue
 
             # Get expression data - handle backed mode, sparse, and dense
@@ -209,7 +218,10 @@ def compute_activity_for_celltype(
             sample_expr.append(expr)
             sample_ids.append(sample)
 
+        log(f"      [DEBUG] Samples processed: {len(sample_ids)}, Skipped (small): {skipped_small}")
+
         if len(sample_expr) == 0:
+            log(f"      [DEBUG] SKIP: No samples with sufficient cells (all {len(unique_samples)} samples had <10 cells)")
             return None, {'error': 'No samples with sufficient cells'}
 
         expr_matrix = np.array(sample_expr)
@@ -391,6 +403,8 @@ def process_atlas(
                 log(f"      → {metadata['n_samples']} samples")
             else:
                 log(f"      → {metadata['n_cells']:,} cells processed")
+        else:
+            log(f"      [DEBUG] FAILED: {metadata.get('error', 'Unknown error')}")
 
         # Free memory after each cell type
         gc.collect()
@@ -398,6 +412,10 @@ def process_atlas(
     # Close backed file
     if hasattr(adata, 'file') and adata.file is not None:
         adata.file.close()
+
+    log(f"  [DEBUG] Total results: {len(results)} cell types with valid activity")
+    if len(results) == 0:
+        log(f"  [DEBUG] WARNING: No valid results for any cell type!")
 
     return results
 
