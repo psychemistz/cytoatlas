@@ -70,7 +70,7 @@
     "IFN1": {
       "hgnc_symbol": "IFNA1",
       "hgnc_id": "HGNC:5417",
-      "notes": "Mapped to IFNA1; represents Type I interferon response (composite of multiple IFN-alpha/beta genes)"
+      "notes": "Mapped to IFNA1; represents Type I interferon response (composite of multiple IFN-alpha/beta genes). IFNB1 also maps to this signature."
     },
     "IFNG": {
       "hgnc_symbol": "IFNG",
@@ -90,7 +90,7 @@
     "IL12": {
       "hgnc_symbol": "IL12A",
       "hgnc_id": "HGNC:5969",
-      "notes": "Mapped to IL12A (p35 subunit); IL-12 is a heterodimer of IL12A + IL12B"
+      "notes": "Mapped to IL12A (p35 subunit); IL-12 is a heterodimer of IL12A + IL12B. Both subunit genes map to this signature."
     },
     "IL13": {
       "hgnc_symbol": "IL13",
@@ -279,10 +279,12 @@
     "CSF2": "GMCSF",
     "HGF": "HGF",
     "IFNA1": "IFN1",
+    "IFNB1": "IFN1",
     "IFNG": "IFNG",
     "IFNL1": "IFNL",
     "IL10": "IL10",
     "IL12A": "IL12",
+    "IL12B": "IL12",
     "IL13": "IL13",
     "IL15": "IL15",
     "IL17A": "IL17A",

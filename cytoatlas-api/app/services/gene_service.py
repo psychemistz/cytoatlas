@@ -42,7 +42,12 @@ def _load_gene_mapping():
     if _GENE_MAPPING is not None:
         return
 
-    mapping_path = Path(__file__).parent.parent.parent / "static" / "data" / "signature_gene_mapping.json"
+    import logging
+    logger = logging.getLogger(__name__)
+
+    base_path = Path(__file__).parent.parent.parent / "static" / "data"
+    mapping_path = base_path / "signature_gene_mapping.json"
+    gene_info_path = base_path / "gene_info.json"
 
     try:
         with open(mapping_path) as f:
@@ -54,24 +59,44 @@ def _load_gene_mapping():
         # Build reverse mapping: HGNC symbol -> CytoSig name
         _HGNC_TO_CYTOSIG = _GENE_MAPPING.get("hgnc_to_signature", {})
 
-        # Build descriptions from cytosig_mapping
-        for sig_name, info in _GENE_MAPPING.get("cytosig_mapping", {}).items():
-            _GENE_DESCRIPTIONS[sig_name] = info.get("notes", "")
-            hgnc = info.get("hgnc_symbol")
-            if hgnc:
-                _GENE_DESCRIPTIONS[hgnc] = info.get("notes", "")
+        # Load detailed descriptions from gene_info.json (has cancer-related info)
+        try:
+            with open(gene_info_path) as f:
+                gene_info = json.load(f)
+
+            # Load CytoSig descriptions
+            for sig_name, info in gene_info.get("cytosig", {}).items():
+                desc = info.get("description", "")
+                if desc:
+                    _GENE_DESCRIPTIONS[sig_name] = desc
+                    hgnc = info.get("hgnc_symbol")
+                    if hgnc:
+                        _GENE_DESCRIPTIONS[hgnc] = desc
+
+            # Load SecAct descriptions
+            for gene_name, info in gene_info.get("secact", {}).items():
+                desc = info.get("description", "")
+                if desc and gene_name not in _GENE_DESCRIPTIONS:
+                    _GENE_DESCRIPTIONS[gene_name] = desc
+
+            logger.info(f"Loaded {len(_GENE_DESCRIPTIONS)} gene descriptions")
+
+        except FileNotFoundError:
+            # Fall back to basic notes from mapping file
+            for sig_name, info in _GENE_MAPPING.get("cytosig_mapping", {}).items():
+                _GENE_DESCRIPTIONS[sig_name] = info.get("notes", "")
+                hgnc = info.get("hgnc_symbol")
+                if hgnc:
+                    _GENE_DESCRIPTIONS[hgnc] = info.get("notes", "")
 
     except FileNotFoundError:
-        # Fallback to hardcoded mapping
-        _HGNC_TO_CYTOSIG = {
-            'TNF': 'TNFA', 'IFNA1': 'IFN1', 'IFNB1': 'IFN1', 'IFNL1': 'IFNL',
-            'CSF3': 'GCSF', 'CSF2': 'GMCSF', 'CSF1': 'MCSF',
-            'IL12A': 'IL12', 'IL12B': 'IL12', 'TNFSF10': 'TRAIL', 'TNFSF12': 'TWEAK',
-            'INHBA': 'Activin A', 'CD40LG': 'CD40L', 'NOS1': 'NO', 'IL36A': 'IL36',
-        }
-        _CYTOSIG_TO_HGNC = {v: k for k, v in _HGNC_TO_CYTOSIG.items()}
-        _CYTOSIG_TO_HGNC['IFN1'] = 'IFNA1'
+        logger.warning(
+            f"signature_gene_mapping.json not found at {mapping_path}. "
+            "Gene name mapping will be unavailable."
+        )
         _GENE_MAPPING = {}
+        _CYTOSIG_TO_HGNC = {}
+        _HGNC_TO_CYTOSIG = {}
 
 
 def get_all_names(query: str) -> dict:

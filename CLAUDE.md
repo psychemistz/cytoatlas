@@ -240,3 +240,40 @@ For comprehensive project status and implementation details, see:
 git config user.email "seongyong.park@nih.gov"
 git config user.name "Seongyong Park"
 ```
+
+## Lessons Learned
+
+> **Self-updating section**: When Claude makes a mistake or learns something project-specific, add it here to prevent repeating errors.
+
+### Data Handling
+- Activity values are z-scores (can be negative) → use `activity_diff` not `log2fc`
+- Gene mapping: CytoSig names (e.g., `TNFA`) differ from HGNC symbols (e.g., `TNF`) - always check `signature_gene_mapping.json`
+- JSON files with `*_complete.json` suffix are duplicates - delete them
+
+### API Development
+- Always test endpoints with real data paths, not mocks
+- Use `get_signature_names()` helper for bidirectional gene name lookup
+- Pydantic v2 syntax: use `field_validator` not `validator`
+
+### Frontend
+- Check `docs/EMBEDDED_DATA_CHECKLIST.md` before adding new JSON files
+- Use "Δ Activity" label (not "Log2FC") in UI for differential displays
+
+## Workflow Tips
+
+### Starting a Session
+```bash
+# Quick context refresh
+claude -c  # Continue last session
+claude -r  # Resume specific session
+```
+
+### Before Complex Tasks
+1. Use `/plan` mode for multi-step implementations
+2. Break large tasks into smaller units (A→A1→A2→A3 not A→B directly)
+3. For parallel work, consider git worktrees
+
+### Context Management
+- Use `/compact` proactively before auto-compaction kicks in
+- Create `/handoff` documents before ending long sessions
+- Fresh conversations work better for unrelated topics
