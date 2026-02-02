@@ -773,19 +773,25 @@ CELLTYPE_COLUMNS = {
 
 
 def compute_singlecell_mean_activity(atlas1: str, atlas2: str, sig_type: str,
-                                      n_cells: int = 50000) -> dict:
+                                      level: str = 'coarse', n_cells: int = 50000) -> dict:
     """
     Compute single-cell mean activity comparison between atlases.
 
     For each atlas:
     1. Sample cells from single-cell activity h5ad
     2. Get cell type from original h5ad (by matching cell index)
-    3. Map to harmonized cell types
+    3. Map to harmonized cell types (coarse or fine)
     4. Compute mean activity per harmonized cell type
+
+    Args:
+        atlas1, atlas2: Atlas names
+        sig_type: 'CytoSig' or 'SecAct'
+        level: 'coarse' or 'fine' cell type granularity
+        n_cells: Number of cells to sample per atlas
 
     Returns comparison data for scatter plot.
     """
-    print(f"\n  Computing single-cell mean activity: {atlas1} vs {atlas2}")
+    print(f"\n  Computing single-cell mean activity ({level}): {atlas1} vs {atlas2}")
 
     def load_singlecell_with_celltype(atlas: str, sig_type: str, n_sample: int) -> tuple:
         """Load single-cell activity with cell type metadata."""
@@ -857,9 +863,13 @@ def compute_singlecell_mean_activity(atlas1: str, atlas2: str, sig_type: str,
     if act1 is None or act2 is None:
         return {'data': [], 'n': 0, 'overall_correlation': None}
 
-    # Get mappings
-    mapping1 = get_coarse_mapping(atlas1)
-    mapping2 = get_coarse_mapping(atlas2)
+    # Get mappings based on level
+    if level == 'fine':
+        mapping1 = get_fine_mapping(atlas1)
+        mapping2 = get_fine_mapping(atlas2)
+    else:
+        mapping1 = get_coarse_mapping(atlas1)
+        mapping2 = get_coarse_mapping(atlas2)
 
     # Map cell types
     meta1['harmonized'] = meta1['cell_type'].map(mapping1)
@@ -870,9 +880,9 @@ def compute_singlecell_mean_activity(atlas1: str, atlas2: str, sig_type: str,
     common_sigs = set(act1.columns) & set(act2.columns)
 
     if sig_type == 'SecAct':
-        # Limit to top 50 most variable
+        # Limit to top 100 most variable (more for SecAct to show diversity)
         combined_var = act1[list(common_sigs)].var() + act2[list(common_sigs)].var()
-        common_sigs = set(combined_var.nlargest(50).index)
+        common_sigs = set(combined_var.nlargest(100).index)
 
     common_sigs = sorted(common_sigs)
     common_types = sorted(common_types)
@@ -1066,16 +1076,22 @@ def main():
             results[sig_key][pair_key]['celltype_aggregated_fine'] = \
                 compute_celltype_aggregated_comparison(atlas1, atlas2, sig_type, level='fine')
 
-            # 3. Single-cell mean activity comparison (CytoSig only for now)
+            # 3. Single-cell mean activity comparison (coarse level)
             # Join activity data with cell type from original h5ad files
-            # Skip SecAct single-cell due to file size/corruption issues
-            if sig_type == 'CytoSig' and \
-               DATA_FILES.get(atlas1, {}).get(f'{sig_key}_sc') and \
+            if DATA_FILES.get(atlas1, {}).get(f'{sig_key}_sc') and \
                DATA_FILES.get(atlas2, {}).get(f'{sig_key}_sc'):
-                results[sig_key][pair_key]['singlecell_mean'] = \
-                    compute_singlecell_mean_activity(atlas1, atlas2, sig_type, n_cells=50000)
+                results[sig_key][pair_key]['singlecell_mean_coarse'] = \
+                    compute_singlecell_mean_activity(atlas1, atlas2, sig_type, level='coarse', n_cells=50000)
             else:
-                results[sig_key][pair_key]['singlecell_mean'] = {'data': [], 'n': 0}
+                results[sig_key][pair_key]['singlecell_mean_coarse'] = {'data': [], 'n': 0}
+
+            # 4. Single-cell mean activity comparison (fine level)
+            if DATA_FILES.get(atlas1, {}).get(f'{sig_key}_sc') and \
+               DATA_FILES.get(atlas2, {}).get(f'{sig_key}_sc'):
+                results[sig_key][pair_key]['singlecell_mean_fine'] = \
+                    compute_singlecell_mean_activity(atlas1, atlas2, sig_type, level='fine', n_cells=50000)
+            else:
+                results[sig_key][pair_key]['singlecell_mean_fine'] = {'data': [], 'n': 0}
 
     # Save results
     print("\n" + "=" * 70)

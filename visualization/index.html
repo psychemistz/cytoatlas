@@ -10106,17 +10106,18 @@
                 if (diffTitle) diffTitle.textContent = 'Per-Cell Type Correlation';
                 if (diffSubtitle) diffSubtitle.textContent = 'Cross-atlas correlation breakdown by harmonized cell type';
             } else if (viewType === 'singlecell') {
+                const levelLabel = level === 'coarse' ? 'Coarse (8 lineages)' : 'Fine (~21 types)';
                 if (scatterTitle) scatterTitle.textContent = 'Single-cell Mean Activity';
-                if (scatterSubtitle) scatterSubtitle.textContent = 'Direct mean of individual cell activities (cell-weighted, 50K cells sampled)';
+                if (scatterSubtitle) scatterSubtitle.textContent = `${levelLabel}: Direct mean of individual cell activities (cell-weighted, 50K cells sampled)`;
                 if (diffTitle) diffTitle.textContent = 'Per-Cell Type Comparison';
-                if (diffSubtitle) diffSubtitle.textContent = 'Mean activity per harmonized cell type from single cells';
+                if (diffSubtitle) diffSubtitle.textContent = `Mean activity per harmonized cell type (${levelLabel.toLowerCase()})`;
             }
 
             // Render based on view type
             if (viewType === 'scatter') {
                 renderAtlasScatter(container1, container2, compData, level, labels);
             } else if (viewType === 'singlecell') {
-                renderSinglecellMean(container1, container2, compData, labels);
+                renderSinglecellMean(container1, container2, compData, level, labels);
             }
 
             // Update summary
@@ -10275,8 +10276,11 @@
         }
 
         // Render single-cell mean activity comparison
-        function renderSinglecellMean(container1, container2, compData, labels) {
-            const scData = compData?.singlecell_mean;
+        function renderSinglecellMean(container1, container2, compData, level, labels) {
+            // Use level-specific data key (singlecell_mean_coarse or singlecell_mean_fine)
+            // Fall back to legacy 'singlecell_mean' for backward compatibility
+            const dataKey = `singlecell_mean_${level}`;
+            const scData = compData?.[dataKey] || compData?.singlecell_mean;
 
             if (!scData || !scData.data || scData.data.length === 0) {
                 if (container1) {
@@ -10635,11 +10639,18 @@
                 html += `${labels.x} vs ${labels.y} | `;
                 html += `<span style="color:#1f77b4">Spearman r = ${aggData.correlation?.toFixed(3) || 'N/A'}</span> | `;
                 html += `${aggData.n_celltypes || '?'} cell types × ${aggData.n_signatures || '?'} signatures = ${aggData.n || 0} data points`;
-            } else if (viewType === 'singlecell' && compData.singlecell_mean) {
-                const sc = compData.singlecell_mean;
-                html += `<span style="color:#1f77b4">Spearman r = ${sc.overall_correlation?.toFixed(3) || 'N/A'}</span> | `;
-                html += `${sc.n_cells_atlas1?.toLocaleString() || '?'} vs ${sc.n_cells_atlas2?.toLocaleString() || '?'} cells sampled | `;
-                html += `${sc.n_celltypes || '?'} cell types × ${sc.n_signatures || '?'} signatures`;
+            } else if (viewType === 'singlecell') {
+                const scKey = `singlecell_mean_${level}`;
+                const sc = compData[scKey] || compData.singlecell_mean;
+                if (sc) {
+                    const levelLabel = level === 'coarse' ? 'Coarse' : 'Fine';
+                    html += `<span style="color:#2ca02c">${levelLabel} level</span> | `;
+                    html += `<span style="color:#1f77b4">Spearman r = ${sc.overall_correlation?.toFixed(3) || 'N/A'}</span> | `;
+                    html += `${sc.n_cells_atlas1?.toLocaleString() || '?'} vs ${sc.n_cells_atlas2?.toLocaleString() || '?'} cells sampled | `;
+                    html += `${sc.n_celltypes || '?'} cell types × ${sc.n_signatures || '?'} signatures`;
+                } else {
+                    html += 'Single-cell mean data not available for this configuration.';
+                }
             }
 
             summaryDiv.innerHTML = html;
