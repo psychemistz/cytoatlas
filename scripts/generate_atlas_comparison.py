@@ -31,6 +31,94 @@ from cell_type_mapping import (
     FINE_TYPES
 )
 
+# scAtlas cellType1 to FINE mapping (for pseudobulk data)
+# Maps to standard fine types: CD4_Naive, CD4_Memory, Treg, Tfh, CD8_Naive, CD8_Memory, CD8_Effector,
+# MAIT, gdT, NKT, ILC, NK_CD56bright, NK_CD56dim, B_Naive, B_Memory, Plasmablast, Plasma,
+# Mono_Classical, Mono_NonClassical, Macrophage, cDC1, cDC2, pDC, Neutrophil, Mast, HSPC
+SCATLAS_CELLTYPE1_TO_FINE = {
+    # CD4 T cell subtypes
+    'T_CD4_naive': 'CD4_Naive', 'naive thymus-derived cd4-positive, alpha-beta t cell': 'CD4_Naive',
+    'T_CD4_conv': 'CD4_Memory', 'cd4-positive, alpha-beta memory t cell': 'CD4_Memory',
+    'CD4 T cell': 'CD4_Memory', 'T_CD4': 'CD4_Memory', 'abT (CD4)': 'CD4_Memory',
+    'cd4-positive alpha-beta t cell': 'CD4_Memory', 'cd4-positive helper t cell': 'CD4_Memory',
+    'cd4-positive, alpha-beta t cell': 'CD4_Memory',
+    'Th1': 'CD4_Effector', 'Th17': 'CD4_Effector',
+    'Treg': 'Treg', 'T_CD4_reg': 'Treg', 'regulatory t cell': 'Treg', 'naive regulatory t cell': 'Treg',
+    'T_CD4_fh': 'Tfh', 't follicular helper cell': 'Tfh',
+    'Tcm': 'CD4_Memory',
+    # CD8 T cell subtypes
+    'naive thymus-derived cd8-positive, alpha-beta t cell': 'CD8_Naive',
+    'cd8-positive, alpha-beta memory t cell': 'CD8_Memory', 'CD8 T': 'CD8_Memory', 'CD8 T cell': 'CD8_Memory',
+    'T_CD8_activated': 'CD8_Effector', 'T_CD8_CTL': 'CD8_Effector', 'abT (CD8)': 'CD8_Effector',
+    'cd8-positive alpha-beta t cell': 'CD8_Memory', 'cd8-positive, alpha-beta t cell': 'CD8_Memory',
+    'cd8-positive, alpha-beta cytokine secreting effector t cell': 'CD8_Effector',
+    'cd8-positive, alpha-beta cytotoxic t cell': 'CD8_Effector', 'Cytotoxic T cells': 'CD8_Effector',
+    'T Cell CCL5': 'CD8_Effector', 'T Cell GZMA': 'CD8_Effector', 'T Cell GZMK': 'CD8_Effector',
+    'T Cell XCL1': 'CD8_Effector',
+    # General T cells (map to memory as default)
+    'T cell': 'CD4_Memory', 'T cells': 'CD4_Memory', 't cell': 'CD4_Memory', 'tcells': 'CD4_Memory',
+    'T Cell IL7R': 'CD4_Memory', 'T Cell RGS1': 'CD4_Memory',
+    'alpha-beta_T_Cells': 'CD4_Memory', 'T_cell_dividing': 'CD4_Memory',
+    # Unconventional T cells
+    'MAIT': 'MAIT', 'T_CD8_MAIT': 'MAIT',
+    'gd T': 'gdT', 'T_CD8_gd': 'gdT', 'gamma-delta_T_Cells_1': 'gdT', 'gamma-delta_T_Cells_2': 'gdT',
+    'NKT cell': 'NKT', 'nkt cell': 'NKT', 'NKTcell': 'NKT', 'NK-T cells': 'NKT',
+    'NK/T Cell GNLY': 'NKT', 'mature nk t cell': 'NKT', 'cd8b-positive nk t cell': 'NKT',
+    'type i nk t cell': 'NKT',
+    'ILC': 'ILC', 'ILCT': 'ILC', 'innate lymphoid cell': 'ILC', 'Innate_lymphoid': 'ILC',
+    # NK cell subtypes
+    'NK_CD160pos': 'NK_CD56bright', 'Resident NK': 'NK_CD56bright',
+    'immature natural killer cell': 'NK_CD56bright',
+    'NK_FCGR3Apos': 'NK_CD56dim', 'Circulating NK/NKT': 'NK_CD56dim',
+    'NK': 'NK_CD56dim', 'NK cell': 'NK_CD56dim', 'NK cells': 'NK_CD56dim', 'nk cell': 'NK_CD56dim',
+    'natural killer cell': 'NK_CD56dim', 'NK-like_Cells': 'NK_CD56dim', 'NK_dividing': 'NK_CD56dim',
+    # B cell subtypes
+    'naive b cell': 'B_Naive', 'B_CD27neg': 'B_Naive',
+    'memory b cell': 'B_Memory', 'B_CD27pos': 'B_Memory', 'B_Hypermutation': 'B_Memory',
+    'B cell memory': 'B_Memory',
+    'B': 'B_Naive', 'B cell': 'B_Naive', 'B cells': 'B_Naive', 'b cell': 'B_Naive', 'bcells': 'B_Naive',
+    'B Cell CD79A': 'B_Naive', 'B Cell MS4A1': 'B_Naive', 'B Cell VPREB3': 'B_Naive',
+    'B_follicular': 'B_Memory', 'B_mantle': 'B_Memory', 'Follicular B cell': 'B_Memory',
+    'Mature_B_Cells': 'B_Memory',
+    # Plasma cells
+    'Plasmablast': 'Plasmablast',
+    'Plasma': 'Plasma', 'Plasma cells': 'Plasma', 'Plasma_Cells': 'Plasma',
+    'Plasma B cells': 'Plasma', 'Plasma Cell JCHAIN': 'Plasma',
+    'plasma cell': 'Plasma', 'Plasma_IgG': 'Plasma', 'Plasma_IgM': 'Plasma',
+    'B cell IgA Plasma': 'Plasma', 'B cell IgG Plasma': 'Plasma',
+    # Monocyte subtypes
+    'classical monocyte': 'Mono_Classical', 'Monocyte': 'Mono_Classical', 'monocyte': 'Mono_Classical',
+    'Monocytes': 'Mono_Classical', 'monocytes': 'Mono_Classical',
+    'MNP-a/classical monocyte derived': 'Mono_Classical',
+    'non-classical monocyte': 'Mono_NonClassical', 'intermediate monocyte': 'Mono_NonClassical',
+    'MNP-b/non-classical monocyte derived': 'Mono_NonClassical',
+    'Mono+mono derived cells': 'Mono_Classical',
+    # Macrophages
+    'Macrophage': 'Macrophage', 'macrophage': 'Macrophage', 'Macrophages': 'Macrophage',
+    'Macrophage C1QB': 'Macrophage', 'Macrophage FCN3': 'Macrophage',
+    'LYVE1 Macrophage': 'Macrophage', 'Inflammatory_Macrophage': 'Macrophage',
+    'Non-inflammatory_Macrophage': 'Macrophage', 'microglial cell': 'Macrophage',
+    'Macrophages and DCs': 'Macrophage', 'Mac and DCs': 'Macrophage',
+    # Dendritic cells
+    'cDC1s': 'cDC1', 'DC_1': 'cDC1', 'cd141-positive myeloid dendritic cell': 'cDC1',
+    'cDC2s': 'cDC2', 'DC_2': 'cDC2', 'cd1c-positive myeloid dendritic cell': 'cDC2',
+    'DC': 'cDC2', 'dendritic cell': 'cDC2', 'mDC': 'cDC2',
+    'pDC': 'pDC', 'pDCs': 'pDC', 'DC_plasmacytoid': 'pDC', 'plasmacytoid dendritic cell': 'pDC',
+    # Neutrophils and Mast cells
+    'Neutrophils': 'Neutrophil', 'neutrophil': 'Neutrophil', 'granulocyte': 'Neutrophil',
+    'cd24 neutrophil': 'Neutrophil', 'nampt neutrophil': 'Neutrophil',
+    'Mast': 'Mast', 'Mast cells': 'Mast', 'mast cell': 'Mast',
+    'Basophils': 'Mast', 'basophil': 'Mast',
+    # Progenitors
+    'Progenitor': 'HSPC', 'DP': 'HSPC', 'SP': 'HSPC',
+    'dn1 thymic pro-t cell': 'HSPC', 'dn3 thymocyte': 'HSPC', 'thymocyte': 'HSPC',
+    'mesenchymal stem cell': 'HSPC',
+    # General/Mixed categories (map to most specific possible)
+    'Myeloid': 'Mono_Classical', 'myeloid': 'Mono_Classical', 'myeloid cell': 'Mono_Classical',
+    'Lymphoid': 'CD4_Memory', 'Lymphocytes': 'CD4_Memory',
+    'Immune': 'Mono_Classical', 'immune cell': 'Mono_Classical', 'Leucocytes': 'Mono_Classical',
+}
+
 # scAtlas cellType1 to coarse mapping (for pseudobulk data)
 # cellType1 uses different naming than subCluster
 SCATLAS_CELLTYPE1_TO_COARSE = {
@@ -157,8 +245,7 @@ def get_fine_mapping(atlas: str) -> dict:
     elif atlas == 'inflammation':
         return INFLAMMATION_TO_FINE
     elif atlas == 'scatlas':
-        # Use coarse mapping for scAtlas fine level (cellType1 doesn't have fine granularity)
-        return SCATLAS_CELLTYPE1_TO_COARSE
+        return SCATLAS_CELLTYPE1_TO_FINE
     return {}
 
 
