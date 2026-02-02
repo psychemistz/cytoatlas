@@ -11491,15 +11491,19 @@
                 }, { responsive: true });
             }
 
-            // 2. Heterogeneity bar chart (I² statistics) - limit to top 50
+            // 2. Heterogeneity bar chart (I² statistics) - show top 25 and bottom 25
             if (container2) {
                 container2.classList.remove('loading');
                 Plotly.purge(container2);
 
-                // Sort by I² and limit to top 50 for display
-                const heterogeneityLimit = 50;
+                // Sort by I² and get top 25 (highest) and bottom 25 (lowest)
                 const allSortedByI2 = [...metaData].sort((a, b) => b.I2 - a.I2);
-                const sortedByI2 = allSortedByI2.slice(0, heterogeneityLimit);
+                const top25 = allSortedByI2.slice(0, 25);
+                const bottom25 = allSortedByI2.slice(-25).reverse(); // Reverse to show lowest first
+                // Combine: top 25 first, then separator visual gap, then bottom 25
+                const sortedByI2 = allSortedByI2.length <= 50
+                    ? allSortedByI2
+                    : [...top25, ...bottom25];
 
                 if (sortedByI2.length === 0) {
                     container2.innerHTML = '<p style="text-align:center; color:#666; padding:2rem;">No data available.</p>';
@@ -11527,8 +11531,8 @@
                 }
 
                 // Show limit note if truncated
-                const limitNote = allSortedByI2.length > heterogeneityLimit
-                    ? `<p style="text-align: center; font-size: 0.8rem; color: #666; margin-bottom: 0.5rem;">Showing top ${heterogeneityLimit} of ${allSortedByI2.length} signatures by I² (highest heterogeneity first)</p>`
+                const limitNote = allSortedByI2.length > 50
+                    ? `<p style="text-align: center; font-size: 0.8rem; color: #666; margin-bottom: 0.5rem;">Showing top 25 (highest I²) and bottom 25 (lowest I²) of ${allSortedByI2.length} signatures</p>`
                     : '';
 
                 container2.innerHTML = limitNote + '<div id="meta-heterogeneity-chart"></div>';
