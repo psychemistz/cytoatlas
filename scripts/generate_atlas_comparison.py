@@ -1206,6 +1206,84 @@ def main():
         print(f"  Atlas-specific (low correlation): {sig_reliability['summary']['atlas_specific']}")
         print(f"  Insufficient data (1 pair only): {sig_reliability['summary']['insufficient_data']}")
 
+    # Add cell-type agnostic data from conserved signatures (mean activity per atlas)
+    print("\n" + "=" * 70)
+    print("Adding cell-type agnostic conservation data...")
+    print("=" * 70)
+
+    # Load conserved data for mean activity values
+    conserved_path = VIZ_OUTPUT_DIR / 'cross_atlas.json'
+    conserved_sigs = []
+    if conserved_path.exists():
+        with open(conserved_path, 'r') as f:
+            existing_data = json.load(f)
+            conserved_sigs = existing_data.get('conserved', {}).get('signatures', [])
+
+    if conserved_sigs:
+        # Build lookup of mean activity by signature
+        sig_means_lookup = {}
+        for s in conserved_sigs:
+            sig_name = s['signature']
+            sig_type_name = s.get('signature_type', 'SecAct')
+            means = {}
+            # Use actual mean values (not boolean flags)
+            if s.get('cima_mean') is not None:
+                means['cima'] = s['cima_mean']
+            if s.get('inflammation_mean') is not None:
+                means['inflammation'] = s['inflammation_mean']
+            if s.get('scatlas_mean') is not None:
+                means['scatlas'] = s['scatlas_mean']
+            sig_means_lookup[(sig_name, sig_type_name)] = means
+
+        atlas_pairs = [
+            ('cima', 'inflammation', 'cima_vs_inflammation'),
+            ('cima', 'scatlas', 'cima_vs_scatlas'),
+            ('inflammation', 'scatlas', 'inflammation_vs_scatlas')
+        ]
+
+        for sig_type in ['cytosig', 'secact']:
+            sig_type_upper = 'CytoSig' if sig_type == 'cytosig' else 'SecAct'
+            print(f"\n{sig_type.upper()} (cell-type agnostic):")
+
+            # Add atlas_means to each signature
+            for sig_info in signature_reliability[sig_type]['signatures']:
+                sig_name = sig_info['signature']
+                means = sig_means_lookup.get((sig_name, sig_type_upper), {})
+                if means:
+                    sig_info['atlas_means'] = {k: round(v, 3) for k, v in means.items()}
+                    means_list = list(means.values())
+                    sig_info['mean_across_atlases'] = round(float(np.mean(means_list)), 3)
+                    sig_info['std_across_atlases'] = round(float(np.std(means_list)), 3) if len(means_list) > 1 else 0
+
+            # Compute agnostic pair correlations using mean values
+            type_sigs = [s for s in conserved_sigs if s.get('signature_type') == sig_type_upper]
+            agnostic_pair_corr = {}
+
+            for atlas1, atlas2, pair_key in atlas_pairs:
+                mean1_key = f'{atlas1}_mean'
+                mean2_key = f'{atlas2}_mean'
+
+                xs, ys = [], []
+                for s in type_sigs:
+                    m1 = s.get(mean1_key)
+                    m2 = s.get(mean2_key)
+                    if m1 is not None and m2 is not None:
+                        xs.append(m1)
+                        ys.append(m2)
+
+                if len(xs) >= 3:
+                    r, p = stats.spearmanr(xs, ys)
+                    agnostic_pair_corr[pair_key] = {
+                        'correlation': round(float(r), 3),
+                        'pvalue': float(p),
+                        'n': len(xs)
+                    }
+                    print(f"  {pair_key}: r={r:.3f}, n={len(xs)}")
+
+            signature_reliability[sig_type]['agnostic_pair_correlations'] = agnostic_pair_corr
+    else:
+        print("  No conserved data found - skipping agnostic correlations")
+
     # Save results
     print("\n" + "=" * 70)
     print("Saving results...")
