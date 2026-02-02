@@ -168,6 +168,90 @@ class SearchService(BaseService):
                 except Exception as e:
                     logger.warning(f"Failed to load {organ_file}: {e}")
 
+        # Load gene mapping to add HGNC aliases and descriptions
+        mapping_path = Path(__file__).parent.parent.parent / "static" / "data" / "signature_gene_mapping.json"
+        gene_mapping = {}
+        if mapping_path.exists():
+            try:
+                with open(mapping_path) as f:
+                    gene_mapping = json.load(f)
+                logger.info("Loaded gene mapping for search aliases")
+            except Exception as e:
+                logger.warning(f"Failed to load gene mapping: {e}")
+
+        # Enhance cytokine entities with HGNC symbols and descriptions
+        cytosig_mapping = gene_mapping.get("cytosig_mapping", {})
+        hgnc_to_sig = gene_mapping.get("hgnc_to_signature", {})
+        sig_to_hgnc = gene_mapping.get("signature_to_hgnc", {})
+
+        for entity_id, entity in list(index["entities"].items()):
+            if entity["type"] == "cytokine":
+                sig_name = entity["name"]
+
+                # Get mapping info
+                mapping_info = cytosig_mapping.get(sig_name, {})
+                hgnc_symbol = mapping_info.get("hgnc_symbol") or sig_to_hgnc.get(sig_name)
+                notes = mapping_info.get("notes", "")
+
+                # Update description if we have notes
+                if notes and notes != "Direct match":
+                    entity["description"] = notes
+
+                # Add HGNC symbol as alias
+                if hgnc_symbol and hgnc_symbol != sig_name:
+                    if hgnc_symbol not in entity["aliases"]:
+                        entity["aliases"].append(hgnc_symbol)
+                        entity["aliases"].append(hgnc_symbol.lower())
+                    # Also add to aliases index
+                    index["aliases"][hgnc_symbol.lower()] = entity_id
+
+                # Store HGNC symbol in metadata
+                entity["hgnc_symbol"] = hgnc_symbol
+
+            elif entity["type"] == "protein":
+                # SecAct uses HGNC symbols directly
+                hgnc_symbol = entity["name"]
+
+                # Check if this HGNC has a CytoSig alias
+                cytosig_name = hgnc_to_sig.get(hgnc_symbol)
+                if cytosig_name and cytosig_name != hgnc_symbol:
+                    if cytosig_name not in entity["aliases"]:
+                        entity["aliases"].append(cytosig_name)
+                        entity["aliases"].append(cytosig_name.lower())
+
+                # Get description from mapping
+                mapping_info = cytosig_mapping.get(cytosig_name, {})
+                if mapping_info.get("notes"):
+                    entity["description"] = mapping_info["notes"]
+
+                entity["hgnc_symbol"] = hgnc_symbol
+
+        # Create gene entities for all HGNC symbols in the mapping
+        # This makes all CytoSig proteins searchable by their gene name
+        for hgnc_symbol, cytosig_name in hgnc_to_sig.items():
+            gene_entity_id = f"gene:{hgnc_symbol}"
+            if gene_entity_id not in index["entities"]:
+                mapping_info = cytosig_mapping.get(cytosig_name, {})
+                index["entities"][gene_entity_id] = {
+                    "id": gene_entity_id,
+                    "name": hgnc_symbol,
+                    "type": "gene",
+                    "description": mapping_info.get("notes", f"Gene encoding {cytosig_name}"),
+                    "aliases": [cytosig_name, cytosig_name.lower(), hgnc_symbol.lower()],
+                    "atlases": [],
+                    "hgnc_symbol": hgnc_symbol,
+                    "cytosig_name": cytosig_name,
+                }
+                if "gene" not in index["by_type"]:
+                    index["by_type"]["gene"] = []
+                index["by_type"]["gene"].append(gene_entity_id)
+                index["aliases"][hgnc_symbol.lower()] = gene_entity_id
+
+                # Link to the cytokine entity's atlases
+                cytokine_id = f"cytokine:{cytosig_name}"
+                if cytokine_id in index["entities"]:
+                    index["entities"][gene_entity_id]["atlases"] = index["entities"][cytokine_id]["atlases"].copy()
+
         # Update atlas counts
         for entity_id, entity in index["entities"].items():
             entity["atlas_count"] = len(set(entity.get("atlases", [])))
