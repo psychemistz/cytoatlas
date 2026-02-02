@@ -4,15 +4,30 @@
 
 Use AlphaGenome API to prioritize regulatory variants from CIMA immune cell cis-eQTLs affecting cytokine/secreted protein expression.
 
-## Status Summary (Updated 2026-02-01)
+## Status Summary (Updated 2026-02-01 20:15)
 
 | Stage | Status | Actual Output |
 |-------|--------|---------------|
 | Stage 1 | ✅ COMPLETE | 48,627 cytokine eQTLs → 29,816 unique variants |
 | Stage 2 | ✅ COMPLETE | 29,816 variants formatted (SNV/indel) |
-| Stage 3 | 🔄 RUNNING | Job 10659620: ~900/29,816 (~3%), ETA ~115h |
-| Stage 4 | ⏳ READY | Can run on sample data |
-| Stage 5 | ⏳ READY | Needs GTEx data (manual download) |
+| Stage 3 | 🔄 RUNNING | Job 10659620: 2,100/29,816 (~7%), ETA ~110h |
+| Stage 4 | ⚠️ MOCK ONLY | Existing output from simulated data - needs re-run |
+| Stage 5 | ⚠️ MOCK ONLY | Existing output from simulated data - needs re-run |
+
+### ⚠️ Critical: Mock vs Real Data
+
+**Existing Stage 4/5 outputs are based on MOCK predictions, not real AlphaGenome API results.**
+
+| Aspect | Mock Run (existing files) | Real API (running job) |
+|--------|---------------------------|------------------------|
+| Source | `--mock` flag (simulated) | AlphaGenome API |
+| Variants | 29,816 | 2,100 in checkpoint |
+| Tracks | 19 (chromatin + TF) | **3 (RNA-seq only)** |
+| Track types | ATAC, H3K27ac, H3K4me3, DNase, ChIP | GTEx lymphocytes, spleen, whole blood |
+| Mechanism classification | Full (enhancer/promoter/TF) | Limited (RNA-only) |
+| File | Overwritten by real run | `stage3_predictions.h5ad` (3 variants) |
+
+**Action required**: Stage 4/5 must be re-run after Stage 3 completes with real API data.
 
 ## Data Sources
 
@@ -48,6 +63,14 @@ Use AlphaGenome API to prioritize regulatory variants from CIMA immune cell cis-
 ### Stage 3: Execute AlphaGenome Predictions 🔄
 **Script**: `scripts/08_alphagenome_stage3_predict.py`
 
+**Current job status** (Job 10659620):
+- Progress: 2,188 / 29,816 variants (~7.3%)
+- Checkpoint: 2,100 variants saved
+- Successful API calls: ~1,055
+- Rate limiting: ~50% RESOURCE_EXHAUSTED errors
+- Runtime: ~9 hours elapsed
+- ETA: ~110-120 hours remaining (4-5 days)
+
 **Key findings from actual execution**:
 - API returns **3 immune-relevant RNA-seq tracks** (not 7000+):
   - `RNA_SEQ_EFO:0000572 gtex Cells_EBV-transformed_lymphocytes polyA plus RNA-seq`
@@ -64,14 +87,21 @@ Use AlphaGenome API to prioritize regulatory variants from CIMA immune cell cis-
 - Immune track filtering (EBV-lymphocytes, Spleen, Whole Blood, PBMC)
 
 **Output**:
-- `results/alphagenome/stage3_predictions.h5ad` (written at job completion)
-- `results/alphagenome/stage3_checkpoint.json` (updated every 100 variants)
-- `results/alphagenome/stage3_test_predictions.h5ad` (12 variants for testing)
+- `results/alphagenome/stage3_predictions.h5ad` - Currently 3 variants (will grow as job runs)
+- `results/alphagenome/stage3_checkpoint.json` - 2,100 variants processed
+- `results/alphagenome/stage3_test_predictions.h5ad` - 12 variants for testing
 
 **Runtime**: ~125 hours for 29,816 variants (168h allocated)
 
-### Stage 4: Interpret and Score Predictions
+### Stage 4: Interpret and Score Predictions ⚠️
 **Script**: `scripts/08_alphagenome_stage4_interpret.py`
+
+**Current status**: Existing outputs are from **MOCK data** (simulated chromatin tracks). Must re-run after Stage 3 completes.
+
+**Mock run results** (not valid for final analysis):
+- 29,816 variants scored with simulated data
+- 1,231 prioritized variants (based on fake chromatin signals)
+- Mechanism classification used non-existent tracks
 
 **Updated approach** (RNA-seq only, no chromatin):
 1. Compute regulatory impact scores from RNA-seq track differences
@@ -84,13 +114,21 @@ Use AlphaGenome API to prioritize regulatory variants from CIMA immune cell cis-
 - `--input FILE` - Custom input h5ad
 - `--output-suffix SUFFIX` - Custom output suffix
 
-**Output**:
+**Output** (to be regenerated):
 - `results/alphagenome/stage4_scored_variants.csv`
 - `results/alphagenome/stage4_prioritized.csv`
 - `results/alphagenome/stage4_summary.json`
 
-### Stage 5: Validate Against GTEx
+### Stage 5: Validate Against GTEx ⚠️
 **Script**: `scripts/08_alphagenome_stage5_validate.py`
+
+**Current status**:
+- Existing outputs are from **MOCK data** - not valid
+- GTEx data directory is **EMPTY** - manual download still required
+
+**Mock run results** (not valid):
+- 369 variants matched to GTEx
+- 48.8% direction concordance (meaningless with fake predictions)
 
 **Updated approach**:
 1. Load GTEx v8 whole blood eQTLs (manual download required)
@@ -106,7 +144,7 @@ Use AlphaGenome API to prioritize regulatory variants from CIMA immune cell cis-
 - `--test` - Use test prioritized file
 - `--input FILE` - Custom input CSV
 
-**Output**:
+**Output** (to be regenerated):
 - `results/alphagenome/stage5_gtex_matched.csv`
 - `results/alphagenome/stage5_validation_metrics.json`
 - `results/alphagenome/stage5_report.md`
@@ -127,14 +165,16 @@ results/alphagenome/
   stage1_summary.json                  ✅
   stage2_alphagenome_input.csv         ✅ 29,816 variants
   stage2_summary.json                  ✅
-  stage3_predictions.h5ad              🔄 (written at job completion)
-  stage3_checkpoint.json               ✅ ~900 variants processed
+  stage3_predictions.h5ad              🔄 3 variants (growing)
+  stage3_checkpoint.json               🔄 2,100 variants processed
   stage3_test_predictions.h5ad         ✅ 12 variants for testing
-  stage4_scored_variants.csv           ⏳
-  stage4_prioritized.csv               ⏳
-  stage5_gtex_matched.csv              ⏳
-  stage5_report.md                     ⏳
-  gtex_data/                           ⏳ (manual download needed)
+  stage4_scored_variants.csv           ⚠️ MOCK DATA - needs re-run
+  stage4_prioritized.csv               ⚠️ MOCK DATA - needs re-run
+  stage4_summary.json                  ⚠️ MOCK DATA - needs re-run
+  stage5_gtex_matched.csv              ⚠️ MOCK DATA - needs re-run
+  stage5_validation_metrics.json       ⚠️ MOCK DATA - needs re-run
+  stage5_report.md                     ⚠️ MOCK DATA - needs re-run
+  gtex_data/                           ❌ EMPTY - manual download needed
 ```
 
 ## SLURM Job
@@ -147,7 +187,7 @@ results/alphagenome/
 #SBATCH --partition=norm
 ```
 
-**Current job**: 10659620, running on cn0008
+**Current job**: 10659620, running on cn0008 (~9h elapsed)
 
 ## Key Deviations from Original Plan
 
@@ -156,7 +196,7 @@ results/alphagenome/
 | Variant count | 500-2,000 | 29,816 |
 | Track count | 7,000+ | 3 (RNA-seq only) |
 | Runtime | 2-5 hours | ~125 hours |
-| Chromatin data | ATAC, H3K27ac, etc. | Not available |
+| Chromatin data | ATAC, H3K27ac, etc. | **Not available** |
 | Mechanism classification | Enhancer/promoter/TF | Limited (RNA-only) |
 
 ## GTEx Data Download (Manual)
@@ -171,8 +211,35 @@ scp GTEx_Analysis_v8_eQTL/Whole_Blood.v8.signif_variant_gene_pairs.txt.gz \
 
 ## Next Steps
 
-1. **Wait for Stage 3 job completion** (~4-5 days)
-2. **Run Stage 4** on full predictions: `python scripts/08_alphagenome_stage4_interpret.py`
-3. **Download GTEx data** manually and transfer to HPC
-4. **Run Stage 5** validation: `python scripts/08_alphagenome_stage5_validate.py`
-5. **Analyze results** - focus on RNA-seq concordance rather than chromatin mechanisms
+1. **Monitor Stage 3 job** - Check progress with:
+   ```bash
+   tail -20 logs/alphagenome_10659620.out
+   python3 -c "import json; d=json.load(open('results/alphagenome/stage3_checkpoint.json')); print(f'Processed: {len(d[\"processed_variants\"])}/29816')"
+   ```
+
+2. **Wait for Stage 3 completion** (~4-5 days from now)
+
+3. **Download GTEx data** manually and transfer to HPC (can do now)
+
+4. **Re-run Stage 4** on real predictions:
+   ```bash
+   python scripts/08_alphagenome_stage4_interpret.py
+   ```
+
+5. **Re-run Stage 5** validation:
+   ```bash
+   python scripts/08_alphagenome_stage5_validate.py
+   ```
+
+6. **Adjust analysis approach** - Focus on RNA-seq expression concordance rather than chromatin mechanism classification (limited by API track availability)
+
+## Implications for Final Analysis
+
+Given that only RNA-seq tracks are available (no chromatin data):
+
+1. **Cannot classify mechanisms** as enhancer/promoter/TF binding
+2. **Focus on expression concordance**: Do AlphaGenome RNA predictions match eQTL direction?
+3. **Validation strategy**: Compare CIMA eQTL beta vs GTEx beta vs AlphaGenome prediction
+4. **Prioritization**: Rank by magnitude of predicted RNA expression change
+
+The analysis will be more limited than originally planned but still valuable for identifying variants with consistent expression effects across prediction methods.
