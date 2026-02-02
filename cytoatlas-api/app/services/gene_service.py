@@ -354,7 +354,8 @@ class GeneService(BaseService):
                 # Data uses "protein" for signature name and "signature" for type
                 if r.get("protein") == signature and r.get("signature") == signature_type:
                     pval = self._parse_pvalue(r.get("pvalue"))
-                    qval = self._parse_pvalue(r.get("qvalue")) if r.get("qvalue") else None
+                    # Check for None explicitly (0.0 is a valid qvalue)
+                    qval = self._parse_pvalue(r.get("qvalue")) if r.get("qvalue") is not None else None
                     is_sig = qval is not None and qval < 0.05
 
                     # Try to get disease group from disease_data
@@ -434,7 +435,7 @@ class GeneService(BaseService):
                 for r in corr_data["age"]:
                     if r.get("protein") == signature and r.get("signature") == signature_type:
                         pval = self._parse_pvalue(r.get("pvalue"))
-                        qval = self._parse_pvalue(r.get("qvalue")) if r.get("qvalue") else None
+                        qval = self._parse_pvalue(r.get("qvalue")) if r.get("qvalue") is not None else None
                         age_results.append(GeneCorrelationResult(
                             variable="age",
                             rho=self._safe_float(r.get("rho")),
@@ -450,7 +451,7 @@ class GeneService(BaseService):
                 for r in corr_data["bmi"]:
                     if r.get("protein") == signature and r.get("signature") == signature_type:
                         pval = self._parse_pvalue(r.get("pvalue"))
-                        qval = self._parse_pvalue(r.get("qvalue")) if r.get("qvalue") else None
+                        qval = self._parse_pvalue(r.get("qvalue")) if r.get("qvalue") is not None else None
                         bmi_results.append(GeneCorrelationResult(
                             variable="bmi",
                             rho=self._safe_float(r.get("rho")),
@@ -466,7 +467,7 @@ class GeneService(BaseService):
                 for r in corr_data["biochemistry"]:
                     if r.get("protein") == signature and r.get("signature") == signature_type:
                         pval = self._parse_pvalue(r.get("pvalue"))
-                        qval = self._parse_pvalue(r.get("qvalue")) if r.get("qvalue") else None
+                        qval = self._parse_pvalue(r.get("qvalue")) if r.get("qvalue") is not None else None
                         biochem_results.append(GeneCorrelationResult(
                             variable=r.get("feature"),
                             rho=self._safe_float(r.get("rho")),
@@ -485,7 +486,7 @@ class GeneService(BaseService):
             for r in metab_data:
                 if r.get("protein") == signature and r.get("signature") == signature_type:
                     pval = self._parse_pvalue(r.get("pvalue"))
-                    qval = self._parse_pvalue(r.get("qvalue")) if r.get("qvalue") else None
+                    qval = self._parse_pvalue(r.get("qvalue")) if r.get("qvalue") is not None else None
                     metabol_results.append(GeneCorrelationResult(
                         variable=r.get("feature"),
                         rho=self._safe_float(r.get("rho")),
