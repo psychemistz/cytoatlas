@@ -1093,6 +1093,119 @@ def main():
             else:
                 results[sig_key][pair_key]['singlecell_mean_fine'] = {'data': [], 'n': 0}
 
+    # Compute per-signature cross-atlas correlations for reliability assessment
+    print("\n" + "=" * 70)
+    print("Computing per-signature cross-atlas correlations...")
+    print("=" * 70)
+
+    signature_reliability = {}
+    pair_names = ['cima_vs_inflammation', 'cima_vs_scatlas', 'inflammation_vs_scatlas']
+    pair_labels = ['CIMA-Inflam', 'CIMA-scAtlas', 'Inflam-scAtlas']
+
+    for sig_type in ['cytosig', 'secact']:
+        print(f"\n{sig_type.upper()}:")
+        sig_reliability = {
+            'signatures': [],
+            'summary': {
+                'total': 0,
+                'highly_conserved': 0,  # r > 0.7 in 2+ pairs
+                'moderately_conserved': 0,  # r > 0.5 in 2+ pairs
+                'atlas_specific': 0,  # low correlation in available pairs
+                'insufficient_data': 0,  # only 1 pair has data
+            },
+            'pair_correlations': {}  # Overall correlation for each pair
+        }
+
+        # Get data from celltype_aggregated_coarse (most reliable)
+        all_signatures = set()
+        pair_data = {}
+        for pair_key in pair_names:
+            pair_result = results.get(sig_type, {}).get(pair_key, {})
+            data = pair_result.get('celltype_aggregated_coarse', {}).get('data', [])
+            pair_data[pair_key] = data
+            # Overall correlation for this pair
+            if pair_result.get('celltype_aggregated_coarse', {}).get('correlation'):
+                sig_reliability['pair_correlations'][pair_key] = {
+                    'correlation': pair_result['celltype_aggregated_coarse']['correlation'],
+                    'pvalue': pair_result['celltype_aggregated_coarse'].get('pvalue', 0),
+                    'n': pair_result['celltype_aggregated_coarse'].get('n', len(data))
+                }
+            for pt in data:
+                all_signatures.add(pt['signature'])
+
+        # Compute per-signature correlation for each pair
+        for sig in sorted(all_signatures):
+            sig_info = {
+                'signature': sig,
+                'correlations': {},
+                'n_reliable_pairs': 0,
+                'n_pairs_with_data': 0,
+                'mean_correlation': 0,
+                'category': 'unknown'
+            }
+
+            valid_correlations = []
+            for pair_key in pair_names:
+                data = pair_data[pair_key]
+                sig_points = [pt for pt in data if pt['signature'] == sig]
+                if len(sig_points) >= 3:
+                    xs = [pt['x'] for pt in sig_points]
+                    ys = [pt['y'] for pt in sig_points]
+                    try:
+                        r, p = stats.spearmanr(xs, ys)
+                        if not np.isnan(r):
+                            sig_info['correlations'][pair_key] = {
+                                'r': round(float(r), 3),
+                                'p': float(p),
+                                'n': len(sig_points)
+                            }
+                            valid_correlations.append(r)
+                            sig_info['n_pairs_with_data'] += 1
+                            if r > 0.7:
+                                sig_info['n_reliable_pairs'] += 1
+                    except Exception:
+                        pass
+
+            if valid_correlations:
+                sig_info['mean_correlation'] = round(float(np.mean(valid_correlations)), 3)
+
+                # Categorize based on number of pairs and correlation values
+                n_pairs = len(valid_correlations)
+                n_high = sum(1 for r in valid_correlations if r > 0.7)
+                n_moderate = sum(1 for r in valid_correlations if r > 0.5)
+
+                if n_pairs < 2:
+                    # Only 1 atlas pair has data - insufficient for cross-atlas assessment
+                    sig_info['category'] = 'insufficient_data'
+                    sig_reliability['summary']['insufficient_data'] += 1
+                elif n_high >= 2:
+                    # High correlation in 2+ pairs
+                    sig_info['category'] = 'highly_conserved'
+                    sig_reliability['summary']['highly_conserved'] += 1
+                elif n_moderate >= 2:
+                    # Moderate correlation in 2+ pairs
+                    sig_info['category'] = 'moderately_conserved'
+                    sig_reliability['summary']['moderately_conserved'] += 1
+                else:
+                    # Low correlation - atlas-specific patterns
+                    sig_info['category'] = 'atlas_specific'
+                    sig_reliability['summary']['atlas_specific'] += 1
+
+            sig_reliability['signatures'].append(sig_info)
+
+        sig_reliability['summary']['total'] = len(sig_reliability['signatures'])
+
+        # Sort by: 1) number of pairs with data (desc), 2) mean correlation (desc)
+        sig_reliability['signatures'].sort(key=lambda x: (-x['n_pairs_with_data'], -x['mean_correlation']))
+
+        signature_reliability[sig_type] = sig_reliability
+
+        print(f"  Total: {sig_reliability['summary']['total']}")
+        print(f"  Highly conserved (r>0.7 in 2+ pairs): {sig_reliability['summary']['highly_conserved']}")
+        print(f"  Moderately conserved (r>0.5 in 2+ pairs): {sig_reliability['summary']['moderately_conserved']}")
+        print(f"  Atlas-specific (low correlation): {sig_reliability['summary']['atlas_specific']}")
+        print(f"  Insufficient data (1 pair only): {sig_reliability['summary']['insufficient_data']}")
+
     # Save results
     print("\n" + "=" * 70)
     print("Saving results...")
@@ -1108,6 +1221,9 @@ def main():
 
     # Store under 'atlas_comparison' key
     cross_atlas['atlas_comparison'] = results
+
+    # Store signature reliability data
+    cross_atlas['signature_reliability'] = signature_reliability
 
     with open(cross_atlas_path, 'w') as f:
         json.dump(cross_atlas, f)
