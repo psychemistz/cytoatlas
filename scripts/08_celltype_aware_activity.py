@@ -58,7 +58,7 @@ MIN_GENES_OVERLAP = 50  # Minimum genes overlap required
 
 def log(msg: str):
     """Print timestamped log message."""
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
 # ==============================================================================
