@@ -162,12 +162,10 @@ def compute_activity_for_celltype(
     gene_symbol_map = None
     if len(overlap_genes) < MIN_GENES_OVERLAP and 'symbol' in adata.var.columns:
         log(f"      [DEBUG] Direct overlap: {len(overlap_genes)}, trying symbol column...")
-        # Build symbol -> ensembl mapping
-        symbol_to_ensembl = {}
-        for ensembl_id, row in adata.var.iterrows():
-            symbol = row.get('symbol', '')
-            if symbol and pd.notna(symbol):
-                symbol_to_ensembl[symbol] = ensembl_id
+        # Build symbol -> ensembl mapping using vectorized pandas (fast)
+        symbol_series = adata.var['symbol']
+        valid_mask = symbol_series.notna() & (symbol_series != '')
+        symbol_to_ensembl = dict(zip(symbol_series[valid_mask], adata.var_names[valid_mask]))
 
         # Find overlap using symbols
         overlap_symbols = list(sig_genes & set(symbol_to_ensembl.keys()))
