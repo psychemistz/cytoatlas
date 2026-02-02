@@ -265,9 +265,12 @@ def compute_activity_for_celltype(
         # Compute activity
         activity = infer_activity_ridge(expr_matrix, sig_subset)
 
-        # Ensure 2D array (sklearn returns 1D when only 1 target)
+        # Ensure 2D array (sklearn returns 1D when only 1 sample/target)
+        # Shape should be (n_samples, n_cytokines)
         if activity.ndim == 1:
-            activity = activity.reshape(-1, 1)
+            # When only 1 sample, sklearn returns (n_cytokines,)
+            # Reshape to (1, n_cytokines)
+            activity = activity.reshape(1, -1)
 
         # Z-score activity
         activity = (activity - activity.mean(axis=0)) / (activity.std(axis=0) + 1e-6)
@@ -320,9 +323,10 @@ def compute_activity_for_celltype(
 
             # Compute activity
             activity = infer_activity_ridge(expr, sig_subset)
-            # Ensure 2D array (sklearn returns 1D when only 1 target)
+            # Ensure 2D array (sklearn returns 1D when only 1 cell in batch)
+            # Shape should be (n_cells, n_cytokines)
             if activity.ndim == 1:
-                activity = activity.reshape(-1, 1)
+                activity = activity.reshape(1, -1)
             all_activity.append(activity)
 
         activity_matrix = np.vstack(all_activity)
