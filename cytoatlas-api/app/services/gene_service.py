@@ -613,53 +613,81 @@ class GeneService(BaseService):
         Returns:
             Gene expression response or None if not available
         """
+        import json
+
+        results = []
+
         # Try to load from individual gene file first
         gene_file = self.viz_data_path / "genes" / f"{gene}.json"
 
         try:
             if gene_file.exists():
-                import json
                 with open(gene_file) as f:
                     data = json.load(f)
-            else:
-                # Fall back to full dataset
-                all_data = await self.load_json("gene_expression.json")
-                data = [r for r in all_data if r.get("gene") == gene]
+                for r in data:
+                    results.append(GeneExpressionResult(
+                        gene=r.get("gene"),
+                        cell_type=r.get("cell_type"),
+                        atlas=r.get("atlas"),
+                        mean_expression=self._safe_float(r.get("mean_expression")),
+                        pct_expressed=self._safe_float(r.get("pct_expressed")),
+                        n_cells=r.get("n_cells"),
+                    ))
+        except (FileNotFoundError, Exception):
+            pass
 
-            if not data:
-                return None
+        # Load from multiple atlas expression files
+        expression_files = [
+            "gene_expression.json",
+            "gene_expression_inflammation.json",
+            "gene_expression_scatlas.json",
+        ]
 
-            results = [
-                GeneExpressionResult(
-                    gene=r.get("gene"),
-                    cell_type=r.get("cell_type"),
-                    atlas=r.get("atlas"),
-                    mean_expression=self._safe_float(r.get("mean_expression")),
-                    pct_expressed=self._safe_float(r.get("pct_expressed")),
-                    n_cells=r.get("n_cells"),
-                )
-                for r in data
-            ]
+        for filename in expression_files:
+            try:
+                all_data = await self.load_json(filename)
+                for r in all_data:
+                    if r.get("gene") == gene:
+                        results.append(GeneExpressionResult(
+                            gene=r.get("gene"),
+                            cell_type=r.get("cell_type"),
+                            atlas=r.get("atlas"),
+                            mean_expression=self._safe_float(r.get("mean_expression")),
+                            pct_expressed=self._safe_float(r.get("pct_expressed")),
+                            n_cells=r.get("n_cells"),
+                        ))
+            except (FileNotFoundError, Exception):
+                continue
 
-            # Sort by mean expression descending
-            results.sort(key=lambda x: x.mean_expression, reverse=True)
-
-            atlases = sorted(list(set(r.atlas for r in results)))
-            n_cell_types = len(set(r.cell_type for r in results))
-            max_expression = max(r.mean_expression for r in results) if results else 0
-            top_cell_type = results[0].cell_type if results else None
-
-            return GeneExpressionResponse(
-                gene=gene,
-                data=results,
-                atlases=atlases,
-                n_cell_types=n_cell_types,
-                max_expression=max_expression,
-                top_cell_type=top_cell_type,
-            )
-
-        except (FileNotFoundError, Exception) as e:
+        if not results:
             return None
+
+        # Deduplicate results based on (gene, cell_type, atlas) tuple
+        seen = set()
+        unique_results = []
+        for r in results:
+            key = (r.gene, r.cell_type, r.atlas)
+            if key not in seen:
+                seen.add(key)
+                unique_results.append(r)
+        results = unique_results
+
+        # Sort by mean expression descending
+        results.sort(key=lambda x: x.mean_expression, reverse=True)
+
+        atlases = sorted(list(set(r.atlas for r in results)))
+        n_cell_types = len(set(r.cell_type for r in results))
+        max_expression = max(r.mean_expression for r in results) if results else 0
+        top_cell_type = results[0].cell_type if results else None
+
+        return GeneExpressionResponse(
+            gene=gene,
+            data=results,
+            atlases=atlases,
+            n_cell_types=n_cell_types,
+            max_expression=max_expression,
+            top_cell_type=top_cell_type,
+        )
 
     @cached(prefix="gene", ttl=3600)
     async def get_gene_page_data(

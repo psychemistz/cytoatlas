@@ -111,14 +111,14 @@ const HomePage = {
     },
 
     /**
-     * Handle search
-     * @param {string} query - Search query
+     * Handle search - go directly to gene page
+     * @param {string} query - Search query (gene symbol)
      */
     handleSearch(query) {
         if (!query || !query.trim()) return;
 
-        // Navigate to explore page with search query
-        router.navigate(`/explore?q=${encodeURIComponent(query.trim())}`);
+        // Navigate directly to gene page
+        router.navigate(`/gene/${encodeURIComponent(query.trim().toUpperCase())}`);
     },
 };
 
@@ -138,7 +138,7 @@ window.handleSearch = function() {
 };
 
 window.searchExample = function(term) {
-    router.navigate(`/explore?q=${encodeURIComponent(term)}`);
+    router.navigate(`/gene/${encodeURIComponent(term)}`);
 };
 
 // Make available globally

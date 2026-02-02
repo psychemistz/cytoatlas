@@ -40,7 +40,7 @@
             </nav>
 
             <div class="header-search">
-                <input type="text" id="global-search" placeholder="Search cytokines, cell types, diseases..." class="search-input">
+                <input type="text" id="global-search" placeholder="Search genes (IFNG, TNF, IL6...)" class="search-input">
                 <button class="search-btn" onclick="handleSearch()">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="11" cy="11" r="8"></circle>
@@ -88,17 +88,17 @@
                     </p>
 
                     <div class="hero-search">
-                        <input type="text" id="hero-search-input" placeholder="Search IFNG, IL17A, CD8, Th17, COVID-19..." class="hero-search-input">
+                        <input type="text" id="hero-search-input" placeholder="Search genes (e.g., IFNG, TNF, IL6, IL17A...)" class="hero-search-input">
                         <button class="hero-search-btn" onclick="handleHeroSearch()">Search</button>
                     </div>
 
                     <div class="hero-examples">
                         <span>Try:</span>
                         <button class="example-btn" onclick="searchExample('IFNG')">IFNG</button>
-                        <button class="example-btn" onclick="searchExample('IL17A')">IL17A</button>
                         <button class="example-btn" onclick="searchExample('TNF')">TNF</button>
-                        <button class="example-btn" onclick="searchExample('CD8')">CD8</button>
-                        <button class="example-btn" onclick="searchExample('Monocyte')">Monocyte</button>
+                        <button class="example-btn" onclick="searchExample('IL6')">IL6</button>
+                        <button class="example-btn" onclick="searchExample('IL17A')">IL17A</button>
+                        <button class="example-btn" onclick="searchExample('TGFB1')">TGFB1</button>
                     </div>
                 </div>
             </section>
@@ -141,7 +141,7 @@
                     <div class="feature-card" onclick="router.navigate('/search')">
                         <div class="feature-icon">&#128270;</div>
                         <h3>Search</h3>
-                        <p>Find cytokines, proteins, cell types, and diseases across all atlases</p>
+                        <p>Search genes to view expression and cytokine/protein activity across all atlases</p>
                         <div class="quick-links">
                             <a href="/gene/IFNG" onclick="event.stopPropagation()">IFNG</a>
                             <a href="/gene/TNF" onclick="event.stopPropagation()">TNF</a>
