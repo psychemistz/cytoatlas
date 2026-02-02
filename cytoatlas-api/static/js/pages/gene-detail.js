@@ -56,8 +56,8 @@ const GeneDetailPage = {
         }
 
         // Check SecAct common genes
-        if (this.geneInfo.secact_common && this.geneInfo.secact_common[gene]) {
-            return this.geneInfo.secact_common[gene].description;
+        if (this.geneInfo.secact && this.geneInfo.secact[gene]) {
+            return this.geneInfo.secact[gene].description;
         }
 
         // Check if gene matches any CytoSig HGNC symbol
@@ -70,8 +70,8 @@ const GeneDetailPage = {
         }
 
         // Check if gene matches any SecAct HGNC symbol
-        if (this.geneInfo.secact_common) {
-            for (const [sigName, info] of Object.entries(this.geneInfo.secact_common)) {
+        if (this.geneInfo.secact) {
+            for (const [sigName, info] of Object.entries(this.geneInfo.secact)) {
                 if (info.hgnc_symbol === gene) {
                     return info.description;
                 }
@@ -93,8 +93,8 @@ const GeneDetailPage = {
         }
 
         // Check SecAct common genes
-        if (this.geneInfo.secact_common && this.geneInfo.secact_common[gene]) {
-            return this.geneInfo.secact_common[gene].hgnc_symbol;
+        if (this.geneInfo.secact && this.geneInfo.secact[gene]) {
+            return this.geneInfo.secact[gene].hgnc_symbol;
         }
 
         // Already a standard symbol
@@ -102,15 +102,89 @@ const GeneDetailPage = {
     },
 
     /**
+     * Get gene info object (with IDs) for a gene
+     */
+    getGeneInfoObject(gene) {
+        if (!this.geneInfo) return null;
+
+        // Check CytoSig signatures
+        if (this.geneInfo.cytosig && this.geneInfo.cytosig[gene]) {
+            return this.geneInfo.cytosig[gene];
+        }
+
+        // Check SecAct common genes
+        if (this.geneInfo.secact && this.geneInfo.secact[gene]) {
+            return this.geneInfo.secact[gene];
+        }
+
+        // Check if gene matches any CytoSig HGNC symbol
+        if (this.geneInfo.cytosig) {
+            for (const [sigName, info] of Object.entries(this.geneInfo.cytosig)) {
+                if (info.hgnc_symbol === gene) {
+                    return info;
+                }
+            }
+        }
+
+        // Check if gene matches any SecAct HGNC symbol
+        if (this.geneInfo.secact) {
+            for (const [sigName, info] of Object.entries(this.geneInfo.secact)) {
+                if (info.hgnc_symbol === gene) {
+                    return info;
+                }
+            }
+        }
+
+        return null;
+    },
+
+    /**
      * Get external database links for a gene
      */
     getExternalLinks(gene) {
-        // Use HGNC symbol for external links
+        const info = this.getGeneInfoObject(gene);
         const hgncSymbol = this.getHGNCSymbol(gene);
 
+        // If we have specific IDs, use direct links
+        if (info) {
+            return [
+                {
+                    name: 'NCBI',
+                    url: info.entrez_id ? `https://www.ncbi.nlm.nih.gov/gene/${info.entrez_id}` : `https://www.ncbi.nlm.nih.gov/gene/?term=${encodeURIComponent(hgncSymbol)}[sym]+AND+human[orgn]`,
+                    icon: '🔬',
+                },
+                {
+                    name: 'UniProt',
+                    url: info.uniprot_id ? `https://www.uniprot.org/uniprotkb/${info.uniprot_id}` : `https://www.uniprot.org/uniprotkb?query=${encodeURIComponent(hgncSymbol)}+AND+organism_id:9606`,
+                    icon: '🧬',
+                },
+                {
+                    name: 'GeneCards',
+                    url: `https://www.genecards.org/cgi-bin/carddisp.pl?gene=${encodeURIComponent(hgncSymbol)}`,
+                    icon: '📋',
+                },
+                {
+                    name: 'Ensembl',
+                    url: info.ensembl_id ? `https://useast.ensembl.org/Homo_sapiens/Gene/Summary?g=${info.ensembl_id}` : `https://www.ensembl.org/Human/Search/Results?q=${encodeURIComponent(hgncSymbol)};site=ensembl;facet_species=Human`,
+                    icon: '🌐',
+                },
+                {
+                    name: 'HGNC',
+                    url: info.hgnc_id ? `https://www.genenames.org/data/gene-symbol-report/#!/hgnc_id/${info.hgnc_id}` : `https://www.genenames.org/tools/search/#!/?query=${encodeURIComponent(hgncSymbol)}`,
+                    icon: '🏷️',
+                },
+                {
+                    name: 'GO',
+                    url: info.uniprot_id ? `https://amigo.geneontology.org/amigo/gene_product/UniProtKB:${info.uniprot_id}` : `https://amigo.geneontology.org/amigo/search/bioentity?q=${encodeURIComponent(hgncSymbol)}`,
+                    icon: '🔗',
+                },
+            ];
+        }
+
+        // Fallback to search-based links
         return [
             {
-                name: 'NCBI Gene',
+                name: 'NCBI',
                 url: `https://www.ncbi.nlm.nih.gov/gene/?term=${encodeURIComponent(hgncSymbol)}[sym]+AND+human[orgn]`,
                 icon: '🔬',
             },
