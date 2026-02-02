@@ -20,14 +20,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Key genes to extract
+# Complete gene list: 69 genes covering all CytoSig signatures + immune markers
+# Includes all HGNC symbols from signature_gene_mapping.json plus checkpoint/effector genes
 KEY_GENES = [
-    'IFNG', 'TNF', 'IL1A', 'IL1B', 'IL2', 'IL4', 'IL6', 'IL10', 'IL12A', 'IL12B',
-    'IL13', 'IL17A', 'IL17F', 'IL21', 'IL22', 'IL23A', 'IL27', 'IL33',
-    'TGFB1', 'TGFB2', 'TGFB3', 'CSF1', 'CSF2', 'CSF3', 'CXCL8', 'CCL2', 'CCL3',
-    'CCL4', 'CCL5', 'CXCL10', 'CXCL11', 'VEGFA', 'EGF', 'FGF2', 'HGF',
-    'SPP1', 'MMP9', 'MMP2', 'TIMP1', 'GZMB', 'PRF1', 'FASLG',
-    'CD274', 'PDCD1', 'CTLA4', 'LAG3', 'HAVCR2', 'TIGIT',
+    # CytoSig cytokines (HGNC symbols)
+    'BDNF', 'BMP2', 'BMP4', 'BMP6', 'CD40LG', 'CSF1', 'CSF2', 'CSF3',
+    'CXCL12', 'EGF', 'FGF2', 'GDF11', 'HGF', 'IFNA1', 'IFNB1', 'IFNG',
+    'IFNL1', 'IL10', 'IL12A', 'IL12B', 'IL13', 'IL15', 'IL17A', 'IL1A',
+    'IL1B', 'IL2', 'IL21', 'IL22', 'IL27', 'IL3', 'IL36A', 'IL4', 'IL6',
+    'INHBA', 'LIF', 'LTA', 'NOS1', 'OSM', 'TGFB1', 'TGFB3', 'TNF',
+    'TNFSF10', 'TNFSF12', 'VEGFA', 'WNT3A',
+    # Additional immune genes (chemokines, checkpoints, effectors)
+    'CCL2', 'CCL3', 'CCL4', 'CCL5', 'CD274', 'CTLA4', 'CXCL10', 'CXCL11',
+    'CXCL8', 'FASLG', 'GZMB', 'HAVCR2', 'IL17F', 'IL23A', 'IL33', 'LAG3',
+    'MMP2', 'MMP9', 'PDCD1', 'PRF1', 'SPP1', 'TGFB2', 'TIGIT', 'TIMP1',
 ]
 
 DATA_PATHS = {
@@ -36,6 +42,7 @@ DATA_PATHS = {
     'inflammation_val': '/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_ATLAS_validation_afterQC.h5ad',
     'inflammation_ext': '/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_ATLAS_external_afterQC.h5ad',
     'scatlas_normal': '/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/igt_s9_fine_counts.h5ad',
+    'scatlas_cancer': '/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/PanCancer_igt_s9_fine_counts.h5ad',
 }
 
 OUTPUT_DIR = Path('/vf/users/parks34/projects/2secactpy/visualization/data')
@@ -228,16 +235,20 @@ def extract_sampled_expression(h5ad_path: str, genes: list[str], atlas_name: str
 
 def main():
     logger.info("Starting sampled gene expression extraction")
+    logger.info(f"Extracting {len(KEY_GENES)} genes from all atlases")
 
     all_results = []
 
     # CIMA
     if Path(DATA_PATHS['cima']).exists():
+        logger.info("Processing CIMA...")
         df = extract_sampled_expression(DATA_PATHS['cima'], KEY_GENES, 'CIMA')
         if not df.empty:
             all_results.append(df)
+            logger.info(f"CIMA: {len(df)} records")
 
     # Inflammation Atlas (main, validation, external)
+    logger.info("Processing Inflammation Atlas...")
     inflam_dfs = []
     for name in ['inflammation_main', 'inflammation_val', 'inflammation_ext']:
         if Path(DATA_PATHS[name]).exists():
@@ -255,12 +266,23 @@ def main():
             'n_cells': 'sum',
         }).reset_index()
         all_results.append(inflam_agg)
+        logger.info(f"Inflammation: {len(inflam_agg)} records")
 
     # scAtlas Normal
     if Path(DATA_PATHS['scatlas_normal']).exists():
-        df = extract_sampled_expression(DATA_PATHS['scatlas_normal'], KEY_GENES, 'scAtlas')
+        logger.info("Processing scAtlas Normal...")
+        df = extract_sampled_expression(DATA_PATHS['scatlas_normal'], KEY_GENES, 'scAtlas_Normal')
         if not df.empty:
             all_results.append(df)
+            logger.info(f"scAtlas Normal: {len(df)} records")
+
+    # scAtlas Cancer
+    if Path(DATA_PATHS['scatlas_cancer']).exists():
+        logger.info("Processing scAtlas Cancer...")
+        df = extract_sampled_expression(DATA_PATHS['scatlas_cancer'], KEY_GENES, 'scAtlas_Cancer')
+        if not df.empty:
+            all_results.append(df)
+            logger.info(f"scAtlas Cancer: {len(df)} records")
 
     if not all_results:
         logger.error("No data extracted")
@@ -268,13 +290,17 @@ def main():
 
     combined = pd.concat(all_results, ignore_index=True)
     logger.info(f"Total records: {len(combined)}")
+    logger.info(f"Genes found: {combined['gene'].nunique()}")
+    logger.info(f"Atlases: {combined['atlas'].unique().tolist()}")
 
-    # Save
+    # Save combined file
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     with open(OUTPUT_DIR / 'gene_expression.json', 'w') as f:
         json.dump(combined.to_dict(orient='records'), f)
+    logger.info(f"Saved {OUTPUT_DIR / 'gene_expression.json'}")
 
+    # Save per-gene files
     gene_dir = OUTPUT_DIR / 'genes'
     gene_dir.mkdir(exist_ok=True)
 
@@ -283,9 +309,11 @@ def main():
         with open(gene_dir / f'{gene}.json', 'w') as f:
             json.dump(gene_df.to_dict(orient='records'), f)
 
+    # Save gene list
     with open(OUTPUT_DIR / 'gene_list.json', 'w') as f:
         json.dump(sorted(combined['gene'].unique().tolist()), f)
 
+    logger.info(f"Saved {combined['gene'].nunique()} gene files to {gene_dir}")
     logger.info("Done!")
     return 0
 
