@@ -307,10 +307,15 @@ class GeneService(BaseService):
         """
         results = []
 
+        # Build list of signature names to search (handles HGNC to CytoSig mapping)
+        sig_names = [signature]
+        if signature_type == "CytoSig" and signature in HGNC_TO_CYTOSIG:
+            sig_names.append(HGNC_TO_CYTOSIG[signature])
+
         try:
             organs_data = await self.load_json("scatlas_organs.json")
             for r in organs_data:
-                if r.get("signature") == signature and r.get("signature_type") == signature_type:
+                if r.get("signature") in sig_names and r.get("signature_type") == signature_type:
                     results.append(GeneTissueActivity(
                         organ=r.get("organ"),
                         signature=signature,
@@ -348,11 +353,16 @@ class GeneService(BaseService):
         results = []
         disease_groups = set()
 
+        # Build list of signature names to search (handles HGNC to CytoSig mapping)
+        sig_names = [signature]
+        if signature_type == "CytoSig" and signature in HGNC_TO_CYTOSIG:
+            sig_names.append(HGNC_TO_CYTOSIG[signature])
+
         try:
             diff_data = await self.load_json("inflammation_differential.json")
             for r in diff_data:
                 # Data uses "protein" for signature name and "signature" for type
-                if r.get("protein") == signature and r.get("signature") == signature_type:
+                if r.get("protein") in sig_names and r.get("signature") == signature_type:
                     pval = self._parse_pvalue(r.get("pvalue"))
                     # Check for None explicitly (0.0 is a valid qvalue)
                     qval = self._parse_pvalue(r.get("qvalue")) if r.get("qvalue") is not None else None
@@ -426,6 +436,11 @@ class GeneService(BaseService):
         biochem_results = []
         metabol_results = []
 
+        # Build list of signature names to search (handles HGNC to CytoSig mapping)
+        sig_names = [signature]
+        if signature_type == "CytoSig" and signature in HGNC_TO_CYTOSIG:
+            sig_names.append(HGNC_TO_CYTOSIG[signature])
+
         # Load CIMA correlations (age, bmi, biochemistry)
         try:
             corr_data = await self.load_json("cima_correlations.json")
@@ -433,7 +448,7 @@ class GeneService(BaseService):
             # Age correlations
             if "age" in corr_data:
                 for r in corr_data["age"]:
-                    if r.get("protein") == signature and r.get("signature") == signature_type:
+                    if r.get("protein") in sig_names and r.get("signature") == signature_type:
                         pval = self._parse_pvalue(r.get("pvalue"))
                         qval = self._parse_pvalue(r.get("qvalue")) if r.get("qvalue") is not None else None
                         age_results.append(GeneCorrelationResult(
@@ -449,7 +464,7 @@ class GeneService(BaseService):
             # BMI correlations
             if "bmi" in corr_data:
                 for r in corr_data["bmi"]:
-                    if r.get("protein") == signature and r.get("signature") == signature_type:
+                    if r.get("protein") in sig_names and r.get("signature") == signature_type:
                         pval = self._parse_pvalue(r.get("pvalue"))
                         qval = self._parse_pvalue(r.get("qvalue")) if r.get("qvalue") is not None else None
                         bmi_results.append(GeneCorrelationResult(
@@ -465,7 +480,7 @@ class GeneService(BaseService):
             # Biochemistry correlations
             if "biochemistry" in corr_data:
                 for r in corr_data["biochemistry"]:
-                    if r.get("protein") == signature and r.get("signature") == signature_type:
+                    if r.get("protein") in sig_names and r.get("signature") == signature_type:
                         pval = self._parse_pvalue(r.get("pvalue"))
                         qval = self._parse_pvalue(r.get("qvalue")) if r.get("qvalue") is not None else None
                         biochem_results.append(GeneCorrelationResult(
@@ -484,7 +499,7 @@ class GeneService(BaseService):
         try:
             metab_data = await self.load_json("cima_metabolites_top.json")
             for r in metab_data:
-                if r.get("protein") == signature and r.get("signature") == signature_type:
+                if r.get("protein") in sig_names and r.get("signature") == signature_type:
                     pval = self._parse_pvalue(r.get("pvalue"))
                     qval = self._parse_pvalue(r.get("qvalue")) if r.get("qvalue") is not None else None
                     metabol_results.append(GeneCorrelationResult(
