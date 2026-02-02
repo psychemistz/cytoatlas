@@ -2583,6 +2583,20 @@
             <h4>Pathway Enrichment</h4>
             <p>Cytokine-pathway associations were derived from KEGG, Reactome, and MSigDB Hallmark databases. Over-representation was tested using Fisher's exact test with Benjamini-Hochberg correction (FDR &lt; 0.05).</p>
 
+            <h4>Cross-Atlas Conservation Analysis</h4>
+            <p>Signature conservation is assessed using two complementary approaches:</p>
+            <ul>
+                <li><strong>Cell-type Aware:</strong> For each signature, Spearman correlation is computed between activity values across harmonized cell types between atlas pairs. This measures whether signatures show consistent cell-type-specific patterns (e.g., IFNG high in CD8 T cells, low in B cells in both atlases).</li>
+                <li><strong>Cell-type Agnostic:</strong> Overall mean activity (z-score) is compared across atlases regardless of cell type distribution. This assesses whether a signature is generally active or inactive at similar levels across datasets.</li>
+            </ul>
+            <p>Signatures are categorized based on cell-type aware correlation:</p>
+            <ul>
+                <li><strong>Highly Conserved:</strong> Spearman r &gt; 0.7 in at least 2 of 3 atlas pairs</li>
+                <li><strong>Moderately Conserved:</strong> Spearman r &gt; 0.5 in at least 2 atlas pairs</li>
+                <li><strong>Atlas-Specific:</strong> Low correlation across available pairs</li>
+                <li><strong>Insufficient Data:</strong> Data available in only 1 atlas pair</li>
+            </ul>
+
             <h3>Visualization Panels</h3>
             <table style="width:100%; border-collapse: collapse; margin: 1rem 0;">
                 <tr style="background: #f5f5f5; border-bottom: 2px solid #ddd;">
@@ -2604,6 +2618,10 @@
                 <tr style="border-bottom: 1px solid #eee;">
                     <td style="padding: 0.5rem;"><strong>Disease Differential</strong></td>
                     <td style="padding: 0.5rem;">Volcano plots showing disease-specific activity changes (Δ activity vs. -log10 p-value)</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 0.5rem;"><strong>Conserved Signatures</strong></td>
+                    <td style="padding: 0.5rem;">Cross-atlas conservation with dual views: cell-type aware (pattern correlation) and cell-type agnostic (mean activity comparison)</td>
                 </tr>
                 <tr style="border-bottom: 1px solid #eee;">
                     <td style="padding: 0.5rem;"><strong>Atlas Comparison</strong></td>
