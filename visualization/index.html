@@ -2423,8 +2423,27 @@
                         <label>Signature Type</label>
                         <select id="meta-sig-type">
                             <option value="CytoSig">CytoSig (43 cytokines)</option>
-                            <option value="SecAct">SecAct (1,170 proteins)</option>
+                            <option value="SecAct">SecAct (top 50 by effect)</option>
                         </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Search Gene</label>
+                        <input type="text" id="meta-search" list="meta-signature-list" placeholder="Type gene name..." style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; width: 150px;">
+                        <datalist id="meta-signature-list"></datalist>
+                    </div>
+                </div>
+
+                <!-- Gene Detail Panel (shown when a gene is searched) -->
+                <div id="meta-gene-detail" style="display: none; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                            <div style="font-size: 1.25rem; font-weight: bold; color: #1565c0;" id="meta-gene-name">-</div>
+                            <div style="font-size: 0.9rem; color: #666; margin-top: 0.25rem;" id="meta-gene-info">-</div>
+                        </div>
+                        <button onclick="clearMetaSearch()" style="background: #1565c0; color: white; border: none; border-radius: 4px; padding: 0.25rem 0.75rem; cursor: pointer; font-size: 0.85rem;">Clear</button>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-top: 1rem;" id="meta-gene-correlations">
+                        <!-- Filled by JS -->
                     </div>
                 </div>
 
@@ -10340,6 +10359,15 @@
             if (detailPanel) detailPanel.style.display = 'none';
         }
 
+        // Clear meta-analysis search and hide detail panel
+        function clearMetaSearch() {
+            const searchInput = document.getElementById('meta-search');
+            const detailPanel = document.getElementById('meta-gene-detail');
+            if (searchInput) searchInput.value = '';
+            if (detailPanel) detailPanel.style.display = 'none';
+            updateMetaAnalysis();
+        }
+
         // Cross-Atlas: Comparison
         // Multiple comparison views: scatter, bootstrap CI, prediction concordance
         function updateAtlasComparison() {
@@ -11253,6 +11281,9 @@
         function updateMetaAnalysis() {
             const container1 = document.getElementById('meta-forest');
             const container2 = document.getElementById('meta-heterogeneity');
+            const searchInput = document.getElementById('meta-search');
+            const datalist = document.getElementById('meta-signature-list');
+            const detailPanel = document.getElementById('meta-gene-detail');
 
             // Get dropdown values
             const analysisType = document.getElementById('meta-analysis-type')?.value || 'age';
@@ -11270,6 +11301,8 @@
                     container2.classList.remove('loading');
                     container2.innerHTML = '';
                 }
+                if (datalist) datalist.innerHTML = '';
+                if (detailPanel) detailPanel.style.display = 'none';
                 return;
             }
 
@@ -11306,6 +11339,49 @@
 
             const metaData = Object.values(sigGroups);
 
+            // Populate search datalist with all signatures
+            if (datalist) {
+                datalist.innerHTML = metaData.map(m => `<option value="${m.signature}">`).join('');
+            }
+
+            // Handle search - show gene detail panel if a gene is searched
+            const searchValue = searchInput?.value?.trim() || '';
+            const searchedGene = metaData.find(m => m.signature.toLowerCase() === searchValue.toLowerCase());
+
+            if (searchedGene && detailPanel) {
+                detailPanel.style.display = 'block';
+                document.getElementById('meta-gene-name').textContent = searchedGene.signature;
+
+                // Show pooled effect info
+                const pooledSig = searchedGene.pooled.ci_low > 0 || searchedGene.pooled.ci_high < 0;
+                const direction = searchedGene.pooled.effect > 0 ? 'positive' : 'negative';
+                document.getElementById('meta-gene-info').innerHTML = `
+                    Pooled effect: <strong style="color: ${searchedGene.pooled.effect > 0 ? '#2e7d32' : '#c2185b'}">
+                    r = ${searchedGene.pooled.effect.toFixed(3)}</strong>
+                    [${searchedGene.pooled.ci_low.toFixed(3)}, ${searchedGene.pooled.ci_high.toFixed(3)}]
+                    ${pooledSig ? '<span style="color: #7b1fa2; font-weight: bold;"> (Significant)</span>' : ''}
+                    | I² = ${searchedGene.I2.toFixed(0)}%
+                `;
+
+                // Show per-atlas effects
+                let corrHtml = '';
+                for (const e of searchedGene.effects) {
+                    const indCiLow = e.effect - 1.96 * e.se;
+                    const indCiHigh = e.effect + 1.96 * e.se;
+                    const color = e.effect > 0 ? '#2e7d32' : '#c2185b';
+                    corrHtml += `
+                        <div style="text-align: center; background: white; padding: 0.75rem; border-radius: 6px;">
+                            <div style="font-size: 1.25rem; font-weight: bold; color: ${color};">r = ${e.effect.toFixed(3)}</div>
+                            <div style="font-size: 0.85rem; color: #666;">${e.atlas}</div>
+                            <div style="font-size: 0.75rem; color: #999;">[${indCiLow.toFixed(3)}, ${indCiHigh.toFixed(3)}]</div>
+                        </div>
+                    `;
+                }
+                document.getElementById('meta-gene-correlations').innerHTML = corrHtml;
+            } else if (detailPanel) {
+                detailPanel.style.display = 'none';
+            }
+
             // Update summary cards
             const replicatedCount = metaData.length;
             const consistentCount = metaData.filter(m => {
@@ -11329,10 +11405,14 @@
             };
             const label = analysisLabels[analysisType] || { title: 'Replicated Associations', desc: 'correlation' };
             document.getElementById('meta-forest-title').textContent = label.title;
-            document.getElementById('meta-description').textContent = `Shows signatures with ${label.desc} data from multiple atlases (CIMA + Inflammation). Only replicated associations are displayed.`;
+
+            // Limit display: show all for CytoSig, top 50 for SecAct
+            const displayLimit = sigType === 'SecAct' ? 50 : metaData.length;
+            const limitNote = sigType === 'SecAct' ? ` Showing top ${Math.min(displayLimit, metaData.length)} of ${metaData.length} by effect size.` : '';
+            document.getElementById('meta-description').textContent = `Shows signatures with ${label.desc} data from multiple atlases (CIMA + Inflammation).${limitNote}`;
 
             // Sort by absolute pooled effect for visualization
-            const sortedMeta = [...metaData].sort((a, b) => Math.abs(b.pooled.effect) - Math.abs(a.pooled.effect)).slice(0, 20);
+            const sortedMeta = [...metaData].sort((a, b) => Math.abs(b.pooled.effect) - Math.abs(a.pooled.effect)).slice(0, displayLimit);
 
             // 1. Forest plot
             if (container1) {
@@ -12034,7 +12114,8 @@
             document.getElementById('mapping-level')?.addEventListener('change', updateCelltypeMapping);
             document.getElementById('mapping-lineage')?.addEventListener('change', updateCelltypeMapping);
             document.getElementById('meta-analysis-type')?.addEventListener('change', updateMetaAnalysis);
-            document.getElementById('meta-sig-type')?.addEventListener('change', updateMetaAnalysis);
+            document.getElementById('meta-sig-type')?.addEventListener('change', () => { clearMetaSearch(); });
+            document.getElementById('meta-search')?.addEventListener('input', updateMetaAnalysis);
 
             // Cross-Atlas Signature Correlation
             document.getElementById('sigcorr-sig-type')?.addEventListener('change', updateSignatureCorrelation);
