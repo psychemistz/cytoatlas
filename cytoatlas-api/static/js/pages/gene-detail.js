@@ -10,9 +10,9 @@ const GeneDetailPage = {
     geneInfo: null,  // Loaded from gene_info.json
 
     tabs: [
-        { id: 'expression', label: 'Gene Expression', icon: '&#129516;' },
-        { id: 'cytosig', label: 'CytoSig Activity', icon: '&#128300;' },
-        { id: 'secact', label: 'SecAct Activity', icon: '&#9898;' },
+        { id: 'expression', label: 'Expression', icon: '&#129516;' },
+        { id: 'cytosig', label: 'CytoSig (Pseudobulk)', icon: '&#128300;' },
+        { id: 'secact', label: 'SecAct (Pseudobulk)', icon: '&#9898;' },
         { id: 'diseases', label: 'Diseases', icon: '&#129658;' },
         { id: 'correlations', label: 'Correlations', icon: '&#128200;' },
     ],
@@ -569,7 +569,7 @@ const GeneDetailPage = {
         content.innerHTML = `
             <div class="tab-header">
                 <h2>${this.gene} ${sigType} Activity</h2>
-                <p>Inferred ${sigType === 'CytoSig' ? 'cytokine' : 'secreted protein'} activity by cell type</p>
+                <p>Pseudobulk-aggregated ${sigType === 'CytoSig' ? 'cytokine' : 'secreted protein'} activity by cell type (ridge regression z-scores)</p>
                 <div class="stats-inline">
                     <span><strong>${activityData.length}</strong> cell types</span>
                     <span><strong>${Object.keys(byAtlas).length}</strong> atlases</span>

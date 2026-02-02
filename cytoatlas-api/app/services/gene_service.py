@@ -27,6 +27,33 @@ from app.services.base import BaseService
 
 settings = get_settings()
 
+# Mapping from HGNC gene symbols to CytoSig signature names
+# CytoSig uses different naming conventions for some signatures
+HGNC_TO_CYTOSIG = {
+    'TNF': 'TNFA',      # TNF alpha
+    'IFNA1': 'IFN1',    # Type I interferon
+    'IFNB1': 'IFN1',    # Type I interferon
+    'IFNL1': 'IFNL',    # Type III interferon (lambda)
+    'CSF3': 'GCSF',     # Granulocyte colony-stimulating factor
+    'CSF2': 'GMCSF',    # Granulocyte-macrophage CSF
+    'CSF1': 'MCSF',     # Macrophage CSF
+    'TGFB2': 'TGFB1',   # TGF-beta (CytoSig may combine)
+    'IL12A': 'IL12',    # IL-12 subunit
+    'IL12B': 'IL12',    # IL-12 subunit
+    'TNFSF10': 'TRAIL', # TRAIL
+    'TNFSF12': 'TWEAK', # TWEAK
+    'LTA': 'LTA',       # Lymphotoxin alpha (same name)
+}
+
+# Reverse mapping for display (CytoSig name -> HGNC symbol)
+CYTOSIG_TO_HGNC = {v: k for k, v in HGNC_TO_CYTOSIG.items()}
+# Handle special cases where multiple HGNC map to one CytoSig
+CYTOSIG_TO_HGNC['IFN1'] = 'IFNA1'
+CYTOSIG_TO_HGNC['GCSF'] = 'CSF3'
+CYTOSIG_TO_HGNC['GMCSF'] = 'CSF2'
+CYTOSIG_TO_HGNC['MCSF'] = 'CSF1'
+CYTOSIG_TO_HGNC['IL12'] = 'IL12A'
+
 
 class GeneService(BaseService):
     """Service for gene-centric data aggregation across atlases."""
@@ -188,16 +215,24 @@ class GeneService(BaseService):
         """
         results = []
 
+        # For CytoSig, map HGNC symbol to CytoSig signature name if needed
+        sig_names = [signature]
+        if signature_type == "CytoSig" and signature in HGNC_TO_CYTOSIG:
+            sig_names.append(HGNC_TO_CYTOSIG[signature])
+        # Also check reverse mapping (if user searches by CytoSig name)
+        if signature_type == "CytoSig" and signature in CYTOSIG_TO_HGNC:
+            sig_names.append(CYTOSIG_TO_HGNC[signature])
+
         # CIMA data
         if atlas is None or atlas.lower() == "cima":
             try:
                 cima_data = await self.load_json("cima_celltype.json")
                 for r in cima_data:
-                    if r.get("signature") == signature and r.get("signature_type") == signature_type:
+                    if r.get("signature") in sig_names and r.get("signature_type") == signature_type:
                         results.append(GeneCellTypeActivity(
                             cell_type=r.get("cell_type"),
                             atlas="CIMA",
-                            signature=signature,
+                            signature=signature,  # Return user's query name
                             signature_type=signature_type,
                             mean_activity=self._safe_float(r.get("mean_activity")),
                             std_activity=self._safe_float(r.get("std_activity")) if r.get("std_activity") else None,
@@ -212,11 +247,11 @@ class GeneService(BaseService):
             try:
                 inflam_data = await self.load_json("inflammation_celltype.json")
                 for r in inflam_data:
-                    if r.get("signature") == signature and r.get("signature_type") == signature_type:
+                    if r.get("signature") in sig_names and r.get("signature_type") == signature_type:
                         results.append(GeneCellTypeActivity(
                             cell_type=r.get("cell_type"),
                             atlas="Inflammation",
-                            signature=signature,
+                            signature=signature,  # Return user's query name
                             signature_type=signature_type,
                             mean_activity=self._safe_float(r.get("mean_activity")),
                             std_activity=None,
@@ -233,7 +268,7 @@ class GeneService(BaseService):
                 # scatlas_celltypes.json has nested structure with "data" key
                 data_list = scatlas_data.get("data", scatlas_data) if isinstance(scatlas_data, dict) else scatlas_data
                 for r in data_list:
-                    if r.get("signature") == signature and r.get("signature_type") == signature_type:
+                    if r.get("signature") in sig_names and r.get("signature_type") == signature_type:
                         # For scAtlas, include organ in cell type name
                         ct_name = f"{r.get('cell_type')} ({r.get('organ')})" if r.get("organ") else r.get("cell_type")
                         results.append(GeneCellTypeActivity(
