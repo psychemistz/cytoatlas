@@ -3,6 +3,7 @@
 Extract gene expression from sampled cells for memory efficiency.
 
 Samples cells within each cell type to estimate mean expression.
+Applies consistent log1p(CPM) normalization across all atlases.
 """
 
 import json
@@ -42,20 +43,76 @@ OUTPUT_DIR = Path('/vf/users/parks34/projects/2secactpy/visualization/data')
 # Sample size per cell type (reduced for memory efficiency)
 SAMPLE_SIZE = 2000
 
+# Atlas-specific cell type column preferences
+# Use finer annotations where available (cell_type has 27 types vs cell_type_l1 has 6)
+ATLAS_CELLTYPE_COLS = {
+    'CIMA': ['cell_type', 'cell_type_l1'],  # Prefer finer 'cell_type' (27 types)
+    'Inflammation': ['Level1', 'Level2', 'cell_type'],
+    'scAtlas': ['cellType1', 'cellType2', 'cell_type'],
+}
 
-def get_cell_type_column(adata):
-    """Find the cell type column."""
+
+def get_cell_type_column(adata, atlas_name: str = None):
+    """Find the cell type column, preferring finer annotations."""
+    # Use atlas-specific preference if available
+    if atlas_name and atlas_name in ATLAS_CELLTYPE_COLS:
+        for col in ATLAS_CELLTYPE_COLS[atlas_name]:
+            if col in adata.obs.columns:
+                return col
+
+    # Fallback to general search
     for col in ['cell_type', 'cell_type_l1', 'celltype', 'CellType', 'cell_type_fine',
                 'cellType1', 'cellType2', 'ann1', 'majorCluster',
-                'Level1', 'Level2']:  # Inflammation Atlas uses Level1/Level2
+                'Level1', 'Level2']:
         if col in adata.obs.columns:
             return col
     return None
 
 
+def detect_normalization(X_sample):
+    """
+    Detect if data is already log-normalized or raw counts.
+
+    Returns: 'log_normalized', 'cpm', or 'raw_counts'
+    """
+    max_val = X_sample.max()
+    mean_val = X_sample.mean()
+
+    # Log-normalized data typically has max < 10 and mean < 1
+    if max_val < 15 and mean_val < 2:
+        return 'log_normalized'
+    # CPM has values in thousands
+    elif max_val > 100:
+        return 'cpm' if mean_val > 10 else 'raw_counts'
+    else:
+        return 'raw_counts'
+
+
+def normalize_expression(X_sample, detected_norm: str):
+    """
+    Normalize expression to log1p(CPM) scale.
+
+    Target scale: log1p(CPM/100) to get values roughly 0-5 range
+    """
+    if detected_norm == 'log_normalized':
+        # Already log-normalized, return as-is
+        return X_sample
+    elif detected_norm == 'cpm':
+        # CPM -> log1p(CPM/100) for comparable scale
+        return np.log1p(X_sample / 100)
+    else:
+        # Raw counts -> CPM -> log1p
+        # Normalize per cell to CPM first
+        row_sums = X_sample.sum(axis=1, keepdims=True)
+        row_sums[row_sums == 0] = 1  # Avoid division by zero
+        cpm = X_sample / row_sums * 1e6
+        return np.log1p(cpm / 100)
+
+
 def extract_sampled_expression(h5ad_path: str, genes: list[str], atlas_name: str) -> pd.DataFrame:
     """
     Extract gene expression by sampling cells per cell type.
+    Applies consistent normalization across atlases.
     """
     import gc
 
@@ -88,8 +145,8 @@ def extract_sampled_expression(h5ad_path: str, genes: list[str], atlas_name: str
     if not genes_found:
         return pd.DataFrame()
 
-    # Get cell type column
-    cell_type_col = get_cell_type_column(adata)
+    # Get cell type column (use atlas-specific preferences)
+    cell_type_col = get_cell_type_column(adata, atlas_name)
     if not cell_type_col:
         logger.warning(f"No cell type column in {atlas_name}")
         return pd.DataFrame()
@@ -136,11 +193,20 @@ def extract_sampled_expression(h5ad_path: str, genes: list[str], atlas_name: str
         if hasattr(X_sample, 'toarray'):
             X_sample = X_sample.toarray()
 
-        # Calculate stats
+        # Detect and apply normalization on first cell type
+        if ct_idx == 0:
+            detected_norm = detect_normalization(X_sample)
+            logger.info(f"Detected normalization: {detected_norm}")
+
+        # Apply consistent normalization
+        X_normalized = normalize_expression(X_sample, detected_norm)
+
+        # Calculate stats using normalized values
         for j, gene in enumerate(genes_found):
-            expr = X_sample[:, j]
-            mean_expr = float(np.mean(expr))
-            pct_expr = float(np.sum(expr > 0) / len(expr) * 100)
+            expr_raw = X_sample[:, j]  # For pct_expressed calculation
+            expr_norm = X_normalized[:, j]  # For mean expression
+            mean_expr = float(np.mean(expr_norm))
+            pct_expr = float(np.sum(expr_raw > 0) / len(expr_raw) * 100)
 
             results.append({
                 'gene': gene,

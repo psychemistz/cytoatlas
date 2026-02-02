@@ -252,8 +252,11 @@ def preprocess_scatlas_celltypes():
     combined_df = pd.concat([cytosig_df, secact_df], ignore_index=True)
 
     # Keep organ information for filtering
-    # Select columns: cell_type, organ, signature, mean_activity, signature_type
-    combined_df = combined_df[['cell_type', 'organ', 'signature', 'mean_activity', 'signature_type']].copy()
+    # Select columns: cell_type, organ, signature, mean_activity, signature_type, n_cells
+    cols_to_keep = ['cell_type', 'organ', 'signature', 'mean_activity', 'signature_type']
+    if 'n_cells' in combined_df.columns:
+        cols_to_keep.append('n_cells')
+    combined_df = combined_df[cols_to_keep].copy()
     combined_df['mean_activity'] = combined_df['mean_activity'].round(4)
 
     # Get top 100 most variable cell types (based on CytoSig)
