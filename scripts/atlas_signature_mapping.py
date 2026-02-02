@@ -93,31 +93,39 @@ ATLAS_FINE_TO_SIGNATURE = {
     'Progenitor_other': ['PBMC'],
 }
 
-# Direct mapping for specific CIMA cell types
+# Direct mapping for specific CIMA cell types (cell_type_l2 column)
+# These are the actual cell type names from CIMA atlas
 CIMA_CELLTYPE_TO_SIGNATURE = {
+    # CD4 T cells
     'CD4_CTL': ['T_CD4', 'T_Cell'],
     'CD4_helper': ['T_CD4', 'T_Cell'],
     'CD4_memory': ['T_CD4', 'T_Cell'],
     'CD4_naive': ['T_CD4', 'T_Cell'],
     'CD4_regulatory': ['T_CD4', 'T_Cell'],
+    # CD8 T cells
     'CD8_CTL': ['T_CD8', 'T_Cell'],
     'CD8_memory': ['T_CD8', 'T_Cell'],
     'CD8_naive': ['T_CD8', 'T_Cell'],
+    # NK cells
     'CD56_bright_NK': ['NK_Cell', 'PBMC'],
     'CD56_dim_NK': ['NK_Cell', 'PBMC'],
     'Proliferative_NK': ['NK_Cell', 'PBMC'],
     'Transitional_NK': ['NK_Cell', 'PBMC'],
+    # Unconventional T / ILC
     'NKT': ['NK_Cell', 'T_Cell'],
     'MAIT': ['T_Cell', 'PBMC'],
     'gdT': ['T_Cell', 'PBMC'],
     'ILC2': ['NK_Cell', 'PBMC'],
+    # B cells
     'Memory_B': ['B_Cell', 'PBMC'],
     'Naive_B': ['B_Cell', 'PBMC'],
     'Transitional_B': ['B_Cell', 'PBMC'],
     'Total_Plasma': ['B_Cell', 'PBMC'],
+    # Myeloid
     'Mono': ['Monocyte', 'Macrophage', 'PBMC'],
     'DC': ['Dendritic_Cell', 'Monocyte', 'PBMC'],
     'pDC': ['Dendritic_Cell', 'PBMC'],
+    # Progenitors
     'HSPC': ['PBMC'],
     'MK': ['PBMC'],
     'Immature_T': ['T_Cell', 'PBMC'],
@@ -198,64 +206,68 @@ INFLAMMATION_CELLTYPE_TO_SIGNATURE = {
     'T_Proliferative': ['T_Cell', 'PBMC'],
 }
 
-# Direct mapping for scAtlas cell types
+# Direct mapping for scAtlas cell types (cellType1 column)
+# These are the actual cell type names from scAtlas (coarse level)
 SCATLAS_CELLTYPE_TO_SIGNATURE = {
-    # CD4 T cells
-    'CD4T01_Tn_SOX4': ['T_CD4', 'T_Cell'],
-    'CD4T02_Tn_CCR7': ['T_CD4', 'T_Cell'],
-    'CD4T03_Tn_NR4A1': ['T_CD4', 'T_Cell'],
-    'CD4T04_Tfh_IL6ST': ['T_CD4', 'T_Cell'],
-    'CD4T05_Tm_LTB': ['T_CD4', 'T_Cell'],
-    'CD4T06_Tm_ANXA1': ['T_CD4', 'T_Cell'],
-    'CD4T07_Tem_GZMK': ['T_CD4', 'T_Cell'],
-    'CD4T08_Treg_FOXP3': ['T_CD4', 'T_Cell'],
-    # CD8 T cells
-    'CD8T01_Tn_CCR7': ['T_CD8', 'T_Cell'],
-    'CD8T02_Tem_GZMK': ['T_CD8', 'T_Cell'],
-    'CD8T03_Trm_ITGA1': ['T_CD8', 'T_Cell'],
-    'CD8T04_Trm_HSPA1A': ['T_CD8', 'T_Cell'],
-    'CD8T05_Temra_GZMH': ['T_CD8', 'T_Cell'],
-    'CD8T06_MAIT_SLC4A10': ['T_Cell', 'PBMC'],
-    # ILC / unconventional
-    'I08_ILC3_KIT': ['NK_Cell', 'PBMC'],
-    'I09_gdT_ITGA1': ['T_Cell', 'PBMC'],
-    # NK cells
-    'I01_CD16hiNK_CREM': ['NK_Cell', 'PBMC'],
-    'I02_CD16hiNK_SYNE2': ['NK_Cell', 'PBMC'],
-    'I03_CD16hiNK_GZMB': ['NK_Cell', 'PBMC'],
-    'I04_CD16hiNK_HSPA1A': ['NK_Cell', 'PBMC'],
-    'I05_CD16loNK_SELL': ['NK_Cell', 'PBMC'],
-    'I06_CD16loNK_NR4A2': ['NK_Cell', 'PBMC'],
-    'I07_CD16loNK_CXCR6': ['NK_Cell', 'PBMC'],
-    # B cells
-    'B01_Bn_IGHM': ['B_Cell', 'PBMC'],
-    'B02_Bn_TCL1A': ['B_Cell', 'PBMC'],
-    'B03_Bn_NR4A2': ['B_Cell', 'PBMC'],
-    'B04_Bm_CD27': ['B_Cell', 'PBMC'],
-    'B05_Bm_NR4A2': ['B_Cell', 'PBMC'],
-    'B06_Bm_ITGB1': ['B_Cell', 'PBMC'],
-    'B07_Bm_HSPA1A': ['B_Cell', 'PBMC'],
-    'B08_ABC_FCRL5': ['B_Cell', 'PBMC'],
-    'B09_GCB_RGS13': ['B_Cell', 'PBMC'],
-    'B10_Plasmablast_MKI67': ['B_Cell', 'PBMC'],
-    'B11_Plasma_IGHG2': ['B_Cell', 'PBMC'],
-    'B12_Plasma_IGHA2': ['B_Cell', 'PBMC'],
-    # Myeloid
-    'M01_cDC1_CLEC9A': ['Dendritic_Cell', 'Monocyte', 'PBMC'],
-    'M02_cDC2_CD1C': ['Dendritic_Cell', 'Monocyte', 'PBMC'],
-    'M03_cDC_LAMP3': ['Dendritic_Cell', 'Monocyte', 'PBMC'],
-    'M04_pDC_LILRA4': ['Dendritic_Cell', 'PBMC'],
-    'M05_Mo_CD14': ['Monocyte', 'Macrophage', 'PBMC'],
-    'M06_Mo_FCGR3A': ['Monocyte', 'Macrophage', 'PBMC'],
-    'M07_Mph_FCN1': ['Macrophage', 'Monocyte', 'PBMC'],
-    'M08_Mph_NLRP3': ['Macrophage', 'Monocyte', 'PBMC'],
-    'M09_Mph_FOLR2': ['Macrophage', 'Monocyte', 'PBMC'],
-    'M10_Mph_CD5L': ['Macrophage', 'Monocyte', 'PBMC'],
-    'M11_Mph_PPARG': ['Macrophage', 'Monocyte', 'PBMC'],
-    'M12_Mph_MT1X': ['Macrophage', 'Monocyte', 'PBMC'],
-    'M13_immNeu_MMP8': ['Neutrophil', 'PBMC'],
-    'M14_mNeu_CXCR2': ['Neutrophil', 'PBMC'],
-    'M15_Mast_CPA3': ['Basophil', 'PBMC'],
+    # Immune cells - from cellType1 annotations
+    'Monocyte': ['Monocyte', 'Macrophage', 'PBMC'],
+    'Macrophage': ['Macrophage', 'Monocyte', 'PBMC'],
+    'Macrophage C1QB': ['Macrophage', 'Monocyte', 'PBMC'],
+    'Macrophage RNASE1': ['Macrophage', 'Monocyte', 'PBMC'],
+    'T Cell': ['T_Cell', 'PBMC'],
+    'T Cell IL7R': ['T_CD4', 'T_Cell', 'PBMC'],
+    'T Cell XCL1': ['T_CD8', 'T_Cell', 'PBMC'],
+    'T Cell GZMK': ['T_CD8', 'T_Cell', 'PBMC'],
+    'T Cell CCL5': ['T_CD8', 'T_Cell', 'PBMC'],
+    'CD4 T Cell': ['T_CD4', 'T_Cell', 'PBMC'],
+    'CD8 T Cell': ['T_CD8', 'T_Cell', 'PBMC'],
+    'NK Cell': ['NK_Cell', 'PBMC'],
+    'NK/T Cell': ['NK_Cell', 'T_Cell', 'PBMC'],
+    'NK/T Cell GNLY': ['NK_Cell', 'T_Cell', 'PBMC'],
+    'B Cell': ['B_Cell', 'PBMC'],
+    'B Cell CD79A': ['B_Cell', 'PBMC'],
+    'Plasma Cell': ['B_Cell', 'PBMC'],
+    'Plasma Cell JCHAIN': ['B_Cell', 'PBMC'],
+    'Myeloid': ['Monocyte', 'Macrophage', 'PBMC'],
+    'DC': ['Dendritic_Cell', 'Monocyte', 'PBMC'],
+    'pDC': ['Dendritic_Cell', 'PBMC'],
+    'Mast Cell': ['Basophil', 'PBMC'],
+    'Neutrophil': ['Neutrophil', 'PBMC'],
+
+    # Stromal cells
+    'Fibroblast': ['Fibroblast', 'Dermal_Fibroblast'],
+    'Fibroblast PTGDS': ['Fibroblast', 'Dermal_Fibroblast'],
+    'Fibroblast C7': ['Fibroblast', 'Dermal_Fibroblast'],
+    'Fibroblast PLA2G2A': ['Fibroblast', 'Dermal_Fibroblast'],
+    'Fibroblast PTN': ['Fibroblast', 'Dermal_Fibroblast'],
+    'FibSmo Cell': ['Fibroblast', 'Smooth_Muscle'],
+    'Myofibroblast': ['Fibroblast'],
+    'Smooth Muscle Cell': ['Smooth_Muscle'],
+    'Pericyte': ['Smooth_Muscle', 'Endothelial'],
+
+    # Endothelial
+    'Endothelial Cell': ['Endothelial', 'HUVEC'],
+    'Endothelial Cell ACKR1': ['Endothelial', 'HUVEC'],
+    'Endothelial Cell FABP4': ['Endothelial', 'HUVEC'],
+    'Lymphatic Endothelial Cell': ['Lymphatic_Endothelial', 'Endothelial'],
+
+    # Epithelial
+    'Epithelial Cell': ['Epithelial', 'Airway_Epithelial'],
+    'Mucosal Epithelial Cell': ['Epithelial', 'Intestinal_Epithelial'],
+    'Keratinocyte': ['Keratinocyte', 'Epithelial'],
+    'Keratinocyte KRT14': ['Keratinocyte', 'Epithelial'],
+    'Hepatocyte': ['Hepatocyte'],
+    'Alveolar Epithelial Cell': ['Airway_Epithelial', 'Epithelial'],
+    'Ciliated Cell': ['Airway_Epithelial', 'Epithelial'],
+    'Secretory Cell': ['Epithelial'],
+
+    # Other
+    'Melanocyte': ['Keratinocyte', 'Epithelial'],  # Skin-related
+    'Adipocyte': ['Adipocyte'],
+    'Neuron': ['Neuron'],
+    'Schwann Cell': ['Neuron'],
+    'Erythrocyte': ['PBMC'],
+    'High Proliferation Erythrocyte': ['PBMC'],
 }
 
 # Non-immune cell types (for tissue atlases like scAtlas)
@@ -295,6 +307,87 @@ def get_available_signatures() -> List[str]:
             metadata = json.load(f)
         return metadata.get('celltypes', [])
     return []
+
+
+# Keyword-based mapping for dynamic cell type matching
+CELLTYPE_KEYWORDS = {
+    # Immune
+    'monocyte': ['Monocyte', 'Macrophage', 'PBMC'],
+    'macrophage': ['Macrophage', 'Monocyte', 'PBMC'],
+    'mph': ['Macrophage', 'Monocyte', 'PBMC'],
+    't cell': ['T_Cell', 'PBMC'],
+    'cd4': ['T_CD4', 'T_Cell', 'PBMC'],
+    'cd8': ['T_CD8', 'T_Cell', 'PBMC'],
+    'nk': ['NK_Cell', 'PBMC'],
+    'b cell': ['B_Cell', 'PBMC'],
+    'plasma': ['B_Cell', 'PBMC'],
+    'dc': ['Dendritic_Cell', 'Monocyte', 'PBMC'],
+    'dendritic': ['Dendritic_Cell', 'Monocyte', 'PBMC'],
+    'pdc': ['Dendritic_Cell', 'PBMC'],
+    'mast': ['Basophil', 'PBMC'],
+    'neutro': ['Neutrophil', 'PBMC'],
+    'basophil': ['Basophil', 'PBMC'],
+    'eosinophil': ['PBMC'],
+    'treg': ['T_CD4', 'T_Cell', 'PBMC'],
+    'th1': ['T_CD4', 'T_Cell', 'PBMC'],
+    'th2': ['T_CD4', 'T_Cell', 'PBMC'],
+    'th17': ['T_CD4', 'T_Cell', 'PBMC'],
+
+    # Stromal
+    'fibroblast': ['Fibroblast', 'Dermal_Fibroblast', 'Lung_Fibroblast'],
+    'fibro': ['Fibroblast', 'Dermal_Fibroblast'],
+    'smooth muscle': ['Smooth_Muscle'],
+    'pericyte': ['Smooth_Muscle', 'Endothelial'],
+    'msc': ['MSC'],
+    'stromal': ['Fibroblast', 'MSC'],
+
+    # Endothelial
+    'endothelial': ['Endothelial', 'HUVEC'],
+    'lymphatic endo': ['Lymphatic_Endothelial', 'Endothelial'],
+
+    # Epithelial
+    'epithelial': ['Epithelial', 'Airway_Epithelial'],
+    'keratinocyte': ['Keratinocyte', 'Epithelial'],
+    'hepatocyte': ['Hepatocyte'],
+    'alveolar': ['Airway_Epithelial', 'Epithelial'],
+    'airway': ['Airway_Epithelial', 'Epithelial'],
+    'bronchial': ['Airway_Epithelial', 'Epithelial'],
+    'intestinal': ['Intestinal_Epithelial', 'Epithelial'],
+    'colon': ['Intestinal_Epithelial', 'Epithelial'],
+
+    # Other
+    'adipocyte': ['Adipocyte'],
+    'neuron': ['Neuron'],
+    'astrocyte': ['Neuron'],
+}
+
+
+def match_celltype_by_keywords(celltype_name: str, available_signatures: List[str]) -> Optional[str]:
+    """
+    Match a cell type by keyword patterns.
+
+    Args:
+        celltype_name: Cell type name to match
+        available_signatures: List of available signature cell types
+
+    Returns:
+        Best matching signature cell type, or None
+    """
+    celltype_lower = celltype_name.lower()
+    available_set = set(available_signatures)
+
+    for keyword, candidates in CELLTYPE_KEYWORDS.items():
+        if keyword in celltype_lower:
+            for candidate in candidates:
+                if candidate in available_set:
+                    return candidate
+
+    # Final fallback: PBMC for anything immune-looking
+    if any(term in celltype_lower for term in ['cell', 'lymph', 'leuk', 'blood']):
+        if 'PBMC' in available_set:
+            return 'PBMC'
+
+    return None
 
 
 def get_best_signature_match(
@@ -354,7 +447,12 @@ def get_best_signature_match(
             if candidate in available_set:
                 return candidate
 
-    # Fallback: try PBMC as universal immune signature
+    # Try keyword-based matching as fallback
+    keyword_match = match_celltype_by_keywords(atlas_celltype, available_signatures)
+    if keyword_match:
+        return keyword_match
+
+    # Final fallback: try PBMC as universal immune signature
     if 'PBMC' in available_set:
         return 'PBMC'
 
