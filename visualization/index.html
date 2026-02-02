@@ -2322,19 +2322,19 @@
                     </div>
                 </div>
 
-                <!-- Two-column layout: Correlation Summary + Category Distribution -->
-                <div class="two-col" style="margin-bottom: 1.5rem;">
-                    <div class="viz-container" style="padding: 1rem;">
+                <!-- Combined panel: Correlation Summary (top) + Category Distribution (bottom) -->
+                <div class="viz-container" style="margin-bottom: 1.5rem; padding: 1rem;">
+                    <div style="margin-bottom: 1rem;">
                         <div class="viz-title" id="conserved-corr-title">Cross-Atlas Correlation Summary</div>
                         <div class="viz-subtitle" id="conserved-corr-subtitle">Overall activity pattern correlation between atlas pairs</div>
-                        <div id="conserved-pair-correlations" style="display: flex; gap: 1.5rem; justify-content: center; flex-wrap: wrap; margin-top: 1rem;">
+                        <div id="conserved-pair-correlations" style="display: flex; gap: 1.5rem; justify-content: center; flex-wrap: wrap; margin-top: 0.5rem;">
                             <!-- Filled by JS -->
                         </div>
                     </div>
-                    <div class="viz-container" style="padding: 1rem;">
+                    <div style="border-top: 1px solid #eee; padding-top: 1rem;">
                         <div class="viz-title">Conservation Category Distribution</div>
                         <div class="viz-subtitle">Breakdown of signatures by cross-atlas reliability</div>
-                        <div id="conserved-category-chart" style="height: 180px;">Loading...</div>
+                        <div id="conserved-category-chart" style="height: 150px;">Loading...</div>
                     </div>
                 </div>
 
@@ -10143,7 +10143,7 @@
                     margin: { t: 10, b: 50, l: 40, r: 20 },
                     yaxis: { title: 'Count', rangemode: 'tozero' },
                     xaxis: { tickangle: -20 },
-                    height: 180
+                    height: 150
                 }, { responsive: true, displayModeBar: false });
             }
 
