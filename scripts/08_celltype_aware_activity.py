@@ -161,6 +161,11 @@ def compute_activity_for_celltype(
 
     # Subset to overlapping genes
     sig_subset = signature_df.loc[overlap_genes].values
+
+    # Handle NaN values in signature matrix
+    if np.any(np.isnan(sig_subset)):
+        sig_subset = np.nan_to_num(sig_subset, nan=0.0)
+
     cytokines = signature_df.columns.tolist()
 
     # Get gene indices in adata
@@ -196,6 +201,10 @@ def compute_activity_for_celltype(
                 expr = np.asarray(X_sample.toarray().mean(axis=0)).flatten()
             else:
                 expr = np.asarray(X_sample).mean(axis=0).flatten()
+
+            # Handle NaN in expression (can occur with sparse/backed data)
+            if np.any(np.isnan(expr)):
+                expr = np.nan_to_num(expr, nan=0.0)
 
             sample_expr.append(expr)
             sample_ids.append(sample)
