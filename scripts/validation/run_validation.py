@@ -103,8 +103,12 @@ def aggregate_pseudobulk(
     X = adata.X
     genes = list(adata.var_names)
 
+    # Create index label to position mapping for backed mode
+    idx_to_pos = {idx: pos for pos, idx in enumerate(adata.obs_names)}
+
     for group_name, indices in valid_groups.items():
-        idx_list = list(indices)
+        # Convert index labels to integer positions
+        idx_list = [idx_to_pos[idx] for idx in indices]
 
         # Sum counts
         if sp.issparse(X):
@@ -170,8 +174,12 @@ def aggregate_resampled(
     X = adata.X
     genes = list(adata.var_names)
 
+    # Create index label to position mapping for backed mode
+    idx_to_pos = {idx: pos for pos, idx in enumerate(adata.obs_names)}
+
     for group_name, indices in valid_groups.items():
-        idx_list = list(indices)
+        # Convert index labels to integer positions
+        idx_list = np.array([idx_to_pos[idx] for idx in indices])
         n_available = len(idx_list)
         n_sample = min(n_cells_per_group, n_available)
 

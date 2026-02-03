@@ -2,7 +2,7 @@
 #SBATCH --job-name=validation_test
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:a100:1
-#SBATCH --mem=64G
+#SBATCH --mem=128G
 #SBATCH --cpus-per-task=4
 #SBATCH --time=02:00:00
 #SBATCH --output=/vf/users/parks34/projects/2secactpy/logs/validation_test_%j.out
