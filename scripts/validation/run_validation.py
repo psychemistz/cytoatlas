@@ -275,14 +275,23 @@ def run_activity_inference(
     signature: pd.DataFrame,
     n_rand: int = 1000,
     seed: int = 42,
-    batch_size: int = 10000,
+    batch_size: int = 5000,
+    output_path: Optional[Path] = None,
+    streaming_threshold: int = 50000,
 ) -> pd.DataFrame:
     """
-    Run ridge regression activity inference.
+    Run ridge regression activity inference with batch processing.
+
+    Uses streaming H5AD output for large datasets to avoid OOM.
 
     Args:
         expression: (genes × samples) expression matrix
         signature: (genes × signatures) signature matrix
+        n_rand: Number of permutations for p-value
+        seed: Random seed
+        batch_size: Samples per batch
+        output_path: Optional path for streaming output
+        streaming_threshold: Use streaming if n_samples > this
 
     Returns:
         activity: (signatures × samples) activity z-scores
@@ -299,36 +308,63 @@ def run_activity_inference(
     expr_aligned = expression.loc[common_genes]
     sig_aligned = signature.loc[common_genes]
 
-    # Convert to numpy
-    X = expr_aligned.values.T  # (samples × genes)
-    Y = sig_aligned.values     # (genes × signatures)
+    # Convert to numpy - ridge_batch expects (genes × features) for X, (genes × samples) for Y
+    X = sig_aligned.values       # (genes × signatures) - signature matrix
+    Y = expr_aligned.values      # (genes × samples) - expression matrix
 
-    # Run ridge regression
-    n_samples = X.shape[0]
+    n_samples = Y.shape[1]
+    feature_names = list(sig_aligned.columns)
+    sample_names = list(expr_aligned.columns)
 
-    if n_samples <= batch_size:
-        # Single batch
-        from secactpy import ridge
-        activity, _, pvalues = ridge(X, Y, nrand=n_rand, seed=seed)
+    # Determine if streaming is needed
+    use_streaming = n_samples > streaming_threshold and output_path is not None
+
+    if use_streaming:
+        log(f"  Using streaming batch processing to {output_path}")
+        # Stream directly to H5AD file
+        ridge_batch(
+            X, Y,
+            batch_size=batch_size,
+            nrand=n_rand,
+            seed=seed,
+            output_path=str(output_path),
+            output_compression="gzip",
+            feature_names=feature_names,
+            sample_names=sample_names,
+            verbose=True
+        )
+
+        # Load back the z-scores for validation
+        import h5py
+        with h5py.File(output_path, 'r') as f:
+            activity = f['zscore'][:]
+
+        activity_df = pd.DataFrame(
+            activity.T,
+            index=feature_names,
+            columns=sample_names
+        )
+        log(f"  Activity streamed to {output_path}, loaded for validation")
+
     else:
-        # Batch processing
-        log(f"  Using batch processing ({n_samples} samples)")
+        # In-memory batch processing
+        log(f"  Using in-memory batch processing ({n_samples} samples)")
         results = ridge_batch(
             X, Y,
             batch_size=batch_size,
             nrand=n_rand,
             seed=seed,
+            feature_names=feature_names,
+            sample_names=sample_names,
             verbose=True
         )
         activity = results['zscore']
-        pvalues = results['pvalue']
 
-    # Create DataFrame
-    activity_df = pd.DataFrame(
-        activity.T,
-        index=sig_aligned.columns,
-        columns=expr_aligned.columns
-    )
+        activity_df = pd.DataFrame(
+            activity.T,
+            index=feature_names,
+            columns=sample_names
+        )
 
     log(f"  Activity matrix: {activity_df.shape}")
     return activity_df
@@ -612,12 +648,19 @@ def run_validation_test(
     del adata
     gc.collect()
 
-    # Run activity inference
+    # Prepare output path for streaming (for single-cell level)
+    output_dir = get_output_path(atlas, signature, aggregation, level).parent
+    output_dir.mkdir(parents=True, exist_ok=True)
+    activity_h5_path = output_dir / f"activity_{atlas}_{signature}_{aggregation}_{level}.h5"
+
+    # Run activity inference with streaming for large datasets
     activity_df = run_activity_inference(
         expr_df, sig_matrix,
         n_rand=VALIDATION_CONFIG['n_rand'],
         seed=VALIDATION_CONFIG['seed'],
-        batch_size=agg_cfg.get('batch_size', 10000)
+        batch_size=agg_cfg.get('batch_size', 5000),
+        output_path=activity_h5_path,
+        streaming_threshold=agg_cfg.get('streaming_threshold', 50000)
     )
 
     # Validate

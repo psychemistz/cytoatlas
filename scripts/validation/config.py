@@ -106,6 +106,8 @@ AGGREGATION_CONFIG = {
         'description': 'Standard pseudobulk aggregation (sum counts per cell_type × sample)',
         'normalize': True,
         'min_cells': 10,
+        'batch_size': 5000,
+        'streaming_threshold': 50000,  # Use streaming if > this many samples
     },
     'resampled': {
         'name': 'Resampled Pseudobulk',
@@ -113,12 +115,15 @@ AGGREGATION_CONFIG = {
         'n_cells_per_group': 100,  # Resample to this many cells
         'n_replicates': 10,  # Number of bootstrap replicates
         'min_cells': 50,  # Skip groups with fewer cells
+        'batch_size': 5000,
+        'streaming_threshold': 50000,
     },
     'singlecell': {
         'name': 'Single-cell',
-        'description': 'Per-cell activity inference',
-        'batch_size': 10000,
+        'description': 'Per-cell activity inference with streaming output',
+        'batch_size': 5000,
         'max_cells': 100000,  # Subsample for validation
+        'streaming_threshold': 20000,  # Use streaming earlier for single-cell
     },
 }
 
