@@ -193,6 +193,14 @@ class GenePageData(BaseModel):
     has_expression: bool = False
     has_cytosig: bool = False
     has_secact: bool = False
+    is_cytosig_only: bool = Field(
+        default=False,
+        description="True if signature is in CytoSig but NOT in SecAct (e.g., IL2, IL4, IL17A)"
+    )
+    cytosig_only_reason: str | None = Field(
+        default=None,
+        description="Reason why signature is not in SecAct (e.g., 'Not a secreted protein')"
+    )
     expression: GeneExpressionResponse | None = None
     cytosig_activity: list[GeneCellTypeActivity] = Field(default_factory=list)
     secact_activity: list[GeneCellTypeActivity] = Field(default_factory=list)

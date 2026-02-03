@@ -322,16 +322,26 @@ const GeneDetailPage = {
         if (!this.data) return;
 
         // Collect all cell types with their max values from all data sources
+        // For scAtlas, aggregate by base cell type (without organ suffix)
         const cellTypeScores = {};
+
+        // Helper to get cell type key (normalized name for scAtlas, original for others)
+        const getCellTypeKey = (d) => {
+            if (d.atlas === 'scAtlas' || d.atlas === 'scAtlas_Normal') {
+                return this.normalizeCellTypeName(d.cell_type);
+            }
+            return d.cell_type;
+        };
 
         // From expression data
         if (this.data.expression && this.data.expression.data) {
             this.data.expression.data.forEach(d => {
-                if (!cellTypeScores[d.cell_type]) {
-                    cellTypeScores[d.cell_type] = { expression: 0, cytosig: 0, secact: 0 };
+                const ct = getCellTypeKey(d);
+                if (!cellTypeScores[ct]) {
+                    cellTypeScores[ct] = { expression: 0, cytosig: 0, secact: 0, atlas: d.atlas };
                 }
-                cellTypeScores[d.cell_type].expression = Math.max(
-                    cellTypeScores[d.cell_type].expression,
+                cellTypeScores[ct].expression = Math.max(
+                    cellTypeScores[ct].expression,
                     d.mean_expression || 0
                 );
             });
@@ -340,24 +350,30 @@ const GeneDetailPage = {
         // From CytoSig activity
         if (this.data.cytosig_activity) {
             this.data.cytosig_activity.forEach(d => {
-                if (!cellTypeScores[d.cell_type]) {
-                    cellTypeScores[d.cell_type] = { expression: 0, cytosig: 0, secact: 0 };
+                const ct = getCellTypeKey(d);
+                // Normalize atlas name for scAtlas variants
+                const atlas = (d.atlas === 'scAtlas_Normal' || d.atlas === 'scAtlas_Cancer') ? 'scAtlas' : d.atlas;
+                if (!cellTypeScores[ct]) {
+                    cellTypeScores[ct] = { expression: 0, cytosig: 0, secact: 0, atlas: atlas };
                 }
-                cellTypeScores[d.cell_type].cytosig = Math.max(
-                    cellTypeScores[d.cell_type].cytosig,
+                cellTypeScores[ct].cytosig = Math.max(
+                    cellTypeScores[ct].cytosig,
                     Math.abs(d.mean_activity) || 0
                 );
+                cellTypeScores[ct].atlas = atlas;
             });
         }
 
         // From SecAct activity
         if (this.data.secact_activity) {
             this.data.secact_activity.forEach(d => {
-                if (!cellTypeScores[d.cell_type]) {
-                    cellTypeScores[d.cell_type] = { expression: 0, cytosig: 0, secact: 0 };
+                const ct = getCellTypeKey(d);
+                if (!cellTypeScores[ct]) {
+                    const atlas = (d.atlas === 'scAtlas_Normal' || d.atlas === 'scAtlas_Cancer') ? 'scAtlas' : d.atlas;
+                    cellTypeScores[ct] = { expression: 0, cytosig: 0, secact: 0, atlas: atlas };
                 }
-                cellTypeScores[d.cell_type].secact = Math.max(
-                    cellTypeScores[d.cell_type].secact,
+                cellTypeScores[ct].secact = Math.max(
+                    cellTypeScores[ct].secact,
                     Math.abs(d.mean_activity) || 0
                 );
             });
@@ -366,14 +382,12 @@ const GeneDetailPage = {
         // Group cell types by atlas and get top from each for balanced representation
         const atlasCellTypes = {};
 
-        // Determine which atlas each cell type belongs to (from activity data)
-        if (this.data.cytosig_activity) {
-            this.data.cytosig_activity.forEach(d => {
-                const atlas = d.atlas;
-                if (!atlasCellTypes[atlas]) atlasCellTypes[atlas] = new Set();
-                atlasCellTypes[atlas].add(d.cell_type);
-            });
-        }
+        // Determine which atlas each cell type belongs to
+        Object.entries(cellTypeScores).forEach(([ct, scores]) => {
+            const atlas = scores.atlas || 'Unknown';
+            if (!atlasCellTypes[atlas]) atlasCellTypes[atlas] = new Set();
+            atlasCellTypes[atlas].add(ct);
+        });
 
         // Sort cell types within each atlas by activity score
         const maxCytosig = Math.max(...Object.keys(cellTypeScores).map(ct => cellTypeScores[ct].cytosig)) || 1;
@@ -448,12 +462,24 @@ const GeneDetailPage = {
         const badges = [];
         if (this.data.has_expression) badges.push('<span class="data-badge expression">Expression</span>');
         if (this.data.has_cytosig) badges.push('<span class="data-badge cytosig">CytoSig</span>');
-        if (this.data.has_secact) badges.push('<span class="data-badge secact">SecAct</span>');
+        if (this.data.has_secact) {
+            badges.push('<span class="data-badge secact">SecAct</span>');
+        } else if (this.data.is_cytosig_only) {
+            // Show that SecAct is unavailable with reason
+            const reason = this.data.cytosig_only_reason || 'Not included in SecAct';
+            badges.push(`<span class="data-badge secact unavailable" title="${reason}">SecAct ✗</span>`);
+        }
+
+        // Add CytoSig-only indicator if applicable
+        const cytosigOnlyNote = this.data.is_cytosig_only
+            ? `<span class="cytosig-only-note" title="${this.data.cytosig_only_reason || ''}">CytoSig only</span>`
+            : '';
 
         summaryEl.innerHTML = `
             <div class="data-availability">
                 <span class="label">Available data:</span>
-                ${badges.length ? badges.join(', ') : '<span class="no-data">No data available</span>'}
+                ${badges.length ? badges.join(' ') : '<span class="no-data">No data available</span>'}
+                ${cytosigOnlyNote}
             </div>
             <div class="atlas-info">
                 <span class="label">Atlases:</span>
@@ -581,6 +607,29 @@ const GeneDetailPage = {
                     </select>
                 </div>
             </div>
+
+            <div class="method-explanation">
+                <details>
+                    <summary><strong>Expression Aggregation</strong> - How expression is computed</summary>
+                    <div class="method-content">
+                        <p><strong>Cell-type level expression</strong> is computed by aggregating single-cell data within each cell type.</p>
+
+                        <h4>Aggregation Process (no resampling)</h4>
+                        <ol>
+                            <li><strong>Group cells</strong> by unique (cell_type, sample_id) combinations</li>
+                            <li><strong>Filter groups</strong> with &lt;10 cells (minimum threshold for statistical reliability)</li>
+                            <li><strong>Compute mean expression</strong> of log-normalized counts across all cells in each group (direct averaging, no bootstrap/resampling)</li>
+                            <li><strong>Calculate % expressed</strong> as fraction of cells with non-zero expression</li>
+                        </ol>
+
+                        <h4>Normalization</h4>
+                        <p>Expression values are log-normalized (log1p of library-size normalized counts) to account for sequencing depth differences between cells.</p>
+
+                        <p><em>Best for:</em> Identifying gene-expressing cell populations, comparing expression levels across atlases.</p>
+                    </div>
+                </details>
+            </div>
+
             <div class="viz-container">
                 <div id="expression-chart" class="chart-container"></div>
             </div>
@@ -921,35 +970,104 @@ const GeneDetailPage = {
 
     async loadActivityTab(content, sigType, activityData) {
         if (!activityData || !activityData.length) {
-            content.innerHTML = `
-                <div class="no-data-panel">
-                    <h3>No ${sigType} Activity</h3>
-                    <p><strong>${this.gene}</strong> is not available as a ${sigType} signature.</p>
-                    <p>${sigType === 'CytoSig' ? 'CytoSig contains 43 major cytokines.' : 'SecAct contains ~1,170 secreted proteins.'}</p>
-                </div>
-            `;
+            // Check if this is a CytoSig-only signature (for SecAct tab)
+            if (sigType === 'SecAct' && this.data && this.data.is_cytosig_only) {
+                const reason = this.data.cytosig_only_reason || 'Not included in SecAct signature matrix';
+                content.innerHTML = `
+                    <div class="no-data-panel cytosig-only-notice">
+                        <div class="notice-icon">&#9432;</div>
+                        <h3>${this.gene} is available in CytoSig only</h3>
+                        <p class="reason"><strong>Reason:</strong> ${reason}</p>
+                        <p class="explanation">
+                            SecAct contains ~1,170 secreted proteins, but <strong>${this.gene}</strong> is not included.
+                            This is one of 11 CytoSig cytokines without a SecAct equivalent.
+                        </p>
+                        <div class="cytosig-only-list">
+                            <details>
+                                <summary>View all CytoSig-only signatures (11)</summary>
+                                <ul>
+                                    <li><strong>EGF</strong> - Not in SecAct</li>
+                                    <li><strong>IFN1</strong> - Type I IFN (composite)</li>
+                                    <li><strong>IL12</strong> - Heterodimer subunit</li>
+                                    <li><strong>IL13</strong> - Not in SecAct</li>
+                                    <li><strong>IL17A</strong> - Not in SecAct</li>
+                                    <li><strong>IL2</strong> - Not in SecAct</li>
+                                    <li><strong>IL22</strong> - Not in SecAct</li>
+                                    <li><strong>IL3</strong> - Not in SecAct</li>
+                                    <li><strong>IL4</strong> - Not in SecAct</li>
+                                    <li><strong>NO</strong> - Nitric oxide (not a protein)</li>
+                                    <li><strong>WNT3A</strong> - Not in SecAct</li>
+                                </ul>
+                            </details>
+                        </div>
+                        <p class="suggestion">
+                            <a href="#" onclick="GeneDetailPage.switchTab('cytosig'); return false;">
+                                &#8592; View CytoSig activity instead
+                            </a>
+                        </p>
+                    </div>
+                `;
+            } else {
+                content.innerHTML = `
+                    <div class="no-data-panel">
+                        <h3>No ${sigType} Activity</h3>
+                        <p><strong>${this.gene}</strong> is not available as a ${sigType} signature.</p>
+                        <p>${sigType === 'CytoSig' ? 'CytoSig contains 43 major cytokines.' : 'SecAct contains ~1,170 secreted proteins.'}</p>
+                    </div>
+                `;
+            }
             return;
         }
 
-        // Group by atlas
+        // Store raw activity data for filtering
+        this._activityData = activityData;
+        this._activitySigType = sigType;
+
+        // Aggregate scAtlas data by cell type for initial "All Atlases" view
+        // Handle both 'scAtlas' and 'scAtlas_Normal' atlas names
+        const scAtlasData = activityData.filter(d => d.atlas === 'scAtlas' || d.atlas === 'scAtlas_Normal');
+        const nonScAtlasData = activityData.filter(d => d.atlas !== 'scAtlas' && d.atlas !== 'scAtlas_Normal');
+        const scAtlasAggregated = this.aggregateByBaseCellType(scAtlasData);
+
+        // Combined data: non-scAtlas as-is + aggregated scAtlas
+        const displayData = [...nonScAtlasData, ...scAtlasAggregated]
+            .sort((a, b) => b.mean_activity - a.mean_activity);
+
+        // Group by atlas for dropdown
         const byAtlas = {};
         activityData.forEach(d => {
             if (!byAtlas[d.atlas]) byAtlas[d.atlas] = [];
             byAtlas[d.atlas].push(d);
         });
 
+        // Prepare boxplot data with aggregated scAtlas
+        let boxplotData = sigType === 'CytoSig' ? this.data.cytosig_boxplot : this.data.secact_boxplot;
+        let displayBoxplotData = null;
+        if (boxplotData && boxplotData.data) {
+            const scAtlasBp = boxplotData.data.filter(d => d.atlas === 'scAtlas' || d.atlas === 'scAtlas_Normal');
+            const nonScAtlasBp = boxplotData.data.filter(d => d.atlas !== 'scAtlas' && d.atlas !== 'scAtlas_Normal');
+            const scAtlasBpAggregated = this.aggregateBoxplotByBaseCellType(scAtlasBp);
+            displayBoxplotData = {
+                ...boxplotData,
+                data: [...nonScAtlasBp, ...scAtlasBpAggregated],
+            };
+        }
+
         content.innerHTML = `
             <div class="tab-header">
                 <h2>${this.gene} ${sigType} Activity</h2>
                 <p>Pseudobulk-aggregated ${sigType === 'CytoSig' ? 'cytokine' : 'secreted protein'} activity by cell type (ridge regression z-scores)</p>
                 <div class="stats-inline">
-                    <span><strong>${activityData.length}</strong> cell types</span>
+                    <span><strong>${displayData.length}</strong> cell types</span>
                     <span><strong>${Object.keys(byAtlas).length}</strong> atlases</span>
                 </div>
                 <div class="tab-filters">
                     <select id="activity-atlas-filter" onchange="GeneDetailPage.filterActivityByAtlas('${sigType}')">
                         <option value="all">All Atlases</option>
                         ${Object.keys(byAtlas).map(a => `<option value="${a}">${a}</option>`).join('')}
+                    </select>
+                    <select id="activity-organ-filter" class="hidden" onchange="GeneDetailPage.filterActivityByOrgan('${sigType}')">
+                        <option value="all">All Organs</option>
                     </select>
                 </div>
             </div>
@@ -958,16 +1076,44 @@ const GeneDetailPage = {
                 <details>
                     <summary><strong>Pseudobulk Method</strong> - How activity is computed</summary>
                     <div class="method-content">
-                        <strong>Pseudobulk</strong> aggregates cells by cell type and sample before computing activity.
-                        This reduces noise from technical variation and dropout, providing robust cell-type-level estimates.
+                        <p><strong>Pseudobulk aggregation</strong> combines cells by cell type and sample to create robust activity estimates.
+                        This approach reduces noise from single-cell dropout and technical variation.</p>
+
+                        <h4>Aggregation Process (no resampling)</h4>
+                        <ol>
+                            <li><strong>Group cells</strong> by unique (cell_type, sample_id) combinations</li>
+                            <li><strong>Filter groups</strong> with &lt;10 cells (minimum threshold for statistical reliability)</li>
+                            <li><strong>Sum raw counts</strong> across all cells within each group (direct summation, no bootstrap/resampling)</li>
+                            <li><strong>Normalize</strong> to CPM (counts per million) and apply log1p transformation</li>
+                        </ol>
+
+                        <h4>${sigType} Activity Inference</h4>
+                        <ol>
+                            <li><strong>Align genes</strong> between expression matrix and ${sigType} signature matrix</li>
+                            <li><strong>Ridge regression</strong> (α=1e-4) to infer activity from gene expression</li>
+                            <li><strong>Z-score normalization</strong> across all samples for comparability</li>
+                        </ol>
+
+                        <h4>scAtlas Organ Aggregation</h4>
+                        <p>scAtlas contains cell type activity computed separately for each organ. Display mode depends on your selection:</p>
                         <ul>
-                            <li><strong>Step 1:</strong> Group cells by (cell_type, sample_id)</li>
-                            <li><strong>Step 2:</strong> Sum raw counts within each group</li>
-                            <li><strong>Step 3:</strong> Normalize to CPM and log-transform</li>
-                            <li><strong>Step 4:</strong> Apply ridge regression with ${sigType} signature matrix</li>
-                            <li><strong>Step 5:</strong> Z-score normalize activity values</li>
+                            <li><strong>All Atlases / All Organs:</strong> Activities are aggregated across organs using <em>cell-weighted mean</em>:
+                                <code style="display:block;margin:0.5em 0;padding:0.5em;background:#f5f5f5;border-radius:4px;">
+                                    Aggregated Activity = Σ(activity<sub>organ</sub> × n_cells<sub>organ</sub>) / Σ(n_cells<sub>organ</sub>)
+                                </code>
+                                This weights each organ's contribution by its cell count, giving more influence to organs with larger cell populations.
+                            </li>
+                            <li><strong>Specific Organ:</strong> Shows activity values computed only from cells of that organ, without cross-organ aggregation.</li>
                         </ul>
-                        <em>Best for:</em> Comparing cell types, identifying signature-producing cell populations.
+                        <p><em>Note:</em> Box plot statistics (quartiles) for aggregated view are approximated from organ-level statistics using cell-count weighting.</p>
+
+                        <h4>Box Plot Availability</h4>
+                        <p>Box plots require ≥3 biological samples per (cell_type, organ) combination to compute valid quartile statistics (min, Q1, median, Q3, max).
+                        Cell types with fewer samples are shown as bar charts instead. For specific organs in scAtlas, box plots are only available for cell types
+                        with sufficient sample coverage in that organ.</p>
+
+                        <p><em>Signature matrix:</em> ${sigType === 'CytoSig' ? '43 cytokines' : '1,170 secreted proteins'} with curated gene weights from literature.</p>
+                        <p><em>Best for:</em> Comparing cell types, identifying signature-producing cell populations, cross-atlas comparisons.</p>
                     </div>
                 </details>
             </div>
@@ -986,7 +1132,7 @@ const GeneDetailPage = {
                         </tr>
                     </thead>
                     <tbody>
-                        ${activityData.slice(0, 50).map(d => `
+                        ${displayData.slice(0, 50).map(d => `
                             <tr>
                                 <td>${d.cell_type}</td>
                                 <td><span class="atlas-badge">${d.atlas}</span></td>
@@ -999,10 +1145,7 @@ const GeneDetailPage = {
             </div>
         `;
 
-        this._activityData = activityData;
-        this._activitySigType = sigType;
-        const boxplotData = sigType === 'CytoSig' ? this.data.cytosig_boxplot : this.data.secact_boxplot;
-        this.createActivityChart(activityData, sigType, boxplotData);
+        this.createActivityChart(displayData, sigType, displayBoxplotData);
     },
 
     createActivityChart(data, sigType, boxplotData = null) {
@@ -1032,10 +1175,21 @@ const GeneDetailPage = {
             // Filter to only cell types that have boxplot data
             const boxplotCellTypes = new Set(boxplotData.data.map(d => d.cell_type));
             const cellTypesWithBoxplot = availableCellTypes.filter(ct => boxplotCellTypes.has(ct));
+            const cellTypesWithoutBoxplot = availableCellTypes.filter(ct => !boxplotCellTypes.has(ct));
 
             if (cellTypesWithBoxplot.length > 0) {
                 this.createBoxPlotChart('activity-chart', boxplotData.data, cellTypesWithBoxplot, colors,
                     `${this.gene} ${sigType} Activity by Cell Type`, 'Activity (z-score)');
+
+                // Show notification if some cell types don't have boxplot data
+                if (cellTypesWithoutBoxplot.length > 0) {
+                    const chartContainer = document.getElementById('activity-chart');
+                    const notice = document.createElement('div');
+                    notice.className = 'boxplot-notice';
+                    notice.innerHTML = `<small>📊 Showing ${cellTypesWithBoxplot.length} of ${availableCellTypes.length} cell types. ` +
+                        `${cellTypesWithoutBoxplot.length} cell type(s) have &lt;3 samples and are shown in table only.</small>`;
+                    chartContainer.parentElement.insertBefore(notice, chartContainer.nextSibling);
+                }
                 return;
             }
         }
@@ -1113,34 +1267,458 @@ const GeneDetailPage = {
         Plotly.newPlot('activity-chart', traces, layout, { responsive: true });
     },
 
-    filterActivityByAtlas(sigType) {
-        const atlas = document.getElementById('activity-atlas-filter').value;
-        let filtered = this._activityData;
-        let boxplotData = sigType === 'CytoSig' ? this.data.cytosig_boxplot : this.data.secact_boxplot;
+    /**
+     * Extract organ from cell type name like "Macrophage (Spleen)" -> "Spleen"
+     */
+    extractOrganFromCellType(cellType) {
+        const match = cellType.match(/\(([^)]+)\)$/);
+        return match ? match[1] : null;
+    },
 
-        if (atlas !== 'all') {
-            filtered = filtered.filter(d => d.atlas === atlas);
-            if (boxplotData && boxplotData.data) {
-                boxplotData = {
-                    ...boxplotData,
-                    data: boxplotData.data.filter(d => d.atlas === atlas),
-                };
+    /**
+     * Extract base cell type from name like "Macrophage (Spleen)" -> "Macrophage"
+     */
+    extractBaseCellType(cellType) {
+        return cellType.replace(/\s*\([^)]+\)$/, '');
+    },
+
+    /**
+     * Normalize cell type name for consistent aggregation
+     * Handles case variations and common plural forms
+     */
+    normalizeCellTypeName(cellType) {
+        // First extract base (remove organ suffix)
+        let name = this.extractBaseCellType(cellType);
+
+        // Normalize case - use lowercase for matching
+        const lowerName = name.toLowerCase().trim();
+
+        // Comprehensive normalization map (lowercase -> canonical form)
+        // Includes all observed variations from scAtlas data
+        const normalizationMap = {
+            // B cells
+            'b cell': 'B Cell',
+            'b cells': 'B Cell',
+            // T cells
+            't cell': 'T Cell',
+            't cells': 'T Cell',
+            // NK cells
+            'nk cell': 'NK Cell',
+            'nk cells': 'NK Cell',
+            'nkt cell': 'NKT Cell',
+            // Macrophages
+            'macrophage': 'Macrophage',
+            'macrophages': 'Macrophage',
+            // Monocytes
+            'monocyte': 'Monocyte',
+            'monocytes': 'Monocyte',
+            // Fibroblasts
+            'fibroblast': 'Fibroblast',
+            'fibroblasts': 'Fibroblast',
+            'fb': 'Fibroblast',
+            // Endothelial cells - aggregate all vascular/blood vessel variants
+            'vascular': 'Endothelial Cell',
+            'endothelia': 'Endothelial Cell',
+            'endothelial': 'Endothelial Cell',
+            'endothelial cell': 'Endothelial Cell',
+            'endothelial cells': 'Endothelial Cell',
+            'vascular endothelial cells': 'Endothelial Cell',
+            'blood vessels': 'Endothelial Cell',
+            'blood_vessel': 'Endothelial Cell',
+            'artery endothelial cell': 'Endothelial Cell',
+            'endothelial cell of artery': 'Endothelial Cell',
+            'vein endothelial cell': 'Endothelial Cell',
+            'capillary endothelial cell': 'Endothelial Cell',
+            'endothelial cell of vascular tree': 'Endothelial Cell',
+            'cardiac endothelial cell': 'Endothelial Cell',
+            'portal_endothelial_cells': 'Endothelial Cell',
+            'bronchial vessel endothelial cell': 'Endothelial Cell',
+            'lung microvascular endothelial cell': 'Endothelial Cell',
+            'retinal blood vessel endothelial cell': 'Endothelial Cell',
+            'ascending vasa recta endothelium': 'Endothelial Cell',
+            'peritubular capillary endothelium': 'Endothelial Cell',
+            'endothelial cell of hepatic sinusoid': 'Endothelial Cell',
+            // Vascular smooth muscle - keep separate from endothelial
+            'vascular associated smooth muscle cell': 'Vascular Smooth Muscle Cell',
+            // Lymphatic endothelial - aggregate all variants
+            'lymphatic endothelial cell': 'Lymphatic Endothelial Cell',
+            'lymphatic endothelial cells': 'Lymphatic Endothelial Cell',
+            'endothelial cell of lymphatic vessel': 'Lymphatic Endothelial Cell',
+            'lymphatic ec': 'Lymphatic Endothelial Cell',
+            'lymph_vessel': 'Lymphatic Endothelial Cell',
+            'lymphatic': 'Lymphatic Endothelial Cell',
+            // Lymphoid cells
+            'lymphoid': 'Lymphoid',
+            'lymphocytes': 'Lymphoid',
+            'innate_lymphoid': 'Innate Lymphoid Cell',
+            'innate lymphoid cell': 'Innate Lymphoid Cell',
+            // Epithelial cells
+            'epithelial cell': 'Epithelial Cell',
+            'epithelial cells': 'Epithelial Cell',
+            'basal cell': 'Basal Cell',
+            'basal cells': 'Basal Cell',
+            'secretory cell': 'Secretory Cell',
+            'umbrella cell': 'Umbrella Cell',
+            'umbrella cells': 'Umbrella Cell',
+            // Other immune cells
+            'myeloid': 'Myeloid',
+            'granulocyte': 'Granulocyte',
+            'basophil': 'Basophil',
+            'basophils': 'Basophil',
+            'neutrophil': 'Neutrophil',
+            'neutrophils': 'Neutrophil',
+            'mast cell': 'Mast Cell',
+            'mast cells': 'Mast Cell',
+            'plasma cell': 'Plasma Cell',
+            'plasma cells': 'Plasma Cell',
+            // DCs
+            'dc': 'DC',
+            'cdc2': 'cDC2',
+            'cdc2s': 'cDC2',
+            'pdc': 'pDC',
+            'pdcs': 'pDC',
+            // Other cell types
+            'hepatocyte': 'Hepatocyte',
+            'cholangiocyte': 'Cholangiocyte',
+            'cholangiocytes': 'Cholangiocyte',
+            'melanocyte': 'Melanocyte',
+            'melanocytes': 'Melanocyte',
+            'keratinocyte': 'Keratinocyte',
+            'keratinocytes': 'Keratinocyte',
+            'pericyte': 'Pericyte',
+            'pericytes': 'Pericyte',
+            'myoepithelial cell': 'Myoepithelial Cell',
+            'myoepithelial cells': 'Myoepithelial Cell',
+            // Smooth muscle
+            'smooth muscle': 'Smooth Muscle',
+            'smooth muscle cell': 'Smooth Muscle Cell',
+            'smooth muscle cells': 'Smooth Muscle Cell',
+        };
+
+        // Check for exact match in normalization map
+        if (normalizationMap[lowerName]) {
+            return normalizationMap[lowerName];
+        }
+
+        // For compound names like "Macrophage C1QB", normalize the base part
+        // Sort by key length (descending) to match longer patterns first
+        const sortedKeys = Object.keys(normalizationMap).sort((a, b) => b.length - a.length);
+        for (const key of sortedKeys) {
+            if (lowerName.startsWith(key + ' ')) {
+                // Replace the base with normalized version, keep the rest
+                const rest = name.substring(key.length);
+                return normalizationMap[key] + rest;
             }
         }
 
-        this.createActivityChart(filtered, sigType, boxplotData);
+        // Default: return original with trimming
+        return name.trim();
+    },
 
-        const tbody = document.querySelector('#activity-table tbody');
-        if (tbody) {
-            tbody.innerHTML = filtered.slice(0, 50).map(d => `
-                <tr>
-                    <td>${d.cell_type}</td>
-                    <td><span class="atlas-badge">${d.atlas}</span></td>
-                    <td class="${d.mean_activity >= 0 ? 'positive' : 'negative'}">${d.mean_activity.toFixed(4)}</td>
-                    <td>${d.n_cells ? d.n_cells.toLocaleString() : '-'}</td>
-                </tr>
-            `).join('');
+    /**
+     * Aggregate scAtlas data by cell type (weighted mean across organs)
+     * Also normalizes cell type names (case, plurals)
+     */
+    aggregateByBaseCellType(data) {
+        const aggregates = {};
+
+        data.forEach(d => {
+            // Use normalized cell type name for consistent aggregation
+            const normalizedCellType = this.normalizeCellTypeName(d.cell_type);
+            const nCells = d.n_cells || 1;
+
+            if (!aggregates[normalizedCellType]) {
+                aggregates[normalizedCellType] = {
+                    cell_type: normalizedCellType,
+                    atlas: 'scAtlas',  // Normalize to 'scAtlas' for aggregated view
+                    signature: d.signature,
+                    signature_type: d.signature_type,
+                    sum_weighted: 0,
+                    total_cells: 0,
+                    organs: new Set(),
+                };
+            }
+
+            aggregates[normalizedCellType].sum_weighted += d.mean_activity * nCells;
+            aggregates[normalizedCellType].total_cells += nCells;
+            const organ = this.extractOrganFromCellType(d.cell_type);
+            if (organ) aggregates[normalizedCellType].organs.add(organ);
+        });
+
+        // Convert to array with weighted mean
+        return Object.values(aggregates).map(agg => ({
+            cell_type: agg.cell_type,
+            atlas: agg.atlas,
+            signature: agg.signature,
+            signature_type: agg.signature_type,
+            mean_activity: agg.total_cells > 0 ? agg.sum_weighted / agg.total_cells : 0,
+            n_cells: agg.total_cells,
+            n_organs: agg.organs.size,
+        })).sort((a, b) => b.mean_activity - a.mean_activity);
+    },
+
+    /**
+     * Aggregate boxplot data by cell type (combine samples across organs)
+     * Also normalizes cell type names (case, plurals)
+     */
+    aggregateBoxplotByBaseCellType(data) {
+        const aggregates = {};
+
+        data.forEach(d => {
+            // Use normalized cell type name for consistent aggregation
+            const normalizedCellType = this.normalizeCellTypeName(d.cell_type);
+
+            if (!aggregates[normalizedCellType]) {
+                aggregates[normalizedCellType] = {
+                    cell_type: normalizedCellType,
+                    atlas: 'scAtlas',  // Normalize to 'scAtlas' for aggregated view
+                    samples: [],  // Collect all sample values to recompute quartiles
+                };
+            }
+
+            // We don't have raw samples, so we approximate by using the existing stats
+            // weighted by n samples. This is an approximation.
+            aggregates[normalizedCellType].samples.push({
+                min: d.min,
+                q1: d.q1,
+                median: d.median,
+                q3: d.q3,
+                max: d.max,
+                n: d.n || 1,
+            });
+        });
+
+        // Convert to array with approximate combined stats
+        return Object.values(aggregates).map(agg => {
+            // Weighted average of quartiles (approximation)
+            let totalN = 0;
+            let sumMin = 0, sumQ1 = 0, sumMedian = 0, sumQ3 = 0, sumMax = 0;
+            let globalMin = Infinity, globalMax = -Infinity;
+
+            agg.samples.forEach(s => {
+                const n = s.n || 1;
+                totalN += n;
+                sumMin += s.min * n;
+                sumQ1 += s.q1 * n;
+                sumMedian += s.median * n;
+                sumQ3 += s.q3 * n;
+                sumMax += s.max * n;
+                globalMin = Math.min(globalMin, s.min);
+                globalMax = Math.max(globalMax, s.max);
+            });
+
+            return {
+                cell_type: agg.cell_type,
+                atlas: agg.atlas,
+                min: globalMin,
+                q1: totalN > 0 ? sumQ1 / totalN : 0,
+                median: totalN > 0 ? sumMedian / totalN : 0,
+                q3: totalN > 0 ? sumQ3 / totalN : 0,
+                max: globalMax,
+                n: totalN,
+            };
+        }).sort((a, b) => b.median - a.median);
+    },
+
+    filterActivityByAtlas(sigType) {
+        const atlas = document.getElementById('activity-atlas-filter').value;
+        const organFilter = document.getElementById('activity-organ-filter');
+        let filtered = [];
+        let boxplotData = sigType === 'CytoSig' ? this.data.cytosig_boxplot : this.data.secact_boxplot;
+        let boxplotFiltered = [];
+
+        // Always aggregate scAtlas data by cell type (for both "all" and "scAtlas" views)
+        // Handle both 'scAtlas' and 'scAtlas_Normal' atlas names
+        const scAtlasData = this._activityData.filter(d => d.atlas === 'scAtlas' || d.atlas === 'scAtlas_Normal');
+        const scAtlasAggregated = this.aggregateByBaseCellType(scAtlasData);
+
+        // Aggregate scAtlas boxplot data
+        let scAtlasBpAggregated = [];
+        if (boxplotData && boxplotData.data) {
+            const scAtlasBp = boxplotData.data.filter(d => d.atlas === 'scAtlas' || d.atlas === 'scAtlas_Normal');
+            scAtlasBpAggregated = this.aggregateBoxplotByBaseCellType(scAtlasBp);
         }
+
+        // Show/hide organ filter based on atlas selection
+        if (atlas === 'scAtlas') {
+            // Extract unique organs from scAtlas data
+            const organs = new Set();
+            scAtlasData.forEach(d => {
+                const organ = this.extractOrganFromCellType(d.cell_type);
+                if (organ) organs.add(organ);
+            });
+
+            // Populate organ dropdown
+            const sortedOrgans = [...organs].sort();
+            organFilter.innerHTML = `
+                <option value="all">All Organs - Aggregated (${sortedOrgans.length} organs)</option>
+                ${sortedOrgans.map(o => `<option value="${o}">${o}</option>`).join('')}
+            `;
+            organFilter.classList.remove('hidden');
+            organFilter.value = 'all';
+
+            // Use aggregated scAtlas data
+            filtered = scAtlasAggregated;
+            boxplotFiltered = scAtlasBpAggregated;
+        } else {
+            organFilter.classList.add('hidden');
+            organFilter.value = 'all';
+
+            if (atlas === 'all') {
+                // For "All Atlases": use CIMA + Inflammation as-is, plus aggregated scAtlas
+                const nonScAtlasData = this._activityData.filter(d => d.atlas !== 'scAtlas');
+                filtered = [...nonScAtlasData, ...scAtlasAggregated];
+
+                // Combine boxplot data: non-scAtlas as-is + aggregated scAtlas
+                if (boxplotData && boxplotData.data) {
+                    const nonScAtlasBp = boxplotData.data.filter(d => d.atlas !== 'scAtlas' && d.atlas !== 'scAtlas_Normal');
+                    boxplotFiltered = [...nonScAtlasBp, ...scAtlasBpAggregated];
+                }
+            } else {
+                // Specific atlas (CIMA or Inflammation)
+                filtered = this._activityData.filter(d => d.atlas === atlas);
+                if (boxplotData && boxplotData.data) {
+                    boxplotFiltered = boxplotData.data.filter(d => d.atlas === atlas);
+                }
+            }
+        }
+
+        // Sort by mean activity
+        filtered.sort((a, b) => b.mean_activity - a.mean_activity);
+
+        // Update boxplot data object
+        if (boxplotData) {
+            boxplotData = { ...boxplotData, data: boxplotFiltered };
+        }
+
+        this._currentAtlasFilter = atlas;
+        this._currentOrganFilter = 'all';
+        this.createActivityChart(filtered, sigType, boxplotData);
+        this.updateActivityTable(filtered, atlas === 'scAtlas', false);
+    },
+
+    filterActivityByOrgan(sigType) {
+        const atlas = document.getElementById('activity-atlas-filter').value;
+        const organ = document.getElementById('activity-organ-filter').value;
+        let boxplotData = sigType === 'CytoSig' ? this.data.cytosig_boxplot : this.data.secact_boxplot;
+
+        // Start with scAtlas data (handle both 'scAtlas' and 'scAtlas_Normal')
+        const scAtlasData = this._activityData.filter(d => d.atlas === 'scAtlas' || d.atlas === 'scAtlas_Normal');
+
+        let filtered;
+        if (organ === 'all') {
+            // Aggregate by base cell type
+            filtered = this.aggregateByBaseCellType(scAtlasData);
+
+            if (boxplotData && boxplotData.data) {
+                const scAtlasBp = boxplotData.data.filter(d => d.atlas === 'scAtlas' || d.atlas === 'scAtlas_Normal');
+                boxplotData = {
+                    ...boxplotData,
+                    data: this.aggregateBoxplotByBaseCellType(scAtlasBp),
+                };
+            }
+        } else {
+            // Filter to specific organ and show base cell type names
+            filtered = scAtlasData
+                .filter(d => {
+                    const cellOrgan = this.extractOrganFromCellType(d.cell_type);
+                    return cellOrgan === organ;
+                })
+                .map(d => ({
+                    ...d,
+                    cell_type: this.extractBaseCellType(d.cell_type),  // Show base name
+                    organ: organ,
+                }))
+                .sort((a, b) => b.mean_activity - a.mean_activity);
+
+            // Filter boxplot data to specific organ
+            if (boxplotData && boxplotData.data) {
+                const organBp = boxplotData.data
+                    .filter(d => {
+                        if (d.atlas !== 'scAtlas' && d.atlas !== 'scAtlas_Normal') return false;
+                        const cellOrgan = this.extractOrganFromCellType(d.cell_type);
+                        return cellOrgan === organ;
+                    })
+                    .map(d => ({
+                        ...d,
+                        cell_type: this.extractBaseCellType(d.cell_type),
+                    }));
+                boxplotData = { ...boxplotData, data: organBp };
+            }
+        }
+
+        this._currentOrganFilter = organ;
+        this.createActivityChart(filtered, sigType, boxplotData);
+        this.updateActivityTable(filtered, true, organ !== 'all', organ);
+    },
+
+    updateActivityTable(data, isScAtlas = false, isOrganSpecific = false, organName = null) {
+        const tbody = document.querySelector('#activity-table tbody');
+        const thead = document.querySelector('#activity-table thead tr');
+
+        if (!tbody) return;
+
+        // Update table header based on view type
+        if (thead) {
+            if (isScAtlas && !isOrganSpecific) {
+                // Aggregated view - show N Organs column
+                thead.innerHTML = `
+                    <th>Cell Type</th>
+                    <th>N Organs</th>
+                    <th>Mean Activity (z-score)</th>
+                    <th>N Cells</th>
+                `;
+            } else if (isScAtlas && isOrganSpecific) {
+                // Organ-specific view
+                thead.innerHTML = `
+                    <th>Cell Type</th>
+                    <th>Organ</th>
+                    <th>Mean Activity (z-score)</th>
+                    <th>N Cells</th>
+                `;
+            } else {
+                thead.innerHTML = `
+                    <th>Cell Type</th>
+                    <th>Atlas</th>
+                    <th>Mean Activity (z-score)</th>
+                    <th>N Cells</th>
+                `;
+            }
+        }
+
+        // Update table body
+        tbody.innerHTML = data.slice(0, 50).map(d => {
+            if (isScAtlas && !isOrganSpecific) {
+                // Aggregated view
+                return `
+                    <tr>
+                        <td>${d.cell_type}</td>
+                        <td><span class="organ-badge">${d.n_organs || '-'}</span></td>
+                        <td class="${d.mean_activity >= 0 ? 'positive' : 'negative'}">${d.mean_activity.toFixed(4)}</td>
+                        <td>${d.n_cells ? d.n_cells.toLocaleString() : '-'}</td>
+                    </tr>
+                `;
+            } else if (isScAtlas && isOrganSpecific) {
+                // Organ-specific view
+                return `
+                    <tr>
+                        <td>${d.cell_type}</td>
+                        <td><span class="organ-badge">${organName}</span></td>
+                        <td class="${d.mean_activity >= 0 ? 'positive' : 'negative'}">${d.mean_activity.toFixed(4)}</td>
+                        <td>${d.n_cells ? d.n_cells.toLocaleString() : '-'}</td>
+                    </tr>
+                `;
+            } else {
+                return `
+                    <tr>
+                        <td>${d.cell_type}</td>
+                        <td><span class="atlas-badge">${d.atlas}</span></td>
+                        <td class="${d.mean_activity >= 0 ? 'positive' : 'negative'}">${d.mean_activity.toFixed(4)}</td>
+                        <td>${d.n_cells ? d.n_cells.toLocaleString() : '-'}</td>
+                    </tr>
+                `;
+            }
+        }).join('');
     },
 
     // ==================== Diseases Tab ====================
@@ -1251,7 +1829,7 @@ const GeneDetailPage = {
                 textposition: 'top center',
                 textfont: { size: 10 },
                 marker: {
-                    color: sigData.map(d => d.activity_diff >= 0 ? '#2ecc71' : '#e74c3c'),
+                    color: sigData.map(d => d.activity_diff >= 0 ? '#b2182b' : '#2166ac'),
                     size: 12,
                 },
                 hovertemplate: '<b>%{text}</b><br>&Delta; Activity: %{x:.3f}<extra></extra>',

@@ -49,16 +49,41 @@ const SearchPage = {
                 <div class="search-examples">
                     <p>Popular genes:</p>
                     <div class="example-genes">
-                        <a href="/gene/IFNG" class="gene-link">IFNG</a>
-                        <a href="/gene/TNF" class="gene-link">TNF</a>
-                        <a href="/gene/IL6" class="gene-link">IL6</a>
-                        <a href="/gene/IL17A" class="gene-link">IL17A</a>
-                        <a href="/gene/IL10" class="gene-link">IL10</a>
-                        <a href="/gene/TGFB1" class="gene-link">TGFB1</a>
-                        <a href="/gene/IL1B" class="gene-link">IL1B</a>
-                        <a href="/gene/CCL2" class="gene-link">CCL2</a>
-                        <a href="/gene/CXCL10" class="gene-link">CXCL10</a>
-                        <a href="/gene/IL2" class="gene-link">IL2</a>
+                        <a href="/gene/IFNG" class="gene-link" title="CytoSig, SecAct">
+                            IFNG <span class="avail-badges"><span class="mini-badge cs">CS</span><span class="mini-badge sa">SA</span></span>
+                        </a>
+                        <a href="/gene/TNF" class="gene-link" title="CytoSig, SecAct">
+                            TNF <span class="avail-badges"><span class="mini-badge cs">CS</span><span class="mini-badge sa">SA</span></span>
+                        </a>
+                        <a href="/gene/IL6" class="gene-link" title="CytoSig, SecAct">
+                            IL6 <span class="avail-badges"><span class="mini-badge cs">CS</span><span class="mini-badge sa">SA</span></span>
+                        </a>
+                        <a href="/gene/IL17A" class="gene-link" title="CytoSig only">
+                            IL17A <span class="avail-badges"><span class="mini-badge cs">CS</span><span class="mini-badge unavail">—</span></span>
+                        </a>
+                        <a href="/gene/IL10" class="gene-link" title="CytoSig, SecAct">
+                            IL10 <span class="avail-badges"><span class="mini-badge cs">CS</span><span class="mini-badge sa">SA</span></span>
+                        </a>
+                        <a href="/gene/TGFB1" class="gene-link" title="CytoSig, SecAct">
+                            TGFB1 <span class="avail-badges"><span class="mini-badge cs">CS</span><span class="mini-badge sa">SA</span></span>
+                        </a>
+                        <a href="/gene/IL1B" class="gene-link" title="CytoSig, SecAct">
+                            IL1B <span class="avail-badges"><span class="mini-badge cs">CS</span><span class="mini-badge sa">SA</span></span>
+                        </a>
+                        <a href="/gene/CCL2" class="gene-link" title="SecAct only">
+                            CCL2 <span class="avail-badges"><span class="mini-badge unavail">—</span><span class="mini-badge sa">SA</span></span>
+                        </a>
+                        <a href="/gene/CXCL10" class="gene-link" title="SecAct only">
+                            CXCL10 <span class="avail-badges"><span class="mini-badge unavail">—</span><span class="mini-badge sa">SA</span></span>
+                        </a>
+                        <a href="/gene/IL2" class="gene-link" title="CytoSig only">
+                            IL2 <span class="avail-badges"><span class="mini-badge cs">CS</span><span class="mini-badge unavail">—</span></span>
+                        </a>
+                    </div>
+                    <div class="legend">
+                        <span class="legend-item"><span class="mini-badge cs">CS</span> CytoSig (43 cytokines)</span>
+                        <span class="legend-item"><span class="mini-badge sa">SA</span> SecAct (1,170 proteins)</span>
+                        <span class="legend-item"><span class="mini-badge unavail">—</span> Not available</span>
                     </div>
                 </div>
 

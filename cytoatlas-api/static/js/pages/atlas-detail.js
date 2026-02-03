@@ -809,10 +809,10 @@ const AtlasDetailPage = {
             x: signatures,
             y: cellTypes,
             type: 'heatmap',
-            colorscale: 'RdBu',
-            reversescale: true,
+            colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
             zmin: -0.5,
             zmax: 0.5,
+            zmid: 0,
             hoverinfo: 'text',
             text: hoverText,
             colorbar: { title: 'ρ', titleside: 'right' },
@@ -2598,7 +2598,7 @@ const AtlasDetailPage = {
                                         <td style="font-size:0.8rem;">${d.variant}</td>
                                         <td style="font-size:0.8rem;">${(d.celltype || '').replace(/_/g, ' ')}</td>
                                         <td>${d.pvalue.toExponential(2)}</td>
-                                        <td style="color: ${(d.beta || 0) > 0 ? '#d62728' : '#1f77b4'}">${(d.beta || 0).toFixed(3)}</td>
+                                        <td style="color: ${(d.beta || 0) > 0 ? '#b2182b' : '#2166ac'}">${(d.beta || 0).toFixed(3)}</td>
                                         <td>${d.af !== undefined ? d.af.toFixed(3) : 'N/A'}</td>
                                     </tr>
                                 `).join('')}
@@ -3203,10 +3203,10 @@ const AtlasDetailPage = {
             x: signatures,
             y: cellTypes,
             type: 'heatmap',
-            colorscale: 'RdBu',
-            reversescale: true,
+            colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
             zmin: -0.5,
             zmax: 0.5,
+            zmid: 0,
             hoverinfo: 'text',
             text: hoverText,
             colorbar: { title: 'ρ', titleside: 'right' },
@@ -4772,7 +4772,7 @@ const AtlasDetailPage = {
             y: effects.map(d => d.cell_type),
             x: effects.map(d => d.effect),
             marker: {
-                color: effects.map(d => d.pvalue < 0.05 ? (d.effect > 0 ? '#d62728' : '#2ca02c') : '#ccc')
+                color: effects.map(d => d.pvalue < 0.05 ? (d.effect > 0 ? '#b2182b' : '#2166ac') : '#ccc')
             },
             text: effects.map(d => d.pvalue < 0.05 ? '*' : ''),
             textposition: 'outside',
@@ -4785,7 +4785,7 @@ const AtlasDetailPage = {
             height: Math.max(300, effects.length * 25),
             annotations: [{
                 x: 0.95, y: 1.02, xref: 'paper', yref: 'paper',
-                text: '<span style="color:#d62728">↑Disease</span> | <span style="color:#2ca02c">↑Healthy</span>', showarrow: false, font: { size: 10 }
+                text: '<span style="color:#b2182b">↑Disease</span> | <span style="color:#2166ac">↑Healthy</span>', showarrow: false, font: { size: 10 }
             }]
         }, { responsive: true });
 
@@ -6150,14 +6150,14 @@ const AtlasDetailPage = {
                 type: 'scatter', mode: 'markers+text', name: 'Higher in Adjacent',
                 x: significantUp.map(d => d.activity_diff), y: significantUp.map(d => d.negLogP),
                 text: significantUp.map(d => d.signature), textposition: 'top center', textfont: { size: 9 },
-                marker: { color: '#ff7f0e', size: 10 },
+                marker: { color: '#2166ac', size: 10 },
                 hovertemplate: '<b>%{text}</b><br>Δ Activity: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
             },
             {
                 type: 'scatter', mode: 'markers+text', name: 'Higher in Tumor',
                 x: significantDown.map(d => d.activity_diff), y: significantDown.map(d => d.negLogP),
                 text: significantDown.map(d => d.signature), textposition: 'top center', textfont: { size: 9 },
-                marker: { color: '#d62728', size: 10 },
+                marker: { color: '#b2182b', size: 10 },
                 hovertemplate: '<b>%{text}</b><br>Δ Activity: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>'
             },
             {
@@ -6214,7 +6214,7 @@ const AtlasDetailPage = {
             y: top15.map(d => d.signature),
             x: top15.map(d => d.activity_diff || 0),
             marker: {
-                color: top15.map(d => (d.pvalue || 1) < 0.05 ? ((d.activity_diff || 0) > 0 ? '#ff7f0e' : '#d62728') : '#ccc')
+                color: top15.map(d => (d.pvalue || 1) < 0.05 ? ((d.activity_diff || 0) > 0 ? '#b2182b' : '#2166ac') : '#ccc')
             },
             text: top15.map(d => (d.activity_diff || 0).toFixed(3)),
             textposition: 'auto',
@@ -6889,7 +6889,7 @@ const AtlasDetailPage = {
                 <strong>Exhausted vs Non-exhausted T cells:</strong> Differential activity analysis between dysfunctional and functional T cells.
                 <div style="margin-top: 0.5rem; font-size: 0.9rem;">
                     <div style="margin-bottom: 0.3rem;">
-                        <span style="color: #d62728; font-weight: bold;">● Exhausted:</span> T cells with inhibitory receptors (PDCD1+, LAG3+, TIGIT+, Tex)
+                        <span style="color: #b2182b; font-weight: bold;">● Exhausted:</span> T cells with inhibitory receptors (PDCD1+, LAG3+, TIGIT+, Tex)
                     </div>
                     <div>
                         <span style="color: #2166ac; font-weight: bold;">● Non-exhausted:</span> Functional T cells (cytotoxic GZMB+/GZMK+ + memory Tem/Tcm + other T cells)
@@ -7002,7 +7002,7 @@ const AtlasDetailPage = {
                 y: top20.map(d => d.signature),
                 x: top20.map(d => d.activity_diff),
                 marker: {
-                    color: top20.map(d => d.activity_diff > 0 ? '#d62728' : '#2166ac')
+                    color: top20.map(d => d.activity_diff > 0 ? '#b2182b' : '#2166ac')
                 },
                 text: top20.map(d => d.activity_diff.toFixed(2)),
                 textposition: 'auto',
@@ -7018,7 +7018,7 @@ const AtlasDetailPage = {
                 height: 480,
                 annotations: [{
                     x: 0, y: 1.02, xref: 'paper', yref: 'paper',
-                    text: '<span style="color:#2166ac">■</span> Non-exhausted  |  <span style="color:#d62728">■</span> Exhausted',
+                    text: '<span style="color:#2166ac">■</span> Non-exhausted  |  <span style="color:#b2182b">■</span> Exhausted',
                     showarrow: false, font: { size: 10 }, xanchor: 'center'
                 }]
             }, { responsive: true });
@@ -7049,7 +7049,7 @@ const AtlasDetailPage = {
                     textfont: { size: 8 },
                     marker: {
                         color: diffValues,
-                        colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#d62728']],
+                        colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
                         cmin: -maxAbsDiff,
                         cmax: maxAbsDiff,
                         size: showLabels ? 10 : 6,
@@ -7348,7 +7348,7 @@ const AtlasDetailPage = {
 
         Heatmap.create(containerId, {
             z, x: signatures, y: cellTypes,
-            colorscale: 'RdBu', reversescale: true,
+            colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
         }, {
             title,
             xLabel: 'Signature',
@@ -7380,7 +7380,7 @@ const AtlasDetailPage = {
 
         Heatmap.create(containerId, {
             z, x: markers, y: proteins,
-            colorscale: 'RdBu', reversescale: true,
+            colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
         }, {
             title: `Biochemistry Correlations [${sigType}]`,
             xLabel: 'Blood Marker',
@@ -7687,8 +7687,7 @@ const AtlasDetailPage = {
             z: medians,
             x: bins,
             y: cell_types,
-            colorscale: 'RdBu',
-            reversescale: true,
+            colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
             zmid: 0,
             colorbar: {
                 title: 'Median Activity',
@@ -8149,12 +8148,12 @@ const AtlasDetailPage = {
                     .sort((a, b) => b.importance - a.importance)
                     .slice(0, 15);
 
-                // For LR, color by coefficient direction (green = positive, red = negative)
+                // For LR, color by coefficient direction (red = positive, blue = negative)
                 const colors = isLR
                     ? aggregated.map(d => d.coefficient !== null
-                        ? (d.coefficient >= 0 ? '#2ca02c' : '#d62728')
-                        : '#1f77b4')
-                    : aggregated.map(() => '#2ca02c');
+                        ? (d.coefficient >= 0 ? '#b2182b' : '#2166ac')
+                        : '#2166ac')
+                    : aggregated.map(() => '#b2182b');
 
                 const hoverText = isLR
                     ? aggregated.map(d => d.coefficient !== null
@@ -8180,7 +8179,7 @@ const AtlasDetailPage = {
                     font: { family: 'Inter, sans-serif' },
                     annotations: isLR ? [{
                         x: 0.95, y: 1.05, xref: 'paper', yref: 'paper',
-                        text: '<span style="color:#2ca02c">■</span> Positive  <span style="color:#d62728">■</span> Negative',
+                        text: '<span style="color:#b2182b">■</span> Positive  <span style="color:#2166ac">■</span> Negative',
                         showarrow: false, font: { size: 11 }
                     }] : []
                 }, { responsive: true });
@@ -8214,8 +8213,8 @@ const AtlasDetailPage = {
                         name: 'Responder',
                         box: { visible: true },
                         meanline: { visible: true },
-                        fillcolor: '#2ca02c',
-                        line: { color: '#2ca02c' }
+                        fillcolor: '#b2182b',
+                        line: { color: '#b2182b' }
                     },
                     {
                         type: 'violin',
@@ -8223,8 +8222,8 @@ const AtlasDetailPage = {
                         name: 'Non-responder',
                         box: { visible: true },
                         meanline: { visible: true },
-                        fillcolor: '#d62728',
-                        line: { color: '#d62728' }
+                        fillcolor: '#2166ac',
+                        line: { color: '#2166ac' }
                     }
                 ], {
                     yaxis: { title: 'Predicted Probability', range: [0, 1] },

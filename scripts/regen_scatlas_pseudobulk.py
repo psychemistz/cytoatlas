@@ -110,11 +110,20 @@ def compute_and_save_activity(expr_df, meta_df, sig_matrix, sig_type, output_pat
     # Z-score normalize
     activity = (activity - activity.mean(axis=0)) / (activity.std(axis=0) + 1e-8)
 
-    # Create AnnData
+    # Transpose for boxplot script: (signatures × samples)
+    # The boxplot script expects:
+    #   - obs = signature metadata (rows)
+    #   - var = sample metadata with 'cell_type' column (columns)
+    activity_T = activity.T  # signatures × samples
+
+    # Create sample metadata for var
+    sample_meta = meta_df.set_index('sample')[['cell_type', 'tissue', 'n_cells']].copy()
+
+    # Create AnnData in expected format for boxplot script
     adata = ad.AnnData(
-        X=activity,
-        obs=meta_df.set_index('sample'),
-        var=pd.DataFrame(index=sig_matrix.columns)
+        X=activity_T,  # signatures × samples
+        obs=pd.DataFrame(index=sig_matrix.columns),  # signature names in obs
+        var=sample_meta  # sample metadata with cell_type in var
     )
 
     # Save

@@ -128,12 +128,31 @@ def read_sparse_rows(f, row_indices, n_genes):
 
 
 def compute_quartiles(values):
-    """Compute box plot statistics for an array of values."""
+    """Compute box plot statistics for an array of values.
+
+    For n>=3: Returns full quartile statistics for boxplot
+    For n=1-2: Returns data points for scatter display
+    For n=0: Returns None
+    """
     values = np.array(values)
     values = values[~np.isnan(values)]
 
-    if len(values) < 3:
+    if len(values) == 0:
         return None
+
+    # For 1-2 samples, return individual points (can't compute meaningful quartiles)
+    if len(values) < 3:
+        return {
+            'min': float(np.min(values)),
+            'q1': float(np.min(values)),  # Same as min for display
+            'median': float(np.mean(values)),  # Use mean as center
+            'q3': float(np.max(values)),  # Same as max for display
+            'max': float(np.max(values)),
+            'mean': float(np.mean(values)),
+            'std': float(np.std(values)) if len(values) > 1 else 0.0,
+            'n': int(len(values)),
+            'points': [float(v) for v in values],  # Raw points for scatter
+        }
 
     return {
         'min': float(np.min(values)),
@@ -152,10 +171,12 @@ def process_activity_file(file_path: str, atlas_name: str, sig_type: str) -> lis
     Process a pseudobulk activity h5ad file to extract box plot data.
 
     Pseudobulk files are (signatures × samples) where each sample is a (cell_type, sample_id).
+    For scAtlas, cell types are shown per organ (e.g., "Macrophage (Spleen)").
     """
     logger.info(f"Processing {file_path}")
 
     results = []
+    is_scatlas = 'scatlas' in atlas_name.lower() or 'scAtlas' in atlas_name
 
     with h5py.File(file_path, 'r') as f:
         # Get shape - signatures × samples
@@ -182,16 +203,36 @@ def process_activity_file(file_path: str, atlas_name: str, sig_type: str) -> lis
             logger.warning("No cell_type column found")
             return results
 
-        unique_cell_types = np.unique(cell_types)
-        logger.info(f"Found {len(unique_cell_types)} cell types")
+        # For scAtlas, also get tissue/organ to create "CellType (Organ)" names
+        tissues = None
+        if is_scatlas and 'tissue' in var:
+            tissue_data = var['tissue']
+            if isinstance(tissue_data, h5py.Group):
+                codes = tissue_data['codes'][:]
+                cats = tissue_data['categories'][:]
+                cats = [decode_if_bytes(c) for c in cats]
+                tissues = np.array([cats[c] for c in codes])
+            else:
+                tissues = tissue_data[:]
+                tissues = np.array([decode_if_bytes(t) for t in tissues])
+
+        # Create display names: for scAtlas, combine cell_type with organ
+        if is_scatlas and tissues is not None:
+            display_names = np.array([f"{ct} ({tissue})" for ct, tissue in zip(cell_types, tissues)])
+        else:
+            display_names = cell_types
+
+        unique_display_names = np.unique(display_names)
+        logger.info(f"Found {len(unique_display_names)} cell types" +
+                   (" (per organ)" if is_scatlas and tissues is not None else ""))
 
         # Load full activity matrix (signatures × samples)
         X = f['X'][:]
 
         # For each signature and cell type, compute quartiles
         for sig_idx, sig_name in enumerate(sig_names):
-            for ct in unique_cell_types:
-                ct_mask = (cell_types == ct)
+            for ct in unique_display_names:
+                ct_mask = (display_names == ct)
                 values = X[sig_idx, ct_mask]
 
                 stats = compute_quartiles(values)

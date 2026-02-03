@@ -259,15 +259,14 @@ def preprocess_scatlas_celltypes():
     combined_df = combined_df[cols_to_keep].copy()
     combined_df['mean_activity'] = combined_df['mean_activity'].round(4)
 
-    # Get top 100 most variable cell types (based on CytoSig)
+    # Get top 100 most variable cell types for quick reference (based on CytoSig)
     ct_variance = cytosig_df.groupby('cell_type')['mean_activity'].var()
     top_cts = ct_variance.nlargest(100).index.tolist()
 
-    # Filter to top cell types
-    filtered = combined_df[combined_df['cell_type'].isin(top_cts)]
-
+    # Include ALL cell types (not filtered) for complete organ-specific views
+    # This ensures boxplot data matches activity data for all cell types
     ct_data = {
-        'data': filtered.to_dict(orient='records'),
+        'data': combined_df.to_dict(orient='records'),
         'all_cell_types': cell_types,
         'top_cell_types': top_cts,
         'organs': organs,
@@ -287,7 +286,7 @@ def preprocess_scatlas_celltypes():
     print(f"  Organs: {len(organs)}")
     print(f"  CytoSig signatures: {len(cytosig_signatures)}")
     print(f"  SecAct signatures: {len(secact_signatures)}")
-    print(f"  Total records: {len(filtered)}")
+    print(f"  Total records: {len(combined_df)}")
 
     return ct_data
 

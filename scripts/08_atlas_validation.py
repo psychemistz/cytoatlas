@@ -238,6 +238,7 @@ def compute_target_gene_expression(
     expr_df: pd.DataFrame,
     sig_matrix: pd.DataFrame,
     signature_type: str,
+    zscore: bool = True,
 ) -> pd.DataFrame:
     """
     Get target gene expression per cell type for each signature.
@@ -250,11 +251,12 @@ def compute_target_gene_expression(
         expr_df: genes x cell_types (normalized expression)
         sig_matrix: genes x signatures
         signature_type: CytoSig or SecAct
+        zscore: If True, z-score expression across cell types (default: True)
 
     Returns:
-        DataFrame: signatures x cell_types (target gene expression)
+        DataFrame: signatures x cell_types (target gene expression, z-scored if enabled)
     """
-    log("  Getting target gene expression...")
+    log(f"  Getting target gene expression (zscore={zscore})...")
 
     # Mapping from signature name to gene symbol (for cases where they differ)
     sig_to_gene = {
@@ -333,6 +335,13 @@ def compute_target_gene_expression(
     log(f"    Found target genes: {found}/{len(sig_matrix.columns)}")
     if not_found and len(not_found) <= 10:
         log(f"    Not found: {not_found}")
+
+    # Z-score expression across cell types (for each signature/gene)
+    if zscore and not result_df.empty:
+        from scipy import stats as scipy_stats
+        result_df = result_df.apply(lambda row: scipy_stats.zscore(row, nan_policy='omit'), axis=1)
+        result_df = result_df.fillna(0)
+        log(f"    Z-scored expression (mean-centered, unit variance)")
 
     return result_df
 

@@ -43,13 +43,14 @@ const ChatViz = {
         const { data, title, config } = viz;
         const { x_labels, y_labels, values } = data;
 
+        // Standard colorscale: Blue (low) → White (0) → Red (high)
+        const defaultColorscale = [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']];
         const trace = {
             type: 'heatmap',
             x: x_labels,
             y: y_labels,
             z: values,
-            colorscale: config.colorscale || 'RdBu',
-            reversescale: config.reversescale !== false,
+            colorscale: config.colorscale || defaultColorscale,
             hoverongaps: false,
             colorbar: {
                 title: config.colorbar_title || 'Activity',
@@ -86,7 +87,7 @@ const ChatViz = {
             y: config.horizontal ? labels : values,
             orientation: config.horizontal ? 'h' : 'v',
             marker: {
-                color: colors || values.map(v => v >= 0 ? '#2563eb' : '#dc2626'),
+                color: colors || values.map(v => v >= 0 ? '#b2182b' : '#2166ac'),
             },
             text: values.map(v => v.toFixed(2)),
             textposition: 'auto',

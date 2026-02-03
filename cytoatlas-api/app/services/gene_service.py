@@ -30,6 +30,33 @@ from app.services.base import BaseService
 
 settings = get_settings()
 
+# CytoSig signatures that are NOT in SecAct (11 signatures)
+# These are CytoSig-only and won't have SecAct results
+CYTOSIG_ONLY_SIGNATURES = {
+    "EGF": "Not included in SecAct signature matrix",
+    "IFN1": "Type I interferon (composite signature, not single protein)",
+    "IL12": "Heterodimer (IL12A/IL12B) - subunits not in SecAct",
+    "IL13": "Not included in SecAct signature matrix",
+    "IL17A": "Not included in SecAct signature matrix",
+    "IL2": "Not included in SecAct signature matrix",
+    "IL22": "Not included in SecAct signature matrix",
+    "IL3": "Not included in SecAct signature matrix",
+    "IL4": "Not included in SecAct signature matrix",
+    "NO": "Nitric oxide - not a secreted protein",
+    "WNT3A": "Not included in SecAct signature matrix",
+}
+
+def is_cytosig_only(signature: str) -> bool:
+    """Check if a signature is CytoSig-only (not in SecAct)."""
+    return signature.upper() in {s.upper() for s in CYTOSIG_ONLY_SIGNATURES}
+
+def get_cytosig_only_reason(signature: str) -> str | None:
+    """Get the reason why a signature is CytoSig-only."""
+    for sig, reason in CYTOSIG_ONLY_SIGNATURES.items():
+        if sig.upper() == signature.upper():
+            return reason
+    return None
+
 # Load comprehensive gene mapping from JSON file
 _GENE_MAPPING = None
 _CYTOSIG_TO_HGNC = {}
@@ -383,40 +410,33 @@ class GeneService(BaseService):
             except FileNotFoundError:
                 pass
 
-        # scAtlas data (cell types within organs) - aggregate by cell type
+        # scAtlas data (cell types within organs) - show per organ, not aggregated
         if atlas is None or atlas.lower() == "scatlas":
             try:
                 scatlas_data = await self.load_json("scatlas_celltypes.json")
                 # scatlas_celltypes.json has nested structure with "data" key
                 data_list = scatlas_data.get("data", scatlas_data) if isinstance(scatlas_data, dict) else scatlas_data
 
-                # Aggregate by cell type (weighted mean across organs)
-                ct_aggregates = {}
+                # Show each (cell_type, organ) combination separately
                 for r in data_list:
                     if r.get("signature") in sig_names and r.get("signature_type") == signature_type:
                         ct_name = r.get("cell_type")
+                        organ = r.get("organ", "")
                         n_cells = r.get("n_cells", 0)
                         mean_act = self._safe_float(r.get("mean_activity"))
 
-                        if ct_name not in ct_aggregates:
-                            ct_aggregates[ct_name] = {"sum_weighted": 0.0, "total_cells": 0}
+                        # Format as "CellType (Organ)" for display
+                        display_name = f"{ct_name} ({organ})" if organ else ct_name
 
-                        ct_aggregates[ct_name]["sum_weighted"] += mean_act * n_cells
-                        ct_aggregates[ct_name]["total_cells"] += n_cells
-
-                # Create results with weighted mean
-                for ct_name, agg in ct_aggregates.items():
-                    if agg["total_cells"] > 0:
-                        weighted_mean = agg["sum_weighted"] / agg["total_cells"]
                         results.append(GeneCellTypeActivity(
-                            cell_type=ct_name,
+                            cell_type=display_name,
                             atlas="scAtlas",
                             signature=signature,
                             signature_type=signature_type,
-                            mean_activity=weighted_mean,
+                            mean_activity=mean_act,
                             std_activity=None,
                             n_samples=None,
-                            n_cells=agg["total_cells"],
+                            n_cells=n_cells,
                         ))
             except FileNotFoundError:
                 pass
@@ -926,6 +946,12 @@ class GeneService(BaseService):
         cytosig_boxplot = await self.get_boxplot_data(canonical, "CytoSig")
         secact_boxplot = await self.get_boxplot_data(canonical, "SecAct")
 
+        # Check if this is a CytoSig-only signature (not in SecAct)
+        # Check both the CytoSig name and HGNC symbol
+        cytosig_name = names.get("cytosig") or gene
+        cytosig_only = is_cytosig_only(cytosig_name) or is_cytosig_only(gene)
+        cytosig_only_reason = get_cytosig_only_reason(cytosig_name) or get_cytosig_only_reason(gene)
+
         return GenePageData(
             gene=canonical,  # Return canonical HGNC name
             hgnc_symbol=names.get("hgnc"),
@@ -934,6 +960,8 @@ class GeneService(BaseService):
             has_expression=expression is not None and len(expression.data) > 0,
             has_cytosig=len(cytosig_activity) > 0,
             has_secact=len(secact_activity) > 0,
+            is_cytosig_only=cytosig_only,
+            cytosig_only_reason=cytosig_only_reason,
             expression=expression,
             cytosig_activity=cytosig_activity,
             secact_activity=secact_activity,

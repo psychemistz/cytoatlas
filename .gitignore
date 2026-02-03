@@ -69,3 +69,11 @@ htmlcov/
 !visualization/data/.gitkeep
 !results/.gitkeep
 !logs/.gitkeep
+
+visualization/data/validation/scatlas_validation.json
+visualization/data/validation/inflammation_validation.json
+visualization/data/validation/cima_validation.json
+visualization/data/boxplot/
+
+# API static data files (large, generated)
+cytoatlas-api/static/data/*.json

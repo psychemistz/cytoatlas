@@ -38,8 +38,8 @@ H5AD_PATHS = {
 # Cell type column names by atlas
 CELLTYPE_COLS = {
     "cima": "cell_type_l2",  # 27 intermediate cell types
-    "inflammation": "cell_type",
-    "scatlas": "cell_type_fine",
+    "inflammation": "Level2",  # Inflammation atlas cell type column
+    "scatlas": "cellType2",  # scAtlas fine cell types
 }
 
 
@@ -133,8 +133,24 @@ def compute_signature_expression(
                 break
     log(f"  Cell type column: {ct_col}")
 
-    # Get available genes
-    available_genes = set(adata.var_names)
+    # Get available genes - check for gene symbol column
+    gene_symbol_col = None
+    for col in ['symbol', 'gene_symbol', 'gene_name', 'Symbol']:
+        if col in adata.var.columns:
+            gene_symbol_col = col
+            break
+
+    if gene_symbol_col:
+        # Use gene symbols from var column
+        gene_symbols = adata.var[gene_symbol_col].tolist()
+        available_genes = set(gene_symbols)
+        # Create mapping from symbol to index
+        symbol_to_idx = {sym: i for i, sym in enumerate(gene_symbols) if pd.notna(sym)}
+        log(f"  Using gene symbols from var['{gene_symbol_col}']")
+    else:
+        # Use var_names directly
+        available_genes = set(adata.var_names)
+        symbol_to_idx = {g: adata.var_names.get_loc(g) for g in available_genes}
     log(f"  Available genes: {len(available_genes):,}")
 
     # Find overlapping genes for each signature
@@ -156,8 +172,10 @@ def compute_signature_expression(
     for genes in sig_gene_map.values():
         all_sig_genes.update(genes)
     all_sig_genes = sorted(all_sig_genes)
-    gene_to_idx = {g: i for i, g in enumerate(all_sig_genes)}
-    gene_indices = [adata.var_names.get_loc(g) for g in all_sig_genes]
+    gene_to_local_idx = {g: i for i, g in enumerate(all_sig_genes)}
+
+    # Get indices in the H5AD (using symbol mapping if available)
+    gene_indices = [symbol_to_idx[g] for g in all_sig_genes]
 
     log(f"  Total signature genes to extract: {len(all_sig_genes)}")
 
@@ -218,7 +236,7 @@ def compute_signature_expression(
 
         # Compute mean CPM for each signature
         for sig, sig_genes in sig_gene_map.items():
-            sig_gene_idx = [gene_to_idx[g] for g in sig_genes if g in gene_to_idx]
+            sig_gene_idx = [gene_to_local_idx[g] for g in sig_genes if g in gene_to_local_idx]
             if not sig_gene_idx:
                 continue
 

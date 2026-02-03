@@ -20,6 +20,6 @@ echo "Starting all gene expression extraction at $(date)"
 echo "SLURM Job ID: $SLURM_JOB_ID"
 echo "Node: $SLURM_NODELIST"
 
-python scripts/07d_all_gene_expression.py
+python scripts/07d_all_gene_expression.py --skip-cima
 
 echo "Finished at $(date)"

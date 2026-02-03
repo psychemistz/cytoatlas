@@ -100,10 +100,38 @@ def load_gene_names_h5py(h5_file) -> tuple:
     """
     Load gene names from h5ad file using h5py.
     Returns (gene_symbols, var_names_are_symbols).
+
+    Handles different h5ad formats:
+    - Format 1: var['_index'] contains gene names directly (e.g., CIMA)
+    - Format 2: var.attrs['_index'] specifies column name (e.g., Inflammation Atlas)
+    - Categorical columns: codes + categories structure
     """
     var = h5_file['var']
-    var_names = var['_index'][:]
-    var_names = [decode_if_bytes(v) for v in var_names]
+
+    # Try to load var_names (index)
+    var_names = None
+
+    # Format 1: Direct _index dataset
+    if '_index' in var and hasattr(var['_index'], 'shape'):
+        var_names = var['_index'][:]
+        var_names = [decode_if_bytes(v) for v in var_names]
+    # Format 2: _index attribute points to a column
+    elif '_index' in var.attrs:
+        index_col = var.attrs['_index']
+        if isinstance(index_col, bytes):
+            index_col = index_col.decode()
+        if index_col in var:
+            col = var[index_col]
+            # Check if categorical (has codes + categories)
+            if hasattr(col, 'keys') and 'codes' in col and 'categories' in col:
+                codes = col['codes'][:]
+                cats = [decode_if_bytes(c) for c in col['categories'][:]]
+                var_names = [cats[c] for c in codes]
+            else:
+                var_names = [decode_if_bytes(v) for v in col[:]]
+
+    if var_names is None:
+        raise ValueError("Could not find gene index in h5ad file")
 
     # Check if var_names are gene symbols or Ensembl IDs
     if not var_names[0].startswith('ENSG'):
@@ -111,8 +139,14 @@ def load_gene_names_h5py(h5_file) -> tuple:
 
     # var_names are Ensembl IDs, try to get symbols
     if 'symbol' in var:
-        symbols = var['symbol'][:]
-        symbols = [decode_if_bytes(s) for s in symbols]
+        sym_col = var['symbol']
+        # Check if categorical
+        if hasattr(sym_col, 'keys') and 'codes' in sym_col and 'categories' in sym_col:
+            codes = sym_col['codes'][:]
+            cats = [decode_if_bytes(c) for c in sym_col['categories'][:]]
+            symbols = [cats[c] for c in codes]
+        else:
+            symbols = [decode_if_bytes(s) for s in sym_col[:]]
         return np.array(symbols), True
 
     # Fall back to Ensembl IDs
@@ -298,12 +332,22 @@ def extract_all_gene_expression(h5ad_path: str, atlas_name: str) -> pd.DataFrame
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description='Extract gene expression from all atlases')
+    parser.add_argument('--skip-cima', action='store_true', help='Skip CIMA (already processed)')
+    parser.add_argument('--skip-inflammation', action='store_true', help='Skip Inflammation Atlas')
+    parser.add_argument('--skip-scatlas', action='store_true', help='Skip scAtlas')
+    args = parser.parse_args()
+
     logger.info("Starting ALL gene expression extraction")
 
     all_results = []
 
     # CIMA
-    if Path(DATA_PATHS['cima']).exists():
+    if args.skip_cima:
+        logger.info("=" * 60)
+        logger.info("Skipping CIMA (--skip-cima flag)")
+    elif Path(DATA_PATHS['cima']).exists():
         logger.info("=" * 60)
         logger.info("Processing CIMA...")
         df = extract_all_gene_expression(DATA_PATHS['cima'], 'CIMA')
@@ -313,31 +357,38 @@ def main():
         gc.collect()
 
     # Inflammation Atlas (combine all cohorts)
-    logger.info("=" * 60)
-    logger.info("Processing Inflammation Atlas...")
-    inflam_dfs = []
-    for name in ['inflammation_main', 'inflammation_val', 'inflammation_ext']:
-        if Path(DATA_PATHS[name]).exists():
-            df = extract_all_gene_expression(DATA_PATHS[name], 'Inflammation')
-            if not df.empty:
-                inflam_dfs.append(df)
+    if args.skip_inflammation:
+        logger.info("=" * 60)
+        logger.info("Skipping Inflammation Atlas (--skip-inflammation flag)")
+    else:
+        logger.info("=" * 60)
+        logger.info("Processing Inflammation Atlas...")
+        inflam_dfs = []
+        for name in ['inflammation_main', 'inflammation_val', 'inflammation_ext']:
+            if Path(DATA_PATHS[name]).exists():
+                df = extract_all_gene_expression(DATA_PATHS[name], 'Inflammation')
+                if not df.empty:
+                    inflam_dfs.append(df)
+                gc.collect()
+
+        if inflam_dfs:
+            inflam_combined = pd.concat(inflam_dfs, ignore_index=True)
+            # Aggregate across cohorts
+            inflam_agg = inflam_combined.groupby(['gene', 'cell_type', 'atlas']).agg({
+                'mean_expression': 'mean',
+                'pct_expressed': 'mean',
+                'n_cells': 'sum',
+            }).reset_index()
+            all_results.append(inflam_agg)
+            logger.info(f"Inflammation: {len(inflam_agg)} records, {inflam_agg['gene'].nunique()} genes")
+            del inflam_combined
             gc.collect()
 
-    if inflam_dfs:
-        inflam_combined = pd.concat(inflam_dfs, ignore_index=True)
-        # Aggregate across cohorts
-        inflam_agg = inflam_combined.groupby(['gene', 'cell_type', 'atlas']).agg({
-            'mean_expression': 'mean',
-            'pct_expressed': 'mean',
-            'n_cells': 'sum',
-        }).reset_index()
-        all_results.append(inflam_agg)
-        logger.info(f"Inflammation: {len(inflam_agg)} records, {inflam_agg['gene'].nunique()} genes")
-        del inflam_combined
-        gc.collect()
-
     # scAtlas Normal
-    if Path(DATA_PATHS['scatlas_normal']).exists():
+    if args.skip_scatlas:
+        logger.info("=" * 60)
+        logger.info("Skipping scAtlas (--skip-scatlas flag)")
+    elif Path(DATA_PATHS['scatlas_normal']).exists():
         logger.info("=" * 60)
         logger.info("Processing scAtlas Normal...")
         df = extract_all_gene_expression(DATA_PATHS['scatlas_normal'], 'scAtlas_Normal')
@@ -347,7 +398,7 @@ def main():
         gc.collect()
 
     # scAtlas Cancer
-    if Path(DATA_PATHS['scatlas_cancer']).exists():
+    if not args.skip_scatlas and Path(DATA_PATHS['scatlas_cancer']).exists():
         logger.info("=" * 60)
         logger.info("Processing scAtlas Cancer...")
         df = extract_all_gene_expression(DATA_PATHS['scatlas_cancer'], 'scAtlas_Cancer')

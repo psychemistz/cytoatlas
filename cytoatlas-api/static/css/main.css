@@ -2521,6 +2521,249 @@ h3 .badge {
     color: var(--text-secondary);
 }
 
+/* Data availability badges */
+.data-availability {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+}
+
+.data-badge {
+    padding: 3px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.data-badge.expression {
+    background: rgba(16, 185, 129, 0.15);
+    color: #059669;
+}
+
+.data-badge.cytosig {
+    background: rgba(37, 99, 235, 0.15);
+    color: #2563eb;
+}
+
+.data-badge.secact {
+    background: rgba(139, 92, 246, 0.15);
+    color: #7c3aed;
+}
+
+.data-badge.unavailable {
+    background: rgba(156, 163, 175, 0.2);
+    color: #6b7280;
+    text-decoration: line-through;
+}
+
+.cytosig-only-note {
+    padding: 3px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: rgba(245, 158, 11, 0.15);
+    color: #d97706;
+    margin-left: var(--spacing-sm);
+}
+
+/* CytoSig-only notice panel */
+.no-data-panel.cytosig-only-notice {
+    max-width: 600px;
+    margin: var(--spacing-xl) auto;
+    padding: var(--spacing-xl);
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.05), rgba(245, 158, 11, 0.1));
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: var(--radius-lg);
+    text-align: left;
+}
+
+.cytosig-only-notice .notice-icon {
+    font-size: 2rem;
+    color: #d97706;
+    margin-bottom: var(--spacing-md);
+}
+
+.cytosig-only-notice h3 {
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-md);
+}
+
+.cytosig-only-notice .reason {
+    background: rgba(245, 158, 11, 0.1);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--spacing-md);
+    font-size: 0.95rem;
+}
+
+.cytosig-only-notice .explanation {
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-md);
+}
+
+.cytosig-only-notice .cytosig-only-list {
+    margin: var(--spacing-md) 0;
+}
+
+.cytosig-only-notice .cytosig-only-list summary {
+    cursor: pointer;
+    color: var(--primary);
+    font-weight: 500;
+}
+
+.cytosig-only-notice .cytosig-only-list ul {
+    margin-top: var(--spacing-sm);
+    padding-left: var(--spacing-lg);
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.cytosig-only-notice .cytosig-only-list li {
+    margin-bottom: var(--spacing-xs);
+}
+
+.cytosig-only-notice .suggestion {
+    margin-top: var(--spacing-lg);
+    padding-top: var(--spacing-md);
+    border-top: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.cytosig-only-notice .suggestion a {
+    color: var(--primary);
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.cytosig-only-notice .suggestion a:hover {
+    text-decoration: underline;
+}
+
+/* Boxplot availability notice */
+.boxplot-notice {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: var(--radius-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    margin-top: var(--spacing-sm);
+    color: var(--text-secondary);
+}
+
+.boxplot-notice small {
+    display: block;
+}
+
+/* Search page mini badges */
+.search-examples .example-genes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-sm);
+}
+
+.search-examples .gene-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    text-decoration: none;
+    color: var(--text-primary);
+    font-weight: 500;
+    transition: all var(--transition-fast);
+}
+
+.search-examples .gene-link:hover {
+    background: var(--primary);
+    color: white;
+}
+
+.search-examples .gene-link:hover .mini-badge {
+    background: rgba(255, 255, 255, 0.3);
+    color: white;
+}
+
+.avail-badges {
+    display: inline-flex;
+    gap: 2px;
+    margin-left: 4px;
+}
+
+.mini-badge {
+    display: inline-block;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.mini-badge.cs {
+    background: rgba(37, 99, 235, 0.2);
+    color: #2563eb;
+}
+
+.mini-badge.sa {
+    background: rgba(139, 92, 246, 0.2);
+    color: #7c3aed;
+}
+
+.mini-badge.unavail {
+    background: rgba(156, 163, 175, 0.2);
+    color: #9ca3af;
+}
+
+.search-examples .legend {
+    margin-top: var(--spacing-md);
+    display: flex;
+    gap: var(--spacing-lg);
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+/* Organ filter and badges */
+.tab-filters {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.tab-filters select {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.tab-filters select:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.tab-filters select.hidden {
+    display: none;
+}
+
+.organ-badge {
+    padding: 2px 8px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border-radius: var(--radius-sm);
+    background-color: rgba(16, 185, 129, 0.15);
+    color: #059669;
+}
+
 .summary-stats {
     display: flex;
     gap: var(--spacing-xl);
@@ -2671,13 +2914,29 @@ h3 .badge {
     color: var(--text-secondary);
 }
 
-.method-explanation .method-content ul {
+.method-explanation .method-content ul,
+.method-explanation .method-content ol {
     margin: var(--spacing-md) 0;
     padding-left: var(--spacing-lg);
 }
 
 .method-explanation .method-content li {
     margin-bottom: var(--spacing-xs);
+}
+
+.method-explanation .method-content h4 {
+    margin: var(--spacing-md) 0 var(--spacing-sm) 0;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.method-explanation .method-content h4:first-child {
+    margin-top: 0;
+}
+
+.method-explanation .method-content p {
+    margin-bottom: var(--spacing-sm);
 }
 
 .method-explanation .method-content em {

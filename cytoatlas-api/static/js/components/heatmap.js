@@ -36,7 +36,9 @@ const Heatmap = {
             return;
         }
 
-        const { z, x, y, colorscale = 'RdBu', zmin, zmax, reversescale = true } = data;
+        // Standard colorscale: Blue (low) → White (0) → Red (high)
+        const defaultColorscale = [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']];
+        const { z, x, y, colorscale = defaultColorscale, zmin, zmax, reversescale = false } = data;
 
         // Calculate zmin/zmax if not provided
         const flatZ = z.flat().filter(v => v != null && !isNaN(v));
@@ -127,8 +129,8 @@ const Heatmap = {
             z: activityData.z,
             x: activityData.signatures || activityData.x,
             y: activityData.cell_types || activityData.y,
-            colorscale: 'RdBu',
-            reversescale: true,
+            colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
+            reversescale: false,
         }, {
             title: options.title || 'Cytokine Activity',
             xLabel: 'Signature',
@@ -156,8 +158,8 @@ const Heatmap = {
             z: corrData.z,
             x: corrData.x,
             y: corrData.y,
-            colorscale: 'RdBu',
-            reversescale: true,
+            colorscale: [[0, '#2166ac'], [0.5, '#f7f7f7'], [1, '#b2182b']],
+            reversescale: false,
             zmin: -1,
             zmax: 1,
         }, {

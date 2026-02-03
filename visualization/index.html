@@ -12677,7 +12677,7 @@
 
             const sigLabel = selectedSig === 'all' ? `All ${sigType} Signatures` : selectedSig;
             Plotly.newPlot(scatterDiv, traces, {
-                xaxis: { title: 'Target Gene Expression (log1p CPM)' },
+                xaxis: { title: 'Target Gene Expression (z-score)' },
                 yaxis: { title: 'Predicted Activity (z-score)' },
                 margin: { l: 60, r: 30, t: 50, b: 50 },
                 legend: { orientation: 'v', x: 1.02, y: 1, font: { size: 9 } },
