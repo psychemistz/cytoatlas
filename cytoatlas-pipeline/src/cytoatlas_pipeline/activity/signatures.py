@@ -31,15 +31,11 @@ class SignatureLoader:
         >>> custom = loader.load_custom("/path/to/signature.csv")
     """
 
-    # Built-in signature paths (relative to SecActpy)
+    # Built-in signatures (all now bundled with SecActpy)
     BUILTIN_SIGNATURES = {
-        "CytoSig": "data/CytoSig.signature.csv",
-        "SecAct": "data/SecAct.signature.csv",
-    }
-
-    # External signatures with absolute paths
-    EXTERNAL_SIGNATURES = {
-        "LinCytoSig": Path("/data/parks34/projects/2secactpy/results/celltype_signatures/celltype_cytokine_signatures.csv"),
+        "CytoSig": "data/CytoSig.tsv.gz",
+        "SecAct": "data/SecAct.tsv.gz",
+        "LinCytoSig": "data/LinCytoSig.tsv.gz",
     }
 
     def __init__(self, secactpy_path: Optional[Path] = None):
@@ -74,11 +70,8 @@ class SignatureLoader:
         elif name in self.BUILTIN_SIGNATURES:
             path = self.secactpy_path / self.BUILTIN_SIGNATURES[name]
             sig = pd.read_csv(path, index_col=0)
-        elif name in self.EXTERNAL_SIGNATURES:
-            path = self.EXTERNAL_SIGNATURES[name]
-            sig = pd.read_csv(path, index_col=0)
         else:
-            raise ValueError(f"Unknown signature: {name}")
+            raise ValueError(f"Unknown signature: {name}. Available: {self.list_available()}")
 
         self._cache[name] = sig
         return sig
@@ -117,8 +110,8 @@ class SignatureLoader:
         return sig
 
     def list_available(self) -> list[str]:
-        """List available signatures (built-in and external)."""
-        return list(self.BUILTIN_SIGNATURES.keys()) + list(self.EXTERNAL_SIGNATURES.keys())
+        """List available signatures."""
+        return list(self.BUILTIN_SIGNATURES.keys())
 
     def get_signature_info(self, name: str) -> dict:
         """
@@ -180,12 +173,7 @@ def load_secact() -> pd.DataFrame:
         )
 
 
-# Default path for LinCytoSig
-LINCYTOSIG_PATH = Path("/data/parks34/projects/2secactpy/results/celltype_signatures/celltype_cytokine_signatures.csv")
-
-
 def load_lincytosig(
-    path: Optional[Union[str, Path]] = None,
     cell_types: Optional[list[str]] = None,
     cytokines: Optional[list[str]] = None,
 ) -> pd.DataFrame:
@@ -199,7 +187,6 @@ def load_lincytosig(
     Signature columns are named as "CellType__Cytokine" (e.g., "Macrophage__IFNG").
 
     Args:
-        path: Path to LinCytoSig CSV file. If None, uses default location.
         cell_types: Filter to specific cell types (e.g., ["Macrophage", "T_CD4"]).
         cytokines: Filter to specific cytokines (e.g., ["IFNG", "TNFA"]).
 
@@ -208,21 +195,16 @@ def load_lincytosig(
     """
     try:
         from secactpy import load_lincytosig as _load_lincytosig
-        return _load_lincytosig(path=path, cell_types=cell_types, cytokines=cytokines)
+        return _load_lincytosig(cell_types=cell_types, cytokines=cytokines)
     except ImportError:
-        # Fallback to direct file load
-        if path is None:
-            path = LINCYTOSIG_PATH
-        else:
-            path = Path(path)
-
+        # Fallback to direct file load from SecActpy data dir
+        path = SECACTPY_PATH / "secactpy" / "data" / "LinCytoSig.tsv.gz"
         if not path.exists():
-            raise FileNotFoundError(
-                f"LinCytoSig file not found: {path}\n"
-                "Generate it using: python scripts/build_celltype_signatures.py"
+            raise ImportError(
+                "Could not load LinCytoSig. Ensure SecActpy is installed with LinCytoSig.tsv.gz"
             )
 
-        df = pd.read_csv(path, index_col=0)
+        df = pd.read_csv(path, sep='\t', index_col=0, compression='gzip')
 
         # Filter by cell types
         if cell_types is not None:
