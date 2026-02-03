@@ -699,8 +699,8 @@ def build_celltype_signatures(meta: pd.DataFrame, diff: pd.DataFrame,
             if len(matching_cols) < MIN_EXPERIMENTS_PER_SIGNATURE:
                 continue
 
-            # Average expression across experiments
-            avg_expr = diff[matching_cols].mean(axis=1)
+            # Median expression across experiments (more robust to outliers)
+            avg_expr = diff[matching_cols].median(axis=1)
             ct_signatures[cytokine] = avg_expr
             ct_counts[cytokine] = len(matching_cols)
 
@@ -763,6 +763,8 @@ def save_signatures(signatures: dict, mapping: pd.DataFrame):
     metadata = {
         'n_celltypes': len(signatures),
         'n_total_signatures': sum(d['n_cytokines'] for d in signatures.values()),
+        'aggregation_method': 'median',  # Median is more robust to outliers
+        'source': 'CytoSig differential expression database',
         'celltypes': list(signatures.keys()),
         'cytokines': list(set(c for d in signatures.values() for c in d['matrix'].columns)),
         'celltype_details': {
