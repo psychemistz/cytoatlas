@@ -302,6 +302,7 @@ class SubmitService:
             json.dump(job_data, f)
 
         # Submit Celery task
+        celery_task_id = None
         try:
             task = process_h5ad_task.delay(
                 job_id=job_id,
@@ -312,9 +313,13 @@ class SubmitService:
             )
             celery_task_id = task.id
             logger.info(f"Job {job_id} submitted to Celery: {celery_task_id}")
+
+            # Update job file with celery_task_id for later revocation
+            job_data["celery_task_id"] = celery_task_id
+            with open(job_file, "w") as f:
+                json.dump(job_data, f)
         except Exception as e:
             logger.warning(f"Celery not available, job will be processed synchronously: {e}")
-            celery_task_id = None
             # For demo/development, could process synchronously here
 
         return ProcessResponse(
@@ -429,7 +434,15 @@ class SubmitService:
         with open(job_file, "w") as f:
             json.dump(data, f)
 
-        # TODO: Revoke Celery task if running
+        # Revoke Celery task if running
+        celery_task_id = data.get("celery_task_id")
+        if celery_task_id:
+            try:
+                from app.tasks.process_atlas import celery_app
+                celery_app.control.revoke(celery_task_id, terminate=True, signal="SIGTERM")
+                logger.info(f"Revoked Celery task {celery_task_id} for job {job_id}")
+            except Exception as e:
+                logger.warning(f"Failed to revoke Celery task {celery_task_id}: {e}")
 
         logger.info(f"Job {job_id} cancelled: {reason}")
         return True

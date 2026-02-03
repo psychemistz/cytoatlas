@@ -1,12 +1,14 @@
 """Chat router for LLM-powered natural language interface."""
 
 import json
+import time
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 
 from app.config import get_settings
+from app.core.cache import CacheService, get_cache
 from app.core.security import get_current_user_optional
 from app.models.user import User
 from app.schemas.chat import (
@@ -22,6 +24,9 @@ from app.services.context_manager import ContextManager, get_context_manager
 router = APIRouter(prefix="/chat", tags=["Chat"])
 settings = get_settings()
 
+# In-memory rate limit tracking (fallback when Redis unavailable)
+_rate_limit_store: dict[str, tuple[int, float]] = {}  # key -> (count, window_start)
+
 
 def get_session_id(request: Request) -> str:
     """Get or create a session ID from cookies."""
@@ -35,11 +40,93 @@ def get_session_id(request: Request) -> str:
 async def check_rate_limit(
     user: User | None,
     session_id: str,
+    cache: CacheService | None = None,
 ) -> None:
-    """Check if the user/session has exceeded rate limits."""
-    # This would typically use Redis to track request counts
-    # For now, we'll implement a simple in-memory check
-    pass  # TODO: Implement rate limiting
+    """Check if the user/session has exceeded rate limits.
+
+    Uses Redis when available, falls back to in-memory tracking.
+    Authenticated users get higher limits than anonymous users.
+    """
+    # Determine rate limit based on authentication status
+    if user:
+        limit = settings.auth_chat_limit_per_day
+        key = f"chat_ratelimit:user:{user.id}"
+    else:
+        limit = settings.anon_chat_limit_per_day
+        key = f"chat_ratelimit:session:{session_id}"
+
+    window = 86400  # 24 hours in seconds
+    current_time = time.time()
+
+    # Try Redis first if available
+    if cache and cache.redis:
+        try:
+            cache_key = key
+            current = await cache.get(cache_key)
+
+            if current is None:
+                await cache.set(cache_key, "1", ttl=window)
+                return
+
+            count = int(current)
+            if count >= limit:
+                ttl = await cache.redis.ttl(cache_key)
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"Chat rate limit exceeded. Daily limit: {limit} messages. "
+                           f"Try again in {ttl // 3600} hours.",
+                    headers={
+                        "X-RateLimit-Limit": str(limit),
+                        "X-RateLimit-Remaining": "0",
+                        "X-RateLimit-Reset": str(ttl),
+                        "Retry-After": str(ttl),
+                    },
+                )
+
+            await cache.incr(cache_key)
+            return
+        except HTTPException:
+            raise
+        except Exception:
+            pass  # Fall through to in-memory
+
+    # In-memory fallback
+    global _rate_limit_store
+
+    # Clean up expired entries periodically
+    if len(_rate_limit_store) > 1000:
+        expired_keys = [
+            k for k, (_, start) in _rate_limit_store.items()
+            if current_time - start > window
+        ]
+        for k in expired_keys:
+            del _rate_limit_store[k]
+
+    if key in _rate_limit_store:
+        count, window_start = _rate_limit_store[key]
+
+        # Check if window has expired
+        if current_time - window_start > window:
+            _rate_limit_store[key] = (1, current_time)
+            return
+
+        if count >= limit:
+            remaining_time = int(window - (current_time - window_start))
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Chat rate limit exceeded. Daily limit: {limit} messages. "
+                       f"Try again in {remaining_time // 3600} hours.",
+                headers={
+                    "X-RateLimit-Limit": str(limit),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": str(remaining_time),
+                    "Retry-After": str(remaining_time),
+                },
+            )
+
+        _rate_limit_store[key] = (count + 1, window_start)
+    else:
+        _rate_limit_store[key] = (1, current_time)
 
 
 @router.post("/message", response_model=ChatMessageResponse)
@@ -48,6 +135,7 @@ async def send_message(
     request: Request,
     current_user: User | None = Depends(get_current_user_optional),
     service: ChatService = Depends(get_chat_service),
+    cache: CacheService = Depends(get_cache),
 ) -> ChatMessageResponse:
     """Send a message to the CytoAtlas Assistant.
 
@@ -70,7 +158,7 @@ async def send_message(
     user_id = current_user.id if current_user else None
 
     # Check rate limits
-    await check_rate_limit(current_user, session_id)
+    await check_rate_limit(current_user, session_id, cache)
 
     try:
         response = await service.chat(
@@ -97,6 +185,7 @@ async def send_message_stream(
     request: Request,
     current_user: User | None = Depends(get_current_user_optional),
     service: ChatService = Depends(get_chat_service),
+    cache: CacheService = Depends(get_cache),
 ):
     """Stream a response from the CytoAtlas Assistant.
 
@@ -121,7 +210,7 @@ async def send_message_stream(
     session_id = request_data.session_id or get_session_id(request)
     user_id = current_user.id if current_user else None
 
-    await check_rate_limit(current_user, session_id)
+    await check_rate_limit(current_user, session_id, cache)
 
     async def generate():
         try:
