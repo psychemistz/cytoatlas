@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3 -u
 """
 Compute Mean Signature Gene Expression (CPM) per Cell Type for Validation.
 
@@ -54,12 +54,12 @@ def load_signature_matrix(signature_type: str) -> Optional[pd.DataFrame]:
         if signature_type == "CytoSig":
             from secactpy import load_cytosig
             return load_cytosig()
-        elif signature_type == "LinCytoSig":
-            from secactpy import load_lincytosig
-            return load_lincytosig()
         elif signature_type == "SecAct":
             from secactpy import load_secact
             return load_secact()
+        else:
+            log(f"  Unknown signature type: {signature_type}")
+            return None
     except Exception as e:
         log(f"  Error loading {signature_type}: {e}")
     return None
@@ -235,6 +235,8 @@ def compute_signature_expression(
 
     # Clean up
     del adata
+    import gc
+    gc.collect()
 
     return results
 
@@ -251,9 +253,9 @@ def main():
     )
     parser.add_argument(
         "--signature-type",
-        choices=["CytoSig", "LinCytoSig", "SecAct", "all"],
+        choices=["CytoSig", "SecAct", "all"],
         default="all",
-        help="Signature type (default: all)",
+        help="Signature type (default: all = CytoSig + SecAct)",
     )
     parser.add_argument(
         "--output-dir",
@@ -271,7 +273,7 @@ def main():
     args = parser.parse_args()
 
     atlases = ["cima", "inflammation", "scatlas"] if args.atlas == "all" else [args.atlas]
-    sig_types = ["CytoSig", "LinCytoSig", "SecAct"] if args.signature_type == "all" else [args.signature_type]
+    sig_types = ["CytoSig", "SecAct"] if args.signature_type == "all" else [args.signature_type]
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -280,7 +282,15 @@ def main():
         log(f"Processing {atlas.upper()}")
         log(f"{'='*60}")
 
-        all_results = {}
+        # Load existing data if present (to merge with new results)
+        output_file = args.output_dir / f"{atlas}_signature_expression.json"
+        if output_file.exists():
+            log(f"  Loading existing data from {output_file}")
+            with open(output_file) as f:
+                all_results = json.load(f)
+            log(f"  Existing signatures: {len(all_results)}")
+        else:
+            all_results = {}
 
         for sig_type in sig_types:
             log(f"\n{sig_type}:")
@@ -292,12 +302,11 @@ def main():
                 max_cells_per_ct=args.max_cells,
             )
 
-            # Add signature type to results
+            # Add signature type to results (merge with existing)
             for sig, ct_data in results.items():
                 all_results[f"{sig_type}:{sig}"] = ct_data
 
         # Save combined results
-        output_file = args.output_dir / f"{atlas}_signature_expression.json"
         with open(output_file, "w") as f:
             json.dump(all_results, f, indent=2)
         log(f"\nSaved to {output_file}")

@@ -3,7 +3,7 @@
 #SBATCH --output=/data/parks34/projects/2secactpy/logs/signature_expression_%j.out
 #SBATCH --error=/data/parks34/projects/2secactpy/logs/signature_expression_%j.err
 #SBATCH --time=4:00:00
-#SBATCH --mem=64G
+#SBATCH --mem=128G
 #SBATCH --cpus-per-task=4
 #SBATCH --partition=norm
 
@@ -19,6 +19,9 @@ echo "Working directory: $(pwd)"
 # Activate conda environment
 source ~/bin/myconda
 conda activate secactpy
+
+# Force unbuffered Python output
+export PYTHONUNBUFFERED=1
 
 cd /data/parks34/projects/2secactpy
 
