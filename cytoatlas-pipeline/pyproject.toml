@@ -1,0 +1,129 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cytoatlas-pipeline"
+version = "0.1.0"
+description = "GPU-accelerated data processing pipeline for CytoAtlas"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "Seongyong Park", email = "seongyong.park@nih.gov" }
+]
+keywords = [
+    "single-cell",
+    "cytokine",
+    "activity",
+    "gpu",
+    "ridge-regression",
+    "bioinformatics"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = [
+    "numpy>=1.26.0",
+    "pandas>=2.1.0",
+    "scipy>=1.12.0",
+    "anndata>=0.10.0",
+    "h5py>=3.10.0",
+    "scikit-learn>=1.4.0",
+    "statsmodels>=0.14.0",
+    "tqdm>=4.66.0",
+]
+
+[project.optional-dependencies]
+gpu = [
+    "cupy-cuda12x>=13.0.0",
+]
+cellxgene = [
+    "cellxgene-census>=1.0.0",
+    "tiledbsoma>=1.0.0",
+]
+celery = [
+    "celery[redis]>=5.3.0",
+]
+parquet = [
+    "pyarrow>=15.0.0",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-benchmark>=4.0.0",
+    "ruff>=0.2.0",
+    "mypy>=1.8.0",
+]
+all = [
+    "cytoatlas-pipeline[gpu,cellxgene,celery,parquet,dev]",
+]
+
+[project.scripts]
+cytoatlas-pipeline = "cytoatlas_pipeline.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/nih-nci/cytoatlas-pipeline"
+Documentation = "https://github.com/nih-nci/cytoatlas-pipeline#readme"
+Repository = "https://github.com/nih-nci/cytoatlas-pipeline"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cytoatlas_pipeline"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "gpu: marks tests that require GPU",
+    "integration: marks integration tests",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "NPY",    # NumPy-specific rules
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "B008",   # do not perform function calls in argument defaults
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["cytoatlas_pipeline"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
