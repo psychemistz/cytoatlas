@@ -27,6 +27,7 @@ class SignatureLoader:
         >>> loader = SignatureLoader()
         >>> cytosig = loader.get("CytoSig")
         >>> secact = loader.get("SecAct")
+        >>> lincytosig = loader.get("LinCytoSig")
         >>> custom = loader.load_custom("/path/to/signature.csv")
     """
 
@@ -34,6 +35,11 @@ class SignatureLoader:
     BUILTIN_SIGNATURES = {
         "CytoSig": "data/CytoSig.signature.csv",
         "SecAct": "data/SecAct.signature.csv",
+    }
+
+    # External signatures with absolute paths
+    EXTERNAL_SIGNATURES = {
+        "LinCytoSig": Path("/data/parks34/projects/2secactpy/results/celltype_signatures/celltype_cytokine_signatures.csv"),
     }
 
     def __init__(self, secactpy_path: Optional[Path] = None):
@@ -51,7 +57,7 @@ class SignatureLoader:
         Get a signature matrix by name.
 
         Args:
-            name: Signature name ("CytoSig" or "SecAct").
+            name: Signature name ("CytoSig", "SecAct", or "LinCytoSig").
 
         Returns:
             Signature matrix (genes x signatures).
@@ -63,8 +69,13 @@ class SignatureLoader:
             sig = load_cytosig()
         elif name == "SecAct":
             sig = load_secact()
+        elif name == "LinCytoSig":
+            sig = load_lincytosig()
         elif name in self.BUILTIN_SIGNATURES:
             path = self.secactpy_path / self.BUILTIN_SIGNATURES[name]
+            sig = pd.read_csv(path, index_col=0)
+        elif name in self.EXTERNAL_SIGNATURES:
+            path = self.EXTERNAL_SIGNATURES[name]
             sig = pd.read_csv(path, index_col=0)
         else:
             raise ValueError(f"Unknown signature: {name}")
@@ -106,8 +117,8 @@ class SignatureLoader:
         return sig
 
     def list_available(self) -> list[str]:
-        """List available built-in signatures."""
-        return list(self.BUILTIN_SIGNATURES.keys())
+        """List available signatures (built-in and external)."""
+        return list(self.BUILTIN_SIGNATURES.keys()) + list(self.EXTERNAL_SIGNATURES.keys())
 
     def get_signature_info(self, name: str) -> dict:
         """
@@ -167,6 +178,69 @@ def load_secact() -> pd.DataFrame:
         raise ImportError(
             "Could not load SecAct. Ensure SecActpy is installed."
         )
+
+
+# Default path for LinCytoSig
+LINCYTOSIG_PATH = Path("/data/parks34/projects/2secactpy/results/celltype_signatures/celltype_cytokine_signatures.csv")
+
+
+def load_lincytosig(
+    path: Optional[Union[str, Path]] = None,
+    cell_types: Optional[list[str]] = None,
+    cytokines: Optional[list[str]] = None,
+) -> pd.DataFrame:
+    """
+    Load LinCytoSig signature matrix.
+
+    LinCytoSig contains cell-type-specific cytokine response signatures,
+    derived from the CytoSig differential expression database using
+    median aggregation across experiments.
+
+    Signature columns are named as "CellType__Cytokine" (e.g., "Macrophage__IFNG").
+
+    Args:
+        path: Path to LinCytoSig CSV file. If None, uses default location.
+        cell_types: Filter to specific cell types (e.g., ["Macrophage", "T_CD4"]).
+        cytokines: Filter to specific cytokines (e.g., ["IFNG", "TNFA"]).
+
+    Returns:
+        LinCytoSig matrix (genes x cell_type__cytokine signatures).
+    """
+    try:
+        from secactpy import load_lincytosig as _load_lincytosig
+        return _load_lincytosig(path=path, cell_types=cell_types, cytokines=cytokines)
+    except ImportError:
+        # Fallback to direct file load
+        if path is None:
+            path = LINCYTOSIG_PATH
+        else:
+            path = Path(path)
+
+        if not path.exists():
+            raise FileNotFoundError(
+                f"LinCytoSig file not found: {path}\n"
+                "Generate it using: python scripts/build_celltype_signatures.py"
+            )
+
+        df = pd.read_csv(path, index_col=0)
+
+        # Filter by cell types
+        if cell_types is not None:
+            matching_cols = [
+                col for col in df.columns
+                if col.split('__')[0] in cell_types
+            ]
+            df = df[matching_cols]
+
+        # Filter by cytokines
+        if cytokines is not None:
+            matching_cols = [
+                col for col in df.columns
+                if col.split('__')[1] in cytokines
+            ]
+            df = df[matching_cols]
+
+        return df
 
 
 def load_custom_signature(
