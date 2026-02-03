@@ -1,12 +1,13 @@
 """
 Validation pipeline for activity inference credibility assessment.
 
-Implements 5-type validation:
+Implements 6-type validation:
 1. Sample-level: Expression vs activity regression
 2. Cell-type level: Pseudobulk correlation
 3. Pseudobulk vs single-cell: Aggregation comparison
 4. Single-cell: Expressing vs non-expressing cells
 5. Biological: Known marker validation
+6. LinCytoSig: Cell-type-specific cytokine signature validation
 """
 
 from cytoatlas_pipeline.validation.sample_level import (
@@ -43,6 +44,13 @@ from cytoatlas_pipeline.validation.quality_score import (
     compute_quality_score,
     ValidationSummary,
 )
+from cytoatlas_pipeline.validation.lincytosig import (
+    LinCytoSigValidator,
+    LinCytoSigResult,
+    LinCytoSigValidationSummary,
+    validate_lincytosig,
+    validate_lincytosig_specificity,
+)
 
 __all__ = [
     # Sample level
@@ -71,4 +79,10 @@ __all__ = [
     "QualityScorer",
     "compute_quality_score",
     "ValidationSummary",
+    # LinCytoSig
+    "LinCytoSigValidator",
+    "LinCytoSigResult",
+    "LinCytoSigValidationSummary",
+    "validate_lincytosig",
+    "validate_lincytosig_specificity",
 ]
