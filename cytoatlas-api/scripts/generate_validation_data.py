@@ -153,7 +153,7 @@ class RealValidationGenerator:
                     if sig:
                         signatures.add(sig)
             if signatures:
-                return sorted(signatures)[:20]  # Top 20 for manageable size
+                return sorted(signatures)  # Return all signatures
 
         # Fall back to cell type activity data
         celltype_data = self._get_celltype_activity()
@@ -165,7 +165,7 @@ class RealValidationGenerator:
                     if sig:
                         signatures.add(sig)
             if signatures:
-                return sorted(signatures)[:20]
+                return sorted(signatures)  # Return all signatures
 
         # Ultimate fallback to known signatures
         return ["IFNG", "TNF", "IL17A", "IL6", "IL10", "IL1B", "TGFB1", "IL2", "IL4"]
