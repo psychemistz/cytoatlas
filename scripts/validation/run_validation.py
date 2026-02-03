@@ -404,6 +404,12 @@ def validate_expression_vs_activity(
         expr_vals = expr_vals[mask]
         act_vals = act_vals[mask]
 
+        # Normalize expression: log1p then z-score
+        expr_vals = np.log1p(expr_vals)
+        expr_std = np.std(expr_vals)
+        if expr_std > 0:
+            expr_vals = (expr_vals - np.mean(expr_vals)) / expr_std
+
         # Correlations
         r_pearson, p_pearson = stats.pearsonr(expr_vals, act_vals)
         r_spearman, p_spearman = stats.spearmanr(expr_vals, act_vals)
@@ -481,8 +487,14 @@ def generate_scatter_data(
             common = list(np.random.choice(common, max_points_per_sig, replace=False))
 
         # Get values
-        expr_vals = expression.loc[gene, common].values
-        act_vals = activity.loc[sig_name, common].values
+        expr_vals = expression.loc[gene, common].values.astype(float)
+        act_vals = activity.loc[sig_name, common].values.astype(float)
+
+        # Normalize expression: log1p then z-score (same as validation)
+        expr_vals = np.log1p(expr_vals)
+        expr_std = np.std(expr_vals)
+        if expr_std > 0:
+            expr_vals = (expr_vals - np.mean(expr_vals)) / expr_std
 
         # Build data points
         points = []
