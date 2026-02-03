@@ -84,6 +84,22 @@ class LinCytoSigValidationSummary:
     mean_r2: float = 0.0
     """Mean R-squared."""
 
+    # Cell type coverage tracking
+    catalogued_celltypes: list[str] = field(default_factory=list)
+    """Cell types available in LinCytoSig catalogue."""
+
+    data_celltypes: list[str] = field(default_factory=list)
+    """Cell types present in the validation data."""
+
+    matched_celltypes: list[str] = field(default_factory=list)
+    """Cell types that could be validated (in both catalogue and data)."""
+
+    unmatched_data_celltypes: list[str] = field(default_factory=list)
+    """Data cell types not in LinCytoSig catalogue (cannot be validated)."""
+
+    unmatched_catalogue_celltypes: list[str] = field(default_factory=list)
+    """Catalogue cell types not in data."""
+
     def __post_init__(self):
         if self.results:
             self.n_signatures = len(self.results)
@@ -135,6 +151,61 @@ class LinCytoSigValidationSummary:
             "r2": "mean",
             "pvalue": lambda x: (x < 0.05).sum(),
         }).round(3)
+
+    def coverage_report(self) -> str:
+        """
+        Generate a cell type coverage report.
+
+        LinCytoSig can only predict for catalogued cell types. This report
+        shows which cell types could/couldn't be validated.
+
+        Returns:
+            Formatted coverage report string.
+        """
+        lines = [
+            "=" * 60,
+            "LinCytoSig Validation Coverage Report",
+            "=" * 60,
+            "",
+            f"Catalogued cell types: {len(self.catalogued_celltypes)}",
+            f"Data cell types: {len(self.data_celltypes)}",
+            f"Matched (validatable): {len(self.matched_celltypes)}",
+            "",
+        ]
+
+        if self.matched_celltypes:
+            lines.append("MATCHED CELL TYPES (can validate):")
+            for ct in self.matched_celltypes:
+                lines.append(f"  ✓ {ct}")
+            lines.append("")
+
+        if self.unmatched_data_celltypes:
+            lines.append("UNMATCHED DATA CELL TYPES (cannot validate - not in LinCytoSig):")
+            for ct in self.unmatched_data_celltypes:
+                lines.append(f"  ✗ {ct}")
+            lines.append("")
+            lines.append("  NOTE: These cell types are in your data but not in the")
+            lines.append("  LinCytoSig catalogue. Consider providing a cell_type_mapping")
+            lines.append("  to map these to catalogue cell types, or these cannot be validated.")
+            lines.append("")
+
+        if self.unmatched_catalogue_celltypes:
+            lines.append("CATALOGUE CELL TYPES NOT IN DATA:")
+            for ct in self.unmatched_catalogue_celltypes:
+                lines.append(f"  - {ct}")
+            lines.append("")
+
+        lines.extend([
+            "-" * 60,
+            f"Signatures validated: {self.n_signatures}",
+            f"Significant (p<0.05): {self.n_significant} ({100*self.n_significant/max(1,self.n_signatures):.1f}%)",
+            f"Positive correlation: {self.n_positive} ({100*self.n_positive/max(1,self.n_signatures):.1f}%)",
+            f"Mean correlation: {self.mean_correlation:.3f}",
+            f"Mean R²: {self.mean_r2:.3f}",
+            "=" * 60,
+        ])
+
+        return "\n".join(lines)
 
 
 class LinCytoSigValidator:
@@ -270,9 +341,14 @@ class LinCytoSigValidator:
         cell_type_col: str = "cell_type",
         sample_col: Optional[str] = None,
         level: Literal["sample", "celltype"] = "sample",
+        cell_type_mapping: Optional[dict[str, str]] = None,
     ) -> LinCytoSigValidationSummary:
         """
         Validate LinCytoSig signatures.
+
+        IMPORTANT: LinCytoSig can only predict for cell types in its catalogue.
+        Cell types in your data that are not in the LinCytoSig catalogue cannot
+        be validated and will be reported in `unmatched_data_celltypes`.
 
         Args:
             activity: Activity matrix (signatures x samples).
@@ -281,9 +357,11 @@ class LinCytoSigValidator:
             cell_type_col: Column name for cell type.
             sample_col: Column for sample grouping (for pseudobulk).
             level: Validation level - "sample" or "celltype" aggregated.
+            cell_type_mapping: Optional mapping from data cell types to LinCytoSig
+                catalogue cell types (e.g., {"CD4 T cell": "T_CD4"}).
 
         Returns:
-            LinCytoSigValidationSummary with validation results.
+            LinCytoSigValidationSummary with validation results and cell type coverage.
         """
         # Align samples
         common_samples = list(
@@ -299,8 +377,38 @@ class LinCytoSigValidator:
         # Build gene name lookup (case-insensitive)
         expr_genes_upper = {g.upper(): g for g in expression.index}
 
-        # Get all cell types and compute global rankings
-        all_cell_types = metadata[cell_type_col].unique()
+        # Extract catalogued cell types from activity signatures
+        catalogued_celltypes = set()
+        for sig in activity.index:
+            try:
+                ct, _ = self.parse_signature(sig)
+                catalogued_celltypes.add(ct)
+            except ValueError:
+                continue
+        catalogued_celltypes = sorted(catalogued_celltypes)
+
+        # Get data cell types
+        data_celltypes = sorted(metadata[cell_type_col].unique())
+
+        # Apply cell type mapping if provided
+        if cell_type_mapping:
+            # Create reverse mapping for validation
+            metadata = metadata.copy()
+            metadata["_mapped_celltype"] = metadata[cell_type_col].map(
+                lambda x: cell_type_mapping.get(x, x)
+            )
+            cell_type_col_internal = "_mapped_celltype"
+        else:
+            cell_type_col_internal = cell_type_col
+
+        # Determine matched/unmatched cell types
+        mapped_data_celltypes = set(metadata[cell_type_col_internal].unique())
+        matched_celltypes = sorted(set(catalogued_celltypes) & mapped_data_celltypes)
+        unmatched_data = sorted(mapped_data_celltypes - set(catalogued_celltypes))
+        unmatched_catalogue = sorted(set(catalogued_celltypes) - mapped_data_celltypes)
+
+        # Get all cell types for ranking
+        all_cell_types = metadata[cell_type_col_internal].unique()
 
         results = []
 
@@ -325,8 +433,8 @@ class LinCytoSigValidator:
             else:
                 actual_gene = expr_genes_upper[hgnc.upper()]
 
-            # Filter to matching cell type
-            ct_mask = metadata[cell_type_col] == cell_type
+            # Filter to matching cell type (using mapped cell type if applicable)
+            ct_mask = metadata[cell_type_col_internal] == cell_type
             ct_samples = metadata.index[ct_mask].tolist()
 
             if len(ct_samples) < self.min_samples:
@@ -357,7 +465,7 @@ class LinCytoSigValidator:
                 ct_expressions = {}
 
                 for ct in all_cell_types:
-                    ct_mask_all = metadata[cell_type_col] == ct
+                    ct_mask_all = metadata[cell_type_col_internal] == ct
                     ct_samp = metadata.index[ct_mask_all].tolist()
                     if len(ct_samp) >= 3:
                         ct_activities[ct] = activity.loc[signature, ct_samp].mean()
@@ -385,7 +493,14 @@ class LinCytoSigValidator:
                 expression_rank=expression_rank,
             ))
 
-        return LinCytoSigValidationSummary(results=results)
+        return LinCytoSigValidationSummary(
+            results=results,
+            catalogued_celltypes=catalogued_celltypes,
+            data_celltypes=data_celltypes,
+            matched_celltypes=matched_celltypes,
+            unmatched_data_celltypes=unmatched_data,
+            unmatched_catalogue_celltypes=unmatched_catalogue,
+        )
 
     def validate_cross_celltype(
         self,
@@ -488,9 +603,14 @@ def validate_lincytosig(
     metadata: pd.DataFrame,
     cell_type_col: str = "cell_type",
     min_samples: int = 10,
+    cell_type_mapping: Optional[dict[str, str]] = None,
 ) -> LinCytoSigValidationSummary:
     """
     Convenience function for LinCytoSig validation.
+
+    IMPORTANT: LinCytoSig can only predict for cell types in its catalogue
+    (45 cell types from CytoSig database). Cell types not in the catalogue
+    cannot be validated.
 
     Args:
         activity: Activity matrix (signatures x samples).
@@ -498,12 +618,23 @@ def validate_lincytosig(
         metadata: Sample metadata.
         cell_type_col: Cell type column name.
         min_samples: Minimum samples per cell type.
+        cell_type_mapping: Optional mapping from data cell types to LinCytoSig
+            catalogue names (e.g., {"CD4 T cell": "T_CD4", "CD8 T cell": "T_CD8"}).
 
     Returns:
-        LinCytoSigValidationSummary.
+        LinCytoSigValidationSummary with validation results and coverage report.
+
+    Example:
+        >>> summary = validate_lincytosig(activity, expression, metadata)
+        >>> print(summary.coverage_report())  # See which cell types can be validated
+        >>> print(f"Matched: {summary.matched_celltypes}")
+        >>> print(f"Cannot validate: {summary.unmatched_data_celltypes}")
     """
     validator = LinCytoSigValidator(min_samples=min_samples)
-    return validator.validate(activity, expression, metadata, cell_type_col)
+    return validator.validate(
+        activity, expression, metadata, cell_type_col,
+        cell_type_mapping=cell_type_mapping
+    )
 
 
 def validate_lincytosig_specificity(
