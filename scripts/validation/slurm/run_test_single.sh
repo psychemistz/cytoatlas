@@ -13,6 +13,14 @@
 
 set -e
 
+# Load CUDA modules
+module load CUDA/12.1
+module load cuDNN/8.9.2/CUDA-12
+
+# Set environment variables
+export CUDA_LAUNCH_BLOCKING=0
+export PYTHONUNBUFFERED=1
+
 source ~/bin/myconda
 conda activate secactpy
 
