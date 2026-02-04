@@ -18,6 +18,7 @@
         router.register('/atlas/:name', (params, query) => AtlasDetailPage.init(params));
         router.register('/validate', (params, query) => ValidatePage.init(params, query));
         router.register('/compare', (params, query) => ComparePage.init(params, query));
+        router.register('/methods', (params, query) => MethodsPage.init(params, query));
         router.register('/submit', (params, query) => SubmitPage.init(params, query));
         router.register('/chat', (params, query) => ChatPage.init(params, query));
         router.register('/chat/:conversationId', (params, query) => ChatPage.init(params, query));
