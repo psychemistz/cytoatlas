@@ -87,8 +87,10 @@ def aggregate_pseudobulk(adata, tissue_col='tissue', celltype_col='cellType1',
 
 
 def compute_and_save_activity(expr_df, meta_df, sig_matrix, sig_type, output_path):
-    """Compute activity and save as h5ad."""
-    log(f"Computing {sig_type} activity...")
+    """Compute activity using secactpy ridge (consistent with CIMA/Inflammation)."""
+    from secactpy import ridge
+
+    log(f"Computing {sig_type} activity using secactpy...")
 
     # Normalize to CPM and log-transform
     cpm = expr_df / expr_df.sum(axis=0) * 1e6
@@ -98,33 +100,41 @@ def compute_and_save_activity(expr_df, meta_df, sig_matrix, sig_type, output_pat
     common_genes = log_cpm.index.intersection(sig_matrix.index)
     log(f"  Common genes: {len(common_genes)}")
 
-    X = log_cpm.loc[common_genes].values.T  # samples x genes
+    # Prepare data for secactpy (genes x samples, genes x signatures)
+    X = log_cpm.loc[common_genes].values  # genes x samples
     S = sig_matrix.loc[common_genes].values  # genes x signatures
 
-    # Ridge regression
-    from numpy.linalg import lstsq
-    alpha = 1e-4
-    n_genes = S.shape[0]
-    activity = lstsq(S.T @ S + alpha * np.eye(S.shape[1]), S.T @ X.T, rcond=None)[0].T
+    # Run secactpy ridge regression (computes zscore = beta/se)
+    result = ridge(X, S, n_rand=0)  # n_rand=0 for standard ridge without permutation
 
-    # Z-score normalize
-    activity = (activity - activity.mean(axis=0)) / (activity.std(axis=0) + 1e-8)
+    # zscore from ridge() is (samples x signatures), need to transpose for expected format
+    zscore = result['zscore']
+    beta = result['beta']
+    pvalue = result['pvalue']
+    log(f"  Activity shape (raw): {zscore.shape}")
 
-    # Transpose for boxplot script: (signatures × samples)
-    # The boxplot script expects:
-    #   - obs = signature metadata (rows)
-    #   - var = sample metadata with 'cell_type' column (columns)
-    activity_T = activity.T  # signatures × samples
+    # Transpose to (signatures x samples) for consistency with CIMA/Inflammation format
+    zscore_t = zscore.T
+    beta_t = beta.T
+    pvalue_t = pvalue.T
+    log(f"  Activity shape (transposed): {zscore_t.shape}")
+    log(f"  Activity range: {zscore_t.min():.3f} to {zscore_t.max():.3f}")
+    log(f"  Activity mean: {zscore_t.mean():.3f}, std: {zscore_t.std():.3f}")
 
     # Create sample metadata for var
     sample_meta = meta_df.set_index('sample')[['cell_type', 'tissue', 'n_cells']].copy()
 
     # Create AnnData in expected format for boxplot script
+    # obs = signature names (rows), var = sample metadata (columns)
     adata = ad.AnnData(
-        X=activity_T,  # signatures × samples
-        obs=pd.DataFrame(index=sig_matrix.columns),  # signature names in obs
-        var=sample_meta  # sample metadata with cell_type in var
+        X=zscore_t,  # signatures × samples (43 × 3428)
+        obs=pd.DataFrame(index=sig_matrix.columns),  # signature names in obs (43)
+        var=sample_meta  # sample metadata with cell_type in var (3428)
     )
+
+    # Store beta and pvalue in layers (also transposed)
+    adata.layers['beta'] = beta_t
+    adata.layers['pvalue'] = pvalue_t
 
     # Save
     adata.write_h5ad(output_path)
