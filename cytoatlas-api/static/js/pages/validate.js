@@ -11,7 +11,7 @@ const ValidatePage = {
 
     // Tab-specific state
     atlasLevel: {
-        signature: 'IFNG',
+        signature: 'all',
         signatures: []
     },
     pseudobulk: {
@@ -183,6 +183,7 @@ const ValidatePage = {
                 <div class="filter-bar">
                     <label>Signature:
                         <select id="val-atlas-signature">
+                            <option value="all" ${this.atlasLevel.signature === 'all' ? 'selected' : ''}>All Signatures</option>
                             ${this.atlasLevel.signatures.map(s =>
                                 `<option value="${s}" ${s === this.atlasLevel.signature ? 'selected' : ''}>${s}</option>`
                             ).join('')}
@@ -201,15 +202,15 @@ const ValidatePage = {
                     </div>
                     <div class="panel">
                         <div class="viz-title">Signature Correlation Ranking</div>
-                        <div class="viz-subtitle">Signatures ranked by cell type correlation</div>
+                        <div class="viz-subtitle">Signatures ranked by cell type correlation (sorted high → low)</div>
                         <div id="val-atlas-ranking" class="plot-container" style="height: 400px;"></div>
                     </div>
                 </div>
 
                 <div class="panel-grid">
                     <div class="panel full-width">
-                        <div class="viz-title">Cross-Atlas Cell Type Correlation</div>
-                        <div class="viz-subtitle">Correlation by cell type across all three atlases</div>
+                        <div class="viz-title">Cross-Atlas Signature Correlation</div>
+                        <div class="viz-subtitle">Per-signature correlation comparison across all three atlases</div>
                         <div id="val-atlas-heatmap" class="plot-container" style="height: 350px;"></div>
                     </div>
                 </div>
@@ -251,53 +252,112 @@ const ValidatePage = {
         if (!container) return;
 
         try {
-            const data = await API.getCellTypeLevelValidation(
-                this.currentAtlas,
-                this.atlasLevel.signature,
-                this.signatureType
-            );
+            if (this.atlasLevel.signature === 'all') {
+                // All Signatures mode - show all signatures with different colors
+                const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+                               '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'];
+                const traces = [];
+                const allX = [], allY = [];
 
-            if (data && data.points) {
-                const trace = {
-                    x: data.points.map(p => p.expression),
-                    y: data.points.map(p => p.activity),
-                    mode: 'markers+text',
-                    type: 'scatter',
-                    text: data.points.map(p => p.cell_type),
-                    textposition: 'top center',
-                    textfont: { size: 9 },
-                    marker: {
-                        size: 10,
-                        color: '#3b82f6',
-                        opacity: 0.7
-                    },
-                    hovertemplate: '<b>%{text}</b><br>Expression: %{x:.3f}<br>Activity: %{y:.3f}<extra></extra>'
-                };
+                for (let i = 0; i < Math.min(this.atlasLevel.signatures.length, 10); i++) {
+                    const sig = this.atlasLevel.signatures[i];
+                    try {
+                        const data = await API.getCellTypeLevelValidation(
+                            this.currentAtlas, sig, this.signatureType
+                        );
+                        if (data?.points?.length > 0) {
+                            traces.push({
+                                x: data.points.map(p => p.expression),
+                                y: data.points.map(p => p.activity),
+                                mode: 'markers',
+                                type: 'scatter',
+                                name: sig,
+                                text: data.points.map(p => `${sig}<br>${p.cell_type}`),
+                                marker: { size: 8, color: colors[i % colors.length], opacity: 0.7 },
+                                hovertemplate: '%{text}<br>Expression: %{x:.2f}<br>Activity: %{y:.2f}<extra></extra>'
+                            });
+                            data.points.forEach(p => { allX.push(p.expression); allY.push(p.activity); });
+                        }
+                    } catch (e) { /* skip */ }
+                }
 
-                // Add trend line
-                const trendline = this.calculateTrendline(
-                    data.points.map(p => p.expression),
-                    data.points.map(p => p.activity)
+                if (traces.length > 0) {
+                    // Calculate overall correlation
+                    const n = allX.length;
+                    const sumX = allX.reduce((a, b) => a + b, 0);
+                    const sumY = allY.reduce((a, b) => a + b, 0);
+                    const sumXY = allX.reduce((a, x, i) => a + x * allY[i], 0);
+                    const sumX2 = allX.reduce((a, x) => a + x * x, 0);
+                    const sumY2 = allY.reduce((a, y) => a + y * y, 0);
+                    const overallR = (n * sumXY - sumX * sumY) / Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+
+                    // Add regression line
+                    const trendline = this.calculateTrendline(allX, allY);
+                    traces.push(trendline);
+
+                    Plotly.newPlot(container, traces, {
+                        xaxis: { title: 'Mean Signature Gene Expression (z-score)' },
+                        yaxis: { title: 'Mean Predicted Activity (z-score)' },
+                        margin: { l: 60, r: 30, t: 50, b: 50 },
+                        legend: { orientation: 'v', x: 1.02, y: 1, font: { size: 9 } },
+                        annotations: [{
+                            x: 0.02, y: 0.98, xref: 'paper', yref: 'paper',
+                            text: `All Signatures<br>r = ${overallR.toFixed(3)}<br>n = ${n} points`,
+                            showarrow: false, font: { size: 12 },
+                            bgcolor: 'rgba(255,255,255,0.9)', borderpad: 6
+                        }],
+                        title: { text: `Atlas Level: All Signatures (${traces.length - 1} signatures × cell types)`, font: { size: 14 } }
+                    }, {responsive: true});
+                } else {
+                    container.innerHTML = '<p class="no-data">No data available</p>';
+                }
+            } else {
+                // Single signature mode
+                const data = await API.getCellTypeLevelValidation(
+                    this.currentAtlas,
+                    this.atlasLevel.signature,
+                    this.signatureType
                 );
 
-                const layout = {
-                    xaxis: { title: 'Mean Expression (log1p)' },
-                    yaxis: { title: 'Mean Activity (z-score)' },
-                    margin: { l: 60, r: 20, t: 40, b: 60 },
-                    annotations: [{
-                        x: 0.02,
-                        y: 0.98,
-                        xref: 'paper',
-                        yref: 'paper',
-                        text: `r = ${data.stats?.pearson_r?.toFixed(3) || 'N/A'}`,
-                        showarrow: false,
-                        font: { size: 14 }
-                    }]
-                };
+                if (data && data.points) {
+                    const xVals = data.points.map(p => p.expression);
+                    const yVals = data.points.map(p => p.activity);
+                    const r = data.stats?.pearson_r || 0;
+                    const pVal = data.stats?.p_value;
 
-                Plotly.newPlot(container, [trace, trendline], layout, {responsive: true});
-            } else {
-                container.innerHTML = '<p class="no-data">No data available</p>';
+                    const trace = {
+                        x: xVals,
+                        y: yVals,
+                        mode: 'markers+text',
+                        type: 'scatter',
+                        text: data.points.map(p => (p.cell_type || '').replace(/_/g, ' ')),
+                        textposition: 'top center',
+                        textfont: { size: 9 },
+                        marker: {
+                            size: data.points.map(p => Math.min(20, Math.max(8, Math.log10(p.n_cells || 1000) * 3))),
+                            color: '#1a5f7a',
+                            opacity: 0.7
+                        },
+                        hovertemplate: '%{text}<br>Expression: %{x:.2f}<br>Activity: %{y:.2f}<extra></extra>'
+                    };
+
+                    const trendline = this.calculateTrendline(xVals, yVals);
+
+                    Plotly.newPlot(container, [trace, trendline], {
+                        xaxis: { title: 'Mean Signature Gene Expression (z-score)' },
+                        yaxis: { title: 'Mean Predicted Activity (z-score)' },
+                        margin: { l: 60, r: 30, t: 50, b: 50 },
+                        showlegend: false,
+                        annotations: [{
+                            x: 0.02, y: 0.98, xref: 'paper', yref: 'paper',
+                            text: `${this.atlasLevel.signature}<br>r = ${r.toFixed(3)}<br>p = ${pVal ? pVal.toExponential(2) : 'N/A'}<br>n = ${data.points.length} cell types`,
+                            showarrow: false, font: { size: 12 },
+                            bgcolor: 'rgba(255,255,255,0.9)', borderpad: 6
+                        }]
+                    }, {responsive: true});
+                } else {
+                    container.innerHTML = '<p class="no-data">No data available</p>';
+                }
             }
         } catch (error) {
             container.innerHTML = `<p class="error">Error: ${error.message}</p>`;
@@ -328,24 +388,37 @@ const ValidatePage = {
             }
 
             if (rankings.length > 0) {
-                // Sort by correlation
+                // Sort by correlation (high to low) and take top 15
                 rankings.sort((a, b) => b.r - a.r);
+                const top15 = rankings.slice(0, 15);
+
+                // Gradient coloring based on r value
+                const getColor = (r) => {
+                    if (r > 0.9) return '#1a9850';  // Dark green
+                    if (r > 0.7) return '#91cf60';  // Light green
+                    if (r > 0.5) return '#d9ef8b';  // Yellow-green
+                    if (r > 0) return '#fee08b';    // Yellow
+                    return '#d73027';               // Red
+                };
 
                 const trace = {
-                    x: rankings.map(r => r.r),
-                    y: rankings.map(r => r.signature),
+                    x: top15.map(r => r.r),
+                    y: top15.map(r => r.signature),
                     type: 'bar',
                     orientation: 'h',
                     marker: {
-                        color: rankings.map(r => r.r > 0 ? '#22c55e' : '#ef4444')
-                    }
+                        color: top15.map(r => getColor(r.r))
+                    },
+                    text: top15.map(r => r.r.toFixed(2)),
+                    textposition: 'outside',
+                    hovertemplate: '%{y}<br>r = %{x:.3f}<extra></extra>'
                 };
 
                 const layout = {
-                    xaxis: { title: 'Pearson r', range: [-1, 1] },
-                    yaxis: { automargin: true },
-                    margin: { l: 100, r: 20, t: 20, b: 60 },
-                    height: 400
+                    xaxis: { title: 'Pearson r', range: [Math.min(0, ...top15.map(r => r.r)) - 0.1, 1] },
+                    yaxis: { automargin: true, autorange: 'reversed' },
+                    margin: { l: 100, r: 50, t: 30, b: 50 },
+                    title: { text: 'Signatures Ranked by Cell Type Correlation', font: { size: 14 } }
                 };
 
                 Plotly.newPlot(container, [trace], layout, {responsive: true});
@@ -362,47 +435,48 @@ const ValidatePage = {
         if (!container) return;
 
         try {
-            // Get data for all atlases
-            const atlases = ['cima', 'inflammation', 'scatlas'];
-            const celltypes = new Set();
-            const atlasData = {};
+            // Get correlation data for signatures across all atlases
+            const atlasKeys = ['cima', 'inflammation', 'scatlas'];
+            const atlasNames = ['CIMA', 'Inflammation', 'scAtlas'];
+            const atlasCorrelations = {};
 
-            for (const atlas of atlases) {
-                try {
-                    const data = await API.getCellTypeLevelValidation(
-                        atlas, this.atlasLevel.signature, this.signatureType
-                    );
-                    if (data?.points) {
-                        atlasData[atlas] = {};
-                        data.points.forEach(p => {
-                            celltypes.add(p.cell_type);
-                            atlasData[atlas][p.cell_type] = p.activity;
-                        });
-                    }
-                } catch (e) {
-                    atlasData[atlas] = {};
+            // Get correlations for top signatures from each atlas
+            const allSignatures = new Set();
+            for (const atlas of atlasKeys) {
+                atlasCorrelations[atlas] = {};
+                for (const sig of this.atlasLevel.signatures.slice(0, 15)) {
+                    try {
+                        const data = await API.getCellTypeLevelValidation(atlas, sig, this.signatureType);
+                        if (data?.stats?.pearson_r !== undefined) {
+                            atlasCorrelations[atlas][sig] = data.stats.pearson_r;
+                            allSignatures.add(sig);
+                        }
+                    } catch (e) { /* skip */ }
                 }
             }
 
-            const celltypeList = Array.from(celltypes).sort();
+            const sigList = Array.from(allSignatures).slice(0, 10);
 
-            if (celltypeList.length > 0) {
-                const traces = atlases.map((atlas, i) => ({
-                    x: celltypeList,
-                    y: celltypeList.map(ct => atlasData[atlas]?.[ct] || null),
-                    name: atlas.charAt(0).toUpperCase() + atlas.slice(1),
-                    type: 'bar'
-                }));
+            if (sigList.length > 0) {
+                // Build heatmap data: each row is an atlas, each column is a signature
+                const heatmapData = atlasKeys.map(atlas =>
+                    sigList.map(sig => atlasCorrelations[atlas]?.[sig] ?? null)
+                );
 
-                const layout = {
-                    barmode: 'group',
-                    xaxis: { title: 'Cell Type', tickangle: 45 },
-                    yaxis: { title: 'Mean Activity' },
-                    margin: { l: 60, r: 20, t: 20, b: 120 },
-                    legend: { orientation: 'h', y: 1.1 }
-                };
-
-                Plotly.newPlot(container, traces, layout, {responsive: true});
+                Plotly.newPlot(container, [{
+                    type: 'heatmap',
+                    z: heatmapData,
+                    x: sigList,
+                    y: atlasNames,
+                    colorscale: 'RdYlGn',
+                    zmin: -0.5, zmax: 1,
+                    colorbar: { title: 'r' },
+                    hovertemplate: '%{y} - %{x}<br>r = %{z:.3f}<extra></extra>'
+                }], {
+                    margin: { l: 100, r: 30, t: 30, b: 100 },
+                    xaxis: { tickangle: -45 },
+                    title: { text: 'Cross-Atlas Signature Correlation Comparison', font: { size: 14 } }
+                }, {responsive: true});
             } else {
                 container.innerHTML = '<p class="no-data">No cross-atlas data available</p>';
             }
