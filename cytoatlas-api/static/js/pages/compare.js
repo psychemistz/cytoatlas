@@ -304,14 +304,9 @@ const ComparePage = {
         };
 
         return Object.entries(atlases).map(([key, atlas]) => {
-            // For scAtlas, show donors; for others show samples
-            let sampleDisplay;
-            if (key.startsWith('scatlas')) {
-                const donors = atlas.donors || atlas.samples || 0;
-                sampleDisplay = donors > 0 ? `${this.formatNumber(donors)} donors` : '-';
-            } else {
-                sampleDisplay = atlas.samples > 0 ? this.formatNumber(atlas.samples) : '-';
-            }
+            // Show sample/donor count as number only
+            const sampleCount = atlas.donors || atlas.samples || 0;
+            const sampleDisplay = sampleCount > 0 ? this.formatNumber(sampleCount) : '-';
 
             return `
                 <tr>
