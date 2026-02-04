@@ -78,6 +78,34 @@ class ValidationService(BaseService):
                 return v
         return None
 
+    async def _calculate_pb_vs_sc_mean_r(
+        self,
+        atlas: str,
+        signature_type: str,
+    ) -> float:
+        """Calculate mean pseudobulk vs single-cell correlation across all signatures."""
+        data = self._load_validation_data(atlas)
+        if not data:
+            return 0.85  # Default fallback
+
+        pb_vs_sc = data.get("pseudobulk_vs_sc", [])
+        if not pb_vs_sc:
+            return 0.85
+
+        # Filter by signature type and collect pearson_r values
+        r_values = []
+        for v in pb_vs_sc:
+            if v.get("signature_type") == signature_type:
+                stats = v.get("stats_vs_mean", {})
+                r = stats.get("pearson_r")
+                if r is not None:
+                    r_values.append(r)
+
+        if not r_values:
+            return 0.85
+
+        return sum(r_values) / len(r_values)
+
     # ==================== Type 1: Sample-Level Validation ====================
 
     @cached(prefix="validation_sample", ttl=3600)
@@ -541,6 +569,9 @@ class ValidationService(BaseService):
         celltype_val = await self.get_celltype_level_validation(atlas, "IFNG", signature_type)
         celltype_r2 = celltype_val.stats.r_squared if celltype_val else 0.7
 
+        # Pseudobulk vs single-cell correlation (mean across all signatures)
+        pb_vs_sc_r = await self._calculate_pb_vs_sc_mean_r(atlas, signature_type)
+
         # Calculate overall quality score (weighted average)
         quality_score = (
             sample_r2 * 20 +
@@ -589,7 +620,7 @@ class ValidationService(BaseService):
             celltype_level_median_r=celltype_r2,
             celltype_level_mean_r=celltype_r2,
             n_signatures_celltype_valid=len(gene_coverage),
-            pb_vs_sc_median_r=0.85,  # Would compute from data
+            pb_vs_sc_median_r=pb_vs_sc_r,
             mean_gene_coverage=mean_coverage * 100,
             min_gene_coverage=min((g.coverage_pct for g in gene_coverage), default=0),
             biological_validation_rate=bio_assoc.validation_rate,

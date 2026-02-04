@@ -1102,7 +1102,7 @@ const ValidatePage = {
                     const summary = await API.getValidationSummary(atlasKeys[i], this.signatureType);
                     const values = [
                         summary.sample_level_mean_r || 0,      // Pseudobulk (sample level)
-                        summary.singlecell_level_mean_r || 0,  // Single-cell level
+                        summary.pb_vs_sc_median_r || 0,        // Single-cell level (PB vs SC correlation)
                         summary.celltype_level_mean_r || 0     // Atlas (cell type level)
                     ];
 
