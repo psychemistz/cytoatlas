@@ -403,12 +403,6 @@ def compute_celltype_aggregated_comparison(atlas1: str, atlas2: str, sig_type: s
     # Get common harmonized types and signatures
     common_types = set(meta1['harmonized'].dropna()) & set(meta2['harmonized'].dropna())
     common_sigs = set(act1.columns) & set(act2.columns)
-
-    if sig_type == 'SecAct':
-        # Limit to top 100 most variable signatures for SecAct
-        combined_var = act1[list(common_sigs)].var() + act2[list(common_sigs)].var()
-        common_sigs = set(combined_var.nlargest(100).index)
-
     common_sigs = sorted(common_sigs)
     common_types = sorted(common_types)
 
@@ -522,11 +516,6 @@ def compute_signature_agreement(atlas1: str, atlas2: str, sig_type: str,
 
     common_types = set(meta1['harmonized'].dropna()) & set(meta2['harmonized'].dropna())
     common_sigs = set(act1.columns) & set(act2.columns)
-
-    if sig_type == 'SecAct':
-        combined_var = act1[list(common_sigs)].var() + act2[list(common_sigs)].var()
-        common_sigs = set(combined_var.nlargest(100).index)
-
     common_sigs = sorted(common_sigs)
     common_types = sorted(common_types)
 
@@ -878,12 +867,6 @@ def compute_singlecell_mean_activity(atlas1: str, atlas2: str, sig_type: str,
     # Get common types and signatures
     common_types = set(meta1['harmonized'].dropna().unique()) & set(meta2['harmonized'].dropna().unique())
     common_sigs = set(act1.columns) & set(act2.columns)
-
-    if sig_type == 'SecAct':
-        # Limit to top 100 most variable (more for SecAct to show diversity)
-        combined_var = act1[list(common_sigs)].var() + act2[list(common_sigs)].var()
-        common_sigs = set(combined_var.nlargest(100).index)
-
     common_sigs = sorted(common_sigs)
     common_types = sorted(common_types)
 

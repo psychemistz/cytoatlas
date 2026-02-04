@@ -93,7 +93,7 @@ const SearchPage = {
                         <ul>
                             <li><strong>Gene Expression</strong> - Expression levels by cell type across atlases</li>
                             <li><strong>CytoSig Activity</strong> - Cytokine signaling activity (44 cytokines)</li>
-                            <li><strong>SecAct Activity</strong> - Secreted protein activity (1,249 proteins)</li>
+                            <li><strong>SecAct Activity</strong> - Secreted protein activity (1,170 proteins)</li>
                             <li><strong>Disease Associations</strong> - Differential activity in diseases vs healthy</li>
                             <li><strong>Correlations</strong> - Age, BMI, and biochemistry correlations</li>
                         </ul>

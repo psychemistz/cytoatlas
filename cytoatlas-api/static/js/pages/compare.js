@@ -91,7 +91,7 @@ const ComparePage = {
                         </div>
                         <select id="signature-type-select" class="filter-select" onchange="ComparePage.changeSignatureType(this.value)">
                             <option value="CytoSig" ${this.signatureType === 'CytoSig' ? 'selected' : ''}>CytoSig (43)</option>
-                            <option value="SecAct" ${this.signatureType === 'SecAct' ? 'selected' : ''}>SecAct (1,249)</option>
+                            <option value="SecAct" ${this.signatureType === 'SecAct' ? 'selected' : ''}>SecAct (1,170)</option>
                         </select>
                     </div>
                 </div>
