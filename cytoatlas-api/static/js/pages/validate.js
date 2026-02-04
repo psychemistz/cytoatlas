@@ -1090,27 +1090,48 @@ const ValidatePage = {
         if (!container) return;
 
         try {
-            const summary = await API.getValidationSummary(this.currentAtlas, this.signatureType);
-
+            const atlasKeys = ['cima', 'inflammation', 'scatlas'];
+            const atlasNames = ['CIMA', 'Inflammation', 'scAtlas'];
+            const atlasColors = ['#2ca02c', '#ff7f0e', '#9467bd'];
             const levels = ['Pseudobulk', 'Single-Cell', 'Atlas'];
-            const values = [
-                summary.sample_level_mean_r || 0.75,    // Pseudobulk (sample level)
-                summary.singlecell_level_mean_r || 0.45, // Single-cell level
-                summary.celltype_level_mean_r || 0.65   // Atlas (cell type level)
-            ];
 
-            Plotly.newPlot(container, [{
-                type: 'bar',
-                x: levels,
-                y: values,
-                marker: { color: '#1a5f7a' },
-                text: values.map(v => v.toFixed(3)),
-                textposition: 'auto'
-            }], {
-                xaxis: { title: 'Validation Level' },
-                yaxis: { title: 'Mean Pearson r', range: [0, 1] },
-                margin: { l: 50, r: 30, t: 30, b: 50 }
-            }, {responsive: true});
+            // Create one trace per atlas (grouped bars)
+            const traces = [];
+            for (let i = 0; i < atlasKeys.length; i++) {
+                try {
+                    const summary = await API.getValidationSummary(atlasKeys[i], this.signatureType);
+                    const values = [
+                        summary.sample_level_mean_r || 0,      // Pseudobulk (sample level)
+                        summary.singlecell_level_mean_r || 0,  // Single-cell level
+                        summary.celltype_level_mean_r || 0     // Atlas (cell type level)
+                    ];
+
+                    traces.push({
+                        type: 'bar',
+                        name: atlasNames[i],
+                        x: levels,
+                        y: values,
+                        marker: { color: atlasColors[i] },
+                        text: values.map(v => v.toFixed(2)),
+                        textposition: 'outside',
+                        textfont: { size: 10 }
+                    });
+                } catch (e) {
+                    // Skip atlas if error
+                }
+            }
+
+            if (traces.length > 0) {
+                Plotly.newPlot(container, traces, {
+                    barmode: 'group',
+                    xaxis: { title: 'Validation Level' },
+                    yaxis: { title: 'Mean Pearson r', range: [0, 1] },
+                    margin: { l: 50, r: 30, t: 30, b: 50 },
+                    legend: { orientation: 'h', y: 1.15 }
+                }, {responsive: true});
+            } else {
+                container.innerHTML = '<p class="no-data">No data available</p>';
+            }
         } catch (error) {
             container.innerHTML = `<p class="error">Error loading level comparison</p>`;
         }
