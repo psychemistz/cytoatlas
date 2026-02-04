@@ -4106,3 +4106,194 @@ h3 .badge {
     margin: 0 0 var(--spacing-xs) 0;
     font-size: 1rem;
 }
+
+/* ==================== Meta-Analysis Styles ==================== */
+.meta-analysis-tab .tab-controls {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--spacing-md);
+    flex-wrap: wrap;
+    margin-bottom: var(--spacing-lg);
+}
+
+.meta-analysis-tab .btn-small {
+    padding: 0.5rem 1rem;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
+.meta-analysis-tab .btn-small:hover {
+    background: var(--primary-dark);
+}
+
+/* Gene Detail Panel */
+.meta-gene-detail {
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+    margin-bottom: var(--spacing-lg);
+}
+
+.meta-gene-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.meta-gene-name {
+    font-size: 1.25rem;
+    font-weight: bold;
+    color: #1565c0;
+}
+
+.meta-gene-info {
+    font-size: 0.9rem;
+    color: #666;
+    margin-top: var(--spacing-xs);
+}
+
+.significant-badge {
+    color: #7b1fa2;
+    font-weight: bold;
+    margin-left: 0.5rem;
+}
+
+.meta-gene-correlations {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-md);
+}
+
+.atlas-effect-card {
+    text-align: center;
+    background: white;
+    padding: var(--spacing-md);
+    border-radius: var(--radius-md);
+}
+
+.atlas-effect-value {
+    font-size: 1.25rem;
+    font-weight: bold;
+}
+
+.atlas-effect-name {
+    font-size: 0.85rem;
+    color: #666;
+    margin-top: var(--spacing-xs);
+}
+
+.atlas-effect-ci {
+    font-size: 0.75rem;
+    color: #999;
+}
+
+.atlas-effect-n {
+    font-size: 0.75rem;
+    color: #999;
+}
+
+/* Meta Summary Cards */
+.meta-summary-cards {
+    display: flex;
+    align-items: stretch;
+    gap: var(--spacing-lg);
+    flex-wrap: wrap;
+}
+
+.meta-summary-cards .summary-card {
+    text-align: center;
+    min-width: 120px;
+}
+
+.meta-summary-cards .summary-description {
+    flex: 1;
+    min-width: 200px;
+    text-align: left;
+    padding-left: var(--spacing-lg);
+    border-left: 2px solid #a5d6a7;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.summary-sublabel {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: var(--spacing-xs);
+}
+
+.highlight-purple {
+    background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%) !important;
+    border-color: #ce93d8 !important;
+}
+
+.highlight-purple .summary-value {
+    color: #7b1fa2;
+}
+
+/* Meta Grid Layout */
+.meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-lg);
+}
+
+@media (max-width: 1200px) {
+    .meta-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.meta-panel {
+    background: var(--bg-primary);
+    padding: var(--spacing-lg);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+}
+
+.meta-panel h3 {
+    margin: 0 0 var(--spacing-xs) 0;
+    font-size: 1rem;
+}
+
+/* Heterogeneity Perfect State */
+.heterogeneity-perfect {
+    padding: var(--spacing-2xl);
+    text-align: center;
+    color: #666;
+}
+
+.heterogeneity-perfect .heterogeneity-value {
+    font-size: 3rem;
+    color: #2ca02c;
+    margin-bottom: var(--spacing-md);
+}
+
+.heterogeneity-perfect .heterogeneity-desc {
+    font-size: 0.9rem;
+    margin-top: var(--spacing-md);
+}
+
+.heterogeneity-perfect .heterogeneity-note {
+    font-size: 0.85rem;
+    margin-top: var(--spacing-sm);
+    color: #999;
+}
+
+.heterogeneity-perfect .text-green {
+    color: #2ca02c;
+    font-weight: bold;
+}
+
+/* Limit Note */
+.limit-note {
+    text-align: center;
+    font-size: 0.8rem;
+    color: #666;
+    margin-bottom: var(--spacing-sm);
+}

@@ -1296,27 +1296,42 @@ const ComparePage = {
                         </select>
                     </div>
                     <div class="control-group">
-                        <label>Signature (optional)</label>
-                        <input type="text" id="meta-signature-filter" class="filter-input"
-                               placeholder="Filter by signature..."
-                               value="${this.tabs.metaAnalysis.signature || ''}"
-                               onchange="ComparePage.changeMetaSignature(this.value)">
+                        <label>Search Signature</label>
+                        <input type="text" id="meta-search" class="filter-input" list="meta-signature-list"
+                               placeholder="Type signature name..."
+                               oninput="ComparePage.onMetaSearch(this.value)">
+                        <datalist id="meta-signature-list"></datalist>
+                    </div>
+                    <button class="btn-small" onclick="ComparePage.clearMetaSearch()" style="margin-left: 0.5rem;">Clear</button>
+                </div>
+
+                <!-- Gene Detail Panel (shown when a gene is searched) -->
+                <div id="meta-gene-detail" class="meta-gene-detail" style="display: none;">
+                    <div class="meta-gene-header">
+                        <div>
+                            <div class="meta-gene-name" id="meta-gene-name">-</div>
+                            <div class="meta-gene-info" id="meta-gene-info">-</div>
+                        </div>
+                    </div>
+                    <div class="meta-gene-correlations" id="meta-gene-correlations">
+                        <!-- Filled by JS -->
                     </div>
                 </div>
 
+                <!-- Replication Summary -->
                 <div class="meta-summary" id="meta-summary">
                     <!-- Summary will be loaded -->
                 </div>
 
                 <div class="meta-grid">
                     <div class="meta-panel main-panel">
-                        <h3>Forest Plot</h3>
-                        <p class="viz-subtitle">Individual atlas effects and pooled estimates</p>
+                        <h3 id="meta-forest-title">Replicated Associations</h3>
+                        <p class="viz-subtitle">Forest plot showing effect sizes from each atlas and pooled estimate</p>
                         <div id="forest-plot" class="plot-container plot-large"></div>
                     </div>
                     <div class="meta-panel side-panel">
-                        <h3>Heterogeneity (I²)</h3>
-                        <p class="viz-subtitle">Variation between atlas estimates</p>
+                        <h3>Replication Consistency</h3>
+                        <p class="viz-subtitle">I² = 0%: identical effects; I² > 75%: substantial heterogeneity</p>
                         <div id="heterogeneity-chart" class="plot-container"></div>
                     </div>
                 </div>
@@ -1326,6 +1341,9 @@ const ComparePage = {
         await this.loadForestPlot();
     },
 
+    // Store meta data for gene detail lookup
+    metaData: null,
+
     /**
      * Load forest plot data
      */
@@ -1333,50 +1351,228 @@ const ComparePage = {
         const data = await API.getMetaAnalysisForest({
             analysis: this.tabs.metaAnalysis.analysis,
             signature_type: this.signatureType,
-            signature: this.tabs.metaAnalysis.signature || undefined,
         });
 
         if (!data || !data.forest_data || data.forest_data.length === 0) {
             document.getElementById('forest-plot').innerHTML =
                 '<p class="loading">No meta-analysis data available</p>';
+            document.getElementById('heterogeneity-chart').innerHTML = '';
             return;
         }
 
-        // Update summary
+        // Store for gene detail lookup
+        this.metaData = data.forest_data;
+
+        // Populate search datalist
+        const datalist = document.getElementById('meta-signature-list');
+        if (datalist) {
+            datalist.innerHTML = data.forest_data.map(d => `<option value="${d.signature}">`).join('');
+        }
+
+        // Update title based on analysis type
+        const analysisLabels = {
+            'age': { title: 'Replicated Age Associations', desc: 'age correlation' },
+            'bmi': { title: 'Replicated BMI Associations', desc: 'BMI correlation' },
+            'sex': { title: 'Replicated Sex Differences', desc: 'sex difference' }
+        };
+        const label = analysisLabels[this.tabs.metaAnalysis.analysis] || { title: 'Replicated Associations', desc: 'correlation' };
+        document.getElementById('meta-forest-title').textContent = label.title;
+
+        // Update summary cards
         const summary = data.summary || {};
         document.getElementById('meta-summary').innerHTML = `
-            <div class="summary-cards">
-                <div class="summary-card">
-                    <div class="summary-value">${summary.n_signatures || 0}</div>
-                    <div class="summary-label">Signatures Analyzed</div>
-                </div>
+            <div class="summary-cards meta-summary-cards">
                 <div class="summary-card highlight-green">
-                    <div class="summary-value">${summary.n_significant || 0}</div>
-                    <div class="summary-label">Significant Effects</div>
+                    <div class="summary-value">${summary.n_signatures || 0}</div>
+                    <div class="summary-label">Replicated Signatures</div>
+                    <div class="summary-sublabel">Data from 2+ atlases</div>
                 </div>
                 <div class="summary-card highlight-blue">
                     <div class="summary-value">${summary.n_consistent_direction || 0}</div>
                     <div class="summary-label">Consistent Direction</div>
+                    <div class="summary-sublabel">Same sign across atlases</div>
                 </div>
-                <div class="summary-card highlight-yellow">
-                    <div class="summary-value">${summary.n_heterogeneous || 0}</div>
-                    <div class="summary-label">High Heterogeneity</div>
+                <div class="summary-card highlight-purple">
+                    <div class="summary-value">${summary.n_significant || 0}</div>
+                    <div class="summary-label">Significant Pooled</div>
+                    <div class="summary-sublabel">p < 0.05 in meta-analysis</div>
+                </div>
+                <div class="summary-card summary-description">
+                    <strong>Cross-Atlas Replication</strong>
+                    <div class="summary-sublabel">Shows signatures with ${label.desc} data from multiple atlases (CIMA + Inflammation). ${data.forest_data.length} signatures available.</div>
                 </div>
             </div>
         `;
 
+        // Check if gene detail panel should be shown
+        const searchValue = document.getElementById('meta-search')?.value?.trim() || '';
+        this.updateMetaGeneDetail(searchValue);
+
         // Create forest plot
+        Plotly.purge('forest-plot');
         ForestPlot.create('forest-plot', data.forest_data, {
             title: '',
             xLabel: this.tabs.metaAnalysis.analysis === 'sex' ? 'Effect Size (M-F)' : 'Effect Size (Correlation)',
-            maxSignatures: 25,
+            maxSignatures: 20,
         });
 
         // Create heterogeneity chart
-        ForestPlot.createHeterogeneityChart('heterogeneity-chart', data.forest_data, {
-            title: '',
-            maxSignatures: 20,
+        Plotly.purge('heterogeneity-chart');
+        this.createHeterogeneityChart(data.forest_data);
+    },
+
+    /**
+     * Create heterogeneity chart with improved styling
+     */
+    createHeterogeneityChart(data) {
+        const container = document.getElementById('heterogeneity-chart');
+        if (!container || !data || data.length === 0) return;
+
+        // Sort by I2 and check for all zeros
+        const sortedData = [...data].sort((a, b) => (b.I2 || 0) - (a.I2 || 0));
+        const allZero = sortedData.every(d => !d.I2 || d.I2 === 0);
+
+        if (allZero) {
+            container.innerHTML = `
+                <div class="heterogeneity-perfect">
+                    <div class="heterogeneity-value">I² = 0%</div>
+                    <p><strong>Perfect Consistency</strong></p>
+                    <p class="heterogeneity-desc">
+                        All ${sortedData.length} replicated signatures show <span class="text-green">identical effects</span>
+                        across CIMA and Inflammation Atlas.
+                    </p>
+                    <p class="heterogeneity-note">I² = 0% indicates no heterogeneity between atlas estimates.</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Limit display and add note
+        const maxDisplay = 50;
+        let displayData = sortedData;
+        let limitNote = '';
+        if (sortedData.length > maxDisplay) {
+            const top25 = sortedData.slice(0, 25);
+            const bottom25 = sortedData.slice(-25).reverse();
+            displayData = [...top25, ...bottom25];
+            limitNote = `Showing top 25 (highest I²) and bottom 25 (lowest I²) of ${sortedData.length} signatures`;
+        }
+
+        const colors = displayData.map(d => {
+            const i2 = (d.I2 || 0) * 100;
+            if (i2 < 25) return '#10b981'; // Low - green
+            if (i2 < 50) return '#fbbf24'; // Moderate - yellow
+            if (i2 < 75) return '#f97316'; // Substantial - orange
+            return '#ef4444'; // Considerable - red
         });
+
+        const trace = {
+            type: 'bar',
+            orientation: 'h',
+            x: displayData.map(d => Math.max((d.I2 || 0) * 100, 2)), // Min width for visibility
+            y: displayData.map(d => d.signature),
+            marker: { color: colors },
+            text: displayData.map(d => `${((d.I2 || 0) * 100).toFixed(0)}%`),
+            textposition: 'auto',
+            hovertemplate: '<b>%{y}</b><br>I² = %{text}<extra></extra>',
+        };
+
+        const layout = {
+            xaxis: {
+                title: 'I² Heterogeneity (%)',
+                range: [0, 100],
+                gridcolor: '#e2e8f0',
+            },
+            yaxis: {
+                automargin: true,
+                tickfont: { size: 10 },
+            },
+            margin: { l: 100, r: 30, t: 10, b: 50 },
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            shapes: [
+                { type: 'line', x0: 25, x1: 25, y0: -0.5, y1: displayData.length - 0.5, line: { dash: 'dot', color: '#94a3b8', width: 1 } },
+                { type: 'line', x0: 50, x1: 50, y0: -0.5, y1: displayData.length - 0.5, line: { dash: 'dot', color: '#94a3b8', width: 1 } },
+                { type: 'line', x0: 75, x1: 75, y0: -0.5, y1: displayData.length - 0.5, line: { dash: 'dot', color: '#94a3b8', width: 1 } },
+            ],
+            annotations: [
+                { x: 12.5, y: displayData.length, text: 'Low', showarrow: false, font: { size: 9, color: '#10b981' } },
+                { x: 37.5, y: displayData.length, text: 'Moderate', showarrow: false, font: { size: 9, color: '#fbbf24' } },
+                { x: 62.5, y: displayData.length, text: 'Substantial', showarrow: false, font: { size: 9, color: '#f97316' } },
+                { x: 87.5, y: displayData.length, text: 'High', showarrow: false, font: { size: 9, color: '#ef4444' } },
+            ],
+            height: Math.max(400, displayData.length * 22),
+        };
+
+        if (limitNote) {
+            container.innerHTML = `<p class="limit-note">${limitNote}</p><div id="heterogeneity-chart-inner"></div>`;
+            Plotly.newPlot('heterogeneity-chart-inner', [trace], layout, { responsive: true });
+        } else {
+            Plotly.newPlot(container, [trace], layout, { responsive: true });
+        }
+    },
+
+    /**
+     * Update gene detail panel based on search
+     */
+    updateMetaGeneDetail(searchValue) {
+        const detailPanel = document.getElementById('meta-gene-detail');
+        if (!detailPanel || !this.metaData) return;
+
+        const searchedGene = this.metaData.find(m =>
+            m.signature.toLowerCase() === searchValue.toLowerCase()
+        );
+
+        if (searchedGene) {
+            detailPanel.style.display = 'block';
+            document.getElementById('meta-gene-name').textContent = searchedGene.signature;
+
+            // Show pooled effect info
+            const pooledSig = searchedGene.ci_low > 0 || searchedGene.ci_high < 0;
+            const effectColor = searchedGene.pooled_effect > 0 ? '#2e7d32' : '#c2185b';
+            document.getElementById('meta-gene-info').innerHTML = `
+                Pooled effect: <strong style="color: ${effectColor}">
+                r = ${searchedGene.pooled_effect.toFixed(3)}</strong>
+                [${searchedGene.ci_low.toFixed(3)}, ${searchedGene.ci_high.toFixed(3)}]
+                ${pooledSig ? '<span class="significant-badge">Significant</span>' : ''}
+                | I² = ${((searchedGene.I2 || 0) * 100).toFixed(0)}%
+            `;
+
+            // Show per-atlas effects
+            let corrHtml = '';
+            for (const e of searchedGene.individual_effects) {
+                const indCiLow = e.effect - 1.96 * e.se;
+                const indCiHigh = e.effect + 1.96 * e.se;
+                const color = e.effect > 0 ? '#2e7d32' : '#c2185b';
+                corrHtml += `
+                    <div class="atlas-effect-card">
+                        <div class="atlas-effect-value" style="color: ${color}">r = ${e.effect.toFixed(3)}</div>
+                        <div class="atlas-effect-name">${e.atlas}</div>
+                        <div class="atlas-effect-ci">[${indCiLow.toFixed(3)}, ${indCiHigh.toFixed(3)}]</div>
+                        <div class="atlas-effect-n">n = ${e.n}</div>
+                    </div>
+                `;
+            }
+            document.getElementById('meta-gene-correlations').innerHTML = corrHtml;
+        } else {
+            detailPanel.style.display = 'none';
+        }
+    },
+
+    /**
+     * Handle meta search input
+     */
+    onMetaSearch(value) {
+        this.updateMetaGeneDetail(value);
+    },
+
+    /**
+     * Clear meta search
+     */
+    clearMetaSearch() {
+        const searchInput = document.getElementById('meta-search');
+        if (searchInput) searchInput.value = '';
+        this.updateMetaGeneDetail('');
     },
 
     /**
@@ -1384,14 +1580,7 @@ const ComparePage = {
      */
     changeAnalysis(analysis) {
         this.tabs.metaAnalysis.analysis = analysis;
-        this.loadForestPlot();
-    },
-
-    /**
-     * Change meta signature filter
-     */
-    changeMetaSignature(signature) {
-        this.tabs.metaAnalysis.signature = signature || null;
+        this.clearMetaSearch();
         this.loadForestPlot();
     },
 
