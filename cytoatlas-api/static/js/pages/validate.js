@@ -742,7 +742,7 @@ const ValidatePage = {
         content.innerHTML = `
             <div class="tab-panel">
                 <h3>Single-Cell Level Validation</h3>
-                <p>Comparison of activity between cells that express the signature gene vs those that don't. If inference is valid, expressing cells should have higher activity.</p>
+                <p>Correlation between signature gene expression and predicted activity at the individual cell level. Uses a random sample of cells for computational efficiency.</p>
 
                 <div class="filter-bar">
                     <label>Signature/Gene:
@@ -759,22 +759,22 @@ const ValidatePage = {
 
                 <div class="panel-grid">
                     <div class="panel">
-                        <div class="viz-title">Activity: Expressing vs Non-Expressing Cells</div>
-                        <div class="viz-subtitle">Box plot comparing activity distributions</div>
-                        <div id="val-sc-boxplot" class="plot-container" style="height: 400px;"></div>
+                        <div class="viz-title">Single-Cell Expression vs Activity</div>
+                        <div class="viz-subtitle">Mean activity comparison: expressing vs non-expressing cells</div>
+                        <div id="val-sc-scatter" class="plot-container" style="height: 400px;"></div>
                     </div>
                     <div class="panel">
-                        <div class="viz-title">Validation by Cell Type</div>
-                        <div class="viz-subtitle">Fold change (expressing/non-expressing) per cell type</div>
+                        <div class="viz-title">Cell Type Distribution</div>
+                        <div class="viz-subtitle">Fold change by signature (sorted high → low)</div>
                         <div id="val-sc-celltype" class="plot-container" style="height: 400px;"></div>
                     </div>
                 </div>
 
                 <div class="panel-grid">
                     <div class="panel full-width">
-                        <div class="viz-title">Validation Summary</div>
-                        <div class="viz-subtitle">Key metrics for single-cell validation</div>
-                        <div id="val-sc-summary" class="summary-cards"></div>
+                        <div class="viz-title">Correlation Summary</div>
+                        <div class="viz-subtitle">Expressing fraction vs fold change across signatures</div>
+                        <div id="val-sc-summary" class="plot-container" style="height: 300px;"></div>
                     </div>
                 </div>
             </div>
@@ -795,46 +795,48 @@ const ValidatePage = {
 
     async updateSingleCellPlots() {
         await Promise.all([
-            this.loadSingleCellBoxplot(),
+            this.loadSingleCellScatter(),
             this.loadSingleCellByType(),
             this.loadSingleCellSummary()
         ]);
     },
 
-    async loadSingleCellBoxplot() {
-        const container = document.getElementById('val-sc-boxplot');
+    async loadSingleCellScatter() {
+        const container = document.getElementById('val-sc-scatter');
         if (!container) return;
 
         try {
-            const data = await API.getSingleCellDistribution(
+            const data = await API.getSingleCellDirect(
                 this.currentAtlas,
                 this.singlecell.signature,
                 this.signatureType
             );
 
             if (data) {
-                const traces = [
-                    {
-                        y: data.expressing_activities || [],
-                        type: 'box',
-                        name: 'Expressing',
-                        marker: { color: '#22c55e' }
-                    },
-                    {
-                        y: data.non_expressing_activities || [],
-                        type: 'box',
-                        name: 'Non-Expressing',
-                        marker: { color: '#94a3b8' }
-                    }
-                ];
+                const meanExpressing = data.mean_expressing || 0;
+                const meanNonExpressing = data.mean_non_expressing || 0;
+                const foldChange = data.fold_change || 1;
+                const pValue = data.p_value;
 
-                const layout = {
-                    yaxis: { title: 'Activity (z-score)' },
-                    margin: { l: 60, r: 20, t: 20, b: 60 },
-                    showlegend: false
-                };
-
-                Plotly.newPlot(container, traces, layout, {responsive: true});
+                Plotly.newPlot(container, [{
+                    type: 'bar',
+                    x: ['Expressing Cells', 'Non-Expressing Cells'],
+                    y: [meanExpressing, meanNonExpressing],
+                    marker: { color: ['#2ca02c', '#d62728'] },
+                    text: [meanExpressing.toFixed(2), meanNonExpressing.toFixed(2)],
+                    textposition: 'outside'
+                }], {
+                    xaxis: { title: '' },
+                    yaxis: { title: 'Mean Activity (z-score)' },
+                    margin: { l: 60, r: 30, t: 60, b: 50 },
+                    annotations: [{
+                        x: 0.5, y: 1.1, xref: 'paper', yref: 'paper',
+                        text: `${this.singlecell.signature}: Fold Change = ${foldChange.toFixed(2)}, p = ${pValue ? pValue.toExponential(2) : 'N/A'}`,
+                        showarrow: false,
+                        font: { size: 12 }
+                    }],
+                    title: { text: `Single-Cell Validation: ${this.singlecell.signature}`, font: { size: 14 } }
+                }, {responsive: true});
             } else {
                 container.innerHTML = '<p class="no-data">No data available</p>';
             }
@@ -848,39 +850,49 @@ const ValidatePage = {
         if (!container) return;
 
         try {
-            const data = await API.getSingleCellDirect(
-                this.currentAtlas,
-                this.singlecell.signature,
-                this.signatureType
-            );
+            // Get fold change data for all signatures
+            const sigFoldChanges = [];
+            for (const sig of this.singlecell.signatures.slice(0, 20)) {
+                try {
+                    const data = await API.getSingleCellDirect(
+                        this.currentAtlas, sig, this.signatureType
+                    );
+                    if (data?.fold_change && !isNaN(data.fold_change)) {
+                        sigFoldChanges.push({
+                            signature: sig,
+                            fc: data.fold_change
+                        });
+                    }
+                } catch (e) { /* skip */ }
+            }
 
-            if (data) {
-                // Show fold change as summary
-                const trace = {
-                    x: ['Overall'],
-                    y: [data.fold_change || 1],
+            if (sigFoldChanges.length > 0) {
+                // Sort by fold change (high to low) and take top 15
+                sigFoldChanges.sort((a, b) => b.fc - a.fc);
+                const top15 = sigFoldChanges.slice(0, 15);
+
+                // Gradient coloring based on fold change
+                const getColor = (fc) => {
+                    if (fc > 1.5) return '#2ca02c';  // Green
+                    if (fc > 1) return '#57a0d3';    // Blue
+                    return '#ff7f0e';                // Orange
+                };
+
+                Plotly.newPlot(container, [{
                     type: 'bar',
-                    marker: {
-                        color: data.fold_change > 1 ? '#22c55e' : '#ef4444'
-                    },
-                    text: [`FC: ${data.fold_change?.toFixed(2)}x`],
+                    x: top15.map(s => s.signature),
+                    y: top15.map(s => s.fc),
+                    marker: { color: top15.map(s => getColor(s.fc)) },
+                    text: top15.map(s => s.fc.toFixed(2)),
                     textposition: 'outside'
-                };
-
-                const layout = {
-                    yaxis: { title: 'Fold Change (Expr / Non-Expr)' },
-                    margin: { l: 60, r: 20, t: 40, b: 60 },
-                    shapes: [{
-                        type: 'line',
-                        x0: -0.5, x1: 0.5,
-                        y0: 1, y1: 1,
-                        line: { color: 'red', dash: 'dash' }
-                    }]
-                };
-
-                Plotly.newPlot(container, [trace], layout, {responsive: true});
+                }], {
+                    xaxis: { title: 'Signature', tickangle: -45 },
+                    yaxis: { title: 'Activity Fold Change', range: [0, Math.max(...top15.map(s => s.fc)) * 1.2] },
+                    margin: { l: 50, r: 30, t: 40, b: 100 },
+                    title: { text: 'Expressing vs Non-Expressing Fold Change', font: { size: 14 } }
+                }, {responsive: true});
             } else {
-                container.innerHTML = '<p class="no-data">No data available</p>';
+                container.innerHTML = '<p class="no-data">No fold change data available</p>';
             }
         } catch (error) {
             container.innerHTML = `<p class="error">Error loading by cell type</p>`;
@@ -892,33 +904,49 @@ const ValidatePage = {
         if (!container) return;
 
         try {
-            const data = await API.getSingleCellDirect(
-                this.currentAtlas,
-                this.singlecell.signature,
-                this.signatureType
-            );
+            // Get data for all signatures to build summary scatter plot
+            const summaryData = [];
+            for (const sig of this.singlecell.signatures.slice(0, 30)) {
+                try {
+                    const data = await API.getSingleCellDirect(
+                        this.currentAtlas, sig, this.signatureType
+                    );
+                    if (data?.fold_change && data?.expressing_fraction !== undefined) {
+                        summaryData.push({
+                            signature: sig,
+                            expressingPct: (data.expressing_fraction * 100),
+                            foldChange: data.fold_change
+                        });
+                    }
+                } catch (e) { /* skip */ }
+            }
 
-            if (data) {
-                const isValid = data.fold_change > 1 && data.p_value < 0.05;
+            if (summaryData.length > 0) {
+                // Sort by expressing fraction
+                summaryData.sort((a, b) => b.expressingPct - a.expressingPct);
 
-                container.innerHTML = `
-                    <div class="summary-card">
-                        <div class="summary-value">${data.n_expressing?.toLocaleString() || 'N/A'}</div>
-                        <div class="summary-label">Expressing Cells</div>
-                    </div>
-                    <div class="summary-card">
-                        <div class="summary-value">${data.n_non_expressing?.toLocaleString() || 'N/A'}</div>
-                        <div class="summary-label">Non-Expressing Cells</div>
-                    </div>
-                    <div class="summary-card">
-                        <div class="summary-value">${data.fold_change?.toFixed(2) || 'N/A'}x</div>
-                        <div class="summary-label">Fold Change</div>
-                    </div>
-                    <div class="summary-card">
-                        <div class="summary-value ${isValid ? 'valid' : 'invalid'}">${isValid ? 'Valid' : 'Not Valid'}</div>
-                        <div class="summary-label">p = ${data.p_value?.toExponential(2) || 'N/A'}</div>
-                    </div>
-                `;
+                Plotly.newPlot(container, [{
+                    type: 'scatter',
+                    mode: 'markers+text',
+                    x: summaryData.map(s => s.expressingPct),
+                    y: summaryData.map(s => s.foldChange),
+                    text: summaryData.map(s => s.signature),
+                    textposition: 'top center',
+                    textfont: { size: 9 },
+                    marker: {
+                        size: 10,
+                        color: summaryData.map(s => s.foldChange),
+                        colorscale: 'RdYlGn',
+                        showscale: true,
+                        colorbar: { title: 'FC' }
+                    },
+                    hovertemplate: '%{text}<br>Expressing: %{x:.1f}%<br>FC: %{y:.2f}<extra></extra>'
+                }], {
+                    xaxis: { title: 'Expressing Fraction (%)' },
+                    yaxis: { title: 'Activity Fold Change' },
+                    margin: { l: 60, r: 80, t: 40, b: 50 },
+                    title: { text: 'Single-Cell Validation Summary', font: { size: 14 } }
+                }, {responsive: true});
             } else {
                 container.innerHTML = '<p class="no-data">No summary data available</p>';
             }
