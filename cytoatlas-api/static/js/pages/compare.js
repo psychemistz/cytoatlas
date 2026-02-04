@@ -1201,10 +1201,11 @@ const ComparePage = {
             x: pairLabels,
             y: signatures.map(s => s.signature),
             colorscale: [
-                [0, '#ef4444'],
-                [0.5, '#fbbf24'],
-                [0.7, '#a3e635'],
-                [1, '#10b981'],
+                [0, '#2166ac'],     // Blue (low correlation)
+                [0.25, '#67a9cf'],
+                [0.5, '#f7f7f7'],   // White (mid)
+                [0.75, '#ef8a62'],
+                [1, '#b2182b'],     // Red (high correlation)
             ],
             zmin: 0,
             zmax: 1,
