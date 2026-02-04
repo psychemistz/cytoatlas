@@ -1447,19 +1447,20 @@ const ComparePage = {
             return;
         }
 
-        // Limit display and add note
-        const maxDisplay = 50;
-        let displayData = sortedData;
+        // Show top 10 (highest I²) and bottom 10 (lowest I²)
+        let displayData;
         let limitNote = '';
-        if (sortedData.length > maxDisplay) {
-            const top25 = sortedData.slice(0, 25);
-            const bottom25 = sortedData.slice(-25).reverse();
-            displayData = [...top25, ...bottom25];
-            limitNote = `Showing top 25 (highest I²) and bottom 25 (lowest I²) of ${sortedData.length} signatures`;
+        if (sortedData.length > 20) {
+            const top10 = sortedData.slice(0, 10);
+            const bottom10 = sortedData.slice(-10).reverse();
+            displayData = [...top10, ...bottom10];
+            limitNote = `Showing top 10 (highest I²) and bottom 10 (lowest I²) of ${sortedData.length} signatures`;
+        } else {
+            displayData = sortedData;
         }
 
         const colors = displayData.map(d => {
-            const i2 = (d.I2 || 0) * 100;
+            const i2 = d.I2 || 0;  // Already a percentage (0-100)
             if (i2 < 25) return '#10b981'; // Low - green
             if (i2 < 50) return '#fbbf24'; // Moderate - yellow
             if (i2 < 75) return '#f97316'; // Substantial - orange
@@ -1469,10 +1470,10 @@ const ComparePage = {
         const trace = {
             type: 'bar',
             orientation: 'h',
-            x: displayData.map(d => Math.max((d.I2 || 0) * 100, 2)), // Min width for visibility
+            x: displayData.map(d => Math.max(d.I2 || 0, 2)), // Min width for visibility, already percentage
             y: displayData.map(d => d.signature),
             marker: { color: colors },
-            text: displayData.map(d => `${((d.I2 || 0) * 100).toFixed(0)}%`),
+            text: displayData.map(d => `${(d.I2 || 0).toFixed(0)}%`),
             textposition: 'auto',
             hovertemplate: '<b>%{y}</b><br>I² = %{text}<extra></extra>',
         };
@@ -1535,7 +1536,7 @@ const ComparePage = {
                 r = ${searchedGene.pooled_effect.toFixed(3)}</strong>
                 [${searchedGene.ci_low.toFixed(3)}, ${searchedGene.ci_high.toFixed(3)}]
                 ${pooledSig ? '<span class="significant-badge">Significant</span>' : ''}
-                | I² = ${((searchedGene.I2 || 0) * 100).toFixed(0)}%
+                | I² = ${(searchedGene.I2 || 0).toFixed(0)}%
             `;
 
             // Show per-atlas effects

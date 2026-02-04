@@ -99,7 +99,7 @@ const ForestPlot = {
                 pooledErrorLow.push(sig.pooled_effect - sig.ci_low);
                 pooledErrorHigh.push(sig.ci_high - sig.pooled_effect);
                 pooledText.push(
-                    `Pooled: ${sig.pooled_effect.toFixed(3)} [${sig.ci_low.toFixed(3)}, ${sig.ci_high.toFixed(3)}]<br>I²: ${(sig.I2 * 100).toFixed(0)}%`
+                    `Pooled: ${sig.pooled_effect.toFixed(3)} [${sig.ci_low.toFixed(3)}, ${sig.ci_high.toFixed(3)}]<br>I²: ${(sig.I2 || 0).toFixed(0)}%`
                 );
             }
         });
@@ -202,7 +202,7 @@ const ForestPlot = {
             .slice(0, options.maxSignatures || 30);
 
         const colors = filteredData.map(d => {
-            const i2 = d.I2 * 100;
+            const i2 = d.I2 || 0;  // Already a percentage (0-100)
             if (i2 < 25) return '#10b981'; // Low heterogeneity - green
             if (i2 < 50) return '#f59e0b'; // Moderate - yellow
             if (i2 < 75) return '#f97316'; // Substantial - orange
@@ -212,10 +212,10 @@ const ForestPlot = {
         const trace = {
             type: 'bar',
             orientation: 'h',
-            x: filteredData.map(d => d.I2 * 100),
+            x: filteredData.map(d => d.I2 || 0),  // Already percentage
             y: filteredData.map(d => d.signature),
             marker: { color: colors },
-            text: filteredData.map(d => `${(d.I2 * 100).toFixed(0)}%`),
+            text: filteredData.map(d => `${(d.I2 || 0).toFixed(0)}%`),
             textposition: 'outside',
             hovertemplate: '%{y}: I² = %{x:.1f}%<extra></extra>',
         };
