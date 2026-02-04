@@ -280,6 +280,31 @@ class RidgeInference:
         return scaled.fillna(0)
 
 
+@dataclass
+class MultiSignatureResult:
+    """Result of multi-signature activity inference."""
+
+    results: dict[str, ActivityResult]
+    """Results per signature type."""
+
+    signature_names: list[str]
+    """Names of signature types processed."""
+
+    total_time_seconds: float
+    """Total execution time."""
+
+    metadata: dict[str, Any] = field(default_factory=dict)
+    """Additional metadata."""
+
+    def __getitem__(self, key: str) -> ActivityResult:
+        """Get result by signature name."""
+        return self.results[key]
+
+    def keys(self) -> list[str]:
+        """Get available signature names."""
+        return list(self.results.keys())
+
+
 def run_ridge_inference(
     expression: Union[pd.DataFrame, np.ndarray],
     signature: pd.DataFrame,
@@ -323,4 +348,155 @@ def run_ridge_inference(
         signature,
         expression_gene_names=expression_gene_names,
         sample_names=sample_names,
+    )
+
+
+def run_multi_signature_inference(
+    expression: Union[pd.DataFrame, np.ndarray],
+    signatures: Optional[list[str]] = None,
+    output_dir: Optional[Path] = None,
+    lambda_: float = 5e5,
+    n_rand: int = 1000,
+    seed: int = 42,
+    backend: Literal["auto", "numpy", "cupy"] = "auto",
+    batch_size: int = 5000,
+    verbose: bool = True,
+    expression_gene_names: Optional[list[str]] = None,
+    sample_names: Optional[list[str]] = None,
+    save_h5ad: bool = True,
+) -> MultiSignatureResult:
+    """
+    Run activity inference with multiple signature types.
+
+    Processes CytoSig, LinCytoSig, and SecAct signatures in sequence,
+    optionally saving results as H5AD files.
+
+    Args:
+        expression: Expression matrix (genes x samples).
+        signatures: List of signatures to run. Default: ["cytosig", "lincytosig", "secact"]
+        output_dir: Directory to save H5AD outputs.
+        lambda_: Ridge regularization parameter.
+        n_rand: Number of permutations.
+        seed: Random seed.
+        backend: Computation backend.
+        batch_size: Batch size for large datasets.
+        verbose: Print progress.
+        expression_gene_names: Gene names if expression is ndarray.
+        sample_names: Sample names if expression is ndarray.
+        save_h5ad: Whether to save results as H5AD files.
+
+    Returns:
+        MultiSignatureResult with results per signature type.
+    """
+    import time
+    import anndata as ad
+
+    # Import signature loaders
+    try:
+        from secactpy import load_cytosig, load_secact, load_lincytosig
+    except ImportError:
+        raise ImportError("SecActpy not found. Ensure it's installed or path is correct.")
+
+    # Default signatures
+    if signatures is None:
+        signatures = ["cytosig", "lincytosig", "secact"]
+
+    # Signature loaders
+    SIGNATURE_LOADERS = {
+        "cytosig": load_cytosig,
+        "lincytosig": load_lincytosig,
+        "secact": load_secact,
+    }
+
+    # Validate signatures
+    for sig in signatures:
+        if sig not in SIGNATURE_LOADERS:
+            raise ValueError(f"Unknown signature: {sig}. Available: {list(SIGNATURE_LOADERS.keys())}")
+
+    # Convert expression if needed
+    if isinstance(expression, np.ndarray):
+        if expression_gene_names is None:
+            raise ValueError("expression_gene_names required for ndarray input")
+        if sample_names is None:
+            sample_names = [f"sample_{i}" for i in range(expression.shape[1])]
+        expression_df = pd.DataFrame(
+            expression, index=expression_gene_names, columns=sample_names
+        )
+    else:
+        expression_df = expression
+        sample_names = list(expression_df.columns)
+
+    # Create output directory
+    if output_dir is not None:
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Run inference for each signature type
+    results = {}
+    total_start = time.time()
+
+    for sig_name in signatures:
+        if verbose:
+            print(f"\n{'='*60}")
+            print(f"Running {sig_name.upper()} inference...")
+            print('='*60)
+
+        sig_start = time.time()
+
+        # Load signature matrix
+        sig_matrix = SIGNATURE_LOADERS[sig_name]()
+        if verbose:
+            print(f"  Signature shape: {sig_matrix.shape}")
+
+        # Run inference
+        inference = RidgeInference(
+            lambda_=lambda_,
+            n_rand=n_rand,
+            seed=seed,
+            backend=backend,
+            batch_size=batch_size,
+            verbose=verbose,
+        )
+        result = inference.run(expression_df, sig_matrix)
+        results[sig_name] = result
+
+        if verbose:
+            print(f"  Gene overlap: {result.gene_overlap:.1%}")
+            print(f"  Time: {time.time() - sig_start:.1f}s")
+
+        # Save as H5AD
+        if save_h5ad and output_dir is not None:
+            h5ad_path = output_dir / f"{sig_name}_activity.h5ad"
+
+            # Create AnnData (samples × signatures)
+            activity_adata = ad.AnnData(
+                X=result.zscore.T.values.astype(np.float32),
+                obs=pd.DataFrame(index=result.sample_names),
+                var=pd.DataFrame(index=result.signature_names),
+            )
+            activity_adata.layers['beta'] = result.beta.T.values.astype(np.float32)
+            activity_adata.layers['se'] = result.se.T.values.astype(np.float32)
+            activity_adata.layers['pvalue'] = result.pvalue.T.values.astype(np.float32)
+            activity_adata.uns['signature'] = sig_name
+            activity_adata.uns['gene_overlap'] = result.gene_overlap
+            activity_adata.uns['n_genes_used'] = result.n_genes_used
+            activity_adata.uns['method'] = result.method
+
+            activity_adata.write_h5ad(h5ad_path, compression='gzip')
+            if verbose:
+                print(f"  Saved: {h5ad_path}")
+
+    total_time = time.time() - total_start
+
+    return MultiSignatureResult(
+        results=results,
+        signature_names=signatures,
+        total_time_seconds=total_time,
+        metadata={
+            'n_samples': len(sample_names),
+            'n_genes_input': len(expression_df),
+            'lambda': lambda_,
+            'n_rand': n_rand,
+            'seed': seed,
+        },
     )
