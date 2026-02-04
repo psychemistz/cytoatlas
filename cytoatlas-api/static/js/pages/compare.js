@@ -303,10 +303,14 @@ const ComparePage = {
         };
 
         return Object.entries(atlases).map(([key, atlas]) => {
-            // scAtlas doesn't have sample-level metadata, show tissue/study count instead
-            const sampleDisplay = atlas.samples > 0
-                ? this.formatNumber(atlas.samples)
-                : (key.startsWith('scatlas') ? `${atlas.organs || '-'} tissues` : '-');
+            // For scAtlas, show donors; for others show samples
+            let sampleDisplay;
+            if (key.startsWith('scatlas')) {
+                const donors = atlas.donors || atlas.samples || 0;
+                sampleDisplay = donors > 0 ? `${this.formatNumber(donors)} donors` : '-';
+            } else {
+                sampleDisplay = atlas.samples > 0 ? this.formatNumber(atlas.samples) : '-';
+            }
 
             return `
                 <tr>

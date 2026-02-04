@@ -384,10 +384,10 @@ class CrossAtlasService(BaseService):
         for atlas_key in ["cima", "inflammation", "scatlas_normal", "scatlas_cancer"]:
             atlas_data = summary.get(atlas_key, {})
             total_cells += atlas_data.get("cells", 0)
-            # Only count samples from atlases that have sample-level data
+            # Use samples for CIMA/Inflammation, donors for scAtlas
             samples = atlas_data.get("samples", 0)
-            if samples > 0:
-                total_samples += samples
+            donors = atlas_data.get("donors", 0)
+            total_samples += samples if samples > 0 else donors
             total_cell_types += atlas_data.get("cell_types", 0)
 
         # Add organs info for scAtlas entries for display
@@ -399,7 +399,6 @@ class CrossAtlasService(BaseService):
         return {
             "total_cells": total_cells,
             "total_samples": total_samples,
-            "total_samples_note": "CIMA + Inflammation only (scAtlas lacks sample-level metadata)",
             "total_cell_types": total_cell_types,
             "atlases": summary,
             "n_atlases": 3,
