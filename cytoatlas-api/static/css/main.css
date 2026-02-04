@@ -3907,8 +3907,13 @@ h3 .badge {
     margin-bottom: var(--spacing-lg);
 }
 
+.comparison-grid.two-col {
+    grid-template-columns: 1fr 1fr;
+}
+
 @media (max-width: 1024px) {
     .comparison-grid,
+    .comparison-grid.two-col,
     .conserved-grid,
     .meta-grid {
         grid-template-columns: 1fr;

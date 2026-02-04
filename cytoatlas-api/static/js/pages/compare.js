@@ -1,7 +1,7 @@
 /**
  * Compare Page Handler
  * Cross-atlas comparison views with 5-panel tab system
- * Version: 2026-02-04 v2 - Added Plotly.purge and visibility checks
+ * Version: 2026-02-04 v3 - Updated Atlas Comparison to match visualization/index.html
  */
 
 const ComparePage = {
@@ -14,7 +14,7 @@ const ComparePage = {
     // Tab-specific state
     tabs: {
         celltypeMapping: { level: 'coarse', lineage: 'all' },
-        atlasComparison: { pair: 'CIMA-Inflammation', level: 'coarse' },
+        atlasComparison: { pair: 'CIMA-Inflammation', level: 'coarse', view: 'pseudobulk' },
         conserved: { filter: 'all' },
         metaAnalysis: { analysis: 'age', signature: null },
     },
@@ -740,22 +740,31 @@ const ComparePage = {
                         </select>
                     </div>
                     <div class="control-group">
-                        <label>Aggregation</label>
+                        <label>Cell Type Level</label>
                         <select id="comparison-level-select" class="filter-select" onchange="ComparePage.changeComparisonLevel(this.value)">
-                            <option value="coarse" ${this.tabs.atlasComparison.level === 'coarse' ? 'selected' : ''}>Coarse (Lineages)</option>
-                            <option value="fine" ${this.tabs.atlasComparison.level === 'fine' ? 'selected' : ''}>Fine (Cell Types)</option>
+                            <option value="coarse" ${this.tabs.atlasComparison.level === 'coarse' ? 'selected' : ''}>Coarse (8 lineages)</option>
+                            <option value="fine" ${this.tabs.atlasComparison.level === 'fine' ? 'selected' : ''}>Fine (~21 types)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>View</label>
+                        <select id="comparison-view-select" class="filter-select" onchange="ComparePage.changeComparisonView(this.value)">
+                            <option value="pseudobulk" ${this.tabs.atlasComparison.view === 'pseudobulk' ? 'selected' : ''}>Pseudobulk Mean</option>
+                            <option value="singlecell" ${this.tabs.atlasComparison.view === 'singlecell' ? 'selected' : ''}>Single-cell Mean</option>
                         </select>
                     </div>
                 </div>
 
-                <div class="comparison-grid">
-                    <div class="comparison-panel main-panel">
-                        <h3>Activity Correlation</h3>
-                        <div id="scatter-plot" class="plot-container plot-large"></div>
+                <div class="comparison-grid two-col">
+                    <div class="comparison-panel">
+                        <h3 id="scatter-title">Cross-Atlas Scatter</h3>
+                        <p class="viz-subtitle" id="scatter-subtitle">Signature activity correlation between atlases</p>
+                        <div id="scatter-plot" class="plot-container" style="height: 450px;"></div>
                     </div>
-                    <div class="comparison-panel side-panel">
-                        <h3>Per-Cell-Type Correlations</h3>
-                        <div id="celltype-correlations" class="plot-container"></div>
+                    <div class="comparison-panel">
+                        <h3 id="bar-title">Per-Cell Type Correlation</h3>
+                        <p class="viz-subtitle" id="bar-subtitle">Activity correlation breakdown by harmonized cell type</p>
+                        <div id="celltype-correlations" class="plot-container" style="height: 450px;"></div>
                     </div>
                 </div>
 
@@ -775,115 +784,229 @@ const ComparePage = {
         const pair = this.getAtlasPairs().find(p => p.key === this.tabs.atlasComparison.pair);
         if (!pair) return;
 
+        const viewType = this.tabs.atlasComparison.view;
+        const level = this.tabs.atlasComparison.level;
+        const levelLabel = level === 'coarse' ? 'Coarse (8 lineages)' : 'Fine (~21 types)';
+
+        // Update titles based on view type
+        const scatterTitle = document.getElementById('scatter-title');
+        const scatterSubtitle = document.getElementById('scatter-subtitle');
+        const barTitle = document.getElementById('bar-title');
+        const barSubtitle = document.getElementById('bar-subtitle');
+
+        if (viewType === 'pseudobulk') {
+            if (scatterTitle) scatterTitle.textContent = 'Pseudobulk Aggregated Activity';
+            if (scatterSubtitle) scatterSubtitle.textContent = `${levelLabel}: Mean activity per cell type (sample-weighted)`;
+            if (barTitle) barTitle.textContent = 'Per-Cell Type Correlation';
+            if (barSubtitle) barSubtitle.textContent = 'Cross-atlas correlation breakdown by harmonized cell type';
+        } else {
+            if (scatterTitle) scatterTitle.textContent = 'Single-cell Mean Activity';
+            if (scatterSubtitle) scatterSubtitle.textContent = `${levelLabel}: Direct mean of individual cell activities (cell-weighted)`;
+            if (barTitle) barTitle.textContent = 'Per-Cell Type Comparison';
+            if (barSubtitle) barSubtitle.textContent = `Mean activity per harmonized cell type (${levelLabel.toLowerCase()})`;
+        }
+
         const data = await API.getPairwiseScatter({
             atlas1: pair.atlas1,
             atlas2: pair.atlas2,
             signature_type: this.signatureType,
-            level: this.tabs.atlasComparison.level,
+            level: level,
+            view: viewType,
         });
 
         if (data && data.data && data.data.length > 0) {
-            // Main scatter plot
             const scatterData = data.data;
             const cellTypes = [...new Set(scatterData.map(d => d.cell_type))];
-            const colors = this.generateColors(cellTypes.length);
 
-            const traces = cellTypes.map((ct, i) => {
-                const ctData = scatterData.filter(d => d.cell_type === ct);
-                return {
-                    type: 'scatter',
-                    mode: 'markers',
-                    name: ct,
-                    x: ctData.map(d => d.x),
-                    y: ctData.map(d => d.y),
-                    text: ctData.map(d => `${d.signature}<br>${d.cell_type}`),
-                    marker: {
-                        color: colors[i],
-                        size: 8,
-                        opacity: 0.7,
-                    },
-                    hovertemplate: '%{text}<br>X: %{x:.2f}<br>Y: %{y:.2f}<extra></extra>',
-                };
-            });
+            if (viewType === 'pseudobulk') {
+                this.renderPseudobulkScatter(scatterData, pair, data);
+            } else {
+                this.renderSinglecellScatter(scatterData, pair, data, cellTypes);
+            }
 
-            // Add identity line
-            const allX = scatterData.map(d => d.x);
-            const allY = scatterData.map(d => d.y);
-            const minVal = Math.min(...allX, ...allY);
-            const maxVal = Math.max(...allX, ...allY);
-
-            traces.push({
-                type: 'scatter',
-                mode: 'lines',
-                x: [minVal, maxVal],
-                y: [minVal, maxVal],
-                line: { color: '#94a3b8', dash: 'dash', width: 1 },
-                showlegend: false,
-                hoverinfo: 'skip',
-            });
-
-            Plotly.purge('scatter-plot');
-            Plotly.newPlot('scatter-plot', traces, {
-                xaxis: { title: `${pair.atlas1} Activity (z-score)`, zeroline: true },
-                yaxis: { title: `${pair.atlas2} Activity (z-score)`, zeroline: true },
-                legend: { orientation: 'v', x: 1.02, y: 1 },
-                margin: { l: 60, r: 120, t: 20, b: 60 },
-                paper_bgcolor: 'rgba(0,0,0,0)',
-                plot_bgcolor: 'rgba(0,0,0,0)',
-                hovermode: 'closest',
-            }, { responsive: true });
-
-            // Per-cell-type correlation bar chart
+            // Per-cell-type correlation bar chart (same for both views)
             const ctCorrelations = this.calculatePerCelltypeCorrelations(scatterData, cellTypes);
+            this.renderCelltypeCorrelationBar(ctCorrelations, viewType);
 
-            Plotly.purge('celltype-correlations');
-            Plotly.newPlot('celltype-correlations', [{
-                type: 'bar',
-                y: ctCorrelations.map(c => c.cellType),
-                x: ctCorrelations.map(c => c.r),
-                orientation: 'h',
-                marker: {
-                    color: ctCorrelations.map(c =>
-                        c.r > 0.8 ? '#10b981' :
-                        c.r > 0.5 ? '#3b82f6' :
-                        c.r > 0.3 ? '#f59e0b' : '#ef4444'
-                    ),
-                },
-                text: ctCorrelations.map(c => c.r.toFixed(2)),
-                textposition: 'outside',
-            }], {
-                xaxis: { title: 'Correlation (r)', range: [0, 1.1] },
-                yaxis: { automargin: true },
-                margin: { l: 100, r: 40, t: 20, b: 60 },
-                paper_bgcolor: 'rgba(0,0,0,0)',
-                plot_bgcolor: 'rgba(0,0,0,0)',
-            }, { responsive: true });
-
-            // Update stats
-            document.getElementById('correlation-stats').innerHTML = `
-                <div class="stats-row">
-                    <div class="stat-item">
-                        <span class="stat-label">Overall Correlation:</span>
-                        <span class="stat-value">${data.correlation?.toFixed(3) || 'N/A'}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">P-value:</span>
-                        <span class="stat-value">${data.pvalue ? data.pvalue.toExponential(2) : 'N/A'}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Data Points:</span>
-                        <span class="stat-value">${data.n || scatterData.length}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Cell Types:</span>
-                        <span class="stat-value">${data.n_celltypes || cellTypes.length}</span>
-                    </div>
-                </div>
-            `;
+            // Update summary stats
+            this.updateComparisonSummary(data, pair, viewType, levelLabel, cellTypes.length);
         } else {
             document.getElementById('scatter-plot').innerHTML =
                 '<p class="loading">No comparison data available for this pair</p>';
+            document.getElementById('celltype-correlations').innerHTML = '';
+            document.getElementById('correlation-stats').innerHTML =
+                '<strong>Note:</strong> Comparison data not available for this atlas pair.';
         }
+    },
+
+    /**
+     * Render pseudobulk scatter plot (Viridis colorscale by |Δ|)
+     */
+    renderPseudobulkScatter(scatterData, pair, data) {
+        const xData = scatterData.map(d => d.x);
+        const yData = scatterData.map(d => d.y);
+
+        const xMin = Math.min(...xData), xMax = Math.max(...xData);
+        const yMin = Math.min(...yData), yMax = Math.max(...yData);
+        const padding = 0.2;
+
+        const pvalText = data.pvalue !== null && data.pvalue < 0.001 ? ', p<0.001' : '';
+        const titleText = `Spearman r = ${data.correlation?.toFixed(3) || 'N/A'}${pvalText} (n=${scatterData.length})`;
+
+        Plotly.purge('scatter-plot');
+        Plotly.newPlot('scatter-plot', [{
+            type: 'scatter',
+            mode: 'markers',
+            x: xData,
+            y: yData,
+            text: scatterData.map(d => `${d.signature} (${d.cell_type})`),
+            marker: {
+                size: 7,
+                color: scatterData.map(d => Math.abs(d.x - d.y)),
+                colorscale: 'Viridis',
+                colorbar: { title: '|Δ|', len: 0.5 },
+            },
+            hovertemplate: '<b>%{text}</b><br>' +
+                `${pair.atlas1}: %{x:.2f}<br>${pair.atlas2}: %{y:.2f}<extra></extra>`,
+        }, {
+            type: 'scatter',
+            mode: 'lines',
+            x: [Math.min(xMin, yMin) - padding, Math.max(xMax, yMax) + padding],
+            y: [Math.min(xMin, yMin) - padding, Math.max(xMax, yMax) + padding],
+            line: { dash: 'dash', color: '#ccc' },
+            showlegend: false,
+            hoverinfo: 'skip',
+        }], {
+            xaxis: { title: `${pair.atlas1} Activity (z-score)`, zeroline: true },
+            yaxis: { title: `${pair.atlas2} Activity (z-score)`, zeroline: true },
+            margin: { l: 60, r: 30, t: 50, b: 60 },
+            title: { text: titleText, font: { size: 12 } },
+            height: 430,
+        }, { responsive: true });
+    },
+
+    /**
+     * Render single-cell scatter plot (colored by cell type)
+     */
+    renderSinglecellScatter(scatterData, pair, data, cellTypes) {
+        const colors = this.generateColors(cellTypes.length);
+
+        const traces = cellTypes.map((ct, i) => {
+            const ctData = scatterData.filter(d => d.cell_type === ct);
+            return {
+                type: 'scatter',
+                mode: 'markers',
+                name: ct,
+                x: ctData.map(d => d.x),
+                y: ctData.map(d => d.y),
+                text: ctData.map(d => `${d.signature}<br>${d.n_cells_x || '?'} vs ${d.n_cells_y || '?'} cells`),
+                marker: {
+                    color: colors[i],
+                    size: 8,
+                    opacity: 0.7,
+                },
+                hovertemplate: '<b>%{text}</b><br>' +
+                    `${pair.atlas1}: %{x:.2f}<br>${pair.atlas2}: %{y:.2f}<extra>${ct}</extra>`,
+            };
+        });
+
+        // Add identity line
+        const allX = scatterData.map(d => d.x);
+        const allY = scatterData.map(d => d.y);
+        const minVal = Math.min(...allX, ...allY);
+        const maxVal = Math.max(...allX, ...allY);
+        const padding = 0.2;
+
+        traces.push({
+            type: 'scatter',
+            mode: 'lines',
+            x: [Math.min(minVal, minVal) - padding, Math.max(maxVal, maxVal) + padding],
+            y: [Math.min(minVal, minVal) - padding, Math.max(maxVal, maxVal) + padding],
+            line: { dash: 'dash', color: '#ccc' },
+            showlegend: false,
+            hoverinfo: 'skip',
+        });
+
+        const titleText = `Spearman r = ${data.correlation?.toFixed(3) || 'N/A'} (n=${scatterData.length})`;
+
+        Plotly.purge('scatter-plot');
+        Plotly.newPlot('scatter-plot', traces, {
+            xaxis: { title: `${pair.atlas1} Mean Activity (z-score)`, zeroline: true },
+            yaxis: { title: `${pair.atlas2} Mean Activity (z-score)`, zeroline: true },
+            margin: { l: 60, r: 30, t: 50, b: 60 },
+            title: { text: titleText, font: { size: 12 } },
+            height: 430,
+            legend: { orientation: 'h', y: -0.2 },
+        }, { responsive: true });
+    },
+
+    /**
+     * Render per-cell-type correlation bar chart
+     */
+    renderCelltypeCorrelationBar(ctCorrelations, viewType) {
+        const colors = ctCorrelations.map(c => {
+            const r = c.r;
+            if (r >= 0.7) return '#1a9850';   // Excellent - green
+            if (r >= 0.5) return '#91cf60';   // Good - light green
+            if (r >= 0.3) return '#fee08b';   // Moderate - yellow
+            if (r >= 0) return '#fdae61';     // Low - orange
+            return '#d73027';                  // Negative - red
+        });
+
+        Plotly.purge('celltype-correlations');
+        Plotly.newPlot('celltype-correlations', [{
+            type: 'bar',
+            orientation: 'h',
+            y: ctCorrelations.map(c => c.cellType),
+            x: ctCorrelations.map(c => c.r),
+            marker: { color: colors },
+            text: ctCorrelations.map(c => `r=${c.r.toFixed(2)} (n=${c.n})`),
+            textposition: 'outside',
+            hovertemplate: '<b>%{y}</b><br>Correlation: %{x:.3f}<br>n=%{customdata}<extra></extra>',
+            customdata: ctCorrelations.map(c => c.n),
+        }], {
+            xaxis: {
+                title: 'Pearson Correlation',
+                range: [-0.2, 1.1],
+                zeroline: true,
+                zerolinecolor: '#ccc',
+            },
+            yaxis: { automargin: true },
+            margin: { l: 100, r: 80, t: 40, b: 50 },
+            height: 430,
+            shapes: [{
+                type: 'line',
+                x0: 0.7, x1: 0.7,
+                y0: -0.5, y1: ctCorrelations.length - 0.5,
+                line: { dash: 'dash', color: '#1a9850', width: 1 },
+            }],
+            annotations: [{
+                x: 0.7, y: ctCorrelations.length - 0.5,
+                text: 'Good (r≥0.7)',
+                showarrow: false,
+                font: { size: 9, color: '#1a9850' },
+                xanchor: 'left',
+                yanchor: 'bottom',
+            }],
+        }, { responsive: true });
+    },
+
+    /**
+     * Update comparison summary stats
+     */
+    updateComparisonSummary(data, pair, viewType, levelLabel, nCelltypes) {
+        const statsDiv = document.getElementById('correlation-stats');
+        if (!statsDiv) return;
+
+        let html = `<strong>Comparison Summary:</strong> ${pair.atlas1} vs ${pair.atlas2} | `;
+        html += `<span style="color:#1f77b4">Spearman r = ${data.correlation?.toFixed(3) || 'N/A'}</span> | `;
+        html += `${nCelltypes} cell types × ${data.n_signatures || '?'} signatures = ${data.n || 0} data points`;
+
+        if (viewType === 'singlecell' && data.n_cells_atlas1) {
+            html += ` | ${data.n_cells_atlas1?.toLocaleString() || '?'} vs ${data.n_cells_atlas2?.toLocaleString() || '?'} cells sampled`;
+        }
+
+        statsDiv.innerHTML = html;
     },
 
     /**
@@ -928,6 +1051,14 @@ const ComparePage = {
      */
     changeComparisonLevel(level) {
         this.tabs.atlasComparison.level = level;
+        this.loadPairwiseScatter();
+    },
+
+    /**
+     * Change comparison view type
+     */
+    changeComparisonView(view) {
+        this.tabs.atlasComparison.view = view;
         this.loadPairwiseScatter();
     },
 
