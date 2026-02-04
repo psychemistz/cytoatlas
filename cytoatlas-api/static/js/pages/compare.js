@@ -1,6 +1,7 @@
 /**
  * Compare Page Handler
  * Cross-atlas comparison views with 5-panel tab system
+ * Version: 2026-02-04 v2 - Added Plotly.purge and visibility checks
  */
 
 const ComparePage = {
@@ -456,6 +457,21 @@ const ComparePage = {
         const container = document.getElementById('celltype-sankey');
         const coarseData = data.coarse_mapping || [];
 
+        if (!container) {
+            console.error('[CelltypeMapping] Container not found');
+            return;
+        }
+
+        // Check if container is visible (has non-zero dimensions)
+        const rect = container.getBoundingClientRect();
+        console.log('[CelltypeMapping] Container rect:', rect.width, 'x', rect.height);
+        if (rect.width === 0 || rect.height === 0) {
+            console.log('[CelltypeMapping] Container not visible, waiting...');
+            // Try again after a short delay
+            setTimeout(() => this.renderCoarseMapping(data), 100);
+            return;
+        }
+
         if (coarseData.length === 0) {
             container.innerHTML = '<p class="loading">No cell types found for selected lineage filter.</p>';
             return;
@@ -463,38 +479,71 @@ const ComparePage = {
 
         // Use precomputed nodes and links from API
         if (data.nodes && data.links && data.nodes.length > 0) {
-            const trace = {
-                type: 'sankey',
-                orientation: 'h',
-                node: {
-                    pad: 15,
-                    thickness: 20,
-                    line: { color: 'black', width: 0.5 },
-                    label: data.nodes.map(n => n.label),
-                    color: data.nodes.map(n => n.color),
-                },
-                link: {
-                    source: data.links.map(l => l.source),
-                    target: data.links.map(l => l.target),
-                    value: data.links.map(l => l.value),
-                    customdata: data.links.map(l => ({ cells: l.cells, types: l.types, n_types: l.n_types })),
-                    hovertemplate: '%{source.label} → %{target.label}<br>' +
-                        'Cells: %{customdata.cells:,}<br>' +
-                        'Types: %{customdata.types}<extra></extra>',
-                },
-            };
+            console.log('[CelltypeMapping] Rendering Sankey with', data.nodes.length, 'nodes and', data.links.length, 'links');
+            console.log('[CelltypeMapping] Container dimensions:', container.offsetWidth, 'x', container.offsetHeight);
 
-            Plotly.newPlot('celltype-sankey', [trace], {
-                margin: { t: 20, b: 20, l: 10, r: 10 },
-                height: 400,
-                paper_bgcolor: 'rgba(0,0,0,0)',
-                plot_bgcolor: 'rgba(0,0,0,0)',
-            }, { responsive: true });
+            // Clear any previous plot
+            Plotly.purge(container);
+
+            try {
+                const trace = {
+                    type: 'sankey',
+                    orientation: 'h',
+                    node: {
+                        pad: 15,
+                        thickness: 20,
+                        line: { color: 'black', width: 0.5 },
+                        label: data.nodes.map(n => n.label),
+                        color: data.nodes.map(n => n.color),
+                    },
+                    link: {
+                        source: data.links.map(l => l.source),
+                        target: data.links.map(l => l.target),
+                        value: data.links.map(l => l.value),
+                        label: data.links.map(l =>
+                            `${l.cells.toLocaleString()} cells (${l.n_types} types)`
+                        ),
+                    },
+                };
+
+                console.log('[CelltypeMapping] Trace nodes:', trace.node.label);
+                console.log('[CelltypeMapping] Trace links sample:', {
+                    source: trace.link.source.slice(0, 3),
+                    target: trace.link.target.slice(0, 3),
+                    value: trace.link.value.slice(0, 3)
+                });
+
+                Plotly.newPlot(container, [trace], {
+                    margin: { t: 20, b: 20, l: 10, r: 10 },
+                    height: 400,
+                    font: { family: 'Inter, system-ui, sans-serif' },
+                }, { responsive: true }).then(() => {
+                    console.log('[CelltypeMapping] Sankey rendered successfully');
+                    console.log('[CelltypeMapping] Container after render:', container.innerHTML.substring(0, 100));
+                }).catch(err => {
+                    console.error('[CelltypeMapping] Plotly error:', err);
+                    container.innerHTML = `<p class="error">Error rendering Sankey: ${err.message}</p>`;
+                });
+            } catch (err) {
+                console.error('[CelltypeMapping] Error building trace:', err);
+                container.innerHTML = `<p class="error">Error: ${err.message}</p>`;
+            }
+        } else {
+            console.warn('[CelltypeMapping] No nodes/links data:', data.nodes?.length, data.links?.length);
+            // Show debug info
+            container.innerHTML = `<div style="padding: 20px; background: #f0f0f0; border-radius: 8px;">
+                <p><strong>Debug:</strong> Sankey data check</p>
+                <p>nodes: ${data.nodes?.length || 0}</p>
+                <p>links: ${data.links?.length || 0}</p>
+                <p>coarse_mapping: ${data.coarse_mapping?.length || 0}</p>
+            </div>`;
         }
 
         // Render bar chart showing original type counts per lineage
         const detailContainer = document.getElementById('celltype-detail-bar');
         if (detailContainer) {
+            Plotly.purge(detailContainer);
+
             const lineages = coarseData.map(d => (d.lineage || '').replace(/_/g, ' '));
             const cimaTypeCounts = coarseData.map(d => (d.cima?.types || []).length);
             const inflamTypeCounts = coarseData.map(d => (d.inflammation?.types || []).length);
@@ -549,6 +598,7 @@ const ComparePage = {
             text.push(textRow);
         });
 
+        Plotly.purge(container);
         Plotly.newPlot(container, [{
             type: 'heatmap',
             z: z,
@@ -581,6 +631,8 @@ const ComparePage = {
         // Render bar chart showing cell counts per fine type (top 15)
         const detailContainer = document.getElementById('celltype-detail-bar');
         if (detailContainer) {
+            Plotly.purge(detailContainer);
+
             const topFineData = fineData.slice(0, 15);
             const topTypes = topFineData.map(d => (d.fine_type || '').replace(/_/g, ' '));
 
@@ -770,6 +822,7 @@ const ComparePage = {
                 hoverinfo: 'skip',
             });
 
+            Plotly.purge('scatter-plot');
             Plotly.newPlot('scatter-plot', traces, {
                 xaxis: { title: `${pair.atlas1} Activity (z-score)`, zeroline: true },
                 yaxis: { title: `${pair.atlas2} Activity (z-score)`, zeroline: true },
@@ -783,6 +836,7 @@ const ComparePage = {
             // Per-cell-type correlation bar chart
             const ctCorrelations = this.calculatePerCelltypeCorrelations(scatterData, cellTypes);
 
+            Plotly.purge('celltype-correlations');
             Plotly.newPlot('celltype-correlations', [{
                 type: 'bar',
                 y: ctCorrelations.map(c => c.cellType),
@@ -998,6 +1052,7 @@ const ComparePage = {
             })
         );
 
+        Plotly.purge('reliability-heatmap');
         Plotly.newPlot('reliability-heatmap', [{
             type: 'heatmap',
             z: z,
