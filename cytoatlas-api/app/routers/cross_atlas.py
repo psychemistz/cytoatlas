@@ -46,13 +46,16 @@ async def get_cross_atlas_summary(
 @router.get("/celltype-sankey")
 async def get_celltype_sankey(
     level: str = Query("coarse", pattern="^(coarse|fine)$"),
-    lineage: str | None = Query(None),
+    lineage: str = Query("all", pattern="^(all|T_cell|Myeloid|B_cell|NK_ILC)$"),
     service: CrossAtlasService = Depends(get_cross_atlas_service),
 ) -> dict:
     """
-    Get Sankey diagram data for cell type mapping across atlases.
+    Get cell type mapping data for Sankey/heatmap visualization.
 
-    Returns nodes and links for Plotly Sankey visualization.
+    - level: 'coarse' (8 lineages) or 'fine' (~32 types)
+    - lineage: Filter by lineage category (all, T_cell, Myeloid, B_cell, NK_ILC)
+
+    Returns nodes/links for Sankey (coarse) or heatmap data (fine).
     """
     return await service.get_celltype_sankey(level, lineage)
 

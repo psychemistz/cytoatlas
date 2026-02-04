@@ -380,17 +380,26 @@ class CrossAtlasService(BaseService):
         total_cells = 0
         total_samples = 0
         total_cell_types = 0
-        atlases = []
 
         for atlas_key in ["cima", "inflammation", "scatlas_normal", "scatlas_cancer"]:
             atlas_data = summary.get(atlas_key, {})
             total_cells += atlas_data.get("cells", 0)
-            total_samples += atlas_data.get("samples", 0)
+            # Only count samples from atlases that have sample-level data
+            samples = atlas_data.get("samples", 0)
+            if samples > 0:
+                total_samples += samples
             total_cell_types += atlas_data.get("cell_types", 0)
+
+        # Add organs info for scAtlas entries for display
+        if "scatlas_normal" in summary:
+            summary["scatlas_normal"]["organs"] = summary["scatlas_normal"].get("organs", 35)
+        if "scatlas_cancer" in summary:
+            summary["scatlas_cancer"]["organs"] = summary["scatlas_cancer"].get("organs", 0)
 
         return {
             "total_cells": total_cells,
             "total_samples": total_samples,
+            "total_samples_note": "CIMA + Inflammation only (scAtlas lacks sample-level metadata)",
             "total_cell_types": total_cell_types,
             "atlases": summary,
             "n_atlases": 3,
@@ -405,39 +414,137 @@ class CrossAtlasService(BaseService):
         lineage: str | None = None,
     ) -> dict:
         """
-        Get Sankey diagram data for cell type mapping.
+        Get cell type mapping data for Sankey/heatmap visualization.
 
         Args:
             level: 'coarse' or 'fine' mapping level
-            lineage: Optional lineage filter
+            lineage: Optional lineage filter (T_cell, Myeloid, B_cell, NK_ILC)
 
         Returns:
-            Sankey nodes and links
+            Mapping data with coarse/fine details and summary
         """
         data = await self.load_json("cross_atlas.json")
         celltype_mapping = data.get("celltype_mapping", {})
 
-        sankey = celltype_mapping.get("sankey", {})
-        nodes = sankey.get("nodes", [])
-        links = sankey.get("links", [])
-
-        # Get lineages for filtering options
-        lineages = celltype_mapping.get("lineages", [])
-
         # Get mapping data based on level
-        mapping_key = f"{level}_mapping"
-        mapping = celltype_mapping.get(mapping_key, [])
+        coarse_mapping = celltype_mapping.get("coarse_mapping", [])
+        fine_mapping = celltype_mapping.get("fine_mapping", [])
 
         # Get summary statistics
         summary = celltype_mapping.get("summary", {})
 
+        # Apply lineage filter
+        filtered_coarse = coarse_mapping
+        filtered_fine = fine_mapping
+
+        if lineage and lineage != "all":
+            # Lineage mapping for coarse
+            lineage_map = {
+                "T_cell": ["CD4_T", "CD8_T", "Unconventional_T"],
+                "Myeloid": ["Myeloid"],
+                "B_cell": ["B", "Plasma"],
+                "NK_ILC": ["NK"],
+            }
+            target_lineages = lineage_map.get(lineage, [])
+            filtered_coarse = [
+                d for d in coarse_mapping
+                if d.get("lineage") in target_lineages
+            ]
+
+            # Lineage prefixes for fine
+            lineage_prefixes = {
+                "T_cell": ["CD4", "CD8", "Treg", "MAIT", "gdT", "NKT", "ILC"],
+                "Myeloid": ["Mono", "Mac", "DC", "pDC", "cDC", "Mast", "Neutro", "Baso", "Eosino"],
+                "B_cell": ["B_", "Plasma"],
+                "NK_ILC": ["NK", "ILC"],
+            }
+            prefixes = lineage_prefixes.get(lineage, [])
+            filtered_fine = [
+                d for d in fine_mapping
+                if any(
+                    d.get("fine_type", "").startswith(p) or p in d.get("fine_type", "")
+                    for p in prefixes
+                )
+            ]
+
+        # Build Sankey nodes and links for coarse level
+        nodes = []
+        links = []
+
+        if level == "coarse" and filtered_coarse:
+            atlas_colors = {"CIMA": "#e41a1c", "Inflammation": "#377eb8", "scAtlas": "#4daf4a"}
+            lineage_colors = {
+                "CD4_T": "#984ea3", "CD8_T": "#ff7f00", "NK": "#a65628",
+                "B": "#f781bf", "Plasma": "#999999", "Myeloid": "#66c2a5",
+                "Unconventional_T": "#fc8d62", "Progenitor": "#8da0cb",
+            }
+
+            node_idx = {}
+
+            # Atlas nodes
+            for atlas in ["CIMA", "Inflammation", "scAtlas"]:
+                node_idx[atlas] = len(nodes)
+                nodes.append({"label": atlas, "color": atlas_colors[atlas], "category": "atlas"})
+
+            # Lineage nodes
+            for d in filtered_coarse:
+                lin = d.get("lineage")
+                node_idx[lin] = len(nodes)
+                nodes.append({
+                    "label": lin.replace("_", " "),
+                    "color": lineage_colors.get(lin, "#999"),
+                    "category": "lineage",
+                })
+
+            # Links from atlases to lineages
+            atlas_keys = [
+                {"key": "cima", "name": "CIMA"},
+                {"key": "inflammation", "name": "Inflammation"},
+                {"key": "scatlas", "name": "scAtlas"},
+            ]
+            for d in filtered_coarse:
+                lin = d.get("lineage")
+                for ak in atlas_keys:
+                    atlas_data = d.get(ak["key"], {})
+                    total_cells = atlas_data.get("total_cells", 0)
+                    if total_cells > 0:
+                        import math
+                        scaled_value = math.log10(total_cells + 1) * 10
+                        types_list = atlas_data.get("types", [])
+                        links.append({
+                            "source": node_idx[ak["name"]],
+                            "target": node_idx[lin],
+                            "value": max(scaled_value, 1),
+                            "cells": total_cells,
+                            "types": ", ".join(t.get("name", "") for t in types_list[:5]),
+                            "n_types": len(types_list),
+                        })
+
+        # Sort fine mapping by total cells
+        if filtered_fine:
+            for d in filtered_fine:
+                d["total_cells"] = (
+                    d.get("cima", {}).get("total_cells", 0) +
+                    d.get("inflammation", {}).get("total_cells", 0) +
+                    d.get("scatlas", {}).get("total_cells", 0)
+                )
+            filtered_fine = sorted(filtered_fine, key=lambda x: x.get("total_cells", 0), reverse=True)
+
         return {
             "nodes": nodes,
             "links": links,
-            "lineages": lineages,
-            "mapping": mapping,
+            "coarse_mapping": filtered_coarse,
+            "fine_mapping": filtered_fine,
             "summary": summary,
             "level": level,
+            "lineage_filter": lineage,
+            "available_lineages": [
+                {"value": "all", "label": "All Lineages"},
+                {"value": "T_cell", "label": "T Cells (CD4, CD8, Unconventional)"},
+                {"value": "Myeloid", "label": "Myeloid (Mono, DC, Mac)"},
+                {"value": "B_cell", "label": "B Cells & Plasma"},
+                {"value": "NK_ILC", "label": "NK & ILC"},
+            ],
         }
 
     @cached(prefix="cross_atlas", ttl=3600)

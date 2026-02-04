@@ -4073,3 +4073,31 @@ h3 .badge {
     padding: var(--spacing-lg);
     text-align: center;
 }
+
+/* Mapping Info Section */
+.mapping-info {
+    margin-top: 15px;
+    padding: 12px 16px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+    border-left: 3px solid var(--primary);
+}
+
+.mapping-info-content {
+    line-height: 1.6;
+}
+
+.mapping-viz-container,
+.mapping-detail-container {
+    background: var(--bg-primary);
+    padding: var(--spacing-lg);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+}
+
+.mapping-viz-container h3,
+.mapping-detail-container h3 {
+    margin: 0 0 var(--spacing-xs) 0;
+    font-size: 1rem;
+}
