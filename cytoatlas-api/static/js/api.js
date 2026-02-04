@@ -173,6 +173,30 @@ const API = {
         return this.get('/cross-atlas/consistency', params);
     },
 
+    async getCrossAtlasSummary() {
+        return this.get('/cross-atlas/summary');
+    },
+
+    async getCelltypeSankey(params = {}) {
+        return this.get('/cross-atlas/celltype-sankey', params);
+    },
+
+    async getPairwiseScatter(params = {}) {
+        return this.get('/cross-atlas/pairwise-scatter', params);
+    },
+
+    async getSignatureReliability(params = {}) {
+        return this.get('/cross-atlas/signature-reliability', params);
+    },
+
+    async getMetaAnalysisForest(params = {}) {
+        return this.get('/cross-atlas/meta-analysis/forest', params);
+    },
+
+    async getCrossAtlasAtlases() {
+        return this.get('/cross-atlas/atlases');
+    },
+
     // ==================== Validation ====================
 
     async getValidationAtlases() {

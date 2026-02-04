@@ -31,6 +31,79 @@ async def get_available_atlases(
     return await service.get_available_atlases()
 
 
+@router.get("/summary")
+async def get_cross_atlas_summary(
+    service: Annotated[CrossAtlasService, Depends(get_cross_atlas_service)],
+) -> dict:
+    """
+    Get cross-atlas summary statistics.
+
+    Returns overview data including total cells, samples, and cell types per atlas.
+    """
+    return await service.get_summary()
+
+
+@router.get("/celltype-sankey")
+async def get_celltype_sankey(
+    level: str = Query("coarse", pattern="^(coarse|fine)$"),
+    lineage: str | None = Query(None),
+    service: CrossAtlasService = Depends(get_cross_atlas_service),
+) -> dict:
+    """
+    Get Sankey diagram data for cell type mapping across atlases.
+
+    Returns nodes and links for Plotly Sankey visualization.
+    """
+    return await service.get_celltype_sankey(level, lineage)
+
+
+@router.get("/pairwise-scatter")
+async def get_pairwise_scatter(
+    atlas1: str = Query("CIMA", description="First atlas"),
+    atlas2: str = Query("Inflammation", description="Second atlas"),
+    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
+    level: str = Query("coarse", pattern="^(coarse|fine)$"),
+    service: CrossAtlasService = Depends(get_cross_atlas_service),
+) -> dict:
+    """
+    Get pairwise scatter plot data for atlas comparison.
+
+    Returns scatter data with correlation statistics for comparing
+    signature activities between two atlases.
+    """
+    return await service.get_pairwise_scatter(atlas1, atlas2, signature_type, level)
+
+
+@router.get("/signature-reliability")
+async def get_signature_reliability(
+    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
+    service: CrossAtlasService = Depends(get_cross_atlas_service),
+) -> dict:
+    """
+    Get signature reliability data across atlas pairs.
+
+    Returns per-signature correlations for each atlas pair,
+    suitable for heatmap visualization.
+    """
+    return await service.get_signature_reliability(signature_type)
+
+
+@router.get("/meta-analysis/forest")
+async def get_meta_analysis_forest(
+    analysis: str = Query("age", pattern="^(age|bmi|sex)$"),
+    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
+    signature: str | None = Query(None, description="Filter by specific signature"),
+    service: CrossAtlasService = Depends(get_cross_atlas_service),
+) -> dict:
+    """
+    Get meta-analysis data for forest plot visualization.
+
+    Returns individual atlas effects and pooled estimates with
+    heterogeneity statistics for each signature.
+    """
+    return await service.get_meta_analysis_forest(analysis, signature_type, signature)
+
+
 @router.get("/comparison", response_model=AtlasComparisonData)
 async def get_atlas_comparison(
     signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),

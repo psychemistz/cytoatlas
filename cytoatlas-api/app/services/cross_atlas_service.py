@@ -364,3 +364,304 @@ class CrossAtlasService(BaseService):
     async def get_available_atlases(self) -> list[str]:
         """Get list of available atlases."""
         return ["CIMA", "Inflammation", "scAtlas"]
+
+    @cached(prefix="cross_atlas", ttl=3600)
+    async def get_summary(self) -> dict:
+        """
+        Get atlas summary statistics for overview.
+
+        Returns:
+            Summary dict with cells, samples, cell_types per atlas
+        """
+        data = await self.load_json("cross_atlas.json")
+        summary = data.get("summary", {})
+
+        # Calculate totals
+        total_cells = 0
+        total_samples = 0
+        total_cell_types = 0
+        atlases = []
+
+        for atlas_key in ["cima", "inflammation", "scatlas_normal", "scatlas_cancer"]:
+            atlas_data = summary.get(atlas_key, {})
+            total_cells += atlas_data.get("cells", 0)
+            total_samples += atlas_data.get("samples", 0)
+            total_cell_types += atlas_data.get("cell_types", 0)
+
+        return {
+            "total_cells": total_cells,
+            "total_samples": total_samples,
+            "total_cell_types": total_cell_types,
+            "atlases": summary,
+            "n_atlases": 3,
+            "n_signatures_cytosig": 43,
+            "n_signatures_secact": 1170,
+        }
+
+    @cached(prefix="cross_atlas", ttl=3600)
+    async def get_celltype_sankey(
+        self,
+        level: str = "coarse",
+        lineage: str | None = None,
+    ) -> dict:
+        """
+        Get Sankey diagram data for cell type mapping.
+
+        Args:
+            level: 'coarse' or 'fine' mapping level
+            lineage: Optional lineage filter
+
+        Returns:
+            Sankey nodes and links
+        """
+        data = await self.load_json("cross_atlas.json")
+        celltype_mapping = data.get("celltype_mapping", {})
+
+        sankey = celltype_mapping.get("sankey", {})
+        nodes = sankey.get("nodes", [])
+        links = sankey.get("links", [])
+
+        # Get lineages for filtering options
+        lineages = celltype_mapping.get("lineages", [])
+
+        # Get mapping data based on level
+        mapping_key = f"{level}_mapping"
+        mapping = celltype_mapping.get(mapping_key, [])
+
+        # Get summary statistics
+        summary = celltype_mapping.get("summary", {})
+
+        return {
+            "nodes": nodes,
+            "links": links,
+            "lineages": lineages,
+            "mapping": mapping,
+            "summary": summary,
+            "level": level,
+        }
+
+    @cached(prefix="cross_atlas", ttl=3600)
+    async def get_pairwise_scatter(
+        self,
+        atlas1: str = "CIMA",
+        atlas2: str = "Inflammation",
+        signature_type: str = "CytoSig",
+        level: str = "coarse",
+    ) -> dict:
+        """
+        Get pairwise scatter plot data for atlas comparison.
+
+        Args:
+            atlas1: First atlas name
+            atlas2: Second atlas name
+            signature_type: 'CytoSig' or 'SecAct'
+            level: 'coarse' or 'fine' aggregation level
+
+        Returns:
+            Scatter data with correlation statistics
+        """
+        data = await self.load_json("cross_atlas.json")
+        atlas_comparison = data.get("atlas_comparison", {})
+
+        # Get the right signature type section
+        sig_key = signature_type.lower()
+        sig_data = atlas_comparison.get(sig_key, {})
+
+        # Map atlas names to pair keys
+        pair_map = {
+            ("CIMA", "Inflammation"): "cima_vs_inflammation",
+            ("Inflammation", "CIMA"): "cima_vs_inflammation",
+            ("CIMA", "scAtlas"): "cima_vs_scatlas",
+            ("scAtlas", "CIMA"): "cima_vs_scatlas",
+            ("Inflammation", "scAtlas"): "inflammation_vs_scatlas",
+            ("scAtlas", "Inflammation"): "inflammation_vs_scatlas",
+        }
+
+        pair_key = pair_map.get((atlas1, atlas2))
+        if not pair_key:
+            return {"error": f"Invalid atlas pair: {atlas1} vs {atlas2}"}
+
+        pair_data = sig_data.get(pair_key, {})
+
+        # Get the right level data
+        level_key = f"celltype_aggregated_{level}"
+        level_data = pair_data.get(level_key, {})
+
+        # Determine if we need to swap x/y based on atlas order
+        swap_axes = (atlas1, atlas2) in [
+            ("Inflammation", "CIMA"),
+            ("scAtlas", "CIMA"),
+            ("scAtlas", "Inflammation"),
+        ]
+
+        scatter_data = level_data.get("data", [])
+        if swap_axes:
+            scatter_data = [
+                {
+                    **point,
+                    "x": point.get("y"),
+                    "y": point.get("x"),
+                    "n_samples_x": point.get("n_samples_y"),
+                    "n_samples_y": point.get("n_samples_x"),
+                }
+                for point in scatter_data
+            ]
+
+        return {
+            "data": scatter_data,
+            "correlation": level_data.get("correlation", 0),
+            "pvalue": level_data.get("pvalue", 1),
+            "n": level_data.get("n", 0),
+            "n_celltypes": level_data.get("n_celltypes", 0),
+            "n_signatures": level_data.get("n_signatures", 0),
+            "atlas1": atlas1,
+            "atlas2": atlas2,
+            "signature_type": signature_type,
+            "level": level,
+        }
+
+    @cached(prefix="cross_atlas", ttl=3600)
+    async def get_signature_reliability(
+        self,
+        signature_type: str = "CytoSig",
+    ) -> dict:
+        """
+        Get signature reliability data for heatmap.
+
+        Args:
+            signature_type: 'CytoSig' or 'SecAct'
+
+        Returns:
+            Signature reliability with per-pair correlations
+        """
+        data = await self.load_json("cross_atlas.json")
+        sig_reliability = data.get("signature_reliability", {})
+
+        sig_key = signature_type.lower()
+        reliability_data = sig_reliability.get(sig_key, {})
+
+        signatures = reliability_data.get("signatures", [])
+        summary = reliability_data.get("summary", {})
+        pair_correlations = reliability_data.get("pair_correlations", {})
+
+        # Build heatmap matrix data
+        # Rows: signatures, Columns: atlas pairs
+        pairs = ["cima_vs_inflammation", "cima_vs_scatlas", "inflammation_vs_scatlas"]
+        pair_labels = ["CIMA vs Inflammation", "CIMA vs scAtlas", "Inflammation vs scAtlas"]
+
+        heatmap_data = []
+        for sig in signatures:
+            row = {
+                "signature": sig.get("signature"),
+                "category": sig.get("category"),
+                "mean_correlation": sig.get("mean_correlation"),
+                "correlations": {},
+            }
+            correlations = sig.get("correlations", {})
+            for pair in pairs:
+                pair_corr = correlations.get(pair, {})
+                row["correlations"][pair] = {
+                    "r": pair_corr.get("r", None),
+                    "p": pair_corr.get("p", None),
+                    "n": pair_corr.get("n", None),
+                }
+            heatmap_data.append(row)
+
+        return {
+            "signatures": heatmap_data,
+            "summary": summary,
+            "pair_labels": pair_labels,
+            "pairs": pairs,
+            "signature_type": signature_type,
+        }
+
+    @cached(prefix="cross_atlas", ttl=3600)
+    async def get_meta_analysis_forest(
+        self,
+        analysis: str = "age",
+        signature_type: str = "CytoSig",
+        signature: str | None = None,
+    ) -> dict:
+        """
+        Get meta-analysis data for forest plot.
+
+        Args:
+            analysis: 'age', 'bmi', or 'sex'
+            signature_type: 'CytoSig' or 'SecAct'
+            signature: Optional specific signature filter
+
+        Returns:
+            Forest plot data with individual and pooled effects
+        """
+        data = await self.load_json("cross_atlas.json")
+        meta_analysis = data.get("meta_analysis", {})
+
+        analysis_data = meta_analysis.get(analysis, [])
+
+        # Filter by signature type
+        sig_key = "CytoSig" if signature_type == "CytoSig" else "SecAct"
+        filtered = [
+            r for r in analysis_data
+            if r.get("sig_type") == sig_key
+        ]
+
+        # Filter by specific signature if provided
+        if signature:
+            filtered = [r for r in filtered if r.get("signature") == signature]
+
+        # Group by signature for forest plot
+        signature_groups = {}
+        for r in filtered:
+            sig = r.get("signature")
+            if sig not in signature_groups:
+                signature_groups[sig] = {
+                    "signature": sig,
+                    "individual_effects": [],
+                    "pooled_effect": r.get("pooled_effect"),
+                    "pooled_se": r.get("pooled_se"),
+                    "ci_low": r.get("ci_low"),
+                    "ci_high": r.get("ci_high"),
+                    "I2": r.get("I2"),
+                    "n_atlases": r.get("n_atlases"),
+                }
+            signature_groups[sig]["individual_effects"].append({
+                "atlas": r.get("atlas"),
+                "effect": r.get("effect"),
+                "se": r.get("se"),
+                "pvalue": r.get("pvalue"),
+                "n": r.get("n"),
+            })
+
+        # Convert to list and sort by pooled effect
+        forest_data = list(signature_groups.values())
+        forest_data.sort(key=lambda x: abs(x.get("pooled_effect", 0)), reverse=True)
+
+        # Calculate summary statistics
+        n_significant = sum(
+            1 for s in forest_data
+            if s.get("pooled_effect") and abs(s.get("pooled_effect", 0)) > 0.1
+        )
+        n_consistent = sum(
+            1 for s in forest_data
+            if all(
+                e.get("effect", 0) * s.get("pooled_effect", 0) > 0
+                for e in s.get("individual_effects", [])
+                if e.get("effect") is not None
+            )
+        )
+        n_heterogeneous = sum(
+            1 for s in forest_data
+            if s.get("I2", 0) > 50
+        )
+
+        return {
+            "analysis": analysis,
+            "signature_type": signature_type,
+            "forest_data": forest_data,
+            "summary": {
+                "n_signatures": len(forest_data),
+                "n_significant": n_significant,
+                "n_consistent_direction": n_consistent,
+                "n_heterogeneous": n_heterogeneous,
+            },
+        }
