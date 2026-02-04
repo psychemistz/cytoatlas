@@ -4297,3 +4297,93 @@ h3 .badge {
     color: #666;
     margin-bottom: var(--spacing-sm);
 }
+
+/* ==================== Methods & References Sections ==================== */
+.methods-section,
+.references-section {
+    padding: var(--spacing-2xl) var(--spacing-xl);
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.methods-section {
+    background: var(--bg-secondary);
+}
+
+.references-section {
+    background: var(--bg-primary);
+    border-top: 1px solid var(--border-light);
+}
+
+.methods-content,
+.references-content {
+    line-height: 1.7;
+    color: var(--text-secondary);
+}
+
+.method-block {
+    margin-bottom: var(--spacing-xl);
+}
+
+.method-block:last-child {
+    margin-bottom: 0;
+}
+
+.method-block h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 var(--spacing-sm) 0;
+    padding-bottom: var(--spacing-xs);
+    border-bottom: 2px solid var(--primary);
+    display: inline-block;
+}
+
+.method-block p {
+    margin: var(--spacing-sm) 0;
+}
+
+.method-block ul {
+    margin: var(--spacing-sm) 0;
+    padding-left: var(--spacing-lg);
+}
+
+.method-block li {
+    margin-bottom: var(--spacing-xs);
+}
+
+.method-block strong {
+    color: var(--text-primary);
+}
+
+.method-subsection {
+    margin: var(--spacing-md) 0;
+    padding-left: var(--spacing-md);
+    border-left: 3px solid var(--border-light);
+}
+
+.method-subsection h4 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 var(--spacing-xs) 0;
+}
+
+.method-subsection p {
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.references-list {
+    padding-left: var(--spacing-lg);
+    margin: 0;
+}
+
+.references-list li {
+    margin-bottom: var(--spacing-sm);
+    font-size: 0.9rem;
+}
+
+.references-list em {
+    color: var(--primary);
+}

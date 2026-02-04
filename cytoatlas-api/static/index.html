@@ -175,6 +175,82 @@
                     </div>
                 </div>
             </section>
+
+            <!-- Methods Section -->
+            <section class="methods-section">
+                <h2 class="section-title">Methods</h2>
+                <div class="methods-content">
+                    <div class="method-block">
+                        <h3>Cytokine Activity Inference</h3>
+                        <p>Cytokine signaling activities were inferred from single-cell RNA-seq data using two complementary approaches:</p>
+                        <ul>
+                            <li><strong>CytoSig</strong>: Predicts activities of 43 cytokines based on their downstream transcriptional signatures (Jiang et al., 2021).</li>
+                            <li><strong>SecAct</strong>: Estimates activities of 1,170 secreted proteins using secreted protein signatures learned from spatial Moran's I autocorrelation (Ru et al., 2026).</li>
+                        </ul>
+                        <p>Activity scores represent z-scored coefficients from ridge regression of signature gene expression, where positive values indicate upregulation of downstream targets.</p>
+                    </div>
+
+                    <div class="method-block">
+                        <h3>Data Sources</h3>
+                        <ul>
+                            <li><strong>CIMA (Healthy Immune)</strong>: 6.5M cells from 421 healthy donors with matched blood biochemistry and metabolomics</li>
+                            <li><strong>Inflammation Atlas</strong>: 4.9M cells from 817 samples across inflammatory diseases (RA, IBD, MS, SLE, etc.)</li>
+                            <li><strong>scAtlas Normal</strong>: 2.3M cells spanning 35 organs and 376 cell types from the Human Cell Atlas</li>
+                            <li><strong>scAtlas Cancer</strong>: 4.1M cells from pan-cancer datasets with 156 cell type annotations</li>
+                        </ul>
+                    </div>
+
+                    <div class="method-block">
+                        <h3>Statistical Analysis</h3>
+                        <div class="method-subsection">
+                            <h4>Correlation Analysis</h4>
+                            <p>Spearman's rank correlation coefficient (ρ) was used for continuous variables (age, BMI, biochemistry, metabolites). P-values were adjusted using Benjamini-Hochberg FDR correction.</p>
+                        </div>
+                        <div class="method-subsection">
+                            <h4>Differential Analysis</h4>
+                            <p>Mann-Whitney U test (Wilcoxon rank-sum) was used for two-group comparisons (sex, disease vs. healthy). Effect sizes are reported as activity difference (Δ, z-score units).</p>
+                        </div>
+                        <div class="method-subsection">
+                            <h4>Meta-Analysis</h4>
+                            <p>Fixed-effects meta-analysis combines effect sizes across atlases using inverse-variance weighting. Heterogeneity was assessed using the I² statistic (Higgins et al., 2003), where I² < 25% indicates low heterogeneity and I² > 75% indicates considerable heterogeneity.</p>
+                        </div>
+                    </div>
+
+                    <div class="method-block">
+                        <h3>Cross-Atlas Integration</h3>
+                        <p>Cell type annotations were harmonized across atlases using manual mapping dictionaries based on canonical marker genes and established nomenclature. Signature conservation is assessed by computing Spearman correlation of activity values across harmonized cell types between atlas pairs:</p>
+                        <ul>
+                            <li><strong>Highly Conserved</strong>: Spearman r > 0.7 in at least 2 of 3 atlas pairs</li>
+                            <li><strong>Moderately Conserved</strong>: Spearman r > 0.5 in at least 2 atlas pairs</li>
+                            <li><strong>Atlas-Specific</strong>: Low correlation across available pairs</li>
+                        </ul>
+                    </div>
+
+                    <div class="method-block">
+                        <h3>Activity Validation</h3>
+                        <p>Activity predictions are validated by computing correlations between predicted activity scores and actual gene expression of signature genes at three levels:</p>
+                        <ul>
+                            <li><strong>Pseudobulk Level</strong>: Mean signature gene expression vs. activity per sample × cell type</li>
+                            <li><strong>Single-Cell Level</strong>: Per-cell correlation between signature gene expression and activity</li>
+                            <li><strong>Atlas Level</strong>: Mean expression vs. mean activity across cell types</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- References Section -->
+            <section class="references-section">
+                <h2 class="section-title">References</h2>
+                <div class="references-content">
+                    <ol class="references-list">
+                        <li>Ru et al. (2026) <em>Nature Methods</em> (in press) - Inference of secreted protein activities in intercellular communication</li>
+                        <li>Jiang et al. (2021) <em>Nature Methods</em> - Systematic investigation of cytokine signaling activity at the tissue and single-cell levels</li>
+                        <li>Hao et al. (2021) <em>Cell</em> - Integrated analysis of multimodal single-cell data</li>
+                        <li>Higgins et al. (2003) <em>BMJ</em> - Measuring inconsistency in meta-analyses</li>
+                        <li>Domínguez Conde et al. (2022) <em>Science</em> - Cross-tissue immune cell analysis reveals tissue-specific features in humans</li>
+                    </ol>
+                </div>
+            </section>
         </div>
     </template>
 
