@@ -235,22 +235,20 @@
                 <p>Validation of activity predictions by correlating inferred scores with signature gene expression</p>
             </div>
 
-            <div class="validation-controls">
-                <div class="control-group">
-                    <label>Atlas:</label>
-                    <select id="val-atlas" class="filter-select">
+            <div class="filter-bar top-controls">
+                <label>Atlas:
+                    <select id="val-atlas">
                         <option value="cima">CIMA</option>
                         <option value="inflammation">Inflammation</option>
                         <option value="scatlas">scAtlas</option>
                     </select>
-                </div>
-                <div class="control-group">
-                    <label>Signature Type:</label>
-                    <select id="val-sigtype" class="filter-select">
+                </label>
+                <label>Signature Type:
+                    <select id="val-sigtype">
                         <option value="CytoSig">CytoSig (43)</option>
                         <option value="SecAct">SecAct (1,170)</option>
                     </select>
-                </div>
+                </label>
             </div>
 
             <div class="tab-navigation" id="validation-tabs">

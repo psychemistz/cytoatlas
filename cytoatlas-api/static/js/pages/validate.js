@@ -181,17 +181,16 @@ const ValidatePage = {
                 <p>Cell type-aggregated correlation: one data point per cell type. Compares mean expression of signature genes with mean activity across all cells of each cell type.</p>
 
                 <div class="filter-bar">
-                    <div class="control-group">
-                        <label>Signature:</label>
-                        <select id="val-atlas-signature" class="filter-select">
+                    <label>Signature:
+                        <select id="val-atlas-signature">
                             ${this.atlasLevel.signatures.map(s =>
                                 `<option value="${s}" ${s === this.atlasLevel.signature ? 'selected' : ''}>${s}</option>`
                             ).join('')}
                         </select>
-                    </div>
-                    <div class="control-group">
-                        <input type="text" id="val-atlas-search" placeholder="Search signature..." class="search-input">
-                    </div>
+                    </label>
+                    <label>
+                        <input type="text" id="val-atlas-search" placeholder="Search signature...">
+                    </label>
                 </div>
 
                 <div class="panel-grid">
@@ -423,18 +422,17 @@ const ValidatePage = {
                 <p>Correlation between mean signature gene expression and predicted activity per sample. Pseudobulk samples are created by aggregating cells within each sample × cell type combination.</p>
 
                 <div class="filter-bar">
-                    <div class="control-group">
-                        <label>Signature:</label>
-                        <select id="val-pb-signature" class="filter-select">
+                    <label>Signature:
+                        <select id="val-pb-signature">
                             <option value="all">All Signatures</option>
                             ${this.pseudobulk.signatures.map(s =>
                                 `<option value="${s}" ${s === this.pseudobulk.signature ? 'selected' : ''}>${s}</option>`
                             ).join('')}
                         </select>
-                    </div>
-                    <div class="control-group">
-                        <input type="text" id="val-pb-search" placeholder="Search signature..." class="search-input">
-                    </div>
+                    </label>
+                    <label>
+                        <input type="text" id="val-pb-search" placeholder="Search signature...">
+                    </label>
                 </div>
 
                 <div class="panel-grid">
@@ -644,17 +642,16 @@ const ValidatePage = {
                 <p>Comparison of activity between cells that express the signature gene vs those that don't. If inference is valid, expressing cells should have higher activity.</p>
 
                 <div class="filter-bar">
-                    <div class="control-group">
-                        <label>Signature:</label>
-                        <select id="val-sc-signature" class="filter-select">
+                    <label>Signature/Gene:
+                        <select id="val-sc-signature">
                             ${this.singlecell.signatures.map(s =>
                                 `<option value="${s}" ${s === this.singlecell.signature ? 'selected' : ''}>${s}</option>`
                             ).join('')}
                         </select>
-                    </div>
-                    <div class="control-group">
-                        <input type="text" id="val-sc-search" placeholder="Search signature..." class="search-input">
-                    </div>
+                    </label>
+                    <label>
+                        <input type="text" id="val-sc-search" placeholder="Search gene...">
+                    </label>
                 </div>
 
                 <div class="panel-grid">

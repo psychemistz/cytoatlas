@@ -635,31 +635,32 @@ main {
 
 .validate-page .tab-navigation {
     display: flex;
-    gap: var(--spacing-xs);
+    flex-wrap: wrap;
+    gap: 4px;
     margin-bottom: var(--spacing-lg);
     border-bottom: 1px solid var(--border-light);
-    padding-bottom: var(--spacing-xs);
 }
 
 .validate-page .tab-btn {
-    padding: var(--spacing-sm) var(--spacing-lg);
+    padding: 0.8rem 1.5rem;
     background: transparent;
     border: none;
-    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    border-bottom: 2px solid transparent;
     cursor: pointer;
+    font-size: 0.95rem;
     font-weight: 500;
     color: var(--text-secondary);
-    transition: all var(--transition-fast);
+    transition: all 0.2s;
 }
 
 .validate-page .tab-btn:hover {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
+    color: var(--primary);
 }
 
 .validate-page .tab-btn.active {
-    background: var(--primary);
-    color: white;
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+    font-weight: 600;
 }
 
 .validate-page .validation-content {
@@ -688,6 +689,34 @@ main {
     border-radius: var(--radius-md);
     flex-wrap: wrap;
     align-items: center;
+}
+
+.validate-page .filter-bar label {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.validate-page .filter-bar label select,
+.validate-page .filter-bar label input {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    font-size: 0.95rem;
+    min-width: 150px;
+}
+
+.validate-page .filter-bar label input[type="text"] {
+    width: 150px;
+}
+
+.validate-page .filter-bar.top-controls {
+    background: transparent;
+    padding: 0;
+    margin-bottom: var(--spacing-md);
 }
 
 .validate-page .panel-grid {
