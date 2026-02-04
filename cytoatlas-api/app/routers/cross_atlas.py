@@ -66,15 +66,18 @@ async def get_pairwise_scatter(
     atlas2: str = Query("Inflammation", description="Second atlas"),
     signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
     level: str = Query("coarse", pattern="^(coarse|fine)$"),
+    view: str = Query("pseudobulk", pattern="^(pseudobulk|singlecell)$"),
     service: CrossAtlasService = Depends(get_cross_atlas_service),
 ) -> dict:
     """
     Get pairwise scatter plot data for atlas comparison.
 
+    - view: 'pseudobulk' for sample-aggregated means, 'singlecell' for cell-level means
+
     Returns scatter data with correlation statistics for comparing
     signature activities between two atlases.
     """
-    return await service.get_pairwise_scatter(atlas1, atlas2, signature_type, level)
+    return await service.get_pairwise_scatter(atlas1, atlas2, signature_type, level, view)
 
 
 @router.get("/signature-reliability")

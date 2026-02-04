@@ -553,6 +553,7 @@ class CrossAtlasService(BaseService):
         atlas2: str = "Inflammation",
         signature_type: str = "CytoSig",
         level: str = "coarse",
+        view: str = "pseudobulk",
     ) -> dict:
         """
         Get pairwise scatter plot data for atlas comparison.
@@ -562,6 +563,7 @@ class CrossAtlasService(BaseService):
             atlas2: Second atlas name
             signature_type: 'CytoSig' or 'SecAct'
             level: 'coarse' or 'fine' aggregation level
+            view: 'pseudobulk' for sample-aggregated, 'singlecell' for cell-level
 
         Returns:
             Scatter data with correlation statistics
@@ -589,8 +591,12 @@ class CrossAtlasService(BaseService):
 
         pair_data = sig_data.get(pair_key, {})
 
-        # Get the right level data
-        level_key = f"celltype_aggregated_{level}"
+        # Get the right data based on view type
+        if view == "singlecell":
+            level_key = f"singlecell_mean_{level}"
+        else:
+            level_key = f"celltype_aggregated_{level}"
+
         level_data = pair_data.get(level_key, {})
 
         # Determine if we need to swap x/y based on atlas order
@@ -602,21 +608,32 @@ class CrossAtlasService(BaseService):
 
         scatter_data = level_data.get("data", [])
         if swap_axes:
-            scatter_data = [
-                {
+            # Swap x/y and also swap n_samples/n_cells fields
+            swapped_data = []
+            for point in scatter_data:
+                swapped_point = {
                     **point,
                     "x": point.get("y"),
                     "y": point.get("x"),
-                    "n_samples_x": point.get("n_samples_y"),
-                    "n_samples_y": point.get("n_samples_x"),
                 }
-                for point in scatter_data
-            ]
+                # Handle both pseudobulk (n_samples) and single-cell (n_cells) fields
+                if "n_samples_x" in point:
+                    swapped_point["n_samples_x"] = point.get("n_samples_y")
+                    swapped_point["n_samples_y"] = point.get("n_samples_x")
+                if "n_cells_x" in point:
+                    swapped_point["n_cells_x"] = point.get("n_cells_y")
+                    swapped_point["n_cells_y"] = point.get("n_cells_x")
+                swapped_data.append(swapped_point)
+            scatter_data = swapped_data
 
-        return {
+        # Build response - handle different field names for correlation
+        correlation = level_data.get("correlation") or level_data.get("overall_correlation", 0)
+        pvalue = level_data.get("pvalue") or level_data.get("overall_pvalue", 1)
+
+        result = {
             "data": scatter_data,
-            "correlation": level_data.get("correlation", 0),
-            "pvalue": level_data.get("pvalue", 1),
+            "correlation": correlation,
+            "pvalue": pvalue,
             "n": level_data.get("n", 0),
             "n_celltypes": level_data.get("n_celltypes", 0),
             "n_signatures": level_data.get("n_signatures", 0),
@@ -624,7 +641,19 @@ class CrossAtlasService(BaseService):
             "atlas2": atlas2,
             "signature_type": signature_type,
             "level": level,
+            "view": view,
         }
+
+        # Add single-cell specific fields
+        if view == "singlecell":
+            n_cells_1 = level_data.get("n_cells_atlas1", 0)
+            n_cells_2 = level_data.get("n_cells_atlas2", 0)
+            if swap_axes:
+                n_cells_1, n_cells_2 = n_cells_2, n_cells_1
+            result["n_cells_atlas1"] = n_cells_1
+            result["n_cells_atlas2"] = n_cells_2
+
+        return result
 
     @cached(prefix="cross_atlas", ttl=3600)
     async def get_signature_reliability(
