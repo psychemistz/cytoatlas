@@ -498,9 +498,17 @@ const ValidatePage = {
                 <div class="filter-bar">
                     <label>Signature:
                         <select id="val-pb-signature">
-                            <option value="all">All Signatures</option>
+                            <option value="all" ${this.pseudobulk.signature === 'all' ? 'selected' : ''}>All Signatures</option>
                             ${this.pseudobulk.signatures.map(s =>
                                 `<option value="${s}" ${s === this.pseudobulk.signature ? 'selected' : ''}>${s}</option>`
+                            ).join('')}
+                        </select>
+                    </label>
+                    <label>Cell Type:
+                        <select id="val-pb-celltype">
+                            <option value="all" ${this.pseudobulk.celltype === 'all' ? 'selected' : ''}>All Cell Types</option>
+                            ${(this.pseudobulk.celltypes || []).map(ct =>
+                                `<option value="${ct}" ${ct === this.pseudobulk.celltype ? 'selected' : ''}>${ct.replace(/_/g, ' ')}</option>`
                             ).join('')}
                         </select>
                     </label>
@@ -541,6 +549,15 @@ const ValidatePage = {
             });
         }
 
+        // Set up cell type selector
+        const ctSelect = document.getElementById('val-pb-celltype');
+        if (ctSelect) {
+            ctSelect.addEventListener('change', async (e) => {
+                this.pseudobulk.celltype = e.target.value;
+                await this.updatePseudobulkScatter();
+            });
+        }
+
         // Load visualizations
         await Promise.all([
             this.updatePseudobulkScatter(),
@@ -563,17 +580,21 @@ const ValidatePage = {
             );
 
             if (data && data.points) {
+                const r = data.stats?.pearson_r || 0;
+                const atlasName = this.currentAtlas.toUpperCase();
+
                 const trace = {
                     x: data.points.map(p => p.expression),
                     y: data.points.map(p => p.activity),
                     mode: 'markers',
                     type: 'scatter',
+                    text: data.points.map(p => p.cell_type || ''),
                     marker: {
                         size: 6,
-                        color: '#3b82f6',
-                        opacity: 0.5
+                        color: '#1a5f7a',
+                        opacity: 0.6
                     },
-                    hovertemplate: 'Expression: %{x:.3f}<br>Activity: %{y:.3f}<extra></extra>'
+                    hovertemplate: '%{text}<br>Expression: %{x:.2f}<br>Activity: %{y:.2f}<extra></extra>'
                 };
 
                 const trendline = this.calculateTrendline(
@@ -581,22 +602,20 @@ const ValidatePage = {
                     data.points.map(p => p.activity)
                 );
 
-                const layout = {
-                    xaxis: { title: 'Mean Expression (log1p)' },
-                    yaxis: { title: 'Activity (z-score)' },
-                    margin: { l: 60, r: 20, t: 40, b: 60 },
+                Plotly.newPlot(container, [trace, trendline], {
+                    xaxis: { title: 'Mean Signature Gene Expression', zeroline: true },
+                    yaxis: { title: 'Predicted Activity (z-score)', zeroline: true },
+                    margin: { l: 60, r: 30, t: 50, b: 50 },
                     annotations: [{
-                        x: 0.02,
-                        y: 0.98,
-                        xref: 'paper',
-                        yref: 'paper',
-                        text: `r = ${data.stats?.pearson_r?.toFixed(3) || 'N/A'}<br>n = ${data.points.length}`,
+                        x: 0.95, y: 0.95, xref: 'paper', yref: 'paper',
+                        text: `r = ${r.toFixed(3)}<br>n = ${data.points.length}`,
                         showarrow: false,
-                        font: { size: 12 }
-                    }]
-                };
-
-                Plotly.newPlot(container, [trace, trendline], layout, {responsive: true});
+                        font: { size: 14, color: '#333' },
+                        bgcolor: 'rgba(255,255,255,0.8)',
+                        borderpad: 4
+                    }],
+                    title: { text: `${atlasName} - ${sig} Pseudobulk`, font: { size: 14 } }
+                }, {responsive: true});
             } else {
                 container.innerHTML = '<p class="no-data">No data available</p>';
             }
@@ -626,27 +645,27 @@ const ValidatePage = {
             }
 
             if (correlations.length > 0) {
-                const trace = {
+                const meanR = correlations.reduce((a, b) => a + b) / correlations.length;
+
+                Plotly.newPlot(container, [{
                     x: correlations,
                     type: 'histogram',
                     nbinsx: 20,
-                    marker: { color: '#3b82f6' }
-                };
-
-                const layout = {
-                    xaxis: { title: 'Pearson r', range: [-1, 1] },
+                    marker: { color: '#57a0d3' }
+                }], {
+                    xaxis: { title: 'Pearson r', range: [-0.5, 1] },
                     yaxis: { title: 'Count' },
-                    margin: { l: 60, r: 20, t: 20, b: 60 },
-                    shapes: [{
-                        type: 'line',
-                        x0: 0, x1: 0,
-                        y0: 0, y1: 1,
-                        yref: 'paper',
-                        line: { color: 'red', dash: 'dash' }
-                    }]
-                };
-
-                Plotly.newPlot(container, [trace], layout, {responsive: true});
+                    margin: { l: 50, r: 30, t: 50, b: 50 },
+                    annotations: [{
+                        x: 0.95, y: 0.95, xref: 'paper', yref: 'paper',
+                        text: `Mean r = ${meanR.toFixed(3)}<br>n = ${correlations.length} signatures`,
+                        showarrow: false,
+                        font: { size: 12 },
+                        bgcolor: 'rgba(255,255,255,0.8)',
+                        borderpad: 4
+                    }],
+                    title: { text: 'Correlation Distribution Across Signatures', font: { size: 14 } }
+                }, {responsive: true});
             } else {
                 container.innerHTML = '<p class="no-data">No distribution data available</p>';
             }
@@ -679,24 +698,34 @@ const ValidatePage = {
             }
 
             if (rankings.length > 0) {
+                // Sort high to low and take top 20
                 rankings.sort((a, b) => b.r - a.r);
+                const top20 = rankings.slice(0, 20);
 
-                const trace = {
-                    x: rankings.map(r => r.signature),
-                    y: rankings.map(r => r.r),
+                // Gradient coloring based on r value
+                const getColor = (r) => {
+                    if (r > 0.5) return '#2ca02c';   // Green
+                    if (r > 0.2) return '#ffdd57';   // Yellow
+                    if (r > 0) return '#ff7f0e';     // Orange
+                    return '#d62728';                // Red
+                };
+
+                Plotly.newPlot(container, [{
+                    x: top20.map(r => r.signature),
+                    y: top20.map(r => r.r),
                     type: 'bar',
                     marker: {
-                        color: rankings.map(r => r.r > 0 ? '#22c55e' : '#ef4444')
-                    }
-                };
-
-                const layout = {
-                    xaxis: { title: 'Signature', tickangle: 45 },
-                    yaxis: { title: 'Pearson r', range: [-1, 1] },
-                    margin: { l: 60, r: 20, t: 20, b: 100 }
-                };
-
-                Plotly.newPlot(container, [trace], layout, {responsive: true});
+                        color: top20.map(r => getColor(r.r))
+                    },
+                    text: top20.map(r => r.r.toFixed(2)),
+                    textposition: 'outside',
+                    hovertemplate: '%{x}<br>r = %{y:.3f}<extra></extra>'
+                }], {
+                    xaxis: { title: 'Signature (sorted by r)', tickangle: -45 },
+                    yaxis: { title: 'Pearson r', range: [-0.3, 1] },
+                    margin: { l: 50, r: 30, t: 40, b: 120 },
+                    title: { text: 'Per-Signature Correlations (Sorted High → Low)', font: { size: 14 } }
+                }, {responsive: true});
             } else {
                 container.innerHTML = '<p class="no-data">No data available</p>';
             }
