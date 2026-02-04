@@ -336,6 +336,7 @@ const ComparePage = {
         const atlasColors = ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6'];
 
         // Cells chart
+        const maxCells = Math.max(...cells);
         Plotly.newPlot('overview-cells-chart', [{
             type: 'bar',
             x: atlasNames,
@@ -343,14 +344,16 @@ const ComparePage = {
             marker: { color: atlasColors },
             text: cells.map(c => this.formatNumber(c)),
             textposition: 'outside',
+            textfont: { size: 12 },
         }], {
-            margin: { l: 60, r: 20, t: 20, b: 60 },
-            yaxis: { title: 'Cells' },
+            margin: { l: 60, r: 20, t: 40, b: 60 },
+            yaxis: { title: 'Cells', range: [0, maxCells * 1.15] },
             paper_bgcolor: 'rgba(0,0,0,0)',
             plot_bgcolor: 'rgba(0,0,0,0)',
         }, { responsive: true });
 
         // Samples chart
+        const maxSamples = Math.max(...samples);
         Plotly.newPlot('overview-samples-chart', [{
             type: 'bar',
             x: atlasNames,
@@ -358,9 +361,10 @@ const ComparePage = {
             marker: { color: atlasColors },
             text: samples.map(s => this.formatNumber(s)),
             textposition: 'outside',
+            textfont: { size: 12 },
         }], {
-            margin: { l: 60, r: 20, t: 20, b: 60 },
-            yaxis: { title: 'Samples' },
+            margin: { l: 60, r: 20, t: 40, b: 60 },
+            yaxis: { title: 'Samples', range: [0, maxSamples * 1.15] },
             paper_bgcolor: 'rgba(0,0,0,0)',
             plot_bgcolor: 'rgba(0,0,0,0)',
         }, { responsive: true });
