@@ -1352,17 +1352,21 @@ const ComparePage = {
      * Load forest plot data
      */
     async loadForestPlot() {
-        const data = await API.getMetaAnalysisForest({
-            analysis: this.tabs.metaAnalysis.analysis,
-            signature_type: this.signatureType,
-        });
+        console.log('[MetaAnalysis] Loading forest plot data...');
+        try {
+            const data = await API.getMetaAnalysisForest({
+                analysis: this.tabs.metaAnalysis.analysis,
+                signature_type: this.signatureType,
+            });
+            console.log('[MetaAnalysis] API response:', data);
 
-        if (!data || !data.forest_data || data.forest_data.length === 0) {
-            document.getElementById('forest-plot').innerHTML =
-                '<p class="loading">No meta-analysis data available</p>';
-            document.getElementById('heterogeneity-chart').innerHTML = '';
-            return;
-        }
+            if (!data || !data.forest_data || data.forest_data.length === 0) {
+                console.warn('[MetaAnalysis] No data available');
+                document.getElementById('forest-plot').innerHTML =
+                    '<p class="loading">No meta-analysis data available</p>';
+                document.getElementById('heterogeneity-chart').innerHTML = '';
+                return;
+            }
 
         // Store for gene detail lookup
         this.metaData = data.forest_data;
@@ -1413,6 +1417,7 @@ const ComparePage = {
         this.updateMetaGeneDetail(searchValue);
 
         // Create forest plot
+        console.log('[MetaAnalysis] Creating forest plot with', data.forest_data.length, 'signatures');
         Plotly.purge('forest-plot');
         ForestPlot.create('forest-plot', data.forest_data, {
             title: '',
@@ -1421,8 +1426,17 @@ const ComparePage = {
         });
 
         // Create heterogeneity chart
+        console.log('[MetaAnalysis] Creating heterogeneity chart');
         Plotly.purge('heterogeneity-chart');
         this.createHeterogeneityChart(data.forest_data);
+        console.log('[MetaAnalysis] Forest plot rendering complete');
+        } catch (error) {
+            console.error('[MetaAnalysis] Error loading forest plot:', error);
+            const forestPlot = document.getElementById('forest-plot');
+            if (forestPlot) {
+                forestPlot.innerHTML = `<p class="error">Error loading: ${error.message}</p>`;
+            }
+        }
     },
 
     /**
