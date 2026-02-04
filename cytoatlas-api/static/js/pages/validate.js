@@ -1,43 +1,48 @@
 /**
  * Validation Page Handler
- * 5-type credibility assessment dashboard
+ * 4-tab validation dashboard matching visualization/index.html
  */
 
 const ValidatePage = {
-    currentAtlas: null,
-    currentSignature: null,
+    // State
+    currentAtlas: 'cima',
     signatureType: 'CytoSig',
+    activeTab: 'atlas-level',
+
+    // Tab-specific state
+    atlasLevel: {
+        signature: 'IFNG',
+        signatures: []
+    },
+    pseudobulk: {
+        signature: 'all',
+        celltype: 'all',
+        signatures: [],
+        celltypes: []
+    },
+    singlecell: {
+        signature: 'IFNG',
+        signatures: []
+    },
 
     /**
      * Initialize the validation page
      */
     async init(params, query) {
-        // Get atlas from query params if provided
-        if (query.atlas) {
-            this.currentAtlas = query.atlas;
-        }
-        if (query.signature) {
-            this.currentSignature = query.signature;
-        }
-        if (query.type) {
-            this.signatureType = query.type;
-        }
+        // Get params from query
+        if (query.atlas) this.currentAtlas = query.atlas;
+        if (query.type) this.signatureType = query.type;
+        if (query.tab) this.activeTab = query.tab;
 
         // Render template
         this.render();
 
-        // Load atlases for dropdown
-        await this.loadAtlases();
+        // Set up event listeners
+        this.setupEventListeners();
 
-        // If atlas is set, load validation data
-        if (this.currentAtlas) {
-            await this.loadSignatures();
-            if (this.currentSignature) {
-                await this.loadValidationPanels();
-            } else {
-                await this.loadValidationSummary();
-            }
-        }
+        // Load initial data
+        await this.loadSignatures();
+        await this.loadTab(this.activeTab);
     },
 
     /**
@@ -50,414 +55,998 @@ const ValidatePage = {
         if (app && template) {
             app.innerHTML = template.innerHTML;
         }
+
+        // Set control values
+        const atlasSelect = document.getElementById('val-atlas');
+        const sigtypeSelect = document.getElementById('val-sigtype');
+
+        if (atlasSelect) atlasSelect.value = this.currentAtlas;
+        if (sigtypeSelect) sigtypeSelect.value = this.signatureType;
     },
 
     /**
-     * Load available atlases
+     * Set up event listeners
      */
-    async loadAtlases() {
-        const select = document.getElementById('val-atlas');
-        if (!select) return;
-
-        try {
-            const atlases = await API.getValidationAtlases();
-
-            select.innerHTML = '<option value="">Select Atlas</option>';
-            atlases.forEach(atlas => {
-                const selected = atlas === this.currentAtlas ? 'selected' : '';
-                select.innerHTML += `<option value="${atlas}" ${selected}>${atlas}</option>`;
-            });
-
-            select.addEventListener('change', async (e) => {
+    setupEventListeners() {
+        // Atlas selector
+        const atlasSelect = document.getElementById('val-atlas');
+        if (atlasSelect) {
+            atlasSelect.addEventListener('change', async (e) => {
                 this.currentAtlas = e.target.value;
-                this.currentSignature = null;
                 await this.loadSignatures();
-                await this.loadValidationSummary();
+                await this.loadTab(this.activeTab);
             });
-        } catch (error) {
-            // Fallback to hardcoded atlases
-            select.innerHTML = `
-                <option value="">Select Atlas</option>
-                <option value="cima" ${this.currentAtlas === 'cima' ? 'selected' : ''}>CIMA</option>
-                <option value="inflammation" ${this.currentAtlas === 'inflammation' ? 'selected' : ''}>Inflammation</option>
-                <option value="scatlas" ${this.currentAtlas === 'scatlas' ? 'selected' : ''}>scAtlas</option>
-            `;
         }
 
-        // Set up type selector
-        const typeSelect = document.getElementById('val-type');
-        if (typeSelect) {
-            typeSelect.value = this.signatureType;
-            typeSelect.addEventListener('change', async (e) => {
+        // Signature type selector
+        const sigtypeSelect = document.getElementById('val-sigtype');
+        if (sigtypeSelect) {
+            sigtypeSelect.addEventListener('change', async (e) => {
                 this.signatureType = e.target.value;
                 await this.loadSignatures();
-                if (this.currentAtlas) {
-                    await this.loadValidationSummary();
-                }
+                await this.loadTab(this.activeTab);
             });
         }
+
+        // Tab buttons
+        const tabBtns = document.querySelectorAll('#validation-tabs .tab-btn');
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const tab = e.target.dataset.tab;
+                this.switchTab(tab);
+            });
+        });
     },
 
     /**
-     * Load available signatures for the selected atlas
+     * Switch active tab
+     */
+    async switchTab(tab) {
+        this.activeTab = tab;
+
+        // Update tab button styles
+        const tabBtns = document.querySelectorAll('#validation-tabs .tab-btn');
+        tabBtns.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tab === tab);
+        });
+
+        // Load tab content
+        await this.loadTab(tab);
+    },
+
+    /**
+     * Load signatures for current atlas/type
      */
     async loadSignatures() {
-        const select = document.getElementById('val-signature');
-        if (!select || !this.currentAtlas) {
-            if (select) select.innerHTML = '<option value="">Select Signature</option>';
-            return;
-        }
-
         try {
             const signatures = await API.getValidationSignatures(this.currentAtlas, this.signatureType);
+            this.atlasLevel.signatures = signatures;
+            this.pseudobulk.signatures = signatures;
+            this.singlecell.signatures = signatures;
 
-            select.innerHTML = '<option value="">All Signatures (Summary)</option>';
-            signatures.forEach(sig => {
-                const selected = sig === this.currentSignature ? 'selected' : '';
-                select.innerHTML += `<option value="${sig}" ${selected}>${sig}</option>`;
-            });
-
-            select.addEventListener('change', async (e) => {
-                this.currentSignature = e.target.value;
-                if (this.currentSignature) {
-                    await this.loadValidationPanels();
-                } else {
-                    await this.loadValidationSummary();
+            // Set default signature
+            if (signatures.length > 0) {
+                if (!signatures.includes(this.atlasLevel.signature)) {
+                    this.atlasLevel.signature = signatures[0];
                 }
-            });
+                if (!signatures.includes(this.singlecell.signature)) {
+                    this.singlecell.signature = signatures[0];
+                }
+            }
         } catch (error) {
-            select.innerHTML = '<option value="">No signatures available</option>';
+            console.error('Failed to load signatures:', error);
+            // Use fallback
+            const fallback = this.signatureType === 'CytoSig'
+                ? ['IFNG', 'TNF', 'IL6', 'IL10', 'IL17A', 'TGFB1']
+                : ['IFNG', 'TNF', 'IL6'];
+            this.atlasLevel.signatures = fallback;
+            this.pseudobulk.signatures = fallback;
+            this.singlecell.signatures = fallback;
         }
     },
 
     /**
-     * Load validation summary (overall quality)
+     * Load tab content
      */
-    async loadValidationSummary() {
-        const summaryContainer = document.getElementById('validation-summary');
-        const panelsContainer = document.getElementById('validation-panels');
+    async loadTab(tab) {
+        const content = document.getElementById('validation-content');
+        if (!content) return;
 
-        if (!summaryContainer || !this.currentAtlas) return;
+        content.innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
 
-        summaryContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Loading summary...</div>';
-        panelsContainer.innerHTML = '';
+        switch (tab) {
+            case 'atlas-level':
+                await this.loadAtlasLevel();
+                break;
+            case 'pseudobulk':
+                await this.loadPseudobulkLevel();
+                break;
+            case 'singlecell':
+                await this.loadSingleCellLevel();
+                break;
+            case 'summary':
+                await this.loadSummary();
+                break;
+        }
+    },
+
+    // ==================== Atlas Level Tab ====================
+
+    async loadAtlasLevel() {
+        const content = document.getElementById('validation-content');
+
+        content.innerHTML = `
+            <div class="tab-panel">
+                <h3>Atlas Level Validation</h3>
+                <p>Cell type-aggregated correlation: one data point per cell type. Compares mean expression of signature genes with mean activity across all cells of each cell type.</p>
+
+                <div class="filter-bar">
+                    <div class="control-group">
+                        <label>Signature:</label>
+                        <select id="val-atlas-signature" class="filter-select">
+                            ${this.atlasLevel.signatures.map(s =>
+                                `<option value="${s}" ${s === this.atlasLevel.signature ? 'selected' : ''}>${s}</option>`
+                            ).join('')}
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <input type="text" id="val-atlas-search" placeholder="Search signature..." class="search-input">
+                    </div>
+                </div>
+
+                <div class="panel-grid">
+                    <div class="panel">
+                        <div class="viz-title">Expression vs Activity Correlation</div>
+                        <div class="viz-subtitle">Each point = cell type mean</div>
+                        <div id="val-atlas-scatter" class="plot-container" style="height: 400px;"></div>
+                    </div>
+                    <div class="panel">
+                        <div class="viz-title">Signature Correlation Ranking</div>
+                        <div class="viz-subtitle">Signatures ranked by cell type correlation</div>
+                        <div id="val-atlas-ranking" class="plot-container" style="height: 400px;"></div>
+                    </div>
+                </div>
+
+                <div class="panel-grid">
+                    <div class="panel full-width">
+                        <div class="viz-title">Cross-Atlas Cell Type Correlation</div>
+                        <div class="viz-subtitle">Correlation by cell type across all three atlases</div>
+                        <div id="val-atlas-heatmap" class="plot-container" style="height: 350px;"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Set up signature selector
+        const sigSelect = document.getElementById('val-atlas-signature');
+        if (sigSelect) {
+            sigSelect.addEventListener('change', async (e) => {
+                this.atlasLevel.signature = e.target.value;
+                await this.updateAtlasLevelScatter();
+            });
+        }
+
+        // Set up search
+        const searchInput = document.getElementById('val-atlas-search');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                const query = e.target.value.toLowerCase();
+                const options = sigSelect.options;
+                for (let i = 0; i < options.length; i++) {
+                    const match = options[i].value.toLowerCase().includes(query);
+                    options[i].style.display = match ? '' : 'none';
+                }
+            });
+        }
+
+        // Load visualizations
+        await Promise.all([
+            this.updateAtlasLevelScatter(),
+            this.loadAtlasLevelRanking(),
+            this.loadAtlasLevelHeatmap()
+        ]);
+    },
+
+    async updateAtlasLevelScatter() {
+        const container = document.getElementById('val-atlas-scatter');
+        if (!container) return;
+
+        try {
+            const data = await API.getCellTypeLevelValidation(
+                this.currentAtlas,
+                this.atlasLevel.signature,
+                this.signatureType
+            );
+
+            if (data && data.points) {
+                const trace = {
+                    x: data.points.map(p => p.expression),
+                    y: data.points.map(p => p.activity),
+                    mode: 'markers+text',
+                    type: 'scatter',
+                    text: data.points.map(p => p.cell_type),
+                    textposition: 'top center',
+                    textfont: { size: 9 },
+                    marker: {
+                        size: 10,
+                        color: '#3b82f6',
+                        opacity: 0.7
+                    },
+                    hovertemplate: '<b>%{text}</b><br>Expression: %{x:.3f}<br>Activity: %{y:.3f}<extra></extra>'
+                };
+
+                // Add trend line
+                const trendline = this.calculateTrendline(
+                    data.points.map(p => p.expression),
+                    data.points.map(p => p.activity)
+                );
+
+                const layout = {
+                    xaxis: { title: 'Mean Expression (log1p)' },
+                    yaxis: { title: 'Mean Activity (z-score)' },
+                    margin: { l: 60, r: 20, t: 40, b: 60 },
+                    annotations: [{
+                        x: 0.02,
+                        y: 0.98,
+                        xref: 'paper',
+                        yref: 'paper',
+                        text: `r = ${data.stats?.pearson_r?.toFixed(3) || 'N/A'}`,
+                        showarrow: false,
+                        font: { size: 14 }
+                    }]
+                };
+
+                Plotly.newPlot(container, [trace, trendline], layout, {responsive: true});
+            } else {
+                container.innerHTML = '<p class="no-data">No data available</p>';
+            }
+        } catch (error) {
+            container.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+        }
+    },
+
+    async loadAtlasLevelRanking() {
+        const container = document.getElementById('val-atlas-ranking');
+        if (!container) return;
+
+        try {
+            // Get correlations for all signatures
+            const rankings = [];
+            for (const sig of this.atlasLevel.signatures.slice(0, 50)) { // Limit for performance
+                try {
+                    const data = await API.getCellTypeLevelValidation(
+                        this.currentAtlas, sig, this.signatureType
+                    );
+                    if (data?.stats?.pearson_r !== undefined) {
+                        rankings.push({
+                            signature: sig,
+                            r: data.stats.pearson_r
+                        });
+                    }
+                } catch (e) {
+                    // Skip signatures without data
+                }
+            }
+
+            if (rankings.length > 0) {
+                // Sort by correlation
+                rankings.sort((a, b) => b.r - a.r);
+
+                const trace = {
+                    x: rankings.map(r => r.r),
+                    y: rankings.map(r => r.signature),
+                    type: 'bar',
+                    orientation: 'h',
+                    marker: {
+                        color: rankings.map(r => r.r > 0 ? '#22c55e' : '#ef4444')
+                    }
+                };
+
+                const layout = {
+                    xaxis: { title: 'Pearson r', range: [-1, 1] },
+                    yaxis: { automargin: true },
+                    margin: { l: 100, r: 20, t: 20, b: 60 },
+                    height: 400
+                };
+
+                Plotly.newPlot(container, [trace], layout, {responsive: true});
+            } else {
+                container.innerHTML = '<p class="no-data">No ranking data available</p>';
+            }
+        } catch (error) {
+            container.innerHTML = `<p class="error">Error loading ranking</p>`;
+        }
+    },
+
+    async loadAtlasLevelHeatmap() {
+        const container = document.getElementById('val-atlas-heatmap');
+        if (!container) return;
+
+        try {
+            // Get data for all atlases
+            const atlases = ['cima', 'inflammation', 'scatlas'];
+            const celltypes = new Set();
+            const atlasData = {};
+
+            for (const atlas of atlases) {
+                try {
+                    const data = await API.getCellTypeLevelValidation(
+                        atlas, this.atlasLevel.signature, this.signatureType
+                    );
+                    if (data?.points) {
+                        atlasData[atlas] = {};
+                        data.points.forEach(p => {
+                            celltypes.add(p.cell_type);
+                            atlasData[atlas][p.cell_type] = p.activity;
+                        });
+                    }
+                } catch (e) {
+                    atlasData[atlas] = {};
+                }
+            }
+
+            const celltypeList = Array.from(celltypes).sort();
+
+            if (celltypeList.length > 0) {
+                const traces = atlases.map((atlas, i) => ({
+                    x: celltypeList,
+                    y: celltypeList.map(ct => atlasData[atlas]?.[ct] || null),
+                    name: atlas.charAt(0).toUpperCase() + atlas.slice(1),
+                    type: 'bar'
+                }));
+
+                const layout = {
+                    barmode: 'group',
+                    xaxis: { title: 'Cell Type', tickangle: 45 },
+                    yaxis: { title: 'Mean Activity' },
+                    margin: { l: 60, r: 20, t: 20, b: 120 },
+                    legend: { orientation: 'h', y: 1.1 }
+                };
+
+                Plotly.newPlot(container, traces, layout, {responsive: true});
+            } else {
+                container.innerHTML = '<p class="no-data">No cross-atlas data available</p>';
+            }
+        } catch (error) {
+            container.innerHTML = `<p class="error">Error loading heatmap</p>`;
+        }
+    },
+
+    // ==================== Pseudobulk Level Tab ====================
+
+    async loadPseudobulkLevel() {
+        const content = document.getElementById('validation-content');
+
+        content.innerHTML = `
+            <div class="tab-panel">
+                <h3>Pseudobulk Level Validation</h3>
+                <p>Correlation between mean signature gene expression and predicted activity per sample. Pseudobulk samples are created by aggregating cells within each sample × cell type combination.</p>
+
+                <div class="filter-bar">
+                    <div class="control-group">
+                        <label>Signature:</label>
+                        <select id="val-pb-signature" class="filter-select">
+                            <option value="all">All Signatures</option>
+                            ${this.pseudobulk.signatures.map(s =>
+                                `<option value="${s}" ${s === this.pseudobulk.signature ? 'selected' : ''}>${s}</option>`
+                            ).join('')}
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <input type="text" id="val-pb-search" placeholder="Search signature..." class="search-input">
+                    </div>
+                </div>
+
+                <div class="panel-grid">
+                    <div class="panel">
+                        <div class="viz-title">Expression vs Activity Correlation</div>
+                        <div class="viz-subtitle">Each point represents a pseudobulk sample</div>
+                        <div id="val-pb-scatter" class="plot-container" style="height: 400px;"></div>
+                    </div>
+                    <div class="panel">
+                        <div class="viz-title">Correlation Distribution</div>
+                        <div class="viz-subtitle">Distribution of Pearson r across all signatures</div>
+                        <div id="val-pb-distribution" class="plot-container" style="height: 400px;"></div>
+                    </div>
+                </div>
+
+                <div class="panel-grid">
+                    <div class="panel full-width">
+                        <div class="viz-title">Per-Signature Correlations (Sorted)</div>
+                        <div class="viz-subtitle">Pearson r between expression and activity, sorted from highest to lowest</div>
+                        <div id="val-pb-heatmap" class="plot-container" style="height: 300px;"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Set up signature selector
+        const sigSelect = document.getElementById('val-pb-signature');
+        if (sigSelect) {
+            sigSelect.addEventListener('change', async (e) => {
+                this.pseudobulk.signature = e.target.value;
+                await this.updatePseudobulkScatter();
+            });
+        }
+
+        // Load visualizations
+        await Promise.all([
+            this.updatePseudobulkScatter(),
+            this.loadPseudobulkDistribution(),
+            this.loadPseudobulkHeatmap()
+        ]);
+    },
+
+    async updatePseudobulkScatter() {
+        const container = document.getElementById('val-pb-scatter');
+        if (!container) return;
+
+        const sig = this.pseudobulk.signature === 'all'
+            ? this.pseudobulk.signatures[0]
+            : this.pseudobulk.signature;
+
+        try {
+            const data = await API.getSampleLevelValidation(
+                this.currentAtlas, sig, this.signatureType
+            );
+
+            if (data && data.points) {
+                const trace = {
+                    x: data.points.map(p => p.expression),
+                    y: data.points.map(p => p.activity),
+                    mode: 'markers',
+                    type: 'scatter',
+                    marker: {
+                        size: 6,
+                        color: '#3b82f6',
+                        opacity: 0.5
+                    },
+                    hovertemplate: 'Expression: %{x:.3f}<br>Activity: %{y:.3f}<extra></extra>'
+                };
+
+                const trendline = this.calculateTrendline(
+                    data.points.map(p => p.expression),
+                    data.points.map(p => p.activity)
+                );
+
+                const layout = {
+                    xaxis: { title: 'Mean Expression (log1p)' },
+                    yaxis: { title: 'Activity (z-score)' },
+                    margin: { l: 60, r: 20, t: 40, b: 60 },
+                    annotations: [{
+                        x: 0.02,
+                        y: 0.98,
+                        xref: 'paper',
+                        yref: 'paper',
+                        text: `r = ${data.stats?.pearson_r?.toFixed(3) || 'N/A'}<br>n = ${data.points.length}`,
+                        showarrow: false,
+                        font: { size: 12 }
+                    }]
+                };
+
+                Plotly.newPlot(container, [trace, trendline], layout, {responsive: true});
+            } else {
+                container.innerHTML = '<p class="no-data">No data available</p>';
+            }
+        } catch (error) {
+            container.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+        }
+    },
+
+    async loadPseudobulkDistribution() {
+        const container = document.getElementById('val-pb-distribution');
+        if (!container) return;
+
+        try {
+            // Get correlations for all signatures
+            const correlations = [];
+            for (const sig of this.pseudobulk.signatures.slice(0, 50)) {
+                try {
+                    const data = await API.getSampleLevelValidation(
+                        this.currentAtlas, sig, this.signatureType
+                    );
+                    if (data?.stats?.pearson_r !== undefined) {
+                        correlations.push(data.stats.pearson_r);
+                    }
+                } catch (e) {
+                    // Skip
+                }
+            }
+
+            if (correlations.length > 0) {
+                const trace = {
+                    x: correlations,
+                    type: 'histogram',
+                    nbinsx: 20,
+                    marker: { color: '#3b82f6' }
+                };
+
+                const layout = {
+                    xaxis: { title: 'Pearson r', range: [-1, 1] },
+                    yaxis: { title: 'Count' },
+                    margin: { l: 60, r: 20, t: 20, b: 60 },
+                    shapes: [{
+                        type: 'line',
+                        x0: 0, x1: 0,
+                        y0: 0, y1: 1,
+                        yref: 'paper',
+                        line: { color: 'red', dash: 'dash' }
+                    }]
+                };
+
+                Plotly.newPlot(container, [trace], layout, {responsive: true});
+            } else {
+                container.innerHTML = '<p class="no-data">No distribution data available</p>';
+            }
+        } catch (error) {
+            container.innerHTML = `<p class="error">Error loading distribution</p>`;
+        }
+    },
+
+    async loadPseudobulkHeatmap() {
+        const container = document.getElementById('val-pb-heatmap');
+        if (!container) return;
+
+        try {
+            // Get correlations for all signatures
+            const rankings = [];
+            for (const sig of this.pseudobulk.signatures.slice(0, 50)) {
+                try {
+                    const data = await API.getSampleLevelValidation(
+                        this.currentAtlas, sig, this.signatureType
+                    );
+                    if (data?.stats?.pearson_r !== undefined) {
+                        rankings.push({
+                            signature: sig,
+                            r: data.stats.pearson_r
+                        });
+                    }
+                } catch (e) {
+                    // Skip
+                }
+            }
+
+            if (rankings.length > 0) {
+                rankings.sort((a, b) => b.r - a.r);
+
+                const trace = {
+                    x: rankings.map(r => r.signature),
+                    y: rankings.map(r => r.r),
+                    type: 'bar',
+                    marker: {
+                        color: rankings.map(r => r.r > 0 ? '#22c55e' : '#ef4444')
+                    }
+                };
+
+                const layout = {
+                    xaxis: { title: 'Signature', tickangle: 45 },
+                    yaxis: { title: 'Pearson r', range: [-1, 1] },
+                    margin: { l: 60, r: 20, t: 20, b: 100 }
+                };
+
+                Plotly.newPlot(container, [trace], layout, {responsive: true});
+            } else {
+                container.innerHTML = '<p class="no-data">No data available</p>';
+            }
+        } catch (error) {
+            container.innerHTML = `<p class="error">Error loading heatmap</p>`;
+        }
+    },
+
+    // ==================== Single-Cell Level Tab ====================
+
+    async loadSingleCellLevel() {
+        const content = document.getElementById('validation-content');
+
+        content.innerHTML = `
+            <div class="tab-panel">
+                <h3>Single-Cell Level Validation</h3>
+                <p>Comparison of activity between cells that express the signature gene vs those that don't. If inference is valid, expressing cells should have higher activity.</p>
+
+                <div class="filter-bar">
+                    <div class="control-group">
+                        <label>Signature:</label>
+                        <select id="val-sc-signature" class="filter-select">
+                            ${this.singlecell.signatures.map(s =>
+                                `<option value="${s}" ${s === this.singlecell.signature ? 'selected' : ''}>${s}</option>`
+                            ).join('')}
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <input type="text" id="val-sc-search" placeholder="Search signature..." class="search-input">
+                    </div>
+                </div>
+
+                <div class="panel-grid">
+                    <div class="panel">
+                        <div class="viz-title">Activity: Expressing vs Non-Expressing Cells</div>
+                        <div class="viz-subtitle">Box plot comparing activity distributions</div>
+                        <div id="val-sc-boxplot" class="plot-container" style="height: 400px;"></div>
+                    </div>
+                    <div class="panel">
+                        <div class="viz-title">Validation by Cell Type</div>
+                        <div class="viz-subtitle">Fold change (expressing/non-expressing) per cell type</div>
+                        <div id="val-sc-celltype" class="plot-container" style="height: 400px;"></div>
+                    </div>
+                </div>
+
+                <div class="panel-grid">
+                    <div class="panel full-width">
+                        <div class="viz-title">Validation Summary</div>
+                        <div class="viz-subtitle">Key metrics for single-cell validation</div>
+                        <div id="val-sc-summary" class="summary-cards"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Set up signature selector
+        const sigSelect = document.getElementById('val-sc-signature');
+        if (sigSelect) {
+            sigSelect.addEventListener('change', async (e) => {
+                this.singlecell.signature = e.target.value;
+                await this.updateSingleCellPlots();
+            });
+        }
+
+        // Load visualizations
+        await this.updateSingleCellPlots();
+    },
+
+    async updateSingleCellPlots() {
+        await Promise.all([
+            this.loadSingleCellBoxplot(),
+            this.loadSingleCellByType(),
+            this.loadSingleCellSummary()
+        ]);
+    },
+
+    async loadSingleCellBoxplot() {
+        const container = document.getElementById('val-sc-boxplot');
+        if (!container) return;
+
+        try {
+            const data = await API.getSingleCellDistribution(
+                this.currentAtlas,
+                this.singlecell.signature,
+                this.signatureType
+            );
+
+            if (data) {
+                const traces = [
+                    {
+                        y: data.expressing_activities || [],
+                        type: 'box',
+                        name: 'Expressing',
+                        marker: { color: '#22c55e' }
+                    },
+                    {
+                        y: data.non_expressing_activities || [],
+                        type: 'box',
+                        name: 'Non-Expressing',
+                        marker: { color: '#94a3b8' }
+                    }
+                ];
+
+                const layout = {
+                    yaxis: { title: 'Activity (z-score)' },
+                    margin: { l: 60, r: 20, t: 20, b: 60 },
+                    showlegend: false
+                };
+
+                Plotly.newPlot(container, traces, layout, {responsive: true});
+            } else {
+                container.innerHTML = '<p class="no-data">No data available</p>';
+            }
+        } catch (error) {
+            container.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+        }
+    },
+
+    async loadSingleCellByType() {
+        const container = document.getElementById('val-sc-celltype');
+        if (!container) return;
+
+        try {
+            const data = await API.getSingleCellDirect(
+                this.currentAtlas,
+                this.singlecell.signature,
+                this.signatureType
+            );
+
+            if (data) {
+                // Show fold change as summary
+                const trace = {
+                    x: ['Overall'],
+                    y: [data.fold_change || 1],
+                    type: 'bar',
+                    marker: {
+                        color: data.fold_change > 1 ? '#22c55e' : '#ef4444'
+                    },
+                    text: [`FC: ${data.fold_change?.toFixed(2)}x`],
+                    textposition: 'outside'
+                };
+
+                const layout = {
+                    yaxis: { title: 'Fold Change (Expr / Non-Expr)' },
+                    margin: { l: 60, r: 20, t: 40, b: 60 },
+                    shapes: [{
+                        type: 'line',
+                        x0: -0.5, x1: 0.5,
+                        y0: 1, y1: 1,
+                        line: { color: 'red', dash: 'dash' }
+                    }]
+                };
+
+                Plotly.newPlot(container, [trace], layout, {responsive: true});
+            } else {
+                container.innerHTML = '<p class="no-data">No data available</p>';
+            }
+        } catch (error) {
+            container.innerHTML = `<p class="error">Error loading by cell type</p>`;
+        }
+    },
+
+    async loadSingleCellSummary() {
+        const container = document.getElementById('val-sc-summary');
+        if (!container) return;
+
+        try {
+            const data = await API.getSingleCellDirect(
+                this.currentAtlas,
+                this.singlecell.signature,
+                this.signatureType
+            );
+
+            if (data) {
+                const isValid = data.fold_change > 1 && data.p_value < 0.05;
+
+                container.innerHTML = `
+                    <div class="summary-card">
+                        <div class="summary-value">${data.n_expressing?.toLocaleString() || 'N/A'}</div>
+                        <div class="summary-label">Expressing Cells</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-value">${data.n_non_expressing?.toLocaleString() || 'N/A'}</div>
+                        <div class="summary-label">Non-Expressing Cells</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-value">${data.fold_change?.toFixed(2) || 'N/A'}x</div>
+                        <div class="summary-label">Fold Change</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-value ${isValid ? 'valid' : 'invalid'}">${isValid ? 'Valid' : 'Not Valid'}</div>
+                        <div class="summary-label">p = ${data.p_value?.toExponential(2) || 'N/A'}</div>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = '<p class="no-data">No summary data available</p>';
+            }
+        } catch (error) {
+            container.innerHTML = `<p class="error">Error loading summary</p>`;
+        }
+    },
+
+    // ==================== Summary Tab ====================
+
+    async loadSummary() {
+        const content = document.getElementById('validation-content');
+
+        content.innerHTML = `
+            <div class="tab-panel">
+                <h3>Validation Summary</h3>
+                <p>Overall validation metrics comparing expression-activity correlations across atlases and signature types.</p>
+
+                <div class="panel-grid">
+                    <div class="panel">
+                        <div class="viz-title">Mean Correlation by Signature Type</div>
+                        <div class="viz-subtitle">Comparison of CytoSig and SecAct</div>
+                        <div id="val-summary-sigtype" class="plot-container" style="height: 350px;"></div>
+                    </div>
+                    <div class="panel">
+                        <div class="viz-title">Mean Correlation by Atlas</div>
+                        <div class="viz-subtitle">Comparison across CIMA, Inflammation, and scAtlas</div>
+                        <div id="val-summary-atlas" class="plot-container" style="height: 350px;"></div>
+                    </div>
+                </div>
+
+                <div class="panel-grid">
+                    <div class="panel full-width">
+                        <div class="viz-title">Validation Level Comparison</div>
+                        <div class="viz-subtitle">Correlation strength at cell type vs sample level</div>
+                        <div id="val-summary-levels" class="plot-container" style="height: 300px;"></div>
+                    </div>
+                </div>
+
+                <div class="panel-grid">
+                    <div class="panel full-width">
+                        <h4>Key Findings</h4>
+                        <div id="val-summary-findings" class="findings">
+                            <ul>
+                                <li><strong>Pseudobulk Level:</strong> Highest correlations due to noise reduction from cell aggregation</li>
+                                <li><strong>Single-Cell Level:</strong> Lower but significant correlations reflecting cell-to-cell variability</li>
+                                <li><strong>Atlas Level:</strong> Cell type-specific patterns reveal biological validity</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Load visualizations
+        await Promise.all([
+            this.loadSummaryBySigType(),
+            this.loadSummaryByAtlas(),
+            this.loadSummaryByLevel()
+        ]);
+    },
+
+    async loadSummaryBySigType() {
+        const container = document.getElementById('val-summary-sigtype');
+        if (!container) return;
+
+        try {
+            const results = [];
+            for (const sigType of ['CytoSig', 'SecAct']) {
+                try {
+                    const summary = await API.getValidationSummary(this.currentAtlas, sigType);
+                    results.push({
+                        type: sigType,
+                        sample_r: summary.sample_level_mean_r || 0,
+                        celltype_r: summary.celltype_level_mean_r || 0
+                    });
+                } catch (e) {
+                    // Skip
+                }
+            }
+
+            if (results.length > 0) {
+                const traces = [
+                    {
+                        x: results.map(r => r.type),
+                        y: results.map(r => r.sample_r),
+                        name: 'Sample Level',
+                        type: 'bar'
+                    },
+                    {
+                        x: results.map(r => r.type),
+                        y: results.map(r => r.celltype_r),
+                        name: 'Cell Type Level',
+                        type: 'bar'
+                    }
+                ];
+
+                const layout = {
+                    barmode: 'group',
+                    yaxis: { title: 'Mean Pearson r', range: [0, 1] },
+                    margin: { l: 60, r: 20, t: 20, b: 60 },
+                    legend: { orientation: 'h', y: 1.1 }
+                };
+
+                Plotly.newPlot(container, traces, layout, {responsive: true});
+            } else {
+                container.innerHTML = '<p class="no-data">No data available</p>';
+            }
+        } catch (error) {
+            container.innerHTML = `<p class="error">Error loading summary</p>`;
+        }
+    },
+
+    async loadSummaryByAtlas() {
+        const container = document.getElementById('val-summary-atlas');
+        if (!container) return;
+
+        try {
+            const atlases = ['cima', 'inflammation', 'scatlas'];
+            const results = [];
+
+            for (const atlas of atlases) {
+                try {
+                    const summary = await API.getValidationSummary(atlas, this.signatureType);
+                    results.push({
+                        atlas: atlas.charAt(0).toUpperCase() + atlas.slice(1),
+                        sample_r: summary.sample_level_mean_r || 0,
+                        celltype_r: summary.celltype_level_mean_r || 0
+                    });
+                } catch (e) {
+                    // Skip
+                }
+            }
+
+            if (results.length > 0) {
+                const traces = [
+                    {
+                        x: results.map(r => r.atlas),
+                        y: results.map(r => r.sample_r),
+                        name: 'Sample Level',
+                        type: 'bar'
+                    },
+                    {
+                        x: results.map(r => r.atlas),
+                        y: results.map(r => r.celltype_r),
+                        name: 'Cell Type Level',
+                        type: 'bar'
+                    }
+                ];
+
+                const layout = {
+                    barmode: 'group',
+                    yaxis: { title: 'Mean Pearson r', range: [0, 1] },
+                    margin: { l: 60, r: 20, t: 20, b: 60 },
+                    legend: { orientation: 'h', y: 1.1 }
+                };
+
+                Plotly.newPlot(container, traces, layout, {responsive: true});
+            } else {
+                container.innerHTML = '<p class="no-data">No data available</p>';
+            }
+        } catch (error) {
+            container.innerHTML = `<p class="error">Error loading summary</p>`;
+        }
+    },
+
+    async loadSummaryByLevel() {
+        const container = document.getElementById('val-summary-levels');
+        if (!container) return;
 
         try {
             const summary = await API.getValidationSummary(this.currentAtlas, this.signatureType);
 
-            const gradeClass = `grade-${summary.quality_grade?.toLowerCase() || 'c'}`;
+            const levels = ['Cell Type', 'Sample'];
+            const values = [
+                summary.celltype_level_mean_r || 0,
+                summary.sample_level_mean_r || 0
+            ];
 
-            summaryContainer.innerHTML = `
-                <h3>Overall Quality: ${summary.quality_score}/100 (Grade ${summary.quality_grade})</h3>
-                <div class="quality-bar">
-                    <div class="quality-bar-fill ${gradeClass}" style="width: ${summary.quality_score}%"></div>
-                </div>
-                <div class="summary-metrics">
-                    <div class="metric">
-                        <span class="metric-label">Sample-Level Correlation</span>
-                        <span class="metric-value">r = ${summary.sample_level_mean_r?.toFixed(3) || 'N/A'}</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-label">Cell Type-Level Correlation</span>
-                        <span class="metric-value">r = ${summary.celltype_level_mean_r?.toFixed(3) || 'N/A'}</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-label">Gene Coverage</span>
-                        <span class="metric-value">${(summary.mean_gene_coverage * 100)?.toFixed(1) || 'N/A'}%</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-label">Biological Validation</span>
-                        <span class="metric-value">${(summary.biological_validation_rate * 100)?.toFixed(1) || 'N/A'}%</span>
-                    </div>
-                </div>
-                <p class="interpretation">${summary.interpretation || ''}</p>
-            `;
+            const trace = {
+                x: levels,
+                y: values,
+                type: 'bar',
+                marker: {
+                    color: ['#3b82f6', '#22c55e']
+                },
+                text: values.map(v => v.toFixed(3)),
+                textposition: 'outside'
+            };
 
-            // Add recommendations if present
-            if (summary.recommendations && summary.recommendations.length > 0) {
-                summaryContainer.innerHTML += `
-                    <div class="recommendations">
-                        <h4>Recommendations</h4>
-                        <ul>
-                            ${summary.recommendations.map(r => `<li>${r}</li>`).join('')}
-                        </ul>
-                    </div>
-                `;
-            }
+            const layout = {
+                yaxis: { title: 'Mean Pearson r', range: [0, 1] },
+                margin: { l: 60, r: 20, t: 40, b: 60 }
+            };
 
-            // Load biological associations table
-            await this.loadBiologicalAssociations(panelsContainer);
-
+            Plotly.newPlot(container, [trace], layout, {responsive: true});
         } catch (error) {
-            summaryContainer.innerHTML = `<p class="loading">Failed to load summary: ${error.message}</p>`;
+            container.innerHTML = `<p class="error">Error loading level comparison</p>`;
         }
     },
 
-    /**
-     * Load biological associations table
-     */
-    async loadBiologicalAssociations(container) {
-        try {
-            const data = await API.getBiologicalAssociations(this.currentAtlas, this.signatureType);
+    // ==================== Utility Functions ====================
 
-            if (data && data.associations && data.associations.length > 0) {
-                const tableRows = data.associations.map(assoc => `
-                    <tr class="${assoc.validated ? 'validated' : 'not-validated'}">
-                        <td>${assoc.signature}</td>
-                        <td>${assoc.expected_cell_type}</td>
-                        <td>${assoc.observed_top_cell_type || 'N/A'}</td>
-                        <td>${assoc.rank || 'N/A'}</td>
-                        <td>${assoc.validated ? '&#9989;' : '&#10060;'}</td>
-                    </tr>
-                `).join('');
+    calculateTrendline(x, y) {
+        if (!x.length || !y.length) return {};
 
-                container.innerHTML = `
-                    <div class="validation-panel" style="grid-column: 1 / -1;">
-                        <h4>&#128300; Biological Associations</h4>
-                        <p>Validation rate: ${(data.validation_rate * 100).toFixed(1)}%</p>
-                        <table class="validation-table">
-                            <thead>
-                                <tr>
-                                    <th>Signature</th>
-                                    <th>Expected Cell Type</th>
-                                    <th>Observed Top</th>
-                                    <th>Rank</th>
-                                    <th>Valid</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${tableRows}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-            }
-        } catch (error) {
-            console.error('Failed to load biological associations:', error);
-        }
-    },
+        const n = x.length;
+        const sumX = x.reduce((a, b) => a + b, 0);
+        const sumY = y.reduce((a, b) => a + b, 0);
+        const sumXY = x.reduce((acc, xi, i) => acc + xi * y[i], 0);
+        const sumX2 = x.reduce((acc, xi) => acc + xi * xi, 0);
 
-    /**
-     * Load validation panels for a specific signature
-     */
-    async loadValidationPanels() {
-        const summaryContainer = document.getElementById('validation-summary');
-        const panelsContainer = document.getElementById('validation-panels');
+        const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+        const intercept = (sumY - slope * sumX) / n;
 
-        if (!panelsContainer || !this.currentAtlas || !this.currentSignature) return;
+        const minX = Math.min(...x);
+        const maxX = Math.max(...x);
 
-        summaryContainer.innerHTML = `<h3>Validation: ${this.currentSignature}</h3>`;
-        panelsContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Loading validation panels...</div>';
-
-        // Load all validation types in parallel
-        const panels = await Promise.allSettled([
-            this.loadSampleLevelPanel(),
-            this.loadCellTypeLevelPanel(),
-            this.loadSingleCellPanel(),
-            this.loadGeneCoveragePanel(),
-        ]);
-
-        panelsContainer.innerHTML = panels
-            .filter(p => p.status === 'fulfilled' && p.value)
-            .map(p => p.value)
-            .join('');
-
-        // Initialize plots
-        await this.initializePlots();
-    },
-
-    /**
-     * Load sample-level validation panel
-     */
-    async loadSampleLevelPanel() {
-        try {
-            const data = await API.getSampleLevelValidation(
-                this.currentAtlas,
-                this.currentSignature,
-                this.signatureType
-            );
-
-            if (!data) return null;
-
-            return `
-                <div class="validation-panel">
-                    <h4>&#128202; Sample-Level Validation</h4>
-                    <p>Expression vs Activity across samples</p>
-                    <div id="sample-level-plot" class="plot-container" style="height: 300px;"
-                         data-validation-type="sample-level"></div>
-                    <div class="panel-stats">
-                        <span>r = ${data.stats?.pearson_r?.toFixed(3) || 'N/A'}</span>
-                        <span>p = ${data.stats?.p_value?.toExponential(2) || 'N/A'}</span>
-                    </div>
-                </div>
-            `;
-        } catch (error) {
-            return null;
-        }
-    },
-
-    /**
-     * Load cell type-level validation panel
-     */
-    async loadCellTypeLevelPanel() {
-        try {
-            const data = await API.getCellTypeLevelValidation(
-                this.currentAtlas,
-                this.currentSignature,
-                this.signatureType
-            );
-
-            if (!data) return null;
-
-            return `
-                <div class="validation-panel">
-                    <h4>&#128300; Cell Type-Level Validation</h4>
-                    <p>Expression vs Activity across cell types</p>
-                    <div id="celltype-level-plot" class="plot-container" style="height: 300px;"
-                         data-validation-type="celltype-level"></div>
-                    <div class="panel-stats">
-                        <span>r = ${data.stats?.pearson_r?.toFixed(3) || 'N/A'}</span>
-                        <span>Concordance: ${(data.biological_concordance * 100)?.toFixed(1) || 'N/A'}%</span>
-                    </div>
-                </div>
-            `;
-        } catch (error) {
-            return null;
-        }
-    },
-
-    /**
-     * Load single-cell validation panel
-     */
-    async loadSingleCellPanel() {
-        try {
-            const data = await API.getSingleCellDirect(
-                this.currentAtlas,
-                this.currentSignature,
-                this.signatureType
-            );
-
-            if (!data) return null;
-
-            return `
-                <div class="validation-panel">
-                    <h4>&#128302; Single-Cell Direct Validation</h4>
-                    <p>Activity in expressing vs non-expressing cells</p>
-                    <div id="singlecell-plot" class="plot-container" style="height: 300px;"
-                         data-validation-type="singlecell"></div>
-                    <div class="panel-stats">
-                        <span>Fold Change: ${data.fold_change?.toFixed(2) || 'N/A'}x</span>
-                        <span>p = ${data.p_value?.toExponential(2) || 'N/A'}</span>
-                    </div>
-                </div>
-            `;
-        } catch (error) {
-            return null;
-        }
-    },
-
-    /**
-     * Load gene coverage panel
-     */
-    async loadGeneCoveragePanel() {
-        try {
-            const data = await API.getGeneCoverage(
-                this.currentAtlas,
-                this.currentSignature,
-                this.signatureType
-            );
-
-            if (!data) return null;
-
-            const coveragePercent = (data.coverage * 100).toFixed(1);
-            const gradeClass = data.quality === 'excellent' ? 'grade-a' :
-                              data.quality === 'good' ? 'grade-b' :
-                              data.quality === 'moderate' ? 'grade-c' : 'grade-d';
-
-            return `
-                <div class="validation-panel">
-                    <h4>&#128269; Gene Coverage</h4>
-                    <p>Signature genes detected in atlas</p>
-                    <div class="coverage-display">
-                        <div class="coverage-value">${coveragePercent}%</div>
-                        <div class="coverage-details">
-                            <span>${data.n_detected} / ${data.n_total} genes</span>
-                            <span class="atlas-badge ${gradeClass}">${data.quality}</span>
-                        </div>
-                    </div>
-                    <div class="quality-bar">
-                        <div class="quality-bar-fill ${gradeClass}" style="width: ${coveragePercent}%"></div>
-                    </div>
-                </div>
-            `;
-        } catch (error) {
-            return null;
-        }
-    },
-
-    /**
-     * Initialize plots after HTML is rendered
-     */
-    async initializePlots() {
-        // Sample-level plot
-        const samplePlot = document.getElementById('sample-level-plot');
-        if (samplePlot) {
-            try {
-                const data = await API.getSampleLevelValidation(
-                    this.currentAtlas,
-                    this.currentSignature,
-                    this.signatureType
-                );
-                if (data) {
-                    Scatter.createCorrelationScatter('sample-level-plot', data, {
-                        xLabel: 'Expression',
-                        yLabel: 'Activity',
-                    });
-                }
-            } catch (e) {
-                samplePlot.innerHTML = '<p class="loading">No data</p>';
-            }
-        }
-
-        // Cell type-level plot
-        const celltypePlot = document.getElementById('celltype-level-plot');
-        if (celltypePlot) {
-            try {
-                const data = await API.getCellTypeLevelValidation(
-                    this.currentAtlas,
-                    this.currentSignature,
-                    this.signatureType
-                );
-                if (data) {
-                    Scatter.createCorrelationScatter('celltype-level-plot', data, {
-                        xLabel: 'Expression',
-                        yLabel: 'Activity',
-                    });
-                }
-            } catch (e) {
-                celltypePlot.innerHTML = '<p class="loading">No data</p>';
-            }
-        }
-
-        // Single-cell distribution plot
-        const scPlot = document.getElementById('singlecell-plot');
-        if (scPlot) {
-            try {
-                const data = await API.getSingleCellDistribution(
-                    this.currentAtlas,
-                    this.currentSignature,
-                    this.signatureType
-                );
-                if (data) {
-                    Scatter.createViolinPlot('singlecell-plot', data, {
-                        title: '',
-                    });
-                }
-            } catch (e) {
-                scPlot.innerHTML = '<p class="loading">No data</p>';
-            }
-        }
-    },
+        return {
+            x: [minX, maxX],
+            y: [slope * minX + intercept, slope * maxX + intercept],
+            mode: 'lines',
+            type: 'scatter',
+            line: { color: 'red', dash: 'dash', width: 1 },
+            showlegend: false,
+            hoverinfo: 'skip'
+        };
+    }
 };
 
 // Make available globally

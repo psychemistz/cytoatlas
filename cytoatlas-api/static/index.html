@@ -231,29 +231,37 @@
     <template id="validate-template">
         <div class="page validate-page">
             <div class="page-header">
-                <h1>Validation & Credibility Assessment</h1>
-                <p>Assess the quality and reliability of CytoSig/SecAct inferences</p>
+                <h1>Activity Validation</h1>
+                <p>Validation of activity predictions by correlating inferred scores with signature gene expression</p>
             </div>
 
             <div class="validation-controls">
-                <select id="val-atlas" class="filter-select">
-                    <option value="">Select Atlas</option>
-                </select>
-                <select id="val-signature" class="filter-select">
-                    <option value="">Select Signature</option>
-                </select>
-                <select id="val-type" class="filter-select">
-                    <option value="CytoSig">CytoSig</option>
-                    <option value="SecAct">SecAct</option>
-                </select>
+                <div class="control-group">
+                    <label>Atlas:</label>
+                    <select id="val-atlas" class="filter-select">
+                        <option value="cima">CIMA</option>
+                        <option value="inflammation">Inflammation</option>
+                        <option value="scatlas">scAtlas</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Signature Type:</label>
+                    <select id="val-sigtype" class="filter-select">
+                        <option value="CytoSig">CytoSig (43)</option>
+                        <option value="SecAct">SecAct (1,170)</option>
+                    </select>
+                </div>
             </div>
 
-            <div class="validation-summary" id="validation-summary">
-                <!-- Summary will be loaded -->
+            <div class="tab-navigation" id="validation-tabs">
+                <button class="tab-btn active" data-tab="atlas-level">Atlas Level</button>
+                <button class="tab-btn" data-tab="pseudobulk">Pseudobulk Level</button>
+                <button class="tab-btn" data-tab="singlecell">Single-Cell Level</button>
+                <button class="tab-btn" data-tab="summary">Summary</button>
             </div>
 
-            <div class="validation-panels" id="validation-panels">
-                <!-- 6 validation panels -->
+            <div class="validation-content" id="validation-content">
+                <!-- Tab content will be loaded dynamically -->
             </div>
         </div>
     </template>
