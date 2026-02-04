@@ -75,7 +75,7 @@ ATLAS_REGISTRY: Dict[str, AtlasConfig] = {
             "L3": "cell_type_l3",
             "L4": "cell_type_l4",
         },
-        sample_col="donor_id",
+        sample_col="sample",  # Sample column for pseudobulk aggregation
         description="CIMA Human Cell Atlas with 4 annotation levels",
     ),
     # Inflammation Atlas - Main cohort

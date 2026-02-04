@@ -16,6 +16,10 @@ from cytoatlas_pipeline.batch.streaming_aggregator import (
     StreamingPseudobulkAggregator,
     aggregate_atlas_pseudobulk,
 )
+from cytoatlas_pipeline.batch.multi_level_aggregator import (
+    MultiLevelAggregator,
+    aggregate_all_levels,
+)
 
 __all__ = [
     # Config classes
@@ -24,7 +28,10 @@ __all__ = [
     "ActivityConfig",
     "ATLAS_REGISTRY",
     "get_atlas_config",
-    # Aggregation
+    # Single-level aggregation
     "StreamingPseudobulkAggregator",
     "aggregate_atlas_pseudobulk",
+    # Multi-level aggregation (single pass)
+    "MultiLevelAggregator",
+    "aggregate_all_levels",
 ]
