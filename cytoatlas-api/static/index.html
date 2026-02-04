@@ -35,9 +35,9 @@
                 <a href="/explore" class="nav-link" data-page="explore">Explore</a>
                 <a href="/validate" class="nav-link" data-page="validate">Validate</a>
                 <a href="/compare" class="nav-link" data-page="compare">Compare</a>
-                <a href="/methods" class="nav-link" data-page="methods">Methods</a>
                 <a href="/submit" class="nav-link" data-page="submit">Submit</a>
                 <a href="/chat" class="nav-link" data-page="chat">Chat</a>
+                <a href="/about" class="nav-link" data-page="about">About</a>
             </nav>
 
             <div class="header-search">
@@ -264,36 +264,14 @@
         </div>
     </template>
 
-    <template id="methods-template">
-        <div class="page methods-page">
+    <template id="about-template">
+        <div class="page about-page">
             <div class="page-header">
-                <h1>Methods</h1>
+                <h1>About</h1>
                 <p>Computational methods and data sources used in the Pan-Disease Cytokine Activity Atlas</p>
             </div>
 
-            <div class="methods-container">
-                <!-- Activity Inference -->
-                <div class="method-card">
-                    <div class="method-card-header">
-                        <div class="method-icon">&#128300;</div>
-                        <h2>Cytokine Activity Inference</h2>
-                    </div>
-                    <div class="method-card-content">
-                        <p>Cytokine signaling activities were inferred from single-cell RNA-seq data using two complementary approaches:</p>
-                        <div class="method-item">
-                            <h4>CytoSig</h4>
-                            <p>Predicts activities of <strong>43 cytokines</strong> based on their downstream transcriptional signatures. Ridge regression is used to infer activity from signature gene expression.</p>
-                            <div class="method-citation">Jiang et al. (2021) <em>Nature Methods</em></div>
-                        </div>
-                        <div class="method-item">
-                            <h4>SecAct</h4>
-                            <p>Estimates activities of <strong>1,170 secreted proteins</strong> using signatures learned from spatial Moran's I autocorrelation patterns.</p>
-                            <div class="method-citation">Ru et al. (2026) <em>Nature Methods</em></div>
-                        </div>
-                        <p class="method-note">Activity scores are z-scored ridge regression coefficients. Positive values indicate upregulation of downstream targets.</p>
-                    </div>
-                </div>
-
+            <div class="about-container">
                 <!-- Data Sources -->
                 <div class="method-card">
                     <div class="method-card-header">
@@ -326,6 +304,28 @@
                     </div>
                 </div>
 
+                <!-- Activity Inference -->
+                <div class="method-card">
+                    <div class="method-card-header">
+                        <div class="method-icon">&#128300;</div>
+                        <h2>Cytokine Activity Inference</h2>
+                    </div>
+                    <div class="method-card-content">
+                        <p>Cytokine signaling activities were inferred from single-cell RNA-seq data using two complementary approaches:</p>
+                        <div class="method-item">
+                            <h4>CytoSig</h4>
+                            <p>Predicts activities of <strong>43 cytokines</strong> based on their downstream transcriptional signatures. Ridge regression is used to infer activity from signature gene expression.</p>
+                            <div class="method-citation">Jiang et al. (2021) <em>Nature Methods</em></div>
+                        </div>
+                        <div class="method-item">
+                            <h4>SecAct</h4>
+                            <p>Estimates activities of <strong>1,170 secreted proteins</strong> using signatures learned from spatial Moran's I autocorrelation patterns.</p>
+                            <div class="method-citation">Ru et al. (2026) <em>Nature Methods</em></div>
+                        </div>
+                        <p class="method-note">Activity scores are z-scored ridge regression coefficients. Positive values indicate upregulation of downstream targets.</p>
+                    </div>
+                </div>
+
                 <!-- Statistical Methods -->
                 <div class="method-card">
                     <div class="method-card-header">
@@ -349,6 +349,31 @@
                                 <span class="i2-mod">25-50%: Moderate</span>
                                 <span class="i2-sub">50-75%: Substantial</span>
                                 <span class="i2-high">&gt; 75%: High</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Validation -->
+                <div class="method-card">
+                    <div class="method-card-header">
+                        <div class="method-icon">&#9989;</div>
+                        <h2>Activity Validation</h2>
+                    </div>
+                    <div class="method-card-content">
+                        <p>Activity predictions validated by correlating predicted scores with signature gene expression:</p>
+                        <div class="validation-levels">
+                            <div class="validation-level">
+                                <h4>Pseudobulk Level</h4>
+                                <p>Mean expression vs. activity per sample × cell type (highest correlations)</p>
+                            </div>
+                            <div class="validation-level">
+                                <h4>Single-Cell Level</h4>
+                                <p>Per-cell expression vs. activity (reflects biological variability)</p>
+                            </div>
+                            <div class="validation-level">
+                                <h4>Atlas Level</h4>
+                                <p>Mean values across cell types (demonstrates cell type patterns)</p>
                             </div>
                         </div>
                     </div>
@@ -380,31 +405,6 @@
                     </div>
                 </div>
 
-                <!-- Validation -->
-                <div class="method-card">
-                    <div class="method-card-header">
-                        <div class="method-icon">&#9989;</div>
-                        <h2>Activity Validation</h2>
-                    </div>
-                    <div class="method-card-content">
-                        <p>Activity predictions validated by correlating predicted scores with signature gene expression:</p>
-                        <div class="validation-levels">
-                            <div class="validation-level">
-                                <h4>Pseudobulk Level</h4>
-                                <p>Mean expression vs. activity per sample × cell type (highest correlations)</p>
-                            </div>
-                            <div class="validation-level">
-                                <h4>Single-Cell Level</h4>
-                                <p>Per-cell expression vs. activity (reflects biological variability)</p>
-                            </div>
-                            <div class="validation-level">
-                                <h4>Atlas Level</h4>
-                                <p>Mean values across cell types (demonstrates cell type patterns)</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- References -->
                 <div class="method-card references-card">
                     <div class="method-card-header">
@@ -412,12 +412,17 @@
                         <h2>References</h2>
                     </div>
                     <div class="method-card-content">
+                        <h4>Methods</h4>
                         <ol class="references-list">
-                            <li><strong>Ru et al.</strong> (2026) Inference of secreted protein activities in intercellular communication. <em>Nature Methods</em> (in press)</li>
                             <li><strong>Jiang et al.</strong> (2021) Systematic investigation of cytokine signaling activity at the tissue and single-cell levels. <em>Nature Methods</em> 18:1181-1191</li>
-                            <li><strong>Hao et al.</strong> (2021) Integrated analysis of multimodal single-cell data. <em>Cell</em> 184:3573-3587</li>
+                            <li><strong>Ru et al.</strong> (2026) Inference of secreted protein activities in intercellular communication. <em>Nature Methods</em> (in press)</li>
                             <li><strong>Higgins et al.</strong> (2003) Measuring inconsistency in meta-analyses. <em>BMJ</em> 327:557-560</li>
-                            <li><strong>Domínguez Conde et al.</strong> (2022) Cross-tissue immune cell analysis reveals tissue-specific features in humans. <em>Science</em> 376:eabl5197</li>
+                        </ol>
+                        <h4>Data Sources</h4>
+                        <ol class="references-list" start="4">
+                            <li><strong>Yin et al.</strong> (2026) Chinese immune multi-omics atlas. <em>Science</em> 391:eadt3130</li>
+                            <li><strong>Jiménez-Gracia et al.</strong> (2026) Interpretable inflammation landscape of circulating immune cells. <em>Nature Medicine</em></li>
+                            <li><strong>Shi et al.</strong> (2025) Cross-tissue multicellular coordination and its rewiring in cancer. <em>Nature</em></li>
                         </ol>
                     </div>
                 </div>
@@ -500,7 +505,7 @@
     <script src="/static/js/pages/atlas-detail.js"></script>
     <script src="/static/js/pages/validate.js"></script>
     <script src="/static/js/pages/compare.js"></script>
-    <script src="/static/js/pages/methods.js"></script>
+    <script src="/static/js/pages/about.js"></script>
     <script src="/static/js/pages/search.js"></script>
     <script src="/static/js/pages/gene-detail.js"></script>
     <script src="/static/js/pages/submit.js"></script>

@@ -1,21 +1,21 @@
 /**
- * Methods Page Handler
+ * About Page Handler
  */
 
-const MethodsPage = {
+const AboutPage = {
     /**
-     * Initialize the methods page
+     * Initialize the about page
      */
     async init() {
         this.render();
     },
 
     /**
-     * Render the methods page template
+     * Render the about page template
      */
     render() {
         const app = document.getElementById('app');
-        const template = document.getElementById('methods-template');
+        const template = document.getElementById('about-template');
 
         if (app && template) {
             app.innerHTML = template.innerHTML;
@@ -24,4 +24,4 @@ const MethodsPage = {
 };
 
 // Make available globally
-window.MethodsPage = MethodsPage;
+window.AboutPage = AboutPage;

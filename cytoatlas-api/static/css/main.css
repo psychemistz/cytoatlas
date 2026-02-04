@@ -4298,29 +4298,29 @@ h3 .badge {
     margin-bottom: var(--spacing-sm);
 }
 
-/* ==================== Methods Page ==================== */
-.methods-page {
+/* ==================== About Page ==================== */
+.about-page {
     padding: var(--spacing-xl);
     max-width: 1200px;
     margin: 0 auto;
 }
 
-.methods-page .page-header {
+.about-page .page-header {
     text-align: center;
     margin-bottom: var(--spacing-2xl);
 }
 
-.methods-page .page-header h1 {
+.about-page .page-header h1 {
     font-size: 2rem;
     margin-bottom: var(--spacing-sm);
 }
 
-.methods-page .page-header p {
+.about-page .page-header p {
     color: var(--text-secondary);
     font-size: 1.1rem;
 }
 
-.methods-container {
+.about-container {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
     gap: var(--spacing-lg);
@@ -4540,7 +4540,7 @@ h3 .badge {
 }
 
 @media (max-width: 768px) {
-    .methods-container {
+    .about-container {
         grid-template-columns: 1fr;
     }
 
