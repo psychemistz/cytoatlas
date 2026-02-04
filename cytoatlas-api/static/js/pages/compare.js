@@ -840,48 +840,59 @@ const ComparePage = {
     },
 
     /**
-     * Render pseudobulk scatter plot (Viridis colorscale by |Δ|)
+     * Render pseudobulk scatter plot (colored by cell type)
      */
     renderPseudobulkScatter(scatterData, pair, data) {
-        const xData = scatterData.map(d => d.x);
-        const yData = scatterData.map(d => d.y);
+        const cellTypes = [...new Set(scatterData.map(d => d.cell_type))];
+        const colors = this.generateColors(cellTypes.length);
 
-        const xMin = Math.min(...xData), xMax = Math.max(...xData);
-        const yMin = Math.min(...yData), yMax = Math.max(...yData);
+        const traces = cellTypes.map((ct, i) => {
+            const ctData = scatterData.filter(d => d.cell_type === ct);
+            return {
+                type: 'scatter',
+                mode: 'markers',
+                name: ct,
+                x: ctData.map(d => d.x),
+                y: ctData.map(d => d.y),
+                text: ctData.map(d => `${d.signature}<br>${d.n_samples_x || '?'} vs ${d.n_samples_y || '?'} samples`),
+                marker: {
+                    color: colors[i],
+                    size: 8,
+                    opacity: 0.7,
+                },
+                hovertemplate: '<b>%{text}</b><br>' +
+                    `${pair.atlas1}: %{x:.2f}<br>${pair.atlas2}: %{y:.2f}<extra>${ct}</extra>`,
+            };
+        });
+
+        // Add identity line
+        const allX = scatterData.map(d => d.x);
+        const allY = scatterData.map(d => d.y);
+        const minVal = Math.min(...allX, ...allY);
+        const maxVal = Math.max(...allX, ...allY);
         const padding = 0.2;
+
+        traces.push({
+            type: 'scatter',
+            mode: 'lines',
+            x: [minVal - padding, maxVal + padding],
+            y: [minVal - padding, maxVal + padding],
+            line: { dash: 'dash', color: '#ccc' },
+            showlegend: false,
+            hoverinfo: 'skip',
+        });
 
         const pvalText = data.pvalue !== null && data.pvalue < 0.001 ? ', p<0.001' : '';
         const titleText = `Spearman r = ${data.correlation?.toFixed(3) || 'N/A'}${pvalText} (n=${scatterData.length})`;
 
         Plotly.purge('scatter-plot');
-        Plotly.newPlot('scatter-plot', [{
-            type: 'scatter',
-            mode: 'markers',
-            x: xData,
-            y: yData,
-            text: scatterData.map(d => `${d.signature} (${d.cell_type})`),
-            marker: {
-                size: 7,
-                color: scatterData.map(d => Math.abs(d.x - d.y)),
-                colorscale: 'Viridis',
-                colorbar: { title: '|Δ|', len: 0.5 },
-            },
-            hovertemplate: '<b>%{text}</b><br>' +
-                `${pair.atlas1}: %{x:.2f}<br>${pair.atlas2}: %{y:.2f}<extra></extra>`,
-        }, {
-            type: 'scatter',
-            mode: 'lines',
-            x: [Math.min(xMin, yMin) - padding, Math.max(xMax, yMax) + padding],
-            y: [Math.min(xMin, yMin) - padding, Math.max(xMax, yMax) + padding],
-            line: { dash: 'dash', color: '#ccc' },
-            showlegend: false,
-            hoverinfo: 'skip',
-        }], {
+        Plotly.newPlot('scatter-plot', traces, {
             xaxis: { title: `${pair.atlas1} Activity (z-score)`, zeroline: true },
             yaxis: { title: `${pair.atlas2} Activity (z-score)`, zeroline: true },
             margin: { l: 60, r: 30, t: 50, b: 60 },
             title: { text: titleText, font: { size: 12 } },
             height: 430,
+            legend: { orientation: 'h', y: -0.2 },
         }, { responsive: true });
     },
 
