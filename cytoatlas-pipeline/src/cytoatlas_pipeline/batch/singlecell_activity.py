@@ -105,7 +105,7 @@ def _compute_projection_matrix(
     X: np.ndarray,
     lambda_: float,
     use_gpu: bool = True,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> np.ndarray:
     """
     Compute projection matrix T = (X'X + λI)^{-1} X'.
 
@@ -116,7 +116,6 @@ def _compute_projection_matrix(
 
     Returns:
         T: Projection matrix (n_features, n_genes)
-        c: Row sums of T (for sparse normalization)
     """
     n_genes, n_features = X.shape
 
@@ -131,10 +130,7 @@ def _compute_projection_matrix(
             XtX_inv = cp.linalg.pinv(XtX_reg)
 
         T = XtX_inv @ X_gpu.T
-        c = T.sum(axis=1)
-
         T = cp.asnumpy(T)
-        c = cp.asnumpy(c)
 
         del X_gpu, XtX, XtX_reg, XtX_inv
         cp.get_default_memory_pool().free_all_blocks()
@@ -150,17 +146,13 @@ def _compute_projection_matrix(
             XtX_inv = linalg.pinv(XtX_reg)
 
         T = XtX_inv @ X.T
-        c = T.sum(axis=1)
 
-    return np.ascontiguousarray(T), c
+    return np.ascontiguousarray(T)
 
 
 def _process_batch_gpu(
     T_gpu,
     Y_batch: np.ndarray,
-    mu: np.ndarray,
-    sigma: np.ndarray,
-    c: np.ndarray,
     n_rand: int,
     inv_perm_table: np.ndarray,
 ) -> Dict[str, np.ndarray]:
@@ -170,9 +162,6 @@ def _process_batch_gpu(
     Args:
         T_gpu: Projection matrix on GPU (n_features, n_genes)
         Y_batch: Expression batch (n_genes, batch_size) - already transposed
-        mu: Column means
-        sigma: Column stds
-        c: Row sums of T for normalization
         n_rand: Number of permutations
         inv_perm_table: Inverse permutation table
 
@@ -184,16 +173,9 @@ def _process_batch_gpu(
 
     # Transfer to GPU
     Y_gpu = cp.asarray(Y_batch, dtype=cp.float64)
-    mu_gpu = cp.asarray(mu, dtype=cp.float64)
-    sigma_gpu = cp.asarray(sigma, dtype=cp.float64)
-    c_gpu = cp.asarray(c, dtype=cp.float64)
 
-    # Normalize: (T @ Y) / σ - c ⊗ (μ/σ)
-    mu_over_sigma = mu_gpu / sigma_gpu
-    correction = cp.outer(c_gpu, mu_over_sigma)
-
-    beta_raw = T_gpu @ Y_gpu
-    beta = beta_raw / sigma_gpu - correction
+    # Compute beta = T @ Y
+    beta = T_gpu @ Y_gpu
 
     # Permutation testing
     aver = cp.zeros((n_features, batch_size), dtype=cp.float64)
@@ -205,14 +187,13 @@ def _process_batch_gpu(
     for i in range(n_rand):
         inv_perm_idx = cp.asarray(inv_perm_table[i], dtype=cp.intp)
         T_perm = T_gpu[:, inv_perm_idx]
-        beta_raw_perm = T_perm @ Y_gpu
-        beta_perm = beta_raw_perm / sigma_gpu - correction
+        beta_perm = T_perm @ Y_gpu
 
         pvalue_counts += (cp.abs(beta_perm) >= abs_beta).astype(cp.float64)
         aver += beta_perm
         aver_sq += beta_perm ** 2
 
-        del inv_perm_idx, T_perm, beta_raw_perm, beta_perm
+        del inv_perm_idx, T_perm, beta_perm
 
     # Finalize statistics
     mean = aver / n_rand
@@ -229,8 +210,7 @@ def _process_batch_gpu(
     }
 
     # Cleanup
-    del Y_gpu, mu_gpu, sigma_gpu, c_gpu, mu_over_sigma, correction
-    del beta_raw, beta, aver, aver_sq, pvalue_counts, abs_beta
+    del Y_gpu, beta, aver, aver_sq, pvalue_counts, abs_beta
     del mean, var, se, zscore, pvalue
     cp.get_default_memory_pool().free_all_blocks()
 
@@ -240,9 +220,6 @@ def _process_batch_gpu(
 def _process_batch_cpu(
     T: np.ndarray,
     Y_batch: np.ndarray,
-    mu: np.ndarray,
-    sigma: np.ndarray,
-    c: np.ndarray,
     n_rand: int,
     inv_perm_table: np.ndarray,
 ) -> Dict[str, np.ndarray]:
@@ -250,12 +227,8 @@ def _process_batch_cpu(
     n_features = T.shape[0]
     batch_size = Y_batch.shape[1]
 
-    # Normalize: (T @ Y) / σ - c ⊗ (μ/σ)
-    mu_over_sigma = mu / sigma
-    correction = np.outer(c, mu_over_sigma)
-
-    beta_raw = T @ Y_batch
-    beta = beta_raw / sigma - correction
+    # Compute beta = T @ Y
+    beta = T @ Y_batch
 
     # Permutation testing
     aver = np.zeros((n_features, batch_size), dtype=np.float64)
@@ -266,8 +239,7 @@ def _process_batch_cpu(
     for i in range(n_rand):
         inv_perm_idx = inv_perm_table[i]
         T_perm = T[:, inv_perm_idx]
-        beta_raw_perm = T_perm @ Y_batch
-        beta_perm = beta_raw_perm / sigma - correction
+        beta_perm = T_perm @ Y_batch
 
         pvalue_counts += (np.abs(beta_perm) >= abs_beta).astype(np.float64)
         aver += beta_perm
@@ -446,7 +418,7 @@ class SingleCellActivityInference:
         if self.verbose:
             log("Computing projection matrix...")
 
-        T, c = _compute_projection_matrix(sig.matrix, self.lambda_, self.use_gpu)
+        T = _compute_projection_matrix(sig.matrix, self.lambda_, self.use_gpu)
 
         # Generate inverse permutation table
         if self.verbose:
@@ -485,24 +457,18 @@ class SingleCellActivityInference:
             else:
                 X_dense = np.asarray(X_batch)
 
-            # Compute column statistics for normalization
-            # Note: For sparse data, we compute stats per batch
-            mu = X_dense.mean(axis=0)
-            sigma = X_dense.std(axis=0, ddof=1)
-            sigma[sigma < EPS] = 1.0
-
             # Transpose for matmul: (n_genes, batch_size)
-            Y_batch = X_dense.T
+            Y_batch = X_dense.T.astype(np.float64)
 
             # Process batch
             if self.use_gpu and T_gpu is not None:
                 result = _process_batch_gpu(
-                    T_gpu, Y_batch, mu, sigma, c,
+                    T_gpu, Y_batch,
                     self.n_rand, inv_perm_table
                 )
             else:
                 result = _process_batch_cpu(
-                    T, Y_batch, mu, sigma, c,
+                    T, Y_batch,
                     self.n_rand, inv_perm_table
                 )
 
