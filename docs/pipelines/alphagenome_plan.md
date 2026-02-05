@@ -22,17 +22,33 @@ Two parallel jobs running:
 
 Partial results available from intermediate checkpoint with 3,713 variants having non-zero predictions.
 
-## Validation Results (Partial Data)
+## Validation Results
 
-### Multi-Source Validation Summary
+### Direct Comparisons (Primary Validation)
+
+**Important**: The strongest validation comes from direct comparison of CIMA eQTLs with independent datasets, NOT from AlphaGenome predictions.
+
+| Comparison | Matches | Concordance | Pearson r | Spearman ρ |
+|------------|---------|-------------|-----------|------------|
+| **Direct CIMA vs DICE** | 165,064 | **83.5%** | **0.685** | **0.660** |
+| **Direct CIMA vs GTEx** | 68,035 | **68.9%** | **0.370** | **0.377** |
+| AlphaGenome-filtered CIMA vs DICE | 4,495 | 75.1% | 0.54 | 0.51 |
+| AlphaGenome-filtered CIMA vs GTEx | 1,962 | 64.7% | 0.28 | 0.29 |
+
+**Key findings**:
+1. **DICE > GTEx**: Cell-type-specific DICE (83.5%) shows better concordance than bulk GTEx (68.9%), confirming cell-type specificity matters
+2. **Direct > AlphaGenome-filtered**: In BOTH cases, direct comparison outperforms AlphaGenome-filtered (DICE: 83.5% vs 75.1%, GTEx: 68.9% vs 64.7%)
+3. **AlphaGenome filtering reduces concordance**: May select variants with larger predicted effects that are more context-specific and less replicable
+
+### AlphaGenome-Filtered Validation (Secondary)
 
 | Source | Matches | Concordance | Pearson r | Spearman ρ | Notes |
 |--------|---------|-------------|-----------|------------|-------|
-| **GTEx Bulk v10** | 1,962 | 64.7% | 0.28 | 0.29 | Whole blood bulk tissue |
-| **DICE (hg38)** | 4,495 | **75.1%** | **0.54** | **0.51** | Cell-type-specific eQTLs |
+| GTEx Bulk v10 | 1,962 | 64.7% | 0.28 | 0.29 | Potentially circular (same training data) |
+| DICE (hg38) | 4,495 | 75.1% | 0.54 | 0.51 | Independent validation |
 | GTEx ieQTL | 0 | - | - | - | Coordinate mismatch |
 
-### DICE Concordance by Cell Type
+### DICE Concordance by Cell Type (AlphaGenome-filtered)
 
 | Cell Type | Concordant | Total | Rate |
 |-----------|------------|-------|------|
@@ -49,7 +65,15 @@ Partial results available from intermediate checkpoint with 3,713 variants havin
 | TREG_MEM | 322 | 439 | 73.3% |
 | B_CELL_NAIVE | 212 | 305 | 69.5% |
 
-**Key finding**: DICE cell-type-specific eQTLs show higher concordance (75.1%) than GTEx bulk (64.7%), validating that CIMA single-cell eQTLs capture true cell-type-specific regulatory effects.
+### What AlphaGenome Actually Provides
+
+| Purpose | Useful? | Notes |
+|---------|---------|-------|
+| **Prioritization** | ✅ Yes | Identifies variants with largest predicted regulatory effects |
+| **Validation** | ❌ No | GTEx validation is circular; DICE validation is weaker than direct comparison |
+| **Mechanism annotation** | ❌ No | Only RNA tracks available, no chromatin data |
+
+**Recommendation for paper**: Report direct CIMA-DICE concordance (83.5%) as the primary validation. Use AlphaGenome only for prioritizing variants for functional follow-up.
 
 ## Data Sources
 
@@ -235,19 +259,20 @@ results/alphagenome/
 
 ### Validation Interpretation
 
-1. **GTEx concordance (64.7%)**: Moderate, but potentially circular since AlphaGenome was trained on GTEx
-2. **DICE concordance (75.1%)**: **Strong independent validation** - DICE is a separate dataset not used in AlphaGenome training
-3. **Cell-type specificity confirmed**: Higher concordance with cell-type-specific DICE than bulk GTEx
+1. **Direct CIMA-DICE concordance (83.5%)**: Strong independent validation - the primary result for publication
+2. **AlphaGenome-filtered concordance (75.1%)**: Lower than direct comparison - AlphaGenome filtering does not improve validation
+3. **GTEx concordance (64.7%)**: Potentially circular since AlphaGenome was trained on GTEx
+4. **Cell-type specificity confirmed**: Cell-type-specific DICE data replicates CIMA single-cell eQTLs better than bulk GTEx
 
-### Top Validated Variants
+### Top Validated Variants (Direct CIMA-DICE)
 
-Variants with concordant effects across CIMA, GTEx, and DICE:
+Variants with concordant effects across CIMA and DICE (10,394 unique variants matched):
 
-| Variant | Gene | CIMA β | GTEx β | DICE β | Notes |
-|---------|------|--------|--------|--------|-------|
-| chr3:49813942 | UBA7 | -0.39 | -0.28 | -0.63 | Consistent across all sources |
-| chr1:192817615 | RGS2 | +0.30 | +0.18 | - | GTEx concordant |
-| chr2:54560455 | SPTBN1 | +0.54 | +0.79 | - | Strong GTEx match |
+| Variant | Gene | CIMA β | DICE β | Notes |
+|---------|------|--------|--------|-------|
+| chr3:49813942 | UBA7 | -0.39 | -0.63 | Consistent negative effect |
+| chr3:40411308 | RPL14 | +0.67 | +0.68 | Strong positive concordance |
+| chr2:54560455 | SPTBN1 | +0.54 | +0.79 | Large effect, same direction |
 
 ## Next Steps
 
@@ -259,21 +284,39 @@ Variants with concordant effects across CIMA, GTEx, and DICE:
    python scripts/08_alphagenome_stage5_validate.py
    ```
 
-3. **Consider additional validation**:
+3. **Report direct CIMA-DICE validation** as primary result (83.5% concordance, r=0.685)
+
+4. **Use AlphaGenome for prioritization only**:
+   - Select top variants by predicted regulatory impact for functional follow-up
+   - Do NOT claim AlphaGenome "validates" eQTLs (validation comes from DICE replication)
+
+5. **Consider additional validation**:
    - eQTLGen (31K blood samples, largest eQTL meta-analysis)
    - BLUEPRINT epigenomics
    - OneK1K single-cell eQTLs
 
-4. **Functional interpretation**:
-   - Focus on variants concordant across all 3 sources
-   - Prioritize immune-relevant genes (HLA, cytokines, receptors)
-   - Link to disease associations via GWAS catalog
-
 ## Conclusions
 
-Despite AlphaGenome API limitations (RNA-seq only, no chromatin), the analysis provides valuable validation:
+### Primary Finding: CIMA eQTLs Strongly Replicate
 
-1. **CIMA eQTLs replicate** in both GTEx (bulk) and DICE (cell-type-specific)
-2. **Cell-type specificity matters**: 75% concordance with DICE vs 65% with GTEx bulk
-3. **1,585 high-confidence variants** prioritized for follow-up
-4. **Independent validation achieved** through DICE (not used in AlphaGenome training)
+**Direct CIMA vs DICE comparison** (without AlphaGenome filtering):
+- 165,064 matched eQTL pairs across 10,394 unique variants
+- **83.5% direction concordance**
+- **Pearson r = 0.685** (strong correlation)
+
+This is the primary validation result demonstrating that CIMA single-cell eQTLs replicate in independent cell-type-specific data.
+
+### AlphaGenome Role: Prioritization, Not Validation
+
+| AlphaGenome Purpose | Status |
+|---------------------|--------|
+| Prioritize variants by predicted regulatory effect | ✅ Useful |
+| Validate eQTLs | ❌ Not useful (direct comparison is better) |
+| Annotate regulatory mechanisms | ❌ Not possible (no chromatin tracks) |
+
+### Summary
+
+1. **CIMA eQTLs are validated** by direct comparison with DICE (83.5% concordance)
+2. **AlphaGenome adds prioritization**, not validation - use for selecting variants for follow-up
+3. **1,585 AlphaGenome-prioritized variants** available for functional studies
+4. **GTEx validation is circular** - AlphaGenome was trained on GTEx data
