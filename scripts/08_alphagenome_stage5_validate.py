@@ -74,22 +74,23 @@ GTEX_FILES = [
 # GTEx ieQTL file (cell type interaction QTLs)
 GTEX_IEQTL_FILE = 'GTEx_Analysis_v8_ieQTL/Whole_Blood.Neutrophils.ieQTL.eigenMT.annotated.txt.gz'
 
-# DICE data directory
+# DICE data directory (original hg19 and lifted hg38)
 DICE_DIR = Path('/data/parks34/projects/2secactpy/results/alphagenome/dice_data')
+DICE_HG38_DIR = DICE_DIR / 'hg38'  # Lifted to hg38 coordinates
 
-# DICE cell type mapping: CIMA cell type prefix -> DICE file name
+# DICE cell type mapping: CIMA cell type prefix -> DICE file name (hg38 TSV format)
 DICE_CELL_MAPPING = {
-    'CD4': ['CD4_NAIVE.vcf', 'CD4_STIM.vcf', 'TH1.vcf', 'TH2.vcf', 'TH17.vcf', 'TFH.vcf', 'TREG_MEM.vcf', 'TREG_NAIVE.vcf'],
-    'CD8': ['CD8_NAIVE.vcf', 'CD8_STIM.vcf'],
-    'Treg': ['TREG_MEM.vcf', 'TREG_NAIVE.vcf'],
-    'Th17': ['TH17.vcf'],
-    'Th1': ['TH1.vcf'],
-    'Th2': ['TH2.vcf'],
-    'Tfh': ['TFH.vcf'],
-    'NK': ['NK.vcf'],
-    'B': ['B_CELL_NAIVE.vcf'],
-    'Mono': ['MONOCYTES_CLASSICAL.vcf', 'MONOCYTES_NONCLASSICAL.vcf'],
-    'MAIT': ['CD8_NAIVE.vcf'],  # MAIT cells - closest match is CD8
+    'CD4': ['CD4_NAIVE_hg38.tsv', 'CD4_STIM_hg38.tsv', 'TH1_hg38.tsv', 'TH2_hg38.tsv', 'TH17_hg38.tsv', 'TFH_hg38.tsv', 'TREG_MEM_hg38.tsv', 'TREG_NAIVE_hg38.tsv'],
+    'CD8': ['CD8_NAIVE_hg38.tsv', 'CD8_STIM_hg38.tsv'],
+    'Treg': ['TREG_MEM_hg38.tsv', 'TREG_NAIVE_hg38.tsv'],
+    'Th17': ['TH17_hg38.tsv'],
+    'Th1': ['TH1_hg38.tsv'],
+    'Th2': ['TH2_hg38.tsv'],
+    'Tfh': ['TFH_hg38.tsv'],
+    'NK': ['NK_hg38.tsv'],
+    'B': ['B_CELL_NAIVE_hg38.tsv'],
+    'Mono': ['MONOCYTES_CLASSICAL_hg38.tsv', 'MONOCYTES_NONCLASSICAL_hg38.tsv'],
+    'MAIT': ['CD8_NAIVE_hg38.tsv'],  # MAIT cells - closest match is CD8
 }
 
 # Matching parameters
@@ -243,11 +244,12 @@ def load_gtex_ieqtls() -> Optional[pd.DataFrame]:
 
 def load_dice_eqtls(cell_types: List[str] = None) -> Optional[pd.DataFrame]:
     """
-    Load DICE immune cell eQTLs.
+    Load DICE immune cell eQTLs (hg38 lifted coordinates).
 
-    DICE VCF format:
-    - CHROM, POS, ID (rsID), REF, ALT
-    - INFO contains: Gene, GeneSymbol, Pvalue, Beta
+    Reads from hg38-lifted TSV files that contain:
+    - Original hg19 coordinates (CHROM, POS)
+    - Lifted hg38 coordinates (CHROM_hg38, POS_hg38)
+    - INFO fields parsed from original VCF
 
     Args:
         cell_types: List of cell type prefixes to load (e.g., ['CD4', 'CD8'])
@@ -256,9 +258,15 @@ def load_dice_eqtls(cell_types: List[str] = None) -> Optional[pd.DataFrame]:
     Returns:
         DataFrame with columns: chrom, pos, ref, alt, gene_symbol, beta, pval, dice_celltype
     """
-    if not DICE_DIR.exists():
-        log(f"  DICE directory not found: {DICE_DIR}")
+    # Use hg38 directory if available, fall back to original
+    dice_dir = DICE_HG38_DIR if DICE_HG38_DIR.exists() else DICE_DIR
+    use_hg38 = DICE_HG38_DIR.exists()
+
+    if not dice_dir.exists():
+        log(f"  DICE directory not found: {dice_dir}")
         return None
+
+    log(f"  Using DICE data from: {dice_dir} ({'hg38' if use_hg38 else 'hg19'})")
 
     # Determine which files to load
     if cell_types:
@@ -270,7 +278,10 @@ def load_dice_eqtls(cell_types: List[str] = None) -> Optional[pd.DataFrame]:
                     files_to_load.update(dice_files)
         files_to_load = list(files_to_load)
     else:
-        files_to_load = [f.name for f in DICE_DIR.glob('*.vcf')]
+        if use_hg38:
+            files_to_load = [f.name for f in dice_dir.glob('*_hg38.tsv')]
+        else:
+            files_to_load = [f.name for f in dice_dir.glob('*.vcf')]
 
     if not files_to_load:
         log("  No DICE files to load")
@@ -279,45 +290,81 @@ def load_dice_eqtls(cell_types: List[str] = None) -> Optional[pd.DataFrame]:
     log(f"Loading DICE eQTLs from {len(files_to_load)} cell types...")
 
     all_records = []
-    for vcf_file in files_to_load:
-        vcf_path = DICE_DIR / vcf_file
-        if not vcf_path.exists() or vcf_path.stat().st_size == 0:
+
+    for data_file in files_to_load:
+        file_path = dice_dir / data_file
+        if not file_path.exists() or file_path.stat().st_size == 0:
             continue
 
-        dice_celltype = vcf_file.replace('.vcf', '')
-        log(f"  Loading {vcf_file}...")
+        # Extract cell type name from filename
+        if use_hg38:
+            dice_celltype = data_file.replace('_hg38.tsv', '')
+        else:
+            dice_celltype = data_file.replace('.vcf', '')
 
-        # Parse VCF manually (simple format)
-        records = []
-        with open(vcf_path, 'r') as f:
-            for line in f:
-                if line.startswith('#'):
-                    continue
-                parts = line.strip().split('\t')
-                if len(parts) < 8:
-                    continue
+        log(f"  Loading {data_file}...")
 
-                chrom, pos, rsid, ref, alt, qual, filt, info = parts[:8]
+        if use_hg38:
+            # Load hg38 TSV format
+            df = pd.read_csv(file_path, sep='\t')
 
+            # Parse INFO field for each row
+            records = []
+            for _, row in df.iterrows():
                 # Parse INFO field
                 info_dict = {}
-                for item in info.split(';'):
-                    if '=' in item:
-                        key, val = item.split('=', 1)
-                        info_dict[key] = val
+                if pd.notna(row.get('INFO', '')):
+                    for item in str(row['INFO']).split(';'):
+                        if '=' in item:
+                            key, val = item.split('=', 1)
+                            info_dict[key] = val
 
-                records.append({
-                    'chrom': chrom,
-                    'pos': int(pos),
-                    'rsid': rsid,
-                    'ref': ref,
-                    'alt': alt,
-                    'gene_symbol': info_dict.get('GeneSymbol', ''),
-                    'gene_id': info_dict.get('Gene', ''),
-                    'beta': float(info_dict.get('Beta', 0)),
-                    'pval': float(info_dict.get('Pvalue', 1)),
-                    'dice_celltype': dice_celltype,
-                })
+                # Use hg38 coordinates
+                if pd.notna(row.get('CHROM_hg38')) and pd.notna(row.get('POS_hg38')):
+                    records.append({
+                        'chrom': row['CHROM_hg38'],
+                        'pos': int(row['POS_hg38']),
+                        'rsid': row.get('ID', ''),
+                        'ref': row.get('REF', ''),
+                        'alt': row.get('ALT', ''),
+                        'gene_symbol': info_dict.get('GeneSymbol', ''),
+                        'gene_id': info_dict.get('Gene', ''),
+                        'beta': float(info_dict.get('Beta', 0)),
+                        'pval': float(info_dict.get('Pvalue', 1)),
+                        'dice_celltype': dice_celltype,
+                    })
+        else:
+            # Original VCF format (hg19)
+            records = []
+            with open(file_path, 'r') as f:
+                for line in f:
+                    if line.startswith('#'):
+                        continue
+                    parts = line.strip().split('\t')
+                    if len(parts) < 8:
+                        continue
+
+                    chrom, pos, rsid, ref, alt, qual, filt, info = parts[:8]
+
+                    # Parse INFO field
+                    info_dict = {}
+                    for item in info.split(';'):
+                        if '=' in item:
+                            key, val = item.split('=', 1)
+                            info_dict[key] = val
+
+                    records.append({
+                        'chrom': chrom,
+                        'pos': int(pos),
+                        'rsid': rsid,
+                        'ref': ref,
+                        'alt': alt,
+                        'gene_symbol': info_dict.get('GeneSymbol', ''),
+                        'gene_id': info_dict.get('Gene', ''),
+                        'beta': float(info_dict.get('Beta', 0)),
+                        'pval': float(info_dict.get('Pvalue', 1)),
+                        'dice_celltype': dice_celltype,
+                    })
 
         if records:
             all_records.extend(records)
