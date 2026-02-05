@@ -182,12 +182,51 @@ class MultiLevelAggregator:
                         for level in levels_to_process}
 
         # Build obs DataFrame with all needed columns
-        cols_to_load = list(set(level_columns.values()))
-        if sample_col and sample_col in adata.obs.columns:
-            cols_to_load.append(sample_col)
+        # Handle composite columns (e.g., "tissue+cellType1" -> creates "tissue_cellType1")
+        cols_to_load = set()
+        composite_columns = {}  # {composite_col_name: [col1, col2]}
 
-        obs_df = adata.obs[cols_to_load].copy()
+        for level, col_spec in level_columns.items():
+            if '+' in col_spec:
+                # Composite column: "col1+col2" -> combine into "col1_col2"
+                parts = col_spec.split('+')
+                cols_to_load.update(parts)
+                composite_col_name = '_'.join(parts)
+                composite_columns[col_spec] = (parts, composite_col_name)
+                level_columns[level] = composite_col_name  # Update to use composite name
+            else:
+                cols_to_load.add(col_spec)
+
+        if sample_col and sample_col in adata.obs.columns:
+            cols_to_load.add(sample_col)
+
+        obs_df = adata.obs[list(cols_to_load)].copy()
         log(f"  Loaded {len(cols_to_load)} columns")
+
+        # Create composite columns (handle NaN values)
+        for col_spec, (parts, composite_name) in composite_columns.items():
+            # Check for NaN in component columns
+            mask_na0 = obs_df[parts[0]].isna()
+            mask_na1 = obs_df[parts[1]].isna()
+            mask_any_na = mask_na0 | mask_na1
+
+            # Convert to string for concatenation
+            part0 = obs_df[parts[0]].astype(str)
+            part1 = obs_df[parts[1]].astype(str)
+
+            # Create composite as regular string column (not categorical)
+            composite_values = part0 + '_' + part1
+
+            # Set NaN for rows with missing values in either component
+            # Use pd.Series to ensure it's not categorical
+            composite_series = pd.Series(composite_values.values, index=obs_df.index, dtype=object)
+            composite_series.loc[mask_any_na] = np.nan
+            obs_df[composite_name] = composite_series
+
+            n_missing = mask_any_na.sum()
+            log(f"  Created composite column: {composite_name}")
+            if n_missing > 0:
+                log(f"    ({n_missing:,} cells with missing annotations excluded)")
 
         # Initialize accumulators for each level
         # For cell-type-only pseudobulk
@@ -242,8 +281,13 @@ class MultiLevelAggregator:
                 col = level_columns[level]
                 batch_celltypes = batch_obs[col].values
 
+                # Filter out NaN values before np.unique to avoid type comparison error
+                # (NaN is float, celltypes are strings)
+                valid_mask = pd.notna(batch_celltypes)
+                valid_celltypes = batch_celltypes[valid_mask]
+
                 # Aggregate by cell type
-                for ct in np.unique(batch_celltypes):
+                for ct in np.unique(valid_celltypes) if len(valid_celltypes) > 0 else []:
                     if ct is None or pd.isna(ct):
                         continue
 
@@ -256,7 +300,11 @@ class MultiLevelAggregator:
 
                     # Also aggregate by sample × celltype (for bootstrap)
                     if batch_samples is not None:
-                        for sample in np.unique(batch_samples[mask]):
+                        # Filter out NaN samples to avoid type comparison error
+                        ct_samples = batch_samples[mask]
+                        valid_sample_mask = pd.notna(ct_samples)
+                        valid_samples = ct_samples[valid_sample_mask]
+                        for sample in np.unique(valid_samples) if len(valid_samples) > 0 else []:
                             if sample is None or pd.isna(sample):
                                 continue
                             sample_mask = mask & (batch_samples == sample)

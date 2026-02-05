@@ -84,10 +84,10 @@ ATLAS_REGISTRY: Dict[str, AtlasConfig] = {
         h5ad_path="/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_ATLAS_main_afterQC.h5ad",
         n_cells=4_000_000,  # Approximate
         annotation_levels={
-            "L1": "cell_type_level1",
-            "L2": "cell_type_level2",
+            "L1": "Level1",
+            "L2": "Level2",
         },
-        sample_col="sample_id",
+        sample_col="sampleID",
         cohort="main",
         description="Inflammation Atlas main cohort",
     ),
@@ -97,10 +97,10 @@ ATLAS_REGISTRY: Dict[str, AtlasConfig] = {
         h5ad_path="/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_ATLAS_validation_afterQC.h5ad",
         n_cells=1_500_000,  # Approximate
         annotation_levels={
-            "L1": "cell_type_level1",
-            "L2": "cell_type_level2",
+            "L1": "Level1pred",  # Note: 'pred' suffix in val/ext cohorts
+            "L2": "Level2pred",
         },
-        sample_col="sample_id",
+        sample_col="sampleID",
         cohort="validation",
         description="Inflammation Atlas validation cohort",
     ),
@@ -110,10 +110,10 @@ ATLAS_REGISTRY: Dict[str, AtlasConfig] = {
         h5ad_path="/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_ATLAS_external_afterQC.h5ad",
         n_cells=800_000,  # Approximate
         annotation_levels={
-            "L1": "cell_type_level1",
-            "L2": "cell_type_level2",
+            "L1": "Level1pred",  # Note: 'pred' suffix in val/ext cohorts
+            "L2": "Level2pred",
         },
-        sample_col="sample_id",
+        sample_col="sampleID",
         cohort="external",
         description="Inflammation Atlas external cohort",
     ),
@@ -123,11 +123,10 @@ ATLAS_REGISTRY: Dict[str, AtlasConfig] = {
         h5ad_path="/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/igt_s9_fine_counts.h5ad",
         n_cells=3_000_000,  # Approximate
         annotation_levels={
-            "organ_celltype": "organ_cellType1",  # Combined annotation
-            "celltype": "cellType1",
-            "organ": "organ",
+            "celltype": "cellType1",  # Aggregate by cell type (all organs)
+            "organ_celltype": "tissue+cellType1",  # Composite: organ × celltype
         },
-        sample_col="sample_id",
+        sample_col="sampleID",
         description="scAtlas normal tissue dataset",
     ),
     # scAtlas - Cancer tissues
@@ -136,11 +135,10 @@ ATLAS_REGISTRY: Dict[str, AtlasConfig] = {
         h5ad_path="/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/PanCancer_igt_s9_fine_counts.h5ad",
         n_cells=3_400_000,  # Approximate
         annotation_levels={
-            "organ_celltype": "organ_cellType1",  # Combined annotation
-            "celltype": "cellType1",
-            "organ": "organ",
+            "celltype": "cellType1",  # Aggregate by cell type (all sample types)
+            "organ_celltype": "tissue+cellType1",  # Composite: sample_type × celltype
         },
-        sample_col="sample_id",
+        sample_col="sampleID",
         description="scAtlas pan-cancer dataset",
     ),
 }

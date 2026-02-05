@@ -700,7 +700,8 @@ def build_celltype_signatures(meta: pd.DataFrame, diff: pd.DataFrame,
                 continue
 
             # Median expression across experiments (more robust to outliers)
-            avg_expr = diff[matching_cols].median(axis=1)
+            # Fill NaN with 0 for genes with no data (assume no effect)
+            avg_expr = diff[matching_cols].median(axis=1).fillna(0)
             ct_signatures[cytokine] = avg_expr
             ct_counts[cytokine] = len(matching_cols)
 

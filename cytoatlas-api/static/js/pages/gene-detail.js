@@ -591,19 +591,53 @@ const GeneDetailPage = {
 
         const expr = this.data.expression;
 
+        // Store raw expression data for filtering
+        this._expressionData = expr.data;
+
+        // Aggregate scAtlas data by cell type for initial "All Atlases" view
+        const scAtlasData = expr.data.filter(d => d.atlas === 'scAtlas' || d.atlas === 'scAtlas_Normal');
+        const nonScAtlasData = expr.data.filter(d => d.atlas !== 'scAtlas' && d.atlas !== 'scAtlas_Normal');
+        const scAtlasAggregated = this.aggregateExpressionByBaseCellType(scAtlasData);
+
+        // Combined data: non-scAtlas as-is + aggregated scAtlas
+        const displayData = [...nonScAtlasData, ...scAtlasAggregated]
+            .sort((a, b) => b.mean_expression - a.mean_expression);
+
+        // Group by atlas for dropdown
+        const byAtlas = {};
+        expr.data.forEach(d => {
+            if (!byAtlas[d.atlas]) byAtlas[d.atlas] = [];
+            byAtlas[d.atlas].push(d);
+        });
+
+        // Prepare boxplot data with aggregated scAtlas
+        let boxplotData = this.data.expression_boxplot;
+        let displayBoxplotData = null;
+        if (boxplotData && boxplotData.data) {
+            const scAtlasBp = boxplotData.data.filter(d => d.atlas === 'scAtlas' || d.atlas === 'scAtlas_Normal');
+            const nonScAtlasBp = boxplotData.data.filter(d => d.atlas !== 'scAtlas' && d.atlas !== 'scAtlas_Normal');
+            const scAtlasBpAggregated = this.aggregateBoxplotByBaseCellType(scAtlasBp);
+            displayBoxplotData = {
+                ...boxplotData,
+                data: [...nonScAtlasBp, ...scAtlasBpAggregated],
+            };
+        }
+
         content.innerHTML = `
             <div class="tab-header">
                 <h2>${this.gene} Gene Expression</h2>
                 <p>Mean log-normalized expression by cell type across atlases</p>
                 <div class="stats-inline">
-                    <span><strong>${expr.n_cell_types}</strong> cell types</span>
-                    <span><strong>${expr.atlases.length}</strong> atlases</span>
-                    <span>Top: <strong>${expr.top_cell_type}</strong></span>
+                    <span><strong>${displayData.length}</strong> cell types</span>
+                    <span><strong>${Object.keys(byAtlas).length}</strong> atlases</span>
                 </div>
                 <div class="tab-filters">
                     <select id="expr-atlas-filter" onchange="GeneDetailPage.filterExpressionByAtlas()">
                         <option value="all">All Atlases</option>
-                        ${expr.atlases.map(a => `<option value="${a}">${a}</option>`).join('')}
+                        ${Object.keys(byAtlas).map(a => `<option value="${a}">${a}</option>`).join('')}
+                    </select>
+                    <select id="expr-organ-filter" class="hidden" onchange="GeneDetailPage.filterExpressionByOrgan()">
+                        <option value="all">All Organs</option>
                     </select>
                 </div>
             </div>
@@ -612,18 +646,25 @@ const GeneDetailPage = {
                 <details>
                     <summary><strong>Expression Aggregation</strong> - How expression is computed</summary>
                     <div class="method-content">
-                        <p><strong>Cell-type level expression</strong> is computed by aggregating single-cell data within each cell type.</p>
+                        <p><strong>Cell-type level expression</strong> is computed by sampling single-cell data within each cell type.</p>
 
-                        <h4>Aggregation Process (no resampling)</h4>
+                        <h4>Aggregation Process</h4>
                         <ol>
-                            <li><strong>Group cells</strong> by unique (cell_type, sample_id) combinations</li>
-                            <li><strong>Filter groups</strong> with &lt;10 cells (minimum threshold for statistical reliability)</li>
-                            <li><strong>Compute mean expression</strong> of log-normalized counts across all cells in each group (direct averaging, no bootstrap/resampling)</li>
-                            <li><strong>Calculate % expressed</strong> as fraction of cells with non-zero expression</li>
+                            <li><strong>Sample cells</strong> randomly from each cell type (up to 500 cells)</li>
+                            <li><strong>Normalize expression</strong> using library-size normalization and log1p transformation</li>
+                            <li><strong>Compute statistics</strong>: mean, median, quartiles, and % cells expressing</li>
                         </ol>
 
-                        <h4>Normalization</h4>
-                        <p>Expression values are log-normalized (log1p of library-size normalized counts) to account for sequencing depth differences between cells.</p>
+                        <h4>scAtlas Organ Aggregation</h4>
+                        <p>scAtlas contains cell type expression computed separately for each organ. Display mode depends on your selection:</p>
+                        <ul>
+                            <li><strong>All Atlases / All Organs:</strong> Expression is aggregated across organs using <em>cell-weighted mean</em></li>
+                            <li><strong>Specific Organ:</strong> Shows expression computed only from cells of that organ</li>
+                        </ul>
+
+                        <h4>Box Plot Statistics</h4>
+                        <p>Box plots show the distribution of expression values across sampled cells:
+                           min, Q1 (25th percentile), median, Q3 (75th percentile), and max.</p>
 
                         <p><em>Best for:</em> Identifying gene-expressing cell populations, comparing expression levels across atlases.</p>
                     </div>
@@ -639,28 +680,73 @@ const GeneDetailPage = {
                         <tr>
                             <th>Cell Type</th>
                             <th>Atlas</th>
-                            <th>Mean Expression</th>
+                            <th>Mean (all)</th>
+                            <th>Mean (>0)</th>
                             <th>% Expressed</th>
                             <th>N Cells</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${expr.data.slice(0, 50).map(d => `
+                        ${displayData.slice(0, 50).map(d => {
+                            // Look up boxplot data for mean of expressing cells
+                            const bp = displayBoxplotData?.data?.find(
+                                b => b.cell_type === d.cell_type && b.atlas === d.atlas
+                            );
+                            const meanExpressing = bp?.mean;
+                            return `
                             <tr>
                                 <td>${d.cell_type}</td>
                                 <td><span class="atlas-badge">${d.atlas}</span></td>
                                 <td class="expression-value">${d.mean_expression.toFixed(4)}</td>
-                                <td>${d.pct_expressed.toFixed(1)}%</td>
+                                <td class="expression-value">${meanExpressing !== undefined ? meanExpressing.toFixed(4) : '-'}</td>
+                                <td>${(d.pct_expressed || 0).toFixed(1)}%</td>
                                 <td>${d.n_cells ? d.n_cells.toLocaleString() : '-'}</td>
                             </tr>
-                        `).join('')}
+                        `}).join('')}
                     </tbody>
                 </table>
             </div>
         `;
 
-        this._expressionData = expr.data;
-        this.createExpressionChart(expr.data, this.data.expression_boxplot);
+        this._displayExpressionData = displayData;
+        this.createExpressionChart(displayData, displayBoxplotData);
+    },
+
+    /**
+     * Aggregate expression data by base cell type (for scAtlas organ aggregation)
+     */
+    aggregateExpressionByBaseCellType(data) {
+        if (!data || data.length === 0) return [];
+
+        // Group by normalized base cell type
+        const groups = {};
+        data.forEach(d => {
+            const baseCT = this.normalizeCellTypeName(d.cell_type);
+            if (!groups[baseCT]) {
+                groups[baseCT] = { items: [], totalCells: 0 };
+            }
+            groups[baseCT].items.push(d);
+            groups[baseCT].totalCells += (d.n_cells || 0);
+        });
+
+        // Compute weighted mean for each group
+        return Object.entries(groups).map(([baseCT, group]) => {
+            const weightedMean = group.items.reduce((sum, d) => {
+                return sum + (d.mean_expression || 0) * (d.n_cells || 1);
+            }, 0) / Math.max(group.totalCells, 1);
+
+            const weightedPct = group.items.reduce((sum, d) => {
+                return sum + (d.pct_expressed || 0) * (d.n_cells || 1);
+            }, 0) / Math.max(group.totalCells, 1);
+
+            return {
+                cell_type: baseCT,
+                atlas: 'scAtlas',
+                mean_expression: weightedMean,
+                pct_expressed: weightedPct,
+                n_cells: group.totalCells,
+            };
+        });
     },
 
     createExpressionChart(data, boxplotData = null) {
@@ -698,11 +784,11 @@ const GeneDetailPage = {
             }
         }
 
-        // Fall back to bar chart
+        // Create dot plot visualization (mean expression + percent expressed)
         const atlasOrder = ['CIMA', 'Inflammation', 'scAtlas'];
         const atlases = atlasOrder.filter(a => data.some(d => d.atlas === a));
 
-        // Sort cell types based on atlas count
+        // Sort cell types by max expression across atlases
         let orderedCellTypes;
         if (atlases.length === 1) {
             // Single atlas: sort by mean expression (descending)
@@ -713,47 +799,86 @@ const GeneDetailPage = {
                 return (bData?.mean_expression || 0) - (aData?.mean_expression || 0);
             });
         } else {
-            // Multiple atlases: group by atlas, sort within each group
-            orderedCellTypes = [];
-            atlases.forEach(atlas => {
-                const atlasCellTypes = availableCellTypes
-                    .filter(ct => data.some(d => d.cell_type === ct && d.atlas === atlas))
-                    .sort((a, b) => {
-                        const aData = data.find(d => d.cell_type === a && d.atlas === atlas);
-                        const bData = data.find(d => d.cell_type === b && d.atlas === atlas);
-                        return (bData?.mean_expression || 0) - (aData?.mean_expression || 0);
-                    });
-                orderedCellTypes.push(...atlasCellTypes);
+            // Multiple atlases: sort by max expression across all atlases
+            orderedCellTypes = [...availableCellTypes].sort((a, b) => {
+                const aMax = Math.max(...data.filter(d => d.cell_type === a).map(d => d.mean_expression || 0));
+                const bMax = Math.max(...data.filter(d => d.cell_type === b).map(d => d.mean_expression || 0));
+                return bMax - aMax;
             });
-            orderedCellTypes = [...new Set(orderedCellTypes)];
         }
 
-        // Create horizontal grouped bar chart
+        // Limit to top 25 cell types for readability
+        orderedCellTypes = orderedCellTypes.slice(0, 25);
+
+        // Calculate max values for scaling
+        const maxExpr = Math.max(...data.map(d => d.mean_expression || 0));
+        const maxPct = Math.max(...data.map(d => d.pct_expressed || 0));
+
+        // Create dot plot traces - one per atlas
         const traces = [];
-        atlases.forEach(atlas => {
+        atlases.forEach((atlas, atlasIdx) => {
+            const atlasData = data.filter(d => d.atlas === atlas);
             const yValues = [];
             const xValues = [];
+            const sizes = [];
+            const colorValues = [];
+            const hoverTexts = [];
+
             orderedCellTypes.forEach(ct => {
-                const match = data.find(d => d.cell_type === ct && d.atlas === atlas);
-                yValues.push(ct);
-                xValues.push(match ? match.mean_expression : null);
+                const match = atlasData.find(d => d.cell_type === ct);
+                if (match) {
+                    yValues.push(ct);
+                    xValues.push(atlas);
+                    // Size based on percent expressed (min 5, max 30)
+                    const pctNorm = (match.pct_expressed || 0) / Math.max(maxPct, 1);
+                    sizes.push(5 + pctNorm * 25);
+                    // Color intensity based on expression
+                    colorValues.push(match.mean_expression || 0);
+                    hoverTexts.push(
+                        `<b>${ct}</b><br>` +
+                        `Atlas: ${atlas}<br>` +
+                        `Mean expr: ${(match.mean_expression || 0).toFixed(3)}<br>` +
+                        `% expressed: ${(match.pct_expressed || 0).toFixed(1)}%<br>` +
+                        `N cells: ${match.n_cells ? match.n_cells.toLocaleString() : 'N/A'}`
+                    );
+                }
             });
-            traces.push({
-                type: 'bar',
-                name: atlas,
-                x: xValues,
-                y: yValues,
-                orientation: 'h',
-                marker: { color: colors[atlas] || '#95a5a6' },
-                hovertemplate: '<b>%{y}</b><br>%{x:.3f}<extra>' + atlas + '</extra>',
-            });
+
+            if (yValues.length > 0) {
+                traces.push({
+                    type: 'scatter',
+                    mode: 'markers',
+                    name: atlas,
+                    x: xValues,
+                    y: yValues,
+                    marker: {
+                        size: sizes,
+                        color: colorValues,
+                        colorscale: atlas === 'CIMA' ? 'Blues' :
+                                   atlas === 'Inflammation' ? 'Reds' : 'Greens',
+                        cmin: 0,
+                        cmax: maxExpr,
+                        showscale: atlasIdx === 0,  // Only show colorbar for first atlas
+                        colorbar: atlasIdx === 0 ? {
+                            title: 'Mean Expr',
+                            x: 1.02,
+                            len: 0.5,
+                        } : undefined,
+                    },
+                    text: hoverTexts,
+                    hovertemplate: '%{text}<extra></extra>',
+                });
+            }
         });
 
         const layout = {
-            title: `${this.gene} Expression by Cell Type`,
+            title: {
+                text: `${this.gene} Expression by Cell Type`,
+                font: { size: 16 }
+            },
             xaxis: {
-                title: 'Mean Expression (log-normalized)',
-                zeroline: true,
+                title: 'Atlas',
+                tickangle: 0,
             },
             yaxis: {
                 title: '',
@@ -761,10 +886,18 @@ const GeneDetailPage = {
                 categoryorder: 'array',
                 categoryarray: [...orderedCellTypes].reverse(),
             },
-            height: Math.max(400, orderedCellTypes.length * 25),
-            margin: { l: 180, r: 50, t: 50, b: 50 },
-            barmode: 'group',
-            legend: { orientation: 'h', y: 1.1 },
+            height: Math.max(450, orderedCellTypes.length * 22),
+            margin: { l: 180, r: 100, t: 60, b: 60 },
+            showlegend: false,
+            annotations: [{
+                x: 0.5,
+                y: -0.12,
+                xref: 'paper',
+                yref: 'paper',
+                text: 'Dot size = % cells expressing | Color intensity = mean expression',
+                showarrow: false,
+                font: { size: 11, color: '#666' }
+            }],
         };
 
         Plotly.newPlot('expression-chart', traces, layout, { responsive: true });
@@ -847,14 +980,29 @@ const GeneDetailPage = {
                 medianValues.push(d.median);
                 minValues.push(d.min);
                 maxValues.push(d.max);
-                hoverTexts.push(
-                    `<b>${d.cell_type}</b><br>` +
+                // Build hover text with both mean values if available
+                let hoverText = `<b>${d.cell_type}</b><br>` +
                     `Atlas: ${atlas}<br>` +
                     `Median: ${d.median.toFixed(3)}<br>` +
                     `IQR: ${d.q1.toFixed(3)} - ${d.q3.toFixed(3)}<br>` +
-                    `Range: ${d.min.toFixed(3)} - ${d.max.toFixed(3)}<br>` +
-                    `n=${d.n}`
-                );
+                    `Range: ${d.min.toFixed(3)} - ${d.max.toFixed(3)}<br>`;
+
+                // Add mean values (expressing vs all)
+                if (d.mean !== undefined) {
+                    hoverText += `Mean (>0): ${d.mean.toFixed(3)}<br>`;
+                }
+                if (d.mean_all !== undefined) {
+                    hoverText += `Mean (all): ${d.mean_all.toFixed(3)}<br>`;
+                }
+
+                // Add cell counts
+                if (d.n_expressing !== undefined && d.n_total !== undefined) {
+                    hoverText += `Cells: ${d.n_expressing}/${d.n_total} (${d.pct_expressed || 0}%)`;
+                } else {
+                    hoverText += `n=${d.n}`;
+                }
+
+                hoverTexts.push(hoverText);
             });
 
             // Draw whiskers (min to max line)
@@ -937,32 +1085,113 @@ const GeneDetailPage = {
 
     filterExpressionByAtlas() {
         const atlas = document.getElementById('expr-atlas-filter').value;
+        const organFilter = document.getElementById('expr-organ-filter');
+
+        // Show/hide organ filter based on atlas selection
+        if (atlas === 'scAtlas' || atlas === 'scAtlas_Normal') {
+            organFilter.classList.remove('hidden');
+            // Populate organ options if not already done
+            if (organFilter.options.length <= 1) {
+                const scAtlasData = this._expressionData.filter(d =>
+                    d.atlas === 'scAtlas' || d.atlas === 'scAtlas_Normal');
+                const organs = [...new Set(scAtlasData.map(d => this.extractOrganFromCellType(d.cell_type)))].filter(Boolean).sort();
+                organs.forEach(organ => {
+                    organFilter.add(new Option(organ, organ));
+                });
+            }
+        } else {
+            organFilter.classList.add('hidden');
+            organFilter.value = 'all';
+        }
+
+        this._updateExpressionDisplay(atlas, organFilter.value);
+    },
+
+    filterExpressionByOrgan() {
+        const atlas = document.getElementById('expr-atlas-filter').value;
+        const organ = document.getElementById('expr-organ-filter').value;
+        this._updateExpressionDisplay(atlas, organ);
+    },
+
+    _updateExpressionDisplay(atlas, organ) {
         let filtered = this._expressionData;
-        let filteredBoxplot = this.data.expression_boxplot;
+        let boxplotData = this.data.expression_boxplot;
 
         if (atlas !== 'all') {
             filtered = filtered.filter(d => d.atlas === atlas);
-            if (filteredBoxplot && filteredBoxplot.data) {
-                filteredBoxplot = {
-                    ...filteredBoxplot,
-                    data: filteredBoxplot.data.filter(d => d.atlas === atlas),
+            if (boxplotData && boxplotData.data) {
+                boxplotData = {
+                    ...boxplotData,
+                    data: boxplotData.data.filter(d => d.atlas === atlas),
+                };
+            }
+
+            // If scAtlas and specific organ selected
+            if ((atlas === 'scAtlas' || atlas === 'scAtlas_Normal') && organ !== 'all') {
+                filtered = filtered.filter(d => {
+                    const cellOrgan = this.extractOrganFromCellType(d.cell_type);
+                    return cellOrgan === organ;
+                });
+                if (boxplotData && boxplotData.data) {
+                    boxplotData = {
+                        ...boxplotData,
+                        data: boxplotData.data.filter(d => {
+                            const cellOrgan = this.extractOrganFromCellType(d.cell_type);
+                            return cellOrgan === organ;
+                        }),
+                    };
+                }
+            } else if ((atlas === 'scAtlas' || atlas === 'scAtlas_Normal') && organ === 'all') {
+                // Aggregate by base cell type for all organs view
+                filtered = this.aggregateExpressionByBaseCellType(filtered);
+                if (boxplotData && boxplotData.data) {
+                    boxplotData = {
+                        ...boxplotData,
+                        data: this.aggregateBoxplotByBaseCellType(boxplotData.data),
+                    };
+                }
+            }
+        } else {
+            // All atlases - aggregate scAtlas
+            const scAtlasData = filtered.filter(d => d.atlas === 'scAtlas' || d.atlas === 'scAtlas_Normal');
+            const nonScAtlasData = filtered.filter(d => d.atlas !== 'scAtlas' && d.atlas !== 'scAtlas_Normal');
+            const scAtlasAggregated = this.aggregateExpressionByBaseCellType(scAtlasData);
+            filtered = [...nonScAtlasData, ...scAtlasAggregated];
+
+            if (boxplotData && boxplotData.data) {
+                const scAtlasBp = boxplotData.data.filter(d => d.atlas === 'scAtlas' || d.atlas === 'scAtlas_Normal');
+                const nonScAtlasBp = boxplotData.data.filter(d => d.atlas !== 'scAtlas' && d.atlas !== 'scAtlas_Normal');
+                const scAtlasBpAggregated = this.aggregateBoxplotByBaseCellType(scAtlasBp);
+                boxplotData = {
+                    ...boxplotData,
+                    data: [...nonScAtlasBp, ...scAtlasBpAggregated],
                 };
             }
         }
 
-        this.createExpressionChart(filtered, filteredBoxplot);
+        // Sort by expression
+        filtered.sort((a, b) => b.mean_expression - a.mean_expression);
+
+        this.createExpressionChart(filtered, boxplotData);
 
         const tbody = document.querySelector('#expression-table tbody');
         if (tbody) {
-            tbody.innerHTML = filtered.slice(0, 50).map(d => `
+            tbody.innerHTML = filtered.slice(0, 50).map(d => {
+                // Look up boxplot data for mean of expressing cells
+                const bp = boxplotData?.data?.find(
+                    b => b.cell_type === d.cell_type && b.atlas === d.atlas
+                );
+                const meanExpressing = bp?.mean;
+                return `
                 <tr>
                     <td>${d.cell_type}</td>
                     <td><span class="atlas-badge">${d.atlas}</span></td>
                     <td class="expression-value">${d.mean_expression.toFixed(4)}</td>
-                    <td>${d.pct_expressed.toFixed(1)}%</td>
+                    <td class="expression-value">${meanExpressing !== undefined ? meanExpressing.toFixed(4) : '-'}</td>
+                    <td>${(d.pct_expressed || 0).toFixed(1)}%</td>
                     <td>${d.n_cells ? d.n_cells.toLocaleString() : '-'}</td>
                 </tr>
-            `).join('');
+            `}).join('');
         }
     },
 
@@ -1268,17 +1497,35 @@ const GeneDetailPage = {
     },
 
     /**
-     * Extract organ from cell type name like "Macrophage (Spleen)" -> "Spleen"
+     * Extract organ from cell type name
+     * Handles both formats:
+     * - "Bladder: Macrophage C1QB" -> "Bladder" (scAtlas format)
+     * - "Macrophage (Spleen)" -> "Spleen" (parentheses format)
      */
     extractOrganFromCellType(cellType) {
-        const match = cellType.match(/\(([^)]+)\)$/);
-        return match ? match[1] : null;
+        // Check for "Organ: CellType" format first (scAtlas)
+        const colonMatch = cellType.match(/^([^:]+):\s+/);
+        if (colonMatch) {
+            return colonMatch[1].trim();
+        }
+        // Fall back to parentheses format
+        const parenMatch = cellType.match(/\(([^)]+)\)$/);
+        return parenMatch ? parenMatch[1] : null;
     },
 
     /**
-     * Extract base cell type from name like "Macrophage (Spleen)" -> "Macrophage"
+     * Extract base cell type from name
+     * Handles both formats:
+     * - "Bladder: Macrophage C1QB" -> "Macrophage C1QB" (scAtlas format)
+     * - "Macrophage (Spleen)" -> "Macrophage" (parentheses format)
      */
     extractBaseCellType(cellType) {
+        // Check for "Organ: CellType" format first (scAtlas)
+        const colonMatch = cellType.match(/^[^:]+:\s+(.+)$/);
+        if (colonMatch) {
+            return colonMatch[1].trim();
+        }
+        // Fall back to parentheses format
         return cellType.replace(/\s*\([^)]+\)$/, '');
     },
 
@@ -1725,20 +1972,23 @@ const GeneDetailPage = {
 
     async loadDiseasesTab(content) {
         try {
-            // Try CytoSig first, then SecAct
-            let response = await API.get(`/gene/${encodeURIComponent(this.gene)}/diseases`, {
-                signature_type: 'CytoSig',
-            });
+            // Load both CytoSig and SecAct data
+            const [cytosigResponse, secactResponse] = await Promise.all([
+                API.get(`/gene/${encodeURIComponent(this.gene)}/diseases`, { signature_type: 'CytoSig' }).catch(() => ({ data: [] })),
+                API.get(`/gene/${encodeURIComponent(this.gene)}/diseases`, { signature_type: 'SecAct' }).catch(() => ({ data: [] })),
+            ]);
 
-            if (!response.data || !response.data.length) {
-                response = await API.get(`/gene/${encodeURIComponent(this.gene)}/diseases`, {
-                    signature_type: 'SecAct',
-                });
-            }
+            const cytosigData = (cytosigResponse.data || []).map(d => ({ ...d, signature_type: 'CytoSig' }));
+            const secactData = (secactResponse.data || []).map(d => ({ ...d, signature_type: 'SecAct' }));
 
-            const data = response.data || [];
+            // Store for filtering
+            this._diseaseCytosigData = cytosigData;
+            this._diseaseSecactData = secactData;
 
-            if (!data.length) {
+            const hasCytosig = cytosigData.length > 0;
+            const hasSecact = secactData.length > 0;
+
+            if (!hasCytosig && !hasSecact) {
                 content.innerHTML = `
                     <div class="no-data-panel">
                         <h3>No Disease Data</h3>
@@ -1748,20 +1998,33 @@ const GeneDetailPage = {
                 return;
             }
 
+            // Default to CytoSig if available, else SecAct
+            const defaultType = hasCytosig ? 'CytoSig' : 'SecAct';
+            const defaultData = defaultType === 'CytoSig' ? cytosigData : secactData;
+
+            const nCytosigSig = cytosigData.filter(d => d.is_significant).length;
+            const nSecactSig = secactData.filter(d => d.is_significant).length;
+
             content.innerHTML = `
                 <div class="tab-header">
                     <h2>${this.gene} Disease Associations</h2>
                     <p>Differential activity (disease vs healthy) from the Inflammation Atlas</p>
                     <div class="stats-inline">
-                        <span><strong>${response.n_diseases}</strong> diseases</span>
-                        <span><strong>${response.n_significant}</strong> significant (FDR < 0.05)</span>
+                        <span><strong id="disease-count">${defaultData.length}</strong> diseases</span>
+                        <span><strong id="disease-sig-count">${defaultData.filter(d => d.is_significant).length}</strong> significant (FDR < 0.05)</span>
+                    </div>
+                    <div class="tab-filters">
+                        <select id="disease-sig-filter" onchange="GeneDetailPage.filterDiseasesBySignatureType()">
+                            ${hasCytosig ? `<option value="CytoSig"${defaultType === 'CytoSig' ? ' selected' : ''}>CytoSig${cytosigData.length ? ` (${nCytosigSig} sig)` : ''}</option>` : ''}
+                            ${hasSecact ? `<option value="SecAct"${defaultType === 'SecAct' ? ' selected' : ''}>SecAct${secactData.length ? ` (${nSecactSig} sig)` : ''}</option>` : ''}
+                        </select>
                     </div>
                 </div>
                 <div class="viz-container">
                     <div id="volcano-chart" class="chart-container"></div>
                 </div>
                 <div class="data-table-container">
-                    <table class="data-table">
+                    <table class="data-table" id="disease-table">
                         <thead>
                             <tr>
                                 <th>Disease</th>
@@ -1772,7 +2035,7 @@ const GeneDetailPage = {
                             </tr>
                         </thead>
                         <tbody>
-                            ${data.map(d => `
+                            ${defaultData.map(d => `
                                 <tr class="${d.is_significant ? 'significant' : ''}">
                                     <td>${d.disease}</td>
                                     <td>${d.disease_group}</td>
@@ -1787,7 +2050,7 @@ const GeneDetailPage = {
             `;
 
             // Create volcano plot
-            this.createVolcanoPlot(data);
+            this.createVolcanoPlot(defaultData);
 
         } catch (error) {
             content.innerHTML = `
@@ -1797,6 +2060,32 @@ const GeneDetailPage = {
                 </div>
             `;
         }
+    },
+
+    filterDiseasesBySignatureType() {
+        const sigType = document.getElementById('disease-sig-filter').value;
+        const data = sigType === 'CytoSig' ? this._diseaseCytosigData : this._diseaseSecactData;
+
+        // Update counts
+        document.getElementById('disease-count').textContent = data.length;
+        document.getElementById('disease-sig-count').textContent = data.filter(d => d.is_significant).length;
+
+        // Update table
+        const tbody = document.querySelector('#disease-table tbody');
+        if (tbody) {
+            tbody.innerHTML = data.map(d => `
+                <tr class="${d.is_significant ? 'significant' : ''}">
+                    <td>${d.disease}</td>
+                    <td>${d.disease_group}</td>
+                    <td class="${d.activity_diff >= 0 ? 'positive' : 'negative'}">${d.activity_diff.toFixed(4)}</td>
+                    <td>${d.pvalue < 0.001 ? d.pvalue.toExponential(2) : d.pvalue.toFixed(4)}</td>
+                    <td>${d.is_significant ? '&#10003;' : ''}</td>
+                </tr>
+            `).join('');
+        }
+
+        // Update volcano plot
+        this.createVolcanoPlot(data);
     },
 
     createVolcanoPlot(data) {
@@ -1852,33 +2141,67 @@ const GeneDetailPage = {
 
     async loadCorrelationsTab(content) {
         try {
-            const data = await API.get(`/gene/${encodeURIComponent(this.gene)}/correlations`, {
-                signature_type: this.data.has_cytosig ? 'CytoSig' : 'SecAct',
-            });
+            // Load both CytoSig and SecAct correlations
+            const [cytosigData, secactData] = await Promise.all([
+                API.get(`/gene/${encodeURIComponent(this.gene)}/correlations`, { signature_type: 'CytoSig' }).catch(() => ({})),
+                API.get(`/gene/${encodeURIComponent(this.gene)}/correlations`, { signature_type: 'SecAct' }).catch(() => ({})),
+            ]);
 
-            // Combine all correlations for visualization
-            const allCorrelations = [
-                ...(data.age || []).map(c => ({ ...c, category: 'Age' })),
-                ...(data.bmi || []).map(c => ({ ...c, category: 'BMI' })),
-                ...(data.biochemistry || []).map(c => ({ ...c, category: 'Biochemistry' })),
-                ...(data.metabolites || []).map(c => ({ ...c, category: 'Metabolites' })),
+            // Helper to combine correlations from a response
+            const combineCorrelations = (data, sigType) => [
+                ...(data.age || []).map(c => ({ ...c, category: 'Age', signature_type: sigType })),
+                ...(data.bmi || []).map(c => ({ ...c, category: 'BMI', signature_type: sigType })),
+                ...(data.biochemistry || []).map(c => ({ ...c, category: 'Biochemistry', signature_type: sigType })),
+                ...(data.metabolites || []).map(c => ({ ...c, category: 'Metabolites', signature_type: sigType })),
             ];
 
-            // Calculate significant count from actual data (handles both q_value and qvalue field names)
-            const totalSignificant = allCorrelations.filter(c => {
+            const cytosigCorrelations = combineCorrelations(cytosigData, 'CytoSig');
+            const secactCorrelations = combineCorrelations(secactData, 'SecAct');
+
+            // Store for filtering
+            this._corrCytosigData = cytosigCorrelations;
+            this._corrSecactData = secactCorrelations;
+
+            const hasCytosig = cytosigCorrelations.length > 0;
+            const hasSecact = secactCorrelations.length > 0;
+
+            if (!hasCytosig && !hasSecact) {
+                content.innerHTML = `
+                    <div class="no-data-panel">
+                        <h3>No Correlation Data</h3>
+                        <p>Correlation data is not available for <strong>${this.gene}</strong>.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Default to CytoSig if available
+            const defaultType = hasCytosig ? 'CytoSig' : 'SecAct';
+            const allCorrelations = defaultType === 'CytoSig' ? cytosigCorrelations : secactCorrelations;
+
+            // Calculate significant counts
+            const countSig = (data) => data.filter(c => {
                 const qval = c.q_value ?? c.qvalue;
                 return qval != null && qval < 0.05;
             }).length;
+
+            const nCytosigSig = countSig(cytosigCorrelations);
+            const nSecactSig = countSig(secactCorrelations);
+            const totalSignificant = countSig(allCorrelations);
 
             content.innerHTML = `
                 <div class="tab-header">
                     <h2>${this.gene} Correlations</h2>
                     <p>Correlations with clinical and molecular variables (Spearman rho, from CIMA atlas)</p>
                     <div class="stats-inline">
-                        <span><strong>${allCorrelations.length}</strong> total correlations</span>
-                        <span><strong>${totalSignificant}</strong> significant (FDR < 0.05)</span>
+                        <span><strong id="corr-total-count">${allCorrelations.length}</strong> total correlations</span>
+                        <span><strong id="corr-sig-count">${totalSignificant}</strong> significant (FDR < 0.05)</span>
                     </div>
                     <div class="tab-filters">
+                        <select id="corr-sig-type-filter" onchange="GeneDetailPage.filterCorrelationsBySignatureType()">
+                            ${hasCytosig ? `<option value="CytoSig"${defaultType === 'CytoSig' ? ' selected' : ''}>CytoSig${cytosigCorrelations.length ? ` (${nCytosigSig} sig)` : ''}</option>` : ''}
+                            ${hasSecact ? `<option value="SecAct"${defaultType === 'SecAct' ? ' selected' : ''}>SecAct${secactCorrelations.length ? ` (${nSecactSig} sig)` : ''}</option>` : ''}
+                        </select>
                         <select id="corr-category-filter" onchange="GeneDetailPage.filterCorrelationsByCategory()">
                             <option value="all">All Categories</option>
                             <option value="Age">Age</option>
@@ -1940,7 +2263,6 @@ const GeneDetailPage = {
                 </div>
             `;
 
-            this._correlationData = allCorrelations;
             this.createCorrelationChart(allCorrelations);
 
         } catch (error) {
@@ -2013,7 +2335,10 @@ const GeneDetailPage = {
         const category = document.getElementById('corr-category-filter').value;
         const sigOnly = document.getElementById('corr-sig-only').checked;
 
-        let filtered = this._correlationData;
+        // Get data based on signature type selection
+        const sigTypeFilter = document.getElementById('corr-sig-type-filter');
+        const sigType = sigTypeFilter ? sigTypeFilter.value : 'CytoSig';
+        let filtered = sigType === 'CytoSig' ? (this._corrCytosigData || []) : (this._corrSecactData || []);
 
         if (category !== 'all') {
             filtered = filtered.filter(c => c.category === category);
@@ -2025,6 +2350,14 @@ const GeneDetailPage = {
                 return qval != null && qval < 0.05;
             });
         }
+
+        // Update counts
+        const totalSig = filtered.filter(c => {
+            const qval = c.q_value ?? c.qvalue;
+            return qval != null && qval < 0.05;
+        }).length;
+        document.getElementById('corr-total-count').textContent = filtered.length;
+        document.getElementById('corr-sig-count').textContent = totalSig;
 
         this.createCorrelationChart(filtered);
 
@@ -2058,6 +2391,13 @@ const GeneDetailPage = {
                 `;
             }).join('');
         }
+    },
+
+    filterCorrelationsBySignatureType() {
+        // Reset category filter to 'all' when switching signature type
+        document.getElementById('corr-category-filter').value = 'all';
+        document.getElementById('corr-sig-only').checked = false;
+        this.filterCorrelationsByCategory();
     },
 };
 

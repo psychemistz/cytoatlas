@@ -20,6 +20,11 @@ from cytoatlas_pipeline.batch.multi_level_aggregator import (
     MultiLevelAggregator,
     aggregate_all_levels,
 )
+from cytoatlas_pipeline.batch.singlecell_activity import (
+    SingleCellActivityInference,
+    run_singlecell_activity,
+    load_signature_matrix,
+)
 
 __all__ = [
     # Config classes
@@ -34,4 +39,8 @@ __all__ = [
     # Multi-level aggregation (single pass)
     "MultiLevelAggregator",
     "aggregate_all_levels",
+    # Single-cell activity inference
+    "SingleCellActivityInference",
+    "run_singlecell_activity",
+    "load_signature_matrix",
 ]

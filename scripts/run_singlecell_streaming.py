@@ -20,6 +20,7 @@ import gc
 from pathlib import Path
 from datetime import datetime
 import numpy as np
+import pandas as pd
 import anndata as ad
 from scipy import sparse
 
@@ -121,10 +122,18 @@ def run_singlecell_streaming(
     adata = ad.read_h5ad(input_path, backed='r')
     log(f"  Shape: {adata.n_obs:,} cells × {adata.n_vars:,} genes")
 
-    # Match genes
+    # Match genes - handle Ensembl IDs by using symbol column if available
     expr_genes = [g.upper() for g in adata.var_names]
+    gene_source = "var_names"
+
+    # Check if var_names are Ensembl IDs (inflammation atlas uses these)
+    if expr_genes[0].startswith('ENSG') and 'symbol' in adata.var.columns:
+        log("  Detected Ensembl IDs, using 'symbol' column for gene matching")
+        expr_genes = [str(g).upper() if pd.notna(g) else '' for g in adata.var['symbol']]
+        gene_source = "symbol column"
+
     common_genes = [g for g in sig_genes if g in expr_genes]
-    log(f"  Matched genes: {len(common_genes)}")
+    log(f"  Matched genes: {len(common_genes)} (from {gene_source})")
 
     if len(common_genes) < 100:
         raise ValueError(f"Too few matched genes: {len(common_genes)}")
@@ -168,54 +177,91 @@ def run_singlecell_streaming(
     # Get cell names
     cell_names = list(adata.obs_names[:n_cells])
 
-    # Process in batches
+    # Process in batches with streaming directly to H5AD
     n_batches = (n_cells + batch_size - 1) // batch_size
-    log(f"Processing {n_batches} batches...")
+    n_features = len(feature_names)
+    log(f"Processing {n_batches} batches (streaming to H5AD)...")
 
-    all_zscore = []
-    all_pvalue = []
-    batch_times = []
-    start_time = time.time()
+    # Create AnnData-compatible H5AD file with pre-allocated arrays
+    import h5py
+    with h5py.File(output_path, 'w') as h5f:
+        # Create AnnData structure
+        h5f.attrs['encoding-type'] = 'anndata'
+        h5f.attrs['encoding-version'] = '0.1.0'
 
-    for batch_idx in range(n_batches):
-        batch_start = time.time()
+        # Pre-allocate X dataset (main data)
+        X_ds = h5f.create_dataset(
+            'X', shape=(n_cells, n_features), dtype='float32',
+            chunks=(min(batch_size, n_cells), n_features),
+            compression='gzip', compression_opts=4
+        )
 
-        start = batch_idx * batch_size
-        end = min(start + batch_size, n_cells)
+        # Create layers group with pvalue
+        layers = h5f.create_group('layers')
+        pvalue_ds = layers.create_dataset(
+            'pvalue', shape=(n_cells, n_features), dtype='float32',
+            chunks=(min(batch_size, n_cells), n_features),
+            compression='gzip', compression_opts=4
+        )
 
-        # Read batch from backed H5AD
-        X_batch = adata.X[start:end][:, expr_idx]
+        # Create obs (cell metadata)
+        obs = h5f.create_group('obs')
+        obs.attrs['_index'] = '_index'
+        obs.attrs['encoding-type'] = 'dataframe'
+        obs.attrs['encoding-version'] = '0.2.0'
+        obs.attrs['column-order'] = []
+        obs.create_dataset('_index', data=np.array(cell_names, dtype='S'))
 
-        if sparse.issparse(X_batch):
-            X_dense = X_batch.toarray()
-        else:
-            X_dense = np.asarray(X_batch)
+        # Create var (feature metadata)
+        var = h5f.create_group('var')
+        var.attrs['_index'] = '_index'
+        var.attrs['encoding-type'] = 'dataframe'
+        var.attrs['encoding-version'] = '0.2.0'
+        var.attrs['column-order'] = []
+        var.create_dataset('_index', data=np.array(feature_names, dtype='S'))
 
-        # Transpose: (n_genes, batch_size)
-        Y_batch = X_dense.T.astype(np.float64)
+        batch_times = []
+        start_time = time.time()
 
-        # Process batch
-        if use_gpu:
-            result = _process_batch_cupy(T_gpu, Y_batch, inv_perm_table, n_rand)
-        else:
-            from secactpy.batch import _process_batch_numpy
-            T_np = _compute_T_numpy(X, lambda_) if batch_idx == 0 else T
-            result = _process_batch_numpy(T_np, Y_batch, inv_perm_table, n_rand)
+        for batch_idx in range(n_batches):
+            batch_start = time.time()
 
-        # Store results (transpose to cells × features)
-        all_zscore.append(result['zscore'].T)
-        all_pvalue.append(result['pvalue'].T)
+            start = batch_idx * batch_size
+            end = min(start + batch_size, n_cells)
 
-        batch_time = time.time() - batch_start
-        batch_times.append(batch_time)
+            # Read batch from backed H5AD
+            X_batch = adata.X[start:end][:, expr_idx]
 
-        if batch_idx % 10 == 0 or batch_idx == n_batches - 1:
-            avg_time = np.mean(batch_times[-10:])
-            eta = avg_time * (n_batches - batch_idx - 1)
-            log(f"  Batch {batch_idx+1}/{n_batches} ({batch_time:.1f}s, ETA: {eta/60:.1f}min)")
+            if sparse.issparse(X_batch):
+                X_dense = X_batch.toarray()
+            else:
+                X_dense = np.asarray(X_batch)
 
-        del X_batch, X_dense, Y_batch, result
-        gc.collect()
+            # Transpose: (n_genes, batch_size)
+            Y_batch = X_dense.T.astype(np.float64)
+
+            # Process batch
+            if use_gpu:
+                result = _process_batch_cupy(T_gpu, Y_batch, inv_perm_table, n_rand)
+            else:
+                from secactpy.batch import _process_batch_numpy
+                T_np = _compute_T_numpy(X, lambda_) if batch_idx == 0 else T
+                result = _process_batch_numpy(T_np, Y_batch, inv_perm_table, n_rand)
+
+            # Stream results directly to H5AD (transpose to cells × features)
+            X_ds[start:end] = result['zscore'].T.astype(np.float32)
+            pvalue_ds[start:end] = result['pvalue'].T.astype(np.float32)
+
+            batch_time = time.time() - batch_start
+            batch_times.append(batch_time)
+
+            if batch_idx % 10 == 0 or batch_idx == n_batches - 1:
+                avg_time = np.mean(batch_times[-10:])
+                eta = avg_time * (n_batches - batch_idx - 1)
+                log(f"  Batch {batch_idx+1}/{n_batches} ({batch_time:.1f}s, ETA: {eta/60:.1f}min)")
+
+            del X_batch, X_dense, Y_batch, result
+            gc.collect()
 
     # Cleanup GPU
     if use_gpu:
@@ -224,24 +270,6 @@ def run_singlecell_streaming(
 
     # Close backed file
     adata.file.close()
-
-    # Concatenate results
-    log("Concatenating results...")
-    zscore_matrix = np.vstack(all_zscore)
-    pvalue_matrix = np.vstack(all_pvalue)
-
-    # Create output AnnData
-    log("Saving results...")
-    adata_out = ad.AnnData(
-        X=zscore_matrix,
-        obs={'cell_id': cell_names},
-        var={'feature_name': feature_names},
-        layers={'pvalue': pvalue_matrix},
-    )
-    adata_out.obs_names = cell_names
-    adata_out.var_names = feature_names
-
-    adata_out.write_h5ad(output_path)
 
     total_time = time.time() - start_time
     file_size = output_path.stat().st_size / 1e6

@@ -1065,9 +1065,9 @@ class GeneService(BaseService):
                             if r.get("signature_type") != data_type:
                                 continue
 
-                        # Normalize atlas name to match activity data naming
+                        # Keep atlas name as-is for expression, normalize only for activity
                         atlas = r.get("atlas")
-                        if atlas in ("scAtlas_Normal", "scAtlas_Cancer"):
+                        if data_type != "expression" and atlas in ("scAtlas_Normal", "scAtlas_Cancer"):
                             atlas = "scAtlas"
 
                         results.append(BoxPlotStats(
@@ -1101,9 +1101,9 @@ class GeneService(BaseService):
                     if data_type != "expression" and r.get("signature_type") != data_type:
                         continue
 
-                    # Normalize atlas name to match activity data naming
+                    # Keep atlas name as-is for expression, normalize only for activity
                     atlas = r.get("atlas")
-                    if atlas in ("scAtlas_Normal", "scAtlas_Cancer"):
+                    if data_type != "expression" and atlas in ("scAtlas_Normal", "scAtlas_Cancer"):
                         atlas = "scAtlas"
 
                     results.append(BoxPlotStats(
