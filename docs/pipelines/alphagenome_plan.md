@@ -300,19 +300,20 @@ Variants with concordant effects across CIMA and DICE (10,394 unique variants ma
 
 ## Next Steps
 
-1. **Wait for Stage 3 completion** (~1-2 days remaining)
+1. **Report direct CIMA-DICE validation** as primary result (83.5% concordance, r=0.685)
 
-2. **Re-run Stage 4/5 on complete data**:
-   ```bash
-   python scripts/08_alphagenome_stage4_interpret.py
-   python scripts/08_alphagenome_stage5_validate.py
+2. **Use eQTL-based prioritization** instead of AlphaGenome:
+   ```python
+   # Prioritize by significance (89.2% concordance)
+   prioritized = cima_eqtls.nsmallest(5000, 'pval_nominal')
+
+   # OR by effect size (89.9% concordance)
+   prioritized = cima_eqtls.nlargest(5000, 'abs_beta')
    ```
 
-3. **Report direct CIMA-DICE validation** as primary result (83.5% concordance, r=0.685)
+3. **Consider canceling AlphaGenome jobs** - The running jobs (10659620, 10735825) are not providing value for this task
 
-4. **Use AlphaGenome for prioritization only**:
-   - Select top variants by predicted regulatory impact for functional follow-up
-   - Do NOT claim AlphaGenome "validates" eQTLs (validation comes from DICE replication)
+4. **Alternative use for AlphaGenome**: Apply to GWAS variants lacking eQTL data to predict regulatory effects
 
 5. **Consider additional validation**:
    - eQTLGen (31K blood samples, largest eQTL meta-analysis)
@@ -330,17 +331,62 @@ Variants with concordant effects across CIMA and DICE (10,394 unique variants ma
 
 This is the primary validation result demonstrating that CIMA single-cell eQTLs replicate in independent cell-type-specific data.
 
-### AlphaGenome Role: Prioritization, Not Validation
+### Critical Assessment: AlphaGenome Was Not the Right Tool for This Task
 
-| AlphaGenome Purpose | Status |
-|---------------------|--------|
-| Prioritize variants by predicted regulatory effect | ✅ Useful |
-| Validate eQTLs | ❌ Not useful (direct comparison is better) |
-| Annotate regulatory mechanisms | ❌ Not possible (no chromatin tracks) |
+#### Prioritization Strategy Comparison
+
+| Strategy | N | DICE Concordance |
+|----------|---|------------------|
+| Top by \|eQTL beta\| | 5,000 | **89.9%** |
+| Top by eQTL p-value | 5,000 | **89.2%** |
+| All variants | 19,655 | 82.2% |
+| Random sample | 5,000 | 82.5% |
+| **AlphaGenome-filtered** | 4,495 | **75.1%** |
+
+**AlphaGenome filtering performs WORST** - even worse than random sampling.
+
+#### What Went Wrong
+
+The fundamental issue: **AlphaGenome was used to prioritize variants that already have measured effects.**
+
+| What was done | What AlphaGenome is designed for |
+|---------------|----------------------------------|
+| Prioritize **known** eQTLs | Predict effects of **unknown** variants |
+| Variants with **measured** betas | Variants with **no** effect data |
+| Improve replicability | Identify causal mechanisms |
+
+Since CIMA eQTLs already have measured effect sizes (beta), using eQTL p-value or beta for prioritization is more effective than AlphaGenome predictions.
+
+#### When AlphaGenome WOULD Be Useful
+
+| Use Case | Input | AlphaGenome Role |
+|----------|-------|------------------|
+| GWAS fine-mapping | GWAS variants (no eQTL data) | Predict which are regulatory |
+| Variant interpretation | Single variant of interest | Predict mechanism |
+| Cross-tissue prediction | eQTL in tissue A | Predict effect in tissue B |
+| Novel variant prioritization | Rare/novel variants | Predict regulatory potential |
+
+### Recommendations
+
+1. **For this project**: Use eQTL p-value or beta for prioritization (89-90% concordance) instead of AlphaGenome (75%)
+
+2. **Report direct validation**: CIMA-DICE concordance (83.5%) is the main result
+
+3. **AlphaGenome adds value when**: You have variants with unknown effects and want to predict which are regulatory
+
+4. **Better prioritization approach**:
+   ```python
+   # Use eQTL data directly (89-90% concordance)
+   prioritized = cima_eqtls.nsmallest(5000, 'pval_nominal')
+   # OR
+   prioritized = cima_eqtls.nlargest(5000, 'abs_beta')
+
+   # NOT: AlphaGenome filtering (75% concordance)
+   ```
 
 ### Summary
 
 1. **CIMA eQTLs are validated** by direct comparison with DICE (83.5% concordance)
-2. **AlphaGenome adds prioritization**, not validation - use for selecting variants for follow-up
-3. **1,585 AlphaGenome-prioritized variants** available for functional studies
-4. **GTEx validation is circular** - AlphaGenome was trained on GTEx data
+2. **AlphaGenome was not the right tool** for this task - naive approaches perform better
+3. **Use eQTL statistics directly** for prioritization (p-value or beta)
+4. **AlphaGenome is useful for** predicting effects of variants WITHOUT prior eQTL data
