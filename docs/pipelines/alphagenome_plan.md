@@ -257,6 +257,30 @@ results/alphagenome/
 
 **Implication**: AlphaGenome predictions are limited to RNA expression changes. The 3 GTEx RNA-seq tracks returned are the same data used to train the model, creating potential circularity in GTEx validation.
 
+### AlphaGenome Filtering Does NOT Improve GTEx Concordance
+
+Despite being trained on GTEx data, AlphaGenome filtering **reduces** concordance with GTEx:
+
+| Comparison | Concordance |
+|------------|-------------|
+| Direct CIMA vs GTEx | **68.9%** |
+| AlphaGenome-filtered CIMA vs GTEx | **64.7%** |
+| Difference | **-4.2%** (worse) |
+
+**Concordance by AlphaGenome impact quartile**:
+
+| Impact Quartile | Concordance |
+|-----------------|-------------|
+| Q1 (low) | 65.6% |
+| Q2 | 63.8% |
+| Q3 | 63.9% |
+| Q4 (high) | 65.6% |
+
+- Point-biserial correlation: r = 0.034, p = 0.14 (not significant)
+- Higher impact scores do NOT predict better GTEx concordance
+
+**Why this happens**: AlphaGenome optimizes for **predicted effect magnitude**, not **cross-study replicability**. Variants with large predicted effects may be more cell-type-specific or context-dependent, making them less likely to replicate across datasets.
+
 ### Validation Interpretation
 
 1. **Direct CIMA-DICE concordance (83.5%)**: Strong independent validation - the primary result for publication
