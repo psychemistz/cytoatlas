@@ -6,7 +6,7 @@
 #SBATCH --partition=gpu
 #SBATCH --output=logs/validation/scatlas_act_%A_%a.out
 #SBATCH --error=logs/validation/scatlas_act_%A_%a.err
-#SBATCH --array=0-5
+#SBATCH --array=0-3
 
 # =============================================================================
 # scAtlas Activity Inference
@@ -14,12 +14,10 @@
 # Array job: processes both datasets × levels with all signatures
 #
 # Config mapping:
-#   0: normal organ_celltype
-#   1: normal celltype
-#   2: normal organ
+#   0: normal celltype
+#   1: normal organ_celltype
+#   2: cancer celltype
 #   3: cancer organ_celltype
-#   4: cancer celltype
-#   5: cancer organ
 #
 # Usage:
 #   sbatch scatlas_activity.sh
@@ -28,9 +26,9 @@
 
 set -e
 
-# Config mapping
-DATASETS=("normal" "normal" "normal" "cancer" "cancer" "cancer")
-LEVELS=("organ_celltype" "celltype" "organ" "organ_celltype" "celltype" "organ")
+# Config mapping (only existing levels)
+DATASETS=("normal" "normal" "cancer" "cancer")
+LEVELS=("celltype" "organ_celltype" "celltype" "organ_celltype")
 
 DATASET="${DATASETS[$SLURM_ARRAY_TASK_ID]}"
 LEVEL="${LEVELS[$SLURM_ARRAY_TASK_ID]}"
