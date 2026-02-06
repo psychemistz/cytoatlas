@@ -2495,65 +2495,122 @@
             <p>Validation of activity predictions by correlating inferred activity scores with actual gene expression of signature genes. This demonstrates that predicted activities reflect underlying biology.</p>
 
             <div class="tabs">
-                <button class="tab active" data-tab="val-atlas">Atlas Level</button>
-                <button class="tab" data-tab="val-pseudobulk">Pseudobulk Level</button>
+                <button class="tab active" data-tab="val-donor">Donor Level</button>
+                <button class="tab" data-tab="val-celltype">Cell Type Stratified</button>
                 <button class="tab" data-tab="val-singlecell">Single-Cell Level</button>
                 <button class="tab" data-tab="val-summary">Summary</button>
             </div>
 
-            <!-- Pseudobulk Level Validation -->
-            <div class="tab-content" id="tab-val-pseudobulk">
-                <h3>Pseudobulk Level Validation</h3>
-                <p>Correlation between mean signature gene expression and predicted activity per sample. Pseudobulk samples are created by aggregating cells within each sample × cell type combination.</p>
+            <!-- Donor Level Validation -->
+            <div class="tab-content active" id="tab-val-donor">
+                <h3>Donor Level Validation</h3>
+                <p>Donor-level validation: correlate gene expression with predicted activity across donors, pooling all cell types. Each point represents one signature target.</p>
 
                 <div class="filter-bar">
                     <label>Atlas:
-                        <select id="val-pb-atlas">
+                        <select id="val-donor-atlas">
                             <option value="cima">CIMA</option>
-                            <option value="inflammation">Inflammation</option>
-                            <option value="scatlas">scAtlas</option>
+                            <option value="inflammation_main">Inflammation Main</option>
+                            <option value="inflammation_val">Inflammation Val</option>
+                            <option value="inflammation_ext">Inflammation Ext</option>
+                            <option value="scatlas_normal">scAtlas Normal</option>
+                            <option value="scatlas_cancer">scAtlas Cancer</option>
                         </select>
                     </label>
                     <label>Signature Type:
-                        <select id="val-pb-sigtype">
-                            <option value="cytosig">CytoSig (44 cytokines)</option>
-                            <option value="lincytosig">LinCytoSig (cell-type-specific)</option>
-                            <option value="secact">SecAct (1,249 proteins)</option>
-                        </select>
-                    </label>
-                    <label>Signature:
-                        <select id="val-pb-signature">
-                            <option value="all">All Signatures</option>
-                        </select>
-                    </label>
-                    <label>Cell Type:
-                        <select id="val-pb-celltype">
-                            <option value="all">All Cell Types</option>
+                        <select id="val-donor-sigtype">
+                            <option value="cytosig">CytoSig</option>
+                            <option value="lincytosig">LinCytoSig</option>
+                            <option value="secact">SecAct</option>
                         </select>
                     </label>
                     <label style="position: relative;">
-                        <input type="text" id="val-pb-search" placeholder="Search signature..." style="width: 150px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <input type="text" id="val-donor-search" placeholder="Search target..." style="width: 150px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;">
                     </label>
                 </div>
 
                 <div class="panel-grid">
                     <div class="panel">
-                        <div class="viz-title">Expression vs Activity Correlation</div>
-                        <div class="viz-subtitle">Each point represents a pseudobulk sample</div>
-                        <div id="val-pb-scatter" class="loading" style="height: 400px;">Loading...</div>
+                        <div class="viz-title">Correlation Distribution</div>
+                        <div class="viz-subtitle">Histogram of Spearman ρ across all targets</div>
+                        <div id="val-donor-histogram" class="loading" style="height: 400px;">Loading...</div>
                     </div>
                     <div class="panel">
-                        <div class="viz-title">Correlation Distribution</div>
-                        <div class="viz-subtitle">Distribution of Pearson r across all signatures</div>
-                        <div id="val-pb-distribution" class="loading" style="height: 400px;">Loading...</div>
+                        <div class="viz-title">Significance Overview</div>
+                        <div class="viz-subtitle">Median ρ by signature type for selected atlas</div>
+                        <div id="val-donor-overview" class="loading" style="height: 400px;">Loading...</div>
                     </div>
                 </div>
 
                 <div class="panel-grid">
-                    <div class="panel" style="grid-column: span 2;">
-                        <div class="viz-title">Per-Signature Correlations (Sorted)</div>
-                        <div class="viz-subtitle">Pearson r between expression and activity, sorted from highest to lowest</div>
-                        <div id="val-pb-heatmap" class="loading" style="height: 300px;">Loading...</div>
+                    <div class="panel">
+                        <div class="viz-title">Per-Target Ranking</div>
+                        <div class="viz-subtitle">Top 30 targets by |ρ|, colored by direction</div>
+                        <div id="val-donor-ranking" class="loading" style="height: 500px;">Loading...</div>
+                    </div>
+                    <div class="panel">
+                        <div class="viz-title">Expression vs Activity Scatter</div>
+                        <div class="viz-subtitle">Mean expression vs mean activity per target (donor level)</div>
+                        <div id="val-donor-scatter" class="loading" style="height: 500px;">Loading...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cell Type Stratified Validation -->
+            <div class="tab-content" id="tab-val-celltype">
+                <h3>Cell Type Stratified Validation</h3>
+                <p>How expression-activity correlations vary across cell types at donor × cell-type aggregation levels.</p>
+
+                <div class="filter-bar">
+                    <label>Atlas:
+                        <select id="val-ct-atlas">
+                            <option value="cima">CIMA</option>
+                            <option value="inflammation_main">Inflammation Main</option>
+                            <option value="inflammation_val">Inflammation Val</option>
+                            <option value="inflammation_ext">Inflammation Ext</option>
+                            <option value="scatlas_normal">scAtlas Normal</option>
+                            <option value="scatlas_cancer">scAtlas Cancer</option>
+                        </select>
+                    </label>
+                    <label>Level:
+                        <select id="val-ct-level">
+                        </select>
+                    </label>
+                    <label>Signature Type:
+                        <select id="val-ct-sigtype">
+                            <option value="cytosig">CytoSig</option>
+                            <option value="lincytosig">LinCytoSig</option>
+                            <option value="secact">SecAct</option>
+                        </select>
+                    </label>
+                    <label style="position: relative;">
+                        <input type="text" id="val-ct-search" placeholder="Search cell type..." style="width: 150px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </label>
+                </div>
+
+                <div class="panel-grid">
+                    <div class="panel">
+                        <div class="viz-title">Per-Cell-Type Median Correlation</div>
+                        <div class="viz-subtitle">Median ρ per cell type, sorted descending</div>
+                        <div id="val-ct-bars" class="loading" style="height: 400px;">Loading...</div>
+                    </div>
+                    <div class="panel">
+                        <div class="viz-title">Aggregation Level Comparison</div>
+                        <div class="viz-subtitle">Median ρ across aggregation levels for selected atlas</div>
+                        <div id="val-ct-levels" class="loading" style="height: 400px;">Loading...</div>
+                    </div>
+                </div>
+
+                <div class="panel-grid">
+                    <div class="panel">
+                        <div class="viz-title">Cell Type × Target Heatmap</div>
+                        <div class="viz-subtitle">Cell types (rows) × top 20 targets (columns), colored by ρ</div>
+                        <div id="val-ct-heatmap" class="loading" style="height: 500px;">Loading...</div>
+                    </div>
+                    <div class="panel">
+                        <div class="viz-title">Cell Type Correlation Scatter</div>
+                        <div class="viz-subtitle">% significant vs median ρ per cell type</div>
+                        <div id="val-ct-scatter" class="loading" style="height: 500px;">Loading...</div>
                     </div>
                 </div>
             </div>
@@ -2561,7 +2618,7 @@
             <!-- Single-Cell Level Validation -->
             <div class="tab-content" id="tab-val-singlecell">
                 <h3>Single-Cell Level Validation</h3>
-                <p>Correlation between signature gene expression and predicted activity at the individual cell level. Uses a random sample of cells for computational efficiency.</p>
+                <p>Single-cell expression vs predicted activity, comparing all cells vs cells expressing the cytokine gene (counts > 0).</p>
 
                 <div class="filter-bar">
                     <label>Atlas:
@@ -2573,14 +2630,21 @@
                     </label>
                     <label>Signature Type:
                         <select id="val-sc-sigtype">
-                            <option value="cytosig">CytoSig (44 cytokines)</option>
-                            <option value="lincytosig">LinCytoSig (cell-type-specific)</option>
-                            <option value="secact">SecAct (1,249 proteins)</option>
+                            <option value="CytoSig">CytoSig</option>
+                            <option value="LinCytoSig">LinCytoSig</option>
+                            <option value="SecAct">SecAct</option>
                         </select>
                     </label>
                     <label>Signature/Gene:
                         <select id="val-sc-signature">
-                            <option value="IFNG">IFNG</option>
+                            <option value="">-- Select --</option>
+                        </select>
+                    </label>
+                    <label>Cell Filter:
+                        <select id="val-sc-cellfilter">
+                            <option value="all">All Cells</option>
+                            <option value="expressing">Expressing Only (counts > 0)</option>
+                            <option value="non_expressing">Non-Expressing Only</option>
                         </select>
                     </label>
                     <label style="position: relative;">
@@ -2590,74 +2654,27 @@
 
                 <div class="panel-grid">
                     <div class="panel">
-                        <div class="viz-title">Single-Cell Expression vs Activity</div>
-                        <div class="viz-subtitle">Each point represents an individual cell</div>
+                        <div class="viz-title">Expression vs Activity Scatter</div>
+                        <div class="viz-subtitle">Each point = individual cell, colored by expressing status</div>
                         <div id="val-sc-scatter" class="loading" style="height: 400px;">Loading...</div>
                     </div>
                     <div class="panel">
-                        <div class="viz-title">Cell Type Distribution</div>
-                        <div class="viz-subtitle">Correlation by cell type</div>
-                        <div id="val-sc-celltype" class="loading" style="height: 400px;">Loading...</div>
+                        <div class="viz-title">Expressing vs Non-Expressing Activity</div>
+                        <div class="viz-subtitle">Mean activity comparison with fold change and p-value</div>
+                        <div id="val-sc-comparison" class="loading" style="height: 400px;">Loading...</div>
                     </div>
-                </div>
-
-                <div class="panel-grid">
-                    <div class="panel" style="grid-column: span 2;">
-                        <div class="viz-title">Correlation Summary</div>
-                        <div class="viz-subtitle">Mean correlation across signatures by cell type</div>
-                        <div id="val-sc-summary" class="loading" style="height: 300px;">Loading...</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Atlas Level Validation -->
-            <div class="tab-content active" id="tab-val-atlas">
-                <h3>Atlas Level Validation</h3>
-                <p>Cell type-aggregated correlation: one data point per cell type. Compares mean expression of signature genes with mean activity across all cells of each cell type.</p>
-
-                <div class="filter-bar">
-                    <label>Atlas:
-                        <select id="val-atlas-atlas">
-                            <option value="cima">CIMA</option>
-                            <option value="inflammation">Inflammation</option>
-                            <option value="scatlas">scAtlas</option>
-                        </select>
-                    </label>
-                    <label>Signature Type:
-                        <select id="val-atlas-sigtype">
-                            <option value="cytosig">CytoSig (44 cytokines)</option>
-                            <option value="lincytosig">LinCytoSig (cell-type-specific)</option>
-                            <option value="secact">SecAct (1,249 proteins)</option>
-                        </select>
-                    </label>
-                    <label>Signature:
-                        <select id="val-atlas-signature">
-                            <option value="all">All Signatures</option>
-                        </select>
-                    </label>
-                    <label style="position: relative;">
-                        <input type="text" id="val-atlas-search" placeholder="Search signature..." style="width: 150px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;">
-                    </label>
                 </div>
 
                 <div class="panel-grid">
                     <div class="panel">
-                        <div class="viz-title">Expression vs Activity Correlation</div>
-                        <div class="viz-subtitle">Each point = cell type mean (REAL DATA)</div>
-                        <div id="val-atlas-scatter" class="loading" style="height: 400px;">Loading...</div>
+                        <div class="viz-title">Expressing Fraction vs Activity Fold Change</div>
+                        <div class="viz-subtitle">Each point = one signature; identifies signatures where expression drives activity</div>
+                        <div id="val-sc-overview" class="loading" style="height: 400px;">Loading...</div>
                     </div>
                     <div class="panel">
-                        <div class="viz-title">Signature Correlation Ranking</div>
-                        <div class="viz-subtitle">Signatures ranked by cell type correlation (sorted high → low)</div>
-                        <div id="val-atlas-ranking" class="loading" style="height: 400px;">Loading...</div>
-                    </div>
-                </div>
-
-                <div class="panel-grid">
-                    <div class="panel" style="grid-column: span 2;">
-                        <div class="viz-title">Cross-Atlas Cell Type Correlation</div>
-                        <div class="viz-subtitle">Correlation by cell type across all three atlases</div>
-                        <div id="val-atlas-heatmap" class="loading" style="height: 350px;">Loading...</div>
+                        <div class="viz-title">Activity Distribution by Expression Status</div>
+                        <div class="viz-subtitle">Box plot of activity scores for expressing vs non-expressing cells</div>
+                        <div id="val-sc-boxplot" class="loading" style="height: 400px;">Loading...</div>
                     </div>
                 </div>
             </div>
@@ -2669,34 +2686,36 @@
 
                 <div class="panel-grid">
                     <div class="panel">
-                        <div class="viz-title">Mean Correlation by Signature Type</div>
-                        <div class="viz-subtitle">Comparison of CytoSig, LinCytoSig, and SecAct</div>
+                        <div class="viz-title">Median Correlation by Signature Type</div>
+                        <div class="viz-subtitle">CytoSig vs LinCytoSig vs SecAct (donor-only level)</div>
                         <div id="val-summary-sigtype" class="loading" style="height: 350px;">Loading...</div>
                     </div>
                     <div class="panel">
-                        <div class="viz-title">Mean Correlation by Atlas</div>
-                        <div class="viz-subtitle">Comparison across CIMA, Inflammation, and scAtlas</div>
+                        <div class="viz-title">Median Correlation by Atlas</div>
+                        <div class="viz-subtitle">Comparison across all atlas/cohort combinations</div>
                         <div id="val-summary-atlas" class="loading" style="height: 350px;">Loading...</div>
                     </div>
                 </div>
 
                 <div class="panel-grid">
-                    <div class="panel" style="grid-column: span 2;">
+                    <div class="panel">
                         <div class="viz-title">Validation Level Comparison</div>
-                        <div class="viz-subtitle">Correlation strength at pseudobulk, single-cell, and atlas levels</div>
-                        <div id="val-summary-levels" class="loading" style="height: 300px;">Loading...</div>
+                        <div class="viz-subtitle">How cell-type stratification affects correlation strength</div>
+                        <div id="val-summary-levels" class="loading" style="height: 350px;">Loading...</div>
+                    </div>
+                    <div class="panel">
+                        <div class="viz-title">% Significant vs Median ρ</div>
+                        <div class="viz-subtitle">Scatter of % significant vs median correlation per atlas/level</div>
+                        <div id="val-summary-scatter" class="loading" style="height: 350px;">Loading...</div>
                     </div>
                 </div>
 
                 <div class="panel-grid">
                     <div class="panel" style="grid-column: span 2;">
                         <h4>Key Findings</h4>
-                        <div id="val-summary-findings" class="loading">
+                        <div id="val-summary-findings">
                             <ul>
-                                <li><strong>Pseudobulk Level:</strong> Highest correlations due to noise reduction from cell aggregation</li>
-                                <li><strong>Single-Cell Level:</strong> Lower but significant correlations reflecting cell-to-cell variability</li>
-                                <li><strong>Atlas Level:</strong> Cell type-specific patterns reveal biological validity</li>
-                                <li><strong>LinCytoSig:</strong> Cell-type-specific signatures show improved correlation for lineage-appropriate cytokines</li>
+                                <li><strong>Donor Level:</strong> Loading...</li>
                             </ul>
                         </div>
                     </div>
@@ -3092,8 +3111,8 @@
                 updateMetaAnalysis();
             } else if (section === 'atlas-validation') {
                 initValidationSection();
-                updateValidationAtlas();
-                updateValidationPseudobulk();
+                updateValidationDonor();
+                updateValidationCelltype();
                 updateValidationSingleCell();
                 updateValidationSummary();
             }
@@ -11713,887 +11732,500 @@
         // ATLAS VALIDATION SECTION
         // ========================================
 
-        // Atlas Validation state
+        // Validation state
         const validationState = {
-            data: null,
-            loaded: false,
-            rawData: {},  // Store raw JSON per atlas (pseudobulk/singlecell validation)
-            atlasData: {}  // Store atlas-level validation (target gene expr vs activity)
+            bulkData: null,       // bulk_donor_correlations.json
+            scData: {},           // validation/{atlas}_validation.json → singlecell_validations
+            bulkLoaded: false,
+            scLoaded: {}
         };
 
-        // Load validation data from actual JSON files
-        async function loadValidationData() {
-            if (validationState.loaded) return validationState.data;
-
-            const atlases = ['cima', 'inflammation', 'scatlas'];
-
-            // Try to load actual validation JSON files
-            for (const atlas of atlases) {
-                try {
-                    const response = await fetch(`data/validation/${atlas}_validation.json`);
-                    if (response.ok) {
-                        validationState.rawData[atlas] = await response.json();
-                    }
-                } catch (e) {
-                    console.log(`Validation data for ${atlas} not available:`, e);
+        // Load bulk donor correlation data
+        async function loadBulkValidationData() {
+            if (validationState.bulkLoaded) return validationState.bulkData;
+            try {
+                const response = await fetch('data/bulk_donor_correlations.json');
+                if (response.ok) {
+                    validationState.bulkData = await response.json();
+                    validationState.bulkLoaded = true;
+                    console.log('Loaded bulk validation data:', Object.keys(validationState.bulkData));
                 }
-
-                // Also load atlas-level validation (target gene expression vs activity)
-                try {
-                    const atlasResponse = await fetch(`data/${atlas}_atlas_validation.json`);
-                    if (atlasResponse.ok) {
-                        validationState.atlasData[atlas] = await atlasResponse.json();
-                        console.log(`Loaded atlas validation for ${atlas}:`, validationState.atlasData[atlas]);
-                    }
-                } catch (e) {
-                    console.log(`Atlas validation data for ${atlas} not available:`, e);
-                }
+            } catch (e) {
+                console.error('Failed to load bulk validation data:', e);
             }
-
-            // Process raw data into structured format
-            validationState.data = processValidationData(validationState.rawData);
-            validationState.loaded = true;
-            return validationState.data;
+            return validationState.bulkData;
         }
 
-        // Process raw validation JSON into structured format
-        function processValidationData(rawData) {
-            const atlases = ['cima', 'inflammation', 'scatlas'];
-            const sigTypes = ['cytosig', 'lincytosig', 'secact'];
-            const levels = ['pseudobulk', 'singlecell', 'atlas'];
-
-            const data = {
-                atlases: atlases,
-                signature_types: sigTypes,
-                validation_levels: levels,
-                results: {},
-                raw: rawData  // Keep raw data for detailed views
-            };
-
-            // Process each atlas
-            atlases.forEach(atlas => {
-                data.results[atlas] = {};
-                const atlasData = rawData[atlas];
-
-                if (!atlasData) {
-                    // Generate placeholder if no data
-                    sigTypes.forEach(sigType => {
-                        levels.forEach(level => {
-                            const baseR = level === 'pseudobulk' ? 0.75 : level === 'atlas' ? 0.65 : 0.45;
-                            data.results[atlas][`${sigType}_${level}`] = {
-                                mean_r: baseR,
-                                median_r: baseR - 0.02,
-                                n_signatures: sigType === 'cytosig' ? 44 : sigType === 'secact' ? 200 : 45,
-                                level: level
-                            };
-                        });
-                    });
-                    return;
+        // Load single-cell validation data per atlas
+        async function loadSingleCellValidation(atlas) {
+            if (validationState.scLoaded[atlas]) return validationState.scData[atlas];
+            try {
+                const response = await fetch(`data/validation/${atlas}_validation.json`);
+                if (response.ok) {
+                    const raw = await response.json();
+                    validationState.scData[atlas] = raw.singlecell_validations || [];
+                    validationState.scLoaded[atlas] = true;
+                    console.log(`Loaded SC validation for ${atlas}: ${validationState.scData[atlas].length} entries`);
                 }
-
-                // Extract real statistics from sample_validations (pseudobulk level)
-                const sampleVals = atlasData.sample_validations || [];
-                if (sampleVals.length > 0) {
-                    const rValues = sampleVals.map(sv => sv.stats?.pearson_r || 0).filter(r => !isNaN(r));
-                    const sigType = (atlasData.signature_type || 'CytoSig').toLowerCase();
-                    data.results[atlas][`${sigType}_pseudobulk`] = {
-                        mean_r: rValues.length > 0 ? rValues.reduce((a, b) => a + b) / rValues.length : 0.5,
-                        median_r: rValues.length > 0 ? rValues.sort((a, b) => a - b)[Math.floor(rValues.length / 2)] : 0.5,
-                        n_signatures: sampleVals.length,
-                        level: 'pseudobulk',
-                        validations: sampleVals  // Keep full data
-                    };
-                }
-
-                // Extract real statistics from celltype_validations (atlas level)
-                const celltypeVals = atlasData.celltype_validations || [];
-                if (celltypeVals.length > 0) {
-                    const rValues = celltypeVals.map(cv => cv.stats?.pearson_r || 0).filter(r => !isNaN(r));
-                    const sigType = (atlasData.signature_type || 'CytoSig').toLowerCase();
-                    data.results[atlas][`${sigType}_atlas`] = {
-                        mean_r: rValues.length > 0 ? rValues.reduce((a, b) => a + b) / rValues.length : 0.5,
-                        median_r: rValues.length > 0 ? rValues.sort((a, b) => a - b)[Math.floor(rValues.length / 2)] : 0.5,
-                        n_signatures: celltypeVals.length,
-                        level: 'atlas',
-                        validations: celltypeVals  // Keep full data
-                    };
-                }
-
-                // Extract singlecell validations
-                const scVals = atlasData.singlecell_validations || [];
-                if (scVals.length > 0) {
-                    const sigType = (atlasData.signature_type || 'CytoSig').toLowerCase();
-                    data.results[atlas][`${sigType}_singlecell`] = {
-                        mean_r: 0.45,  // SC level typically lower
-                        n_signatures: scVals.length,
-                        level: 'singlecell',
-                        validations: scVals  // Keep full data
-                    };
-                }
-            });
-
-            return data;
+            } catch (e) {
+                console.log(`SC validation data for ${atlas} not available:`, e);
+                validationState.scData[atlas] = [];
+                validationState.scLoaded[atlas] = true;
+            }
+            return validationState.scData[atlas];
         }
 
-        // Get available signatures for an atlas
-        function getValidationSignatures(atlas) {
-            const rawData = validationState.rawData[atlas];
-            if (!rawData) return [];
-            const sampleVals = rawData.sample_validations || [];
-            return sampleVals.map(sv => sv.signature).filter(Boolean);
+        // Helper: compute Pearson r from arrays
+        function computePearsonR(xArr, yArr) {
+            const n = xArr.length;
+            if (n < 3) return 0;
+            const sumX = xArr.reduce((a, b) => a + b, 0);
+            const sumY = yArr.reduce((a, b) => a + b, 0);
+            const sumXY = xArr.reduce((a, x, i) => a + x * yArr[i], 0);
+            const sumX2 = xArr.reduce((a, x) => a + x * x, 0);
+            const sumY2 = yArr.reduce((a, y) => a + y * y, 0);
+            const denom = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+            return denom === 0 ? 0 : (n * sumXY - sumX * sumY) / denom;
         }
 
-        // Get available cell types for an atlas
-        function getValidationCellTypes(atlas) {
-            const rawData = validationState.rawData[atlas];
-            if (!rawData) return [];
-            const celltypeVals = rawData.celltype_validations || [];
-            if (celltypeVals.length === 0) return [];
-            // Get unique cell types from first validation's points
-            const points = celltypeVals[0]?.points || [];
-            return points.map(p => p.cell_type).filter(Boolean);
-        }
+        // ---- Tab 1: Donor Level ----
+        async function updateValidationDonor() {
+            const bulk = await loadBulkValidationData();
+            if (!bulk) return;
 
-        // Update pseudobulk validation panel
-        async function updateValidationPseudobulk() {
-            const data = await loadValidationData();
-            const atlas = document.getElementById('val-pb-atlas')?.value || 'cima';
-            const sigType = document.getElementById('val-pb-sigtype')?.value || 'cytosig';
-            const selectedSig = document.getElementById('val-pb-signature')?.value || 'all';
-            const selectedCellType = document.getElementById('val-pb-celltype')?.value || 'all';
-            const searchTerm = document.getElementById('val-pb-search')?.value?.toLowerCase() || '';
+            const atlas = document.getElementById('val-donor-atlas')?.value || 'cima';
+            const sigType = document.getElementById('val-donor-sigtype')?.value || 'cytosig';
+            const searchTerm = document.getElementById('val-donor-search')?.value?.toLowerCase() || '';
 
-            const scatterDiv = document.getElementById('val-pb-scatter');
-            const distDiv = document.getElementById('val-pb-distribution');
-            const heatmapDiv = document.getElementById('val-pb-heatmap');
+            const histDiv = document.getElementById('val-donor-histogram');
+            const overviewDiv = document.getElementById('val-donor-overview');
+            const rankingDiv = document.getElementById('val-donor-ranking');
+            const scatterDiv = document.getElementById('val-donor-scatter');
 
-            if (!scatterDiv || !distDiv) return;
+            [histDiv, overviewDiv, rankingDiv, scatterDiv].forEach(d => d?.classList.remove('loading'));
 
-            scatterDiv.classList.remove('loading');
-            distDiv.classList.remove('loading');
-            heatmapDiv?.classList.remove('loading');
-
-            // Get raw data for this atlas
-            const rawData = validationState.rawData[atlas];
-            const sampleVals = rawData?.sample_validations || [];
-
-            if (sampleVals.length === 0) {
-                scatterDiv.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">Validation data not yet available. Run the validation script to generate data.</p>';
-                distDiv.innerHTML = '';
-                if (heatmapDiv) heatmapDiv.innerHTML = '';
+            // Get donor-level data: targets where celltype == "all", donor_only or donor_organ level
+            const atlasData = bulk.donor_level[atlas];
+            if (!atlasData || !atlasData[sigType]) {
+                if (histDiv) histDiv.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No data available for this atlas/signature combination.</p>';
                 return;
             }
 
-            // Populate signature dropdown if not populated
-            const sigDropdown = document.getElementById('val-pb-signature');
-            if (sigDropdown && sigDropdown.options.length <= 1) {
-                const signatures = sampleVals.map(sv => sv.signature).filter(Boolean);
-                signatures.forEach(sig => {
-                    const opt = document.createElement('option');
-                    opt.value = sig;
-                    opt.textContent = sig;
-                    sigDropdown.appendChild(opt);
-                });
-            }
+            // Filter to donor_only or donor_organ level (pure donor-level, no cell-type stratification)
+            const donorLevels = ['donor_only', 'donor_organ'];
+            let targets = atlasData[sigType].filter(t => donorLevels.includes(t.level));
+            if (targets.length === 0) targets = atlasData[sigType]; // fallback to all
 
-            // Populate cell type dropdown if not populated
-            const ctDropdown = document.getElementById('val-pb-celltype');
-            const cellTypes = getValidationCellTypes(atlas);
-            if (ctDropdown && ctDropdown.options.length <= 1 && cellTypes.length > 0) {
-                cellTypes.forEach(ct => {
-                    const opt = document.createElement('option');
-                    opt.value = ct;
-                    opt.textContent = ct.replace(/_/g, ' ');
-                    ctDropdown.appendChild(opt);
-                });
-            }
-
-            // Filter validations by search term
-            let filteredVals = sampleVals;
+            // Apply search filter
             if (searchTerm) {
-                filteredVals = sampleVals.filter(sv =>
-                    sv.signature?.toLowerCase().includes(searchTerm)
+                targets = targets.filter(t =>
+                    t.target.toLowerCase().includes(searchTerm) ||
+                    t.gene.toLowerCase().includes(searchTerm)
                 );
             }
-            if (selectedSig !== 'all') {
-                filteredVals = filteredVals.filter(sv => sv.signature === selectedSig);
+
+            if (targets.length === 0) {
+                if (histDiv) histDiv.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No targets match your search.</p>';
+                return;
             }
 
-            // Get scatter data from selected signature or first available
-            const scatterSig = filteredVals.length > 0 ? filteredVals[0] : sampleVals[0];
-            const points = scatterSig?.points || [];
-            const stats = scatterSig?.stats || {};
-            const r = stats.pearson_r || 0.5;
+            // Panel 1: Correlation Distribution (histogram)
+            if (histDiv) {
+                const rhoValues = targets.map(t => t.rho).filter(r => r !== null);
+                const sigCount = rhoValues.filter((_, i) => targets[i]?.significant).length;
+                const nsCount = rhoValues.length - sigCount;
+                const medianRho = rhoValues.sort((a, b) => a - b)[Math.floor(rhoValues.length / 2)] || 0;
+                const pctSig = rhoValues.length > 0 ? (100 * sigCount / rhoValues.length).toFixed(1) : 0;
 
-            // Scatter plot using REAL data
-            if (points.length > 0) {
-                Plotly.newPlot(scatterDiv, [{
-                    type: 'scatter',
-                    mode: 'markers',
-                    x: points.map(p => p.x),
-                    y: points.map(p => p.y),
-                    text: points.map(p => p.label || ''),
-                    marker: { size: 6, color: '#1a5f7a', opacity: 0.6 },
-                    hovertemplate: '%{text}<br>Expression: %{x:.2f}<br>Activity: %{y:.2f}<extra></extra>'
-                }], {
-                    xaxis: { title: 'Mean Signature Gene Expression', zeroline: true },
-                    yaxis: { title: 'Predicted Activity (z-score)', zeroline: true },
-                    margin: { l: 60, r: 30, t: 40, b: 50 },
-                    annotations: [{
-                        x: 0.95, y: 0.95, xref: 'paper', yref: 'paper',
-                        text: `r = ${r.toFixed(3)}<br>n = ${points.length}`,
-                        showarrow: false,
-                        font: { size: 14, color: '#333' },
-                        bgcolor: 'rgba(255,255,255,0.8)',
-                        borderpad: 4
-                    }],
-                    title: { text: `${atlas.toUpperCase()} - ${scatterSig?.signature || 'Unknown'} Pseudobulk`, font: { size: 14 } }
-                }, { responsive: true });
-            }
+                const sigRhos = targets.filter(t => t.significant).map(t => t.rho);
+                const nsRhos = targets.filter(t => !t.significant).map(t => t.rho);
 
-            // Distribution histogram using REAL correlations
-            const correlations = (filteredVals.length > 0 ? filteredVals : sampleVals)
-                .map(sv => sv.stats?.pearson_r)
-                .filter(r => r !== undefined && !isNaN(r));
+                const traces = [];
+                if (sigRhos.length > 0) {
+                    traces.push({
+                        type: 'histogram', x: sigRhos, name: 'Significant (p<0.05)',
+                        marker: { color: 'rgba(44, 160, 44, 0.7)' },
+                        xbins: { start: -1, end: 1, size: 0.08 }
+                    });
+                }
+                if (nsRhos.length > 0) {
+                    traces.push({
+                        type: 'histogram', x: nsRhos, name: 'Not significant',
+                        marker: { color: 'rgba(200, 200, 200, 0.7)' },
+                        xbins: { start: -1, end: 1, size: 0.08 }
+                    });
+                }
 
-            if (correlations.length > 0) {
-                const meanR = correlations.reduce((a, b) => a + b) / correlations.length;
-                Plotly.newPlot(distDiv, [{
-                    type: 'histogram',
-                    x: correlations,
-                    nbinsx: 20,
-                    marker: { color: '#57a0d3' }
-                }], {
-                    xaxis: { title: 'Pearson r', range: [-0.5, 1] },
+                Plotly.newPlot(histDiv, traces, {
+                    barmode: 'stack',
+                    xaxis: { title: 'Spearman \u03c1', range: [-1, 1] },
                     yaxis: { title: 'Count' },
-                    margin: { l: 50, r: 30, t: 40, b: 50 },
+                    margin: { l: 50, r: 30, t: 50, b: 50 },
+                    legend: { x: 0.02, y: 0.98 },
                     annotations: [{
-                        x: 0.95, y: 0.95, xref: 'paper', yref: 'paper',
-                        text: `Mean r = ${meanR.toFixed(3)}<br>n = ${correlations.length} signatures`,
-                        showarrow: false,
-                        font: { size: 12 },
-                        bgcolor: 'rgba(255,255,255,0.8)',
-                        borderpad: 4
+                        x: 0.98, y: 0.98, xref: 'paper', yref: 'paper',
+                        text: `Median \u03c1 = ${medianRho.toFixed(3)}<br>${pctSig}% significant<br>n = ${rhoValues.length} targets`,
+                        showarrow: false, font: { size: 11 },
+                        bgcolor: 'rgba(255,255,255,0.9)', borderpad: 4, align: 'right'
                     }],
-                    title: { text: 'Correlation Distribution Across Signatures', font: { size: 14 } }
+                    title: { text: `Correlation Distribution: ${atlas.replace(/_/g, ' ')} - ${sigType}`, font: { size: 13 } }
                 }, { responsive: true });
             }
 
-            // BOXPLOT of per-signature correlations (sorted high to low)
-            if (heatmapDiv) {
-                const sigData = (filteredVals.length > 0 ? filteredVals : sampleVals)
-                    .map(sv => ({
-                        name: sv.signature,
-                        r: sv.stats?.pearson_r || 0,
-                        points: sv.points || []
-                    }))
-                    .filter(s => !isNaN(s.r))
-                    .sort((a, b) => b.r - a.r);  // Sort high to low
+            // Panel 2: Significance Overview (grouped bar - all 3 sig types)
+            if (overviewDiv) {
+                const sigTypes = ['cytosig', 'lincytosig', 'secact'];
+                const sigLabels = ['CytoSig', 'LinCytoSig', 'SecAct'];
+                const sigColors = ['#1a5f7a', '#57a0d3', '#ff6b6b'];
 
-                // Create boxplot traces - one per signature showing activity distribution
-                const boxTraces = sigData.slice(0, 20).map((sig, idx) => ({
-                    type: 'box',
-                    name: sig.name,
-                    y: sig.points.map(p => p.y),
-                    boxpoints: false,
-                    marker: { color: sig.r > 0.5 ? '#2ca02c' : sig.r > 0.2 ? '#ffdd57' : sig.r > 0 ? '#ff7f0e' : '#d62728' },
-                    hovertemplate: `${sig.name}<br>r = ${sig.r.toFixed(3)}<extra></extra>`
-                }));
+                // Get summary data for this atlas at donor_only/donor_organ level
+                const summaryRows = bulk.summary.filter(s =>
+                    s.atlas === atlas && (s.level === 'donor_only' || s.level === 'donor_organ')
+                );
 
-                // Also show correlation as bar overlay
-                Plotly.newPlot(heatmapDiv, [{
+                const medianRhos = sigTypes.map(st => {
+                    const row = summaryRows.find(r => r.signature === st);
+                    return row ? row.median_rho : 0;
+                });
+                const pctSigs = sigTypes.map(st => {
+                    const row = summaryRows.find(r => r.signature === st);
+                    return row ? row.pct_significant : 0;
+                });
+
+                Plotly.newPlot(overviewDiv, [{
                     type: 'bar',
-                    x: sigData.slice(0, 20).map(s => s.name),
-                    y: sigData.slice(0, 20).map(s => s.r),
-                    marker: {
-                        color: sigData.slice(0, 20).map(s =>
-                            s.r > 0.5 ? '#2ca02c' : s.r > 0.2 ? '#ffdd57' : s.r > 0 ? '#ff7f0e' : '#d62728'
-                        )
-                    },
-                    text: sigData.slice(0, 20).map(s => s.r.toFixed(2)),
+                    x: sigLabels,
+                    y: medianRhos,
+                    marker: { color: sigColors },
+                    text: sigLabels.map((_, i) => `\u03c1=${medianRhos[i]?.toFixed(3) || 'N/A'}<br>${pctSigs[i]?.toFixed(0) || 0}% sig`),
                     textposition: 'outside',
-                    hovertemplate: '%{x}<br>r = %{y:.3f}<extra></extra>'
+                    hovertemplate: '%{x}<br>Median \u03c1: %{y:.4f}<extra></extra>'
                 }], {
-                    xaxis: { title: 'Signature (sorted by r)', tickangle: -45 },
-                    yaxis: { title: 'Pearson r', range: [-0.3, 1] },
-                    margin: { l: 50, r: 30, t: 30, b: 120 },
-                    title: { text: 'Per-Signature Correlations (Sorted High → Low)', font: { size: 14 } }
-                }, { responsive: true });
-            }
-        }
-
-        // Update single-cell validation panel
-        async function updateValidationSingleCell() {
-            const data = await loadValidationData();
-            const atlas = document.getElementById('val-sc-atlas')?.value || 'cima';
-            const sigType = document.getElementById('val-sc-sigtype')?.value || 'cytosig';
-            const selectedSig = document.getElementById('val-sc-signature')?.value || 'IFNG';
-            const searchTerm = document.getElementById('val-sc-search')?.value?.toLowerCase() || '';
-
-            const scatterDiv = document.getElementById('val-sc-scatter');
-            const celltypeDiv = document.getElementById('val-sc-celltype');
-            const summaryDiv = document.getElementById('val-sc-summary');
-
-            if (!scatterDiv) return;
-
-            scatterDiv.classList.remove('loading');
-            celltypeDiv?.classList.remove('loading');
-            summaryDiv?.classList.remove('loading');
-
-            // Get raw data for this atlas
-            const rawData = validationState.rawData[atlas];
-            const scVals = rawData?.singlecell_validations || [];
-
-            // Populate signature dropdown with available signatures
-            const sigDropdown = document.getElementById('val-sc-signature');
-            if (sigDropdown && scVals.length > 0) {
-                const currentOptions = Array.from(sigDropdown.options).map(o => o.value);
-                const signatures = scVals.map(sv => sv.signature).filter(Boolean);
-                signatures.forEach(sig => {
-                    if (!currentOptions.includes(sig)) {
-                        const opt = document.createElement('option');
-                        opt.value = sig;
-                        opt.textContent = sig;
-                        sigDropdown.appendChild(opt);
-                    }
-                });
-            }
-
-            // Filter by search term
-            let targetSig = selectedSig;
-            if (searchTerm) {
-                const match = scVals.find(sv =>
-                    sv.signature?.toLowerCase().includes(searchTerm)
-                );
-                if (match) targetSig = match.signature;
-            }
-
-            // Find the selected signature validation
-            const scVal = scVals.find(sv => sv.signature === targetSig) || scVals[0];
-
-            if (!scVal) {
-                scatterDiv.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">Single-cell validation data not yet available for this atlas.</p>';
-                return;
-            }
-
-            // Get sampled points from real data
-            const sampledPoints = scVal.sampled_points || [];
-
-            // Show single-cell validation summary instead of scatter if no sampled points
-            if (sampledPoints.length === 0) {
-                // Display validation metrics
-                const foldChange = scVal.activity_fold_change || 'N/A';
-                const pValue = scVal.activity_p_value;
-                const expressingFrac = (scVal.expressing_fraction * 100).toFixed(1);
-                const meanExpressing = scVal.mean_activity_expressing?.toFixed(2) || 'N/A';
-                const meanNonExpressing = scVal.mean_activity_non_expressing?.toFixed(2) || 'N/A';
-
-                // Create comparison bar chart
-                Plotly.newPlot(scatterDiv, [{
-                    type: 'bar',
-                    x: ['Expressing Cells', 'Non-Expressing Cells'],
-                    y: [scVal.mean_activity_expressing || 0, scVal.mean_activity_non_expressing || 0],
-                    marker: { color: ['#2ca02c', '#d62728'] },
-                    text: [meanExpressing, meanNonExpressing],
-                    textposition: 'outside'
-                }], {
-                    xaxis: { title: '' },
-                    yaxis: { title: 'Mean Activity (z-score)' },
-                    margin: { l: 60, r: 30, t: 60, b: 50 },
-                    annotations: [{
-                        x: 0.5, y: 1.1, xref: 'paper', yref: 'paper',
-                        text: `${scVal.signature}: Fold Change = ${typeof foldChange === 'number' ? foldChange.toFixed(2) : foldChange}, p = ${pValue ? pValue.toExponential(2) : 'N/A'}`,
-                        showarrow: false,
-                        font: { size: 12 }
-                    }],
-                    title: { text: `Single-Cell Validation: ${scVal.signature}`, font: { size: 14 } }
-                }, { responsive: true });
-            } else {
-                // Plot actual sampled points
-                const uniqueCellTypes = [...new Set(sampledPoints.map(p => p.cell_type))];
-                const traces = uniqueCellTypes.map(ct => ({
-                    type: 'scatter',
-                    mode: 'markers',
-                    name: ct.replace(/_/g, ' '),
-                    x: sampledPoints.filter(p => p.cell_type === ct).map(p => p.expression),
-                    y: sampledPoints.filter(p => p.cell_type === ct).map(p => p.activity),
-                    marker: { size: 4, opacity: 0.5 }
-                }));
-
-                Plotly.newPlot(scatterDiv, traces, {
-                    xaxis: { title: `${scVal.signature} Expression` },
-                    yaxis: { title: 'Predicted Activity (z-score)' },
-                    margin: { l: 60, r: 30, t: 40, b: 50 },
-                    legend: { orientation: 'h', y: -0.15 },
-                    title: { text: `Single-Cell: ${scVal.signature} (n = ${sampledPoints.length} cells)`, font: { size: 14 } }
+                    xaxis: { title: 'Signature Type' },
+                    yaxis: { title: 'Median Spearman \u03c1' },
+                    margin: { l: 50, r: 30, t: 50, b: 50 },
+                    title: { text: `Signature Type Comparison: ${atlas.replace(/_/g, ' ')}`, font: { size: 13 } }
                 }, { responsive: true });
             }
 
-            // Cell type distribution - show fold change by cell type if available
-            if (celltypeDiv && scVals.length > 0) {
-                // Aggregate fold changes across signatures
-                const sigFoldChanges = scVals
-                    .filter(sv => sv.activity_fold_change && !isNaN(sv.activity_fold_change))
-                    .map(sv => ({
-                        signature: sv.signature,
-                        fc: sv.activity_fold_change
-                    }))
-                    .sort((a, b) => b.fc - a.fc)
-                    .slice(0, 15);
-
-                Plotly.newPlot(celltypeDiv, [{
-                    type: 'bar',
-                    x: sigFoldChanges.map(s => s.signature),
-                    y: sigFoldChanges.map(s => s.fc),
-                    marker: {
-                        color: sigFoldChanges.map(s => s.fc > 1.5 ? '#2ca02c' : s.fc > 1 ? '#57a0d3' : '#ff7f0e')
-                    },
-                    text: sigFoldChanges.map(s => s.fc.toFixed(2)),
-                    textposition: 'outside'
-                }], {
-                    xaxis: { title: 'Signature', tickangle: -45 },
-                    yaxis: { title: 'Activity Fold Change', range: [0, Math.max(...sigFoldChanges.map(s => s.fc)) * 1.2] },
-                    margin: { l: 50, r: 30, t: 30, b: 100 },
-                    title: { text: 'Expressing vs Non-Expressing Fold Change', font: { size: 14 } }
-                }, { responsive: true });
-            }
-
-            // Summary: expressing fraction across signatures
-            if (summaryDiv && scVals.length > 0) {
-                const summaryData = scVals
-                    .filter(sv => sv.expressing_fraction !== undefined)
-                    .map(sv => ({
-                        signature: sv.signature,
-                        expressingPct: (sv.expressing_fraction * 100),
-                        foldChange: sv.activity_fold_change || 1
-                    }))
-                    .sort((a, b) => b.expressingPct - a.expressingPct);
-
-                Plotly.newPlot(summaryDiv, [{
-                    type: 'scatter',
-                    mode: 'markers+text',
-                    x: summaryData.map(s => s.expressingPct),
-                    y: summaryData.map(s => s.foldChange),
-                    text: summaryData.map(s => s.signature),
-                    textposition: 'top center',
-                    textfont: { size: 9 },
-                    marker: {
-                        size: 10,
-                        color: summaryData.map(s => s.foldChange),
-                        colorscale: 'RdYlGn',
-                        showscale: true,
-                        colorbar: { title: 'FC' }
-                    },
-                    hovertemplate: '%{text}<br>Expressing: %{x:.1f}%<br>FC: %{y:.2f}<extra></extra>'
-                }], {
-                    xaxis: { title: 'Expressing Fraction (%)' },
-                    yaxis: { title: 'Activity Fold Change' },
-                    margin: { l: 60, r: 80, t: 30, b: 50 },
-                    title: { text: 'Single-Cell Validation Summary', font: { size: 14 } }
-                }, { responsive: true });
-            }
-        }
-
-        // Update atlas-level validation panel
-        async function updateValidationAtlas() {
-            const data = await loadValidationData();
-            const atlas = document.getElementById('val-atlas-atlas')?.value || 'cima';
-            const sigType = document.getElementById('val-atlas-sigtype')?.value || 'cytosig';
-            let selectedSig = document.getElementById('val-atlas-signature')?.value || 'all';
-            const searchTerm = document.getElementById('val-atlas-search')?.value?.toLowerCase() || '';
-
-            const scatterDiv = document.getElementById('val-atlas-scatter');
-            const rankingDiv = document.getElementById('val-atlas-ranking');
-            const heatmapDiv = document.getElementById('val-atlas-heatmap');
-
-            if (!scatterDiv) return;
-
-            scatterDiv.classList.remove('loading');
-            rankingDiv?.classList.remove('loading');
-            heatmapDiv?.classList.remove('loading');
-
-            // Try to use new atlas validation data (target gene expression vs activity)
-            const atlasValidation = validationState.atlasData[atlas];
-            const sigTypeKey = sigType === 'cytosig' ? 'CytoSig' : (sigType === 'secact' ? 'SecAct' : 'CytoSig');
-
-            if (atlasValidation && atlasValidation[sigTypeKey]) {
-                // Use new real data format
-                updateValidationAtlasReal(atlasValidation[sigTypeKey], atlas, sigTypeKey, selectedSig, searchTerm, scatterDiv, rankingDiv, heatmapDiv);
-                return;
-            }
-
-            // Fallback to old format
-            const rawData = validationState.rawData[atlas];
-            let celltypeVals = rawData?.celltype_validations || [];
-
-            // Populate signature dropdown
-            const sigDropdown = document.getElementById('val-atlas-signature');
-            if (sigDropdown && celltypeVals.length > 0) {
-                const currentOptions = Array.from(sigDropdown.options).map(o => o.value);
-                const signatures = celltypeVals.map(cv => cv.signature).filter(Boolean);
-                signatures.forEach(sig => {
-                    if (!currentOptions.includes(sig)) {
-                        const opt = document.createElement('option');
-                        opt.value = sig;
-                        opt.textContent = sig;
-                        sigDropdown.appendChild(opt);
-                    }
-                });
-            }
-
-            // Filter by search term
-            if (searchTerm) {
-                celltypeVals = celltypeVals.filter(cv =>
-                    cv.signature?.toLowerCase().includes(searchTerm)
-                );
-                // If search matches exactly one, select it
-                if (celltypeVals.length === 1) {
-                    selectedSig = celltypeVals[0].signature;
-                } else if (celltypeVals.length > 1) {
-                    selectedSig = 'all';  // Show all matching signatures
-                }
-            }
-
-            if (celltypeVals.length === 0) {
-                scatterDiv.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No signatures match your search. Try a different term.</p>';
-                return;
-            }
-
-            const colors = [
-                '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-                '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
-                '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5',
-                '#c49c94', '#f7b6d2', '#c7c7c7', '#dbdb8d', '#9edae5'
-            ];
-
-            // Check if showing all signatures or single signature
-            if (selectedSig === 'all') {
-                // Show ALL signatures in one scatter plot
-                const traces = celltypeVals.map((cv, idx) => {
-                    const points = cv.points || [];
-                    const r = cv.stats?.pearson_r || 0;
-                    return {
-                        type: 'scatter',
-                        mode: 'markers',
-                        name: `${cv.signature} (r=${r.toFixed(2)})`,
-                        x: points.map(p => p.expression),
-                        y: points.map(p => p.activity),
-                        text: points.map(p => `${cv.signature}<br>${(p.cell_type || '').replace(/_/g, ' ')}<br>n=${(p.n_cells || 0).toLocaleString()} cells`),
-                        marker: {
-                            size: 8,
-                            color: colors[idx % colors.length],
-                            opacity: 0.7
-                        },
-                        hovertemplate: '%{text}<br>Expression: %{x:.2f}<br>Activity: %{y:.2f}<extra></extra>'
-                    };
-                });
-
-                // Calculate overall correlation across all points
-                const allX = [], allY = [];
-                celltypeVals.forEach(cv => {
-                    (cv.points || []).forEach(p => {
-                        allX.push(p.expression);
-                        allY.push(p.activity);
-                    });
-                });
-
-                const n = allX.length;
-                const sumX = allX.reduce((a, b) => a + b, 0);
-                const sumY = allY.reduce((a, b) => a + b, 0);
-                const sumXY = allX.reduce((a, x, i) => a + x * allY[i], 0);
-                const sumX2 = allX.reduce((a, x) => a + x * x, 0);
-                const sumY2 = allY.reduce((a, y) => a + y * y, 0);
-                const overallR = (n * sumXY - sumX * sumY) / Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
-
-                // Add regression line
-                const minX = Math.min(...allX);
-                const maxX = Math.max(...allX);
-                const meanX = sumX / n;
-                const meanY = sumY / n;
-                const slope = (sumXY - n * meanX * meanY) / (sumX2 - n * meanX * meanX);
-                const intercept = meanY - slope * meanX;
-
-                traces.push({
-                    type: 'scatter',
-                    mode: 'lines',
-                    name: 'Regression',
-                    x: [minX, maxX],
-                    y: [slope * minX + intercept, slope * maxX + intercept],
-                    line: { color: '#333', width: 2, dash: 'dash' },
-                    hoverinfo: 'skip'
-                });
-
-                Plotly.newPlot(scatterDiv, traces, {
-                    xaxis: { title: 'Mean Signature Gene Expression (z-score)' },
-                    yaxis: { title: 'Mean Predicted Activity (z-score)' },
-                    margin: { l: 60, r: 30, t: 50, b: 50 },
-                    legend: { orientation: 'v', x: 1.02, y: 1, font: { size: 9 } },
-                    annotations: [{
-                        x: 0.02, y: 0.98, xref: 'paper', yref: 'paper',
-                        text: `All Signatures<br>r = ${overallR.toFixed(3)}<br>n = ${n} points`,
-                        showarrow: false,
-                        font: { size: 12 },
-                        bgcolor: 'rgba(255,255,255,0.9)',
-                        borderpad: 6,
-                        align: 'left'
-                    }],
-                    title: { text: `Atlas Level: All Signatures (${celltypeVals.length} signatures × cell types)`, font: { size: 14 } }
-                }, { responsive: true });
-
-            } else {
-                // Show SINGLE selected signature
-                const ctVal = celltypeVals.find(cv => cv.signature === selectedSig) || celltypeVals[0];
-                const points = ctVal?.points || [];
-                const stats = ctVal?.stats || {};
-                const r = stats.pearson_r || 0;
-
-                // Calculate regression for this signature
-                const xVals = points.map(p => p.expression);
-                const yVals = points.map(p => p.activity);
-                const n = xVals.length;
-                const sumX = xVals.reduce((a, b) => a + b, 0);
-                const sumY = yVals.reduce((a, b) => a + b, 0);
-                const sumXY = xVals.reduce((a, x, i) => a + x * yVals[i], 0);
-                const sumX2 = xVals.reduce((a, x) => a + x * x, 0);
-                const meanX = sumX / n;
-                const meanY = sumY / n;
-                const slope = (sumXY - n * meanX * meanY) / (sumX2 - n * meanX * meanX);
-                const intercept = meanY - slope * meanX;
-                const minX = Math.min(...xVals);
-                const maxX = Math.max(...xVals);
-
-                Plotly.newPlot(scatterDiv, [
-                    {
-                        type: 'scatter',
-                        mode: 'markers+text',
-                        x: xVals,
-                        y: yVals,
-                        text: points.map(p => (p.cell_type || '').replace(/_/g, ' ')),
-                        textposition: 'top center',
-                        textfont: { size: 9 },
-                        marker: {
-                            size: points.map(p => Math.min(20, Math.max(8, Math.log10(p.n_cells || 1000) * 3))),
-                            color: '#1a5f7a',
-                            opacity: 0.7
-                        },
-                        hovertemplate: '%{text}<br>Expression: %{x:.2f}<br>Activity: %{y:.2f}<extra></extra>'
-                    },
-                    {
-                        type: 'scatter',
-                        mode: 'lines',
-                        name: 'Regression',
-                        x: [minX, maxX],
-                        y: [slope * minX + intercept, slope * maxX + intercept],
-                        line: { color: '#d62728', width: 2, dash: 'dash' },
-                        hoverinfo: 'skip'
-                    }
-                ], {
-                    xaxis: { title: 'Mean Signature Gene Expression (z-score)' },
-                    yaxis: { title: 'Mean Predicted Activity (z-score)' },
-                    margin: { l: 60, r: 30, t: 50, b: 50 },
-                    showlegend: false,
-                    annotations: [{
-                        x: 0.02, y: 0.98, xref: 'paper', yref: 'paper',
-                        text: `${ctVal?.signature}<br>r = ${r.toFixed(3)}<br>p = ${stats.p_value ? stats.p_value.toExponential(2) : 'N/A'}<br>n = ${n} cell types`,
-                        showarrow: false,
-                        font: { size: 12 },
-                        bgcolor: 'rgba(255,255,255,0.9)',
-                        borderpad: 6,
-                        align: 'left'
-                    }],
-                    title: { text: `Atlas Level: ${ctVal?.signature} (Real Data)`, font: { size: 14 } }
-                }, { responsive: true });
-            }
-
-            // Signature ranking using REAL data (sorted high to low)
+            // Panel 3: Per-Target Ranking (horizontal bar, top 30 by |rho|)
             if (rankingDiv) {
-                const sigCorrelations = celltypeVals
-                    .map(cv => ({
-                        name: cv.signature,
-                        r: cv.stats?.pearson_r || 0
-                    }))
-                    .filter(s => !isNaN(s.r))
-                    .sort((a, b) => b.r - a.r);  // Sort high to low
+                const sorted = [...targets]
+                    .filter(t => t.rho !== null)
+                    .sort((a, b) => Math.abs(b.rho) - Math.abs(a.rho))
+                    .slice(0, 30)
+                    .reverse();
 
                 Plotly.newPlot(rankingDiv, [{
                     type: 'bar',
                     orientation: 'h',
-                    y: sigCorrelations.slice(0, 15).map(s => s.name),
-                    x: sigCorrelations.slice(0, 15).map(s => s.r),
+                    y: sorted.map(t => t.target),
+                    x: sorted.map(t => t.rho),
                     marker: {
-                        color: sigCorrelations.slice(0, 15).map(s =>
-                            s.r > 0.9 ? '#1a9850' : s.r > 0.7 ? '#91cf60' : s.r > 0.5 ? '#d9ef8b' : s.r > 0 ? '#fee08b' : '#d73027'
-                        )
+                        color: sorted.map(t => t.rho >= 0 ? '#2ca02c' : '#d62728'),
+                        line: {
+                            color: sorted.map(t => t.significant ? '#333' : '#ccc'),
+                            width: sorted.map(t => t.significant ? 1.5 : 0.5)
+                        }
                     },
-                    text: sigCorrelations.slice(0, 15).map(s => s.r.toFixed(2)),
-                    textposition: 'outside',
-                    hovertemplate: '%{y}<br>r = %{x:.3f}<extra></extra>'
+                    text: sorted.map(t => `\u03c1=${t.rho?.toFixed(3)}, n=${t.n}${t.significant ? ' *' : ''}`),
+                    hovertemplate: '%{y}<br>%{text}<extra></extra>'
                 }], {
-                    xaxis: { title: 'Pearson r', range: [Math.min(0, ...sigCorrelations.map(s => s.r)) - 0.1, 1] },
-                    yaxis: { automargin: true, autorange: 'reversed' },
-                    margin: { l: 100, r: 50, t: 30, b: 50 },
-                    title: { text: 'Signatures Ranked by Cell Type Correlation', font: { size: 14 } }
+                    xaxis: { title: 'Spearman \u03c1', zeroline: true },
+                    yaxis: { automargin: true, tickfont: { size: 9 } },
+                    margin: { l: 110, r: 30, t: 40, b: 50 },
+                    title: { text: `Top 30 Targets by |\u03c1| (${sigType})`, font: { size: 13 } }
                 }, { responsive: true });
             }
 
-            // Cross-atlas heatmap using REAL data
-            if (heatmapDiv) {
-                const atlasNames = ['CIMA', 'Inflammation', 'scAtlas'];
-                const atlasKeys = ['cima', 'inflammation', 'scatlas'];
+            // Panel 4: Scatter plot (mean_expr vs mean_activity per target)
+            if (scatterDiv) {
+                const validTargets = targets.filter(t => t.mean_expr !== null && t.mean_activity !== null);
+                const sigTargets = validTargets.filter(t => t.significant);
+                const nsTargets = validTargets.filter(t => !t.significant);
 
-                // Get all unique signatures across atlases
-                const allSigs = new Set();
-                atlasKeys.forEach(ak => {
-                    const rd = validationState.rawData[ak];
-                    (rd?.celltype_validations || []).forEach(cv => allSigs.add(cv.signature));
-                });
-                const sigList = Array.from(allSigs).slice(0, 10);
-
-                // Build heatmap data
-                const heatmapData = atlasKeys.map(ak => {
-                    const rd = validationState.rawData[ak];
-                    const ctVals = rd?.celltype_validations || [];
-                    return sigList.map(sig => {
-                        const cv = ctVals.find(c => c.signature === sig);
-                        return cv?.stats?.pearson_r ?? null;
+                const traces = [];
+                if (sigTargets.length > 0) {
+                    traces.push({
+                        type: 'scatter', mode: 'markers', name: 'Significant (p<0.05)',
+                        x: sigTargets.map(t => t.mean_expr),
+                        y: sigTargets.map(t => t.mean_activity),
+                        text: sigTargets.map(t => `${t.target} (${t.gene})<br>\u03c1=${t.rho?.toFixed(3)}, n=${t.n}`),
+                        marker: { size: 7, color: '#2ca02c', opacity: 0.7 },
+                        hovertemplate: '%{text}<extra></extra>'
                     });
+                }
+                if (nsTargets.length > 0) {
+                    traces.push({
+                        type: 'scatter', mode: 'markers', name: 'Not significant',
+                        x: nsTargets.map(t => t.mean_expr),
+                        y: nsTargets.map(t => t.mean_activity),
+                        text: nsTargets.map(t => `${t.target} (${t.gene})<br>\u03c1=${t.rho?.toFixed(3)}, n=${t.n}`),
+                        marker: { size: 7, color: '#ccc', opacity: 0.5, line: { color: '#999', width: 0.5 } },
+                        hovertemplate: '%{text}<extra></extra>'
+                    });
+                }
+
+                if (validTargets.length >= 3) {
+                    const xAll = validTargets.map(t => t.mean_expr);
+                    const yAll = validTargets.map(t => t.mean_activity);
+                    const r = computePearsonR(xAll, yAll);
+                    const n = xAll.length;
+                    const mx = xAll.reduce((a, b) => a + b, 0) / n;
+                    const my = yAll.reduce((a, b) => a + b, 0) / n;
+                    const slope = xAll.reduce((a, x, i) => a + (x - mx) * (yAll[i] - my), 0) /
+                                  xAll.reduce((a, x) => a + (x - mx) * (x - mx), 0);
+                    const intercept = my - slope * mx;
+                    const minX = Math.min(...xAll);
+                    const maxX = Math.max(...xAll);
+
+                    traces.push({
+                        type: 'scatter', mode: 'lines', name: 'Regression',
+                        x: [minX, maxX], y: [slope * minX + intercept, slope * maxX + intercept],
+                        line: { color: '#333', width: 2, dash: 'dash' },
+                        hoverinfo: 'skip'
+                    });
+
+                    Plotly.newPlot(scatterDiv, traces, {
+                        xaxis: { title: 'Mean Gene Expression' },
+                        yaxis: { title: 'Mean Predicted Activity' },
+                        margin: { l: 60, r: 30, t: 50, b: 50 },
+                        legend: { x: 0.02, y: 0.98 },
+                        annotations: [{
+                            x: 0.98, y: 0.02, xref: 'paper', yref: 'paper',
+                            text: `Pearson r = ${r.toFixed(3)}<br>n = ${n} targets`,
+                            showarrow: false, font: { size: 11 },
+                            bgcolor: 'rgba(255,255,255,0.9)', borderpad: 4, align: 'right'
+                        }],
+                        title: { text: 'Expression vs Activity per Target', font: { size: 13 } }
+                    }, { responsive: true });
+                } else {
+                    Plotly.newPlot(scatterDiv, traces, {
+                        xaxis: { title: 'Mean Gene Expression' },
+                        yaxis: { title: 'Mean Predicted Activity' },
+                        margin: { l: 60, r: 30, t: 50, b: 50 },
+                        title: { text: 'Expression vs Activity per Target', font: { size: 13 } }
+                    }, { responsive: true });
+                }
+            }
+        }
+
+        // ---- Tab 2: Cell Type Stratified ----
+        function populateCelltypeLevelDropdown(atlas) {
+            const levelDropdown = document.getElementById('val-ct-level');
+            if (!levelDropdown || !validationState.bulkData) return;
+            levelDropdown.innerHTML = '';
+            const ctData = validationState.bulkData.celltype_level[atlas];
+            if (!ctData) return;
+            const levels = Object.keys(ctData).sort();
+            levels.forEach(level => {
+                const opt = document.createElement('option');
+                opt.value = level;
+                opt.textContent = level.replace(/_/g, ' ');
+                levelDropdown.appendChild(opt);
+            });
+        }
+
+        async function updateValidationCelltype() {
+            const bulk = await loadBulkValidationData();
+            if (!bulk) return;
+
+            const atlas = document.getElementById('val-ct-atlas')?.value || 'cima';
+            const level = document.getElementById('val-ct-level')?.value;
+            const sigType = document.getElementById('val-ct-sigtype')?.value || 'cytosig';
+            const searchTerm = document.getElementById('val-ct-search')?.value?.toLowerCase() || '';
+
+            const barsDiv = document.getElementById('val-ct-bars');
+            const levelsDiv = document.getElementById('val-ct-levels');
+            const heatmapDiv = document.getElementById('val-ct-heatmap');
+            const scatterDiv = document.getElementById('val-ct-scatter');
+
+            [barsDiv, levelsDiv, heatmapDiv, scatterDiv].forEach(d => d?.classList.remove('loading'));
+
+            const ctData = bulk.celltype_level[atlas];
+            if (!ctData || !level || !ctData[level] || !ctData[level][sigType]) {
+                if (barsDiv) barsDiv.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No cell-type stratified data for this combination.</p>';
+                return;
+            }
+
+            let perCelltype = ctData[level][sigType].per_celltype || [];
+
+            if (searchTerm) {
+                perCelltype = perCelltype.filter(ct =>
+                    ct.celltype.toLowerCase().includes(searchTerm)
+                );
+            }
+
+            if (perCelltype.length === 0) {
+                if (barsDiv) barsDiv.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No cell types match your search.</p>';
+                return;
+            }
+
+            // Panel 1: Per-Cell-Type Median Correlation (bar chart)
+            if (barsDiv) {
+                const sorted = [...perCelltype].sort((a, b) => (b.median_rho || 0) - (a.median_rho || 0));
+                Plotly.newPlot(barsDiv, [{
+                    type: 'bar',
+                    x: sorted.map(ct => ct.celltype.replace(/_/g, ' ')),
+                    y: sorted.map(ct => ct.median_rho || 0),
+                    marker: {
+                        color: sorted.map(ct => {
+                            const r = ct.median_rho || 0;
+                            return r > 0.3 ? '#2ca02c' : r > 0.1 ? '#ffdd57' : r > 0 ? '#ff7f0e' : '#d62728';
+                        })
+                    },
+                    text: sorted.map(ct => (ct.median_rho || 0).toFixed(3)),
+                    textposition: 'outside',
+                    hovertemplate: '%{x}<br>Median \u03c1: %{y:.4f}<extra></extra>',
+                }], {
+                    xaxis: { title: 'Cell Type', tickangle: -45, tickfont: { size: 9 } },
+                    yaxis: { title: 'Median Spearman \u03c1' },
+                    margin: { l: 50, r: 20, t: 40, b: 130 },
+                    title: { text: `Median \u03c1 per Cell Type (${level.replace(/_/g, ' ')})`, font: { size: 13 } }
+                }, { responsive: true });
+            }
+
+            // Panel 2: Aggregation Level Comparison
+            if (levelsDiv) {
+                const allLevels = Object.keys(ctData).sort();
+                const sigTypes = ['cytosig', 'lincytosig', 'secact'];
+                const sigLabels = ['CytoSig', 'LinCytoSig', 'SecAct'];
+                const sigColors = ['#1a5f7a', '#57a0d3', '#ff6b6b'];
+                const summaryRows = bulk.summary.filter(s => s.atlas === atlas);
+
+                const traces = sigTypes.map((st, idx) => {
+                    const xLabels = [];
+                    const yValues = [];
+                    const donorRow = summaryRows.find(r =>
+                        r.signature === st && (r.level === 'donor_only' || r.level === 'donor_organ')
+                    );
+                    if (donorRow) {
+                        xLabels.push(donorRow.level.replace(/_/g, ' '));
+                        yValues.push(donorRow.median_rho || 0);
+                    }
+                    allLevels.forEach(lv => {
+                        const row = summaryRows.find(r => r.signature === st && r.level === lv);
+                        if (row) {
+                            xLabels.push(lv.replace(/_/g, ' '));
+                            yValues.push(row.median_rho || 0);
+                        }
+                    });
+                    return {
+                        type: 'bar', name: sigLabels[idx],
+                        x: xLabels, y: yValues,
+                        marker: { color: sigColors[idx] },
+                        text: yValues.map(v => v.toFixed(3)),
+                        textposition: 'outside', textfont: { size: 9 }
+                    };
+                });
+
+                Plotly.newPlot(levelsDiv, traces, {
+                    barmode: 'group',
+                    xaxis: { title: 'Aggregation Level', tickangle: -30, tickfont: { size: 9 } },
+                    yaxis: { title: 'Median Spearman \u03c1' },
+                    margin: { l: 50, r: 20, t: 40, b: 100 },
+                    legend: { orientation: 'h', y: 1.05 },
+                    title: { text: `Level Comparison: ${atlas.replace(/_/g, ' ')}`, font: { size: 13 } }
+                }, { responsive: true });
+            }
+
+            // Panel 3: Cell Type x Target Heatmap
+            if (heatmapDiv) {
+                const sortedCT = [...perCelltype].sort((a, b) => (b.median_rho || 0) - (a.median_rho || 0));
+                const targetCounts = {};
+                sortedCT.forEach(ct => {
+                    (ct.top_targets || []).forEach(t => {
+                        targetCounts[t.target] = (targetCounts[t.target] || 0) + Math.abs(t.rho || 0);
+                    });
+                });
+                const topTargets = Object.entries(targetCounts)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 20)
+                    .map(([t]) => t);
+
+                const zData = sortedCT.map(ct => {
+                    const targetMap = {};
+                    (ct.top_targets || []).forEach(t => { targetMap[t.target] = t.rho; });
+                    return topTargets.map(target => targetMap[target] ?? null);
                 });
 
                 Plotly.newPlot(heatmapDiv, [{
                     type: 'heatmap',
-                    z: heatmapData,
-                    x: sigList,
-                    y: atlasNames,
+                    z: zData,
+                    x: topTargets,
+                    y: sortedCT.map(ct => ct.celltype.replace(/_/g, ' ')),
                     colorscale: 'RdYlGn',
-                    zmin: -0.5, zmax: 1,
-                    colorbar: { title: 'r' },
-                    hovertemplate: '%{y} - %{x}<br>r = %{z:.3f}<extra></extra>'
+                    zmin: -0.5, zmax: 0.5,
+                    colorbar: { title: '\u03c1', len: 0.8 },
+                    hovertemplate: '%{y} \u00d7 %{x}<br>\u03c1 = %{z:.3f}<extra></extra>'
                 }], {
-                    margin: { l: 100, r: 30, t: 30, b: 100 },
-                    xaxis: { tickangle: -45 },
-                    title: { text: 'Cross-Atlas Signature Correlation Comparison', font: { size: 14 } }
+                    margin: { l: 140, r: 60, t: 40, b: 100 },
+                    xaxis: { tickangle: -45, tickfont: { size: 9 } },
+                    yaxis: { tickfont: { size: 9 }, autorange: 'reversed' },
+                    title: { text: 'Cell Type \u00d7 Target Correlation', font: { size: 13 } }
+                }, { responsive: true });
+            }
+
+            // Panel 4: Cell Type Scatter (% significant vs median rho)
+            if (scatterDiv) {
+                const validCT = perCelltype.filter(ct => ct.median_rho !== null);
+                Plotly.newPlot(scatterDiv, [{
+                    type: 'scatter',
+                    mode: 'markers+text',
+                    x: validCT.map(ct => ct.pct_significant || 0),
+                    y: validCT.map(ct => ct.median_rho || 0),
+                    text: validCT.map(ct => ct.celltype.replace(/_/g, ' ')),
+                    textposition: 'top center',
+                    textfont: { size: 8 },
+                    marker: {
+                        size: validCT.map(ct => Math.max(6, Math.min(20, Math.sqrt(ct.n_targets) * 2))),
+                        color: validCT.map(ct => ct.median_rho || 0),
+                        colorscale: 'RdYlGn',
+                        showscale: true,
+                        colorbar: { title: '\u03c1', len: 0.6 }
+                    },
+                    hovertemplate: '%{text}<br>% Significant: %{x:.1f}%<br>Median \u03c1: %{y:.4f}<extra></extra>'
+                }], {
+                    xaxis: { title: '% Significant (p<0.05)' },
+                    yaxis: { title: 'Median Spearman \u03c1' },
+                    margin: { l: 60, r: 60, t: 40, b: 50 },
+                    title: { text: 'Cell Type Quality: % Significant vs Median \u03c1', font: { size: 13 } }
                 }, { responsive: true });
             }
         }
 
-        // Update validation summary panel
-        async function updateValidationSummary() {
-            const data = await loadValidationData();
+        // ---- Tab 3: Single-Cell Level ----
+        async function updateValidationSingleCell() {
+            const atlas = document.getElementById('val-sc-atlas')?.value || 'cima';
+            const sigType = document.getElementById('val-sc-sigtype')?.value || 'CytoSig';
+            const selectedSig = document.getElementById('val-sc-signature')?.value || '';
+            const cellFilter = document.getElementById('val-sc-cellfilter')?.value || 'all';
+            const searchTerm = document.getElementById('val-sc-search')?.value?.toLowerCase() || '';
 
-            const sigtypeDiv = document.getElementById('val-summary-sigtype');
-            const atlasDiv = document.getElementById('val-summary-atlas');
-            const levelsDiv = document.getElementById('val-summary-levels');
-            const findingsDiv = document.getElementById('val-summary-findings');
+            const scatterDiv = document.getElementById('val-sc-scatter');
+            const comparisonDiv = document.getElementById('val-sc-comparison');
+            const overviewDiv = document.getElementById('val-sc-overview');
+            const boxplotDiv = document.getElementById('val-sc-boxplot');
 
-            if (!sigtypeDiv) return;
+            [scatterDiv, comparisonDiv, overviewDiv, boxplotDiv].forEach(d => d?.classList.remove('loading'));
 
-            sigtypeDiv.classList.remove('loading');
-            atlasDiv?.classList.remove('loading');
-            levelsDiv?.classList.remove('loading');
-            findingsDiv?.classList.remove('loading');
+            const scVals = await loadSingleCellValidation(atlas);
 
-            const sigTypes = ['CytoSig', 'LinCytoSig', 'SecAct'];
-            const atlases = ['CIMA', 'Inflammation', 'scAtlas'];
-            const levels = ['Pseudobulk', 'Single-Cell', 'Atlas'];
-
-            // Compute mean r by signature type
-            const sigTypeR = sigTypes.map((st, i) => {
-                const key = st.toLowerCase();
-                let sum = 0, count = 0;
-                Object.values(data.results || {}).forEach(atlasData => {
-                    Object.entries(atlasData).forEach(([k, v]) => {
-                        if (k.startsWith(key) && v.mean_r) {
-                            sum += v.mean_r;
-                            count++;
-                        }
-                    });
-                });
-                return count > 0 ? sum / count : 0.5 + i * 0.05;
-            });
-
-            Plotly.newPlot(sigtypeDiv, [{
-                type: 'bar',
-                x: sigTypes,
-                y: sigTypeR,
-                marker: { color: ['#1a5f7a', '#57a0d3', '#ff6b6b'] },
-                text: sigTypeR.map(r => r.toFixed(3)),
-                textposition: 'auto'
-            }], {
-                xaxis: { title: 'Signature Type' },
-                yaxis: { title: 'Mean Pearson r', range: [0, 1] },
-                margin: { l: 50, r: 30, t: 30, b: 50 }
-            }, { responsive: true });
-
-            // Mean r by atlas
-            if (atlasDiv) {
-                const atlasR = atlases.map((a, i) => {
-                    const key = a.toLowerCase();
-                    const atlasData = data.results?.[key] || {};
-                    const values = Object.values(atlasData).filter(v => v.mean_r).map(v => v.mean_r);
-                    return values.length > 0 ? values.reduce((a, b) => a + b) / values.length : 0.5 + i * 0.05;
-                });
-
-                Plotly.newPlot(atlasDiv, [{
-                    type: 'bar',
-                    x: atlases,
-                    y: atlasR,
-                    marker: { color: ['#2ca02c', '#ff7f0e', '#9467bd'] },
-                    text: atlasR.map(r => r.toFixed(3)),
-                    textposition: 'auto'
-                }], {
-                    xaxis: { title: 'Atlas' },
-                    yaxis: { title: 'Mean Pearson r', range: [0, 1] },
-                    margin: { l: 50, r: 30, t: 30, b: 50 }
-                }, { responsive: true });
+            if (!scVals || scVals.length === 0) {
+                if (scatterDiv) scatterDiv.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">Single-cell validation data not yet available for this atlas. Loading large JSON files may take time.</p>';
+                return;
             }
 
-            // Correlation by level
-            if (levelsDiv) {
-                const levelR = levels.map((level, i) => {
-                    const key = level.toLowerCase().replace('-', '');
-                    let sum = 0, count = 0;
-                    Object.values(data.results || {}).forEach(atlasData => {
-                        Object.entries(atlasData).forEach(([k, v]) => {
-                            if (k.includes(key) && v.mean_r) {
-                                sum += v.mean_r;
-                                count++;
-                            }
-                        });
-                    });
-                    // Default values if no data
-                    return count > 0 ? sum / count : [0.75, 0.45, 0.65][i];
-                });
-
-                Plotly.newPlot(levelsDiv, [{
-                    type: 'bar',
-                    x: levels,
-                    y: levelR,
-                    marker: { color: '#1a5f7a' },
-                    text: levelR.map(r => r.toFixed(3)),
-                    textposition: 'auto'
-                }], {
-                    xaxis: { title: 'Validation Level' },
-                    yaxis: { title: 'Mean Pearson r', range: [0, 1] },
-                    margin: { l: 50, r: 30, t: 30, b: 50 }
-                }, { responsive: true });
-            }
-        }
-
-        // Update atlas-level validation with REAL data (target gene expression vs activity)
-        function updateValidationAtlasReal(sigData, atlas, sigType, selectedSig, searchTerm, scatterDiv, rankingDiv, heatmapDiv) {
-            const points = sigData.points || [];
-            const overallR = sigData.pearson_r || 0;
-            const overallRho = sigData.spearman_rho || 0;
-            const nPoints = sigData.n_points || points.length;
-
-            // Get unique signatures
-            const allSignatures = [...new Set(points.map(p => p.signature))];
+            // Filter by signature type
+            let filteredVals = scVals.filter(sv => sv.signature_type === sigType);
+            if (filteredVals.length === 0) filteredVals = scVals;
 
             // Populate signature dropdown
-            const sigDropdown = document.getElementById('val-atlas-signature');
+            const sigDropdown = document.getElementById('val-sc-signature');
             if (sigDropdown) {
                 const currentOptions = new Set(Array.from(sigDropdown.options).map(o => o.value));
-                allSignatures.forEach(sig => {
+                const sigs = filteredVals.map(sv => sv.signature).filter(Boolean);
+                sigs.forEach(sig => {
                     if (!currentOptions.has(sig)) {
                         const opt = document.createElement('option');
                         opt.value = sig;
@@ -12603,216 +12235,384 @@
                 });
             }
 
-            // Filter points by search term
-            let filteredPoints = points;
+            let targetSig = selectedSig;
             if (searchTerm) {
-                filteredPoints = points.filter(p => p.signature?.toLowerCase().includes(searchTerm));
+                const match = filteredVals.find(sv => sv.signature?.toLowerCase().includes(searchTerm));
+                if (match) targetSig = match.signature;
             }
 
-            // Filter by selected signature
-            if (selectedSig !== 'all') {
-                filteredPoints = filteredPoints.filter(p => p.signature === selectedSig);
-            }
+            const scVal = filteredVals.find(sv => sv.signature === targetSig) || filteredVals[0];
 
-            if (filteredPoints.length === 0) {
-                scatterDiv.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No data matches your search.</p>';
-                return;
-            }
-
-            const colors = [
-                '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-                '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'
-            ];
-
-            // Group points by signature for coloring
-            const sigToPoints = {};
-            filteredPoints.forEach(p => {
-                if (!sigToPoints[p.signature]) sigToPoints[p.signature] = [];
-                sigToPoints[p.signature].push(p);
-            });
-
-            const traces = Object.entries(sigToPoints).map(([sig, pts], idx) => ({
-                type: 'scatter',
-                mode: 'markers',
-                name: sig,
-                x: pts.map(p => p.expression),
-                y: pts.map(p => p.activity),
-                text: pts.map(p => `${sig}<br>${p.cell_type}<br>Expr: ${p.expression.toFixed(2)}<br>Activity: ${p.activity.toFixed(2)}`),
-                marker: {
-                    size: 10,
-                    color: colors[idx % colors.length],
-                    opacity: 0.7
-                },
-                hovertemplate: '%{text}<extra></extra>'
-            }));
-
-            // Calculate regression line
-            const xVals = filteredPoints.map(p => p.expression);
-            const yVals = filteredPoints.map(p => p.activity);
-            const n = xVals.length;
-            const sumX = xVals.reduce((a, b) => a + b, 0);
-            const sumY = yVals.reduce((a, b) => a + b, 0);
-            const sumXY = xVals.reduce((a, x, i) => a + x * yVals[i], 0);
-            const sumX2 = xVals.reduce((a, x) => a + x * x, 0);
-            const meanX = sumX / n;
-            const meanY = sumY / n;
-            const slope = (sumXY - n * meanX * meanY) / (sumX2 - n * meanX * meanX) || 0;
-            const intercept = meanY - slope * meanX;
-            const minX = Math.min(...xVals);
-            const maxX = Math.max(...xVals);
-
-            // Compute correlation for filtered data
-            const sumY2 = yVals.reduce((a, y) => a + y * y, 0);
-            const r = (n * sumXY - sumX * sumY) / Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY)) || 0;
-
-            traces.push({
-                type: 'scatter',
-                mode: 'lines',
-                name: 'Regression',
-                x: [minX, maxX],
-                y: [slope * minX + intercept, slope * maxX + intercept],
-                line: { color: '#333', width: 2, dash: 'dash' },
-                hoverinfo: 'skip'
-            });
-
-            const sigLabel = selectedSig === 'all' ? `All ${sigType} Signatures` : selectedSig;
-            Plotly.newPlot(scatterDiv, traces, {
-                xaxis: { title: 'Target Gene Expression (z-score)' },
-                yaxis: { title: 'Predicted Activity (z-score)' },
-                margin: { l: 60, r: 30, t: 50, b: 50 },
-                legend: { orientation: 'v', x: 1.02, y: 1, font: { size: 9 } },
-                annotations: [{
-                    x: 0.02, y: 0.98, xref: 'paper', yref: 'paper',
-                    text: `${sigLabel}<br>r = ${r.toFixed(3)}<br>n = ${n} points`,
-                    showarrow: false,
-                    font: { size: 12 },
-                    bgcolor: 'rgba(255,255,255,0.9)',
-                    borderpad: 6,
-                    align: 'left'
-                }],
-                title: { text: `Atlas Level: ${sigLabel} (${atlas.toUpperCase()})`, font: { size: 14 } }
-            }, { responsive: true });
-
-            // Create ranking chart (correlation per signature)
-            if (rankingDiv && selectedSig === 'all') {
-                const sigCorrelations = [];
-                Object.entries(sigToPoints).forEach(([sig, pts]) => {
-                    if (pts.length >= 3) {
-                        const xs = pts.map(p => p.expression);
-                        const ys = pts.map(p => p.activity);
-                        const nn = xs.length;
-                        const sx = xs.reduce((a, b) => a + b, 0);
-                        const sy = ys.reduce((a, b) => a + b, 0);
-                        const sxy = xs.reduce((a, x, i) => a + x * ys[i], 0);
-                        const sx2 = xs.reduce((a, x) => a + x * x, 0);
-                        const sy2 = ys.reduce((a, y) => a + y * y, 0);
-                        const rr = (nn * sxy - sx * sy) / Math.sqrt((nn * sx2 - sx * sx) * (nn * sy2 - sy * sy)) || 0;
-                        sigCorrelations.push({ signature: sig, r: rr, n: nn });
+            // Panel 1: Expression vs Activity Scatter
+            if (scatterDiv && scVal) {
+                const sampledPoints = scVal.sampled_points || [];
+                if (sampledPoints.length === 0) {
+                    scatterDiv.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No sampled points available for this signature.</p>';
+                } else {
+                    let visiblePoints = sampledPoints;
+                    if (cellFilter === 'expressing') {
+                        visiblePoints = sampledPoints.filter(p => p.is_expressing === true);
+                    } else if (cellFilter === 'non_expressing') {
+                        visiblePoints = sampledPoints.filter(p => p.is_expressing === false);
                     }
+
+                    if (visiblePoints.length === 0) {
+                        scatterDiv.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No cells match the selected filter.</p>';
+                    } else {
+                        const xArr = visiblePoints.map(p => p.expression);
+                        const yArr = visiblePoints.map(p => p.activity);
+                        const r = computePearsonR(xArr, yArr);
+
+                        const traces = [];
+                        if (cellFilter === 'all') {
+                            const expressing = visiblePoints.filter(p => p.is_expressing);
+                            const nonExpressing = visiblePoints.filter(p => !p.is_expressing);
+                            if (expressing.length > 0) {
+                                traces.push({
+                                    type: 'scatter', mode: 'markers', name: 'Expressing',
+                                    x: expressing.map(p => p.expression),
+                                    y: expressing.map(p => p.activity),
+                                    marker: { size: 4, color: '#2ca02c', opacity: 0.4 }
+                                });
+                            }
+                            if (nonExpressing.length > 0) {
+                                traces.push({
+                                    type: 'scatter', mode: 'markers', name: 'Non-expressing',
+                                    x: nonExpressing.map(p => p.expression),
+                                    y: nonExpressing.map(p => p.activity),
+                                    marker: { size: 4, color: '#bbb', opacity: 0.3 }
+                                });
+                            }
+                        } else {
+                            traces.push({
+                                type: 'scatter', mode: 'markers',
+                                name: cellFilter === 'expressing' ? 'Expressing' : 'Non-expressing',
+                                x: xArr, y: yArr,
+                                marker: { size: 4, color: cellFilter === 'expressing' ? '#2ca02c' : '#bbb', opacity: 0.4 }
+                            });
+                        }
+
+                        Plotly.newPlot(scatterDiv, traces, {
+                            xaxis: { title: `${scVal.signature} Expression` },
+                            yaxis: { title: 'Predicted Activity (z-score)' },
+                            margin: { l: 60, r: 30, t: 50, b: 50 },
+                            legend: { orientation: 'h', y: -0.15 },
+                            annotations: [{
+                                x: 0.98, y: 0.98, xref: 'paper', yref: 'paper',
+                                text: `r = ${r.toFixed(3)}<br>n = ${visiblePoints.length} cells`,
+                                showarrow: false, font: { size: 11 },
+                                bgcolor: 'rgba(255,255,255,0.9)', borderpad: 4
+                            }],
+                            title: { text: `Single-Cell: ${scVal.signature}`, font: { size: 13 } }
+                        }, { responsive: true });
+                    }
+                }
+            }
+
+            // Panel 2: Expressing vs Non-Expressing Activity comparison
+            if (comparisonDiv) {
+                const top15 = filteredVals
+                    .filter(sv => sv.activity_fold_change !== undefined && !isNaN(sv.activity_fold_change))
+                    .sort((a, b) => Math.abs(b.activity_fold_change) - Math.abs(a.activity_fold_change))
+                    .slice(0, 15);
+
+                if (top15.length > 0) {
+                    Plotly.newPlot(comparisonDiv, [
+                        {
+                            type: 'bar', name: 'Expressing',
+                            x: top15.map(sv => sv.signature),
+                            y: top15.map(sv => sv.mean_activity_expressing || 0),
+                            marker: { color: '#2ca02c' }
+                        },
+                        {
+                            type: 'bar', name: 'Non-expressing',
+                            x: top15.map(sv => sv.signature),
+                            y: top15.map(sv => sv.mean_activity_non_expressing || 0),
+                            marker: { color: '#d62728' }
+                        }
+                    ], {
+                        barmode: 'group',
+                        xaxis: { title: 'Signature', tickangle: -45, tickfont: { size: 9 } },
+                        yaxis: { title: 'Mean Activity (z-score)' },
+                        margin: { l: 60, r: 20, t: 40, b: 110 },
+                        legend: { orientation: 'h', y: 1.05 },
+                        title: { text: 'Expressing vs Non-Expressing Activity (Top 15)', font: { size: 13 } }
+                    }, { responsive: true });
+                }
+            }
+
+            // Panel 3: Expressing Fraction vs Activity Fold Change
+            if (overviewDiv) {
+                const summaryData = filteredVals
+                    .filter(sv => sv.expressing_fraction !== undefined && sv.activity_fold_change !== undefined)
+                    .map(sv => ({
+                        signature: sv.signature,
+                        expressingPct: sv.expressing_fraction * 100,
+                        foldChange: sv.activity_fold_change,
+                        pValue: sv.activity_p_value,
+                        significant: sv.activity_p_value !== undefined && sv.activity_p_value < 0.05
+                    }));
+
+                if (summaryData.length > 0) {
+                    const topLabels = [...summaryData]
+                        .sort((a, b) => Math.abs(b.foldChange) - Math.abs(a.foldChange))
+                        .slice(0, 10)
+                        .map(s => s.signature);
+
+                    Plotly.newPlot(overviewDiv, [{
+                        type: 'scatter',
+                        mode: 'markers+text',
+                        x: summaryData.map(s => s.expressingPct),
+                        y: summaryData.map(s => s.foldChange),
+                        text: summaryData.map(s => topLabels.includes(s.signature) ? s.signature : ''),
+                        textposition: 'top center',
+                        textfont: { size: 8 },
+                        marker: {
+                            size: 8,
+                            color: summaryData.map(s => s.significant ? '#2ca02c' : '#ccc'),
+                            opacity: summaryData.map(s => s.significant ? 0.8 : 0.4),
+                            line: { color: '#333', width: 0.5 }
+                        },
+                        hovertemplate: '%{hovertext}<br>Expressing: %{x:.1f}%<br>FC: %{y:.2f}<extra></extra>',
+                        hovertext: summaryData.map(s => s.signature)
+                    }], {
+                        xaxis: { title: 'Expressing Fraction (%)' },
+                        yaxis: { title: 'Activity Fold Change' },
+                        margin: { l: 60, r: 30, t: 40, b: 50 },
+                        title: { text: 'Expressing Fraction vs Activity Fold Change', font: { size: 13 } }
+                    }, { responsive: true });
+                }
+            }
+
+            // Panel 4: Box plot of activity by expression status
+            if (boxplotDiv && scVal) {
+                const sampledPoints = scVal.sampled_points || [];
+                if (sampledPoints.length > 0) {
+                    const expressing = sampledPoints.filter(p => p.is_expressing);
+                    const nonExpressing = sampledPoints.filter(p => !p.is_expressing);
+                    const traces = [];
+                    if (expressing.length > 0) {
+                        traces.push({
+                            type: 'box', name: 'Expressing',
+                            y: expressing.map(p => p.activity),
+                            marker: { color: '#2ca02c' }, boxpoints: false
+                        });
+                    }
+                    if (nonExpressing.length > 0) {
+                        traces.push({
+                            type: 'box', name: 'Non-expressing',
+                            y: nonExpressing.map(p => p.activity),
+                            marker: { color: '#d62728' }, boxpoints: false
+                        });
+                    }
+                    const fc = scVal.activity_fold_change;
+                    const pv = scVal.activity_p_value;
+                    Plotly.newPlot(boxplotDiv, traces, {
+                        yaxis: { title: 'Activity (z-score)' },
+                        margin: { l: 60, r: 30, t: 50, b: 50 },
+                        annotations: [{
+                            x: 0.5, y: 1.05, xref: 'paper', yref: 'paper',
+                            text: `${scVal.signature}: FC=${fc !== undefined ? fc.toFixed(2) : 'N/A'}, p=${pv !== undefined ? pv.toExponential(2) : 'N/A'}`,
+                            showarrow: false, font: { size: 11 }
+                        }],
+                        title: { text: `Activity Distribution: ${scVal.signature}`, font: { size: 13 } }
+                    }, { responsive: true });
+                } else {
+                    boxplotDiv.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No sampled points for box plot.</p>';
+                }
+            }
+        }
+
+        // ---- Tab 4: Summary ----
+        async function updateValidationSummary() {
+            const bulk = await loadBulkValidationData();
+            if (!bulk) return;
+
+            const sigtypeDiv = document.getElementById('val-summary-sigtype');
+            const atlasDiv = document.getElementById('val-summary-atlas');
+            const levelsDiv = document.getElementById('val-summary-levels');
+            const scatterDiv = document.getElementById('val-summary-scatter');
+            const findingsDiv = document.getElementById('val-summary-findings');
+
+            [sigtypeDiv, atlasDiv, levelsDiv, scatterDiv].forEach(d => d?.classList.remove('loading'));
+
+            const summary = bulk.summary;
+
+            // Panel 1: Median Correlation by Signature Type
+            if (sigtypeDiv) {
+                const donorRows = summary.filter(s =>
+                    s.level === 'donor_only' || s.level === 'donor_organ'
+                );
+                const sigTypes = ['cytosig', 'lincytosig', 'secact'];
+                const sigLabels = ['CytoSig', 'LinCytoSig', 'SecAct'];
+                const sigColors = ['#1a5f7a', '#57a0d3', '#ff6b6b'];
+
+                const medianRhos = sigTypes.map(st => {
+                    const rows = donorRows.filter(r => r.signature === st);
+                    if (rows.length === 0) return 0;
+                    const vals = rows.map(r => r.median_rho).filter(v => v !== null);
+                    return vals.length > 0 ? vals.reduce((a, b) => a + b) / vals.length : 0;
                 });
 
-                // Sort by correlation (high to low)
-                sigCorrelations.sort((a, b) => b.r - a.r);
-
-                const topN = Math.min(30, sigCorrelations.length);
-                const topSigs = sigCorrelations.slice(0, topN);
-
-                Plotly.newPlot(rankingDiv, [{
-                    type: 'bar',
-                    x: topSigs.map(s => s.r),
-                    y: topSigs.map(s => s.signature),
-                    orientation: 'h',
-                    marker: {
-                        color: topSigs.map(s => s.r >= 0 ? '#2ca02c' : '#d62728')
-                    },
-                    text: topSigs.map(s => `r=${s.r.toFixed(2)}, n=${s.n}`),
-                    hovertemplate: '%{y}<br>%{text}<extra></extra>'
+                Plotly.newPlot(sigtypeDiv, [{
+                    type: 'bar', x: sigLabels, y: medianRhos,
+                    marker: { color: sigColors },
+                    text: medianRhos.map(r => r.toFixed(4)),
+                    textposition: 'outside'
                 }], {
-                    xaxis: { title: 'Pearson r (Expression vs Activity)', range: [-1, 1] },
-                    yaxis: { automargin: true, tickfont: { size: 10 } },
-                    margin: { l: 100, r: 30, t: 40, b: 50 },
-                    title: { text: `Top ${topN} Signatures by Correlation`, font: { size: 14 } }
+                    xaxis: { title: 'Signature Type' },
+                    yaxis: { title: 'Mean of Median \u03c1 (across atlases)' },
+                    margin: { l: 50, r: 30, t: 40, b: 50 },
+                    title: { text: 'Median Correlation by Signature Type', font: { size: 13 } }
                 }, { responsive: true });
             }
 
-            // Update description
-            const descP = scatterDiv.closest('.tab-content')?.querySelector('p');
-            if (descP) {
-                descP.textContent = `Correlation between target gene expression (e.g., IFNG gene) and predicted activity (e.g., IFNG activity) across ${sigData.n_cell_types || 27} cell types. Overall: r=${overallR.toFixed(3)}, \u03c1=${overallRho.toFixed(3)}`;
+            // Panel 2: Median Correlation by Atlas
+            if (atlasDiv) {
+                const atlases = [...new Set(summary.map(s => s.atlas))];
+                const donorRows = summary.filter(s =>
+                    s.level === 'donor_only' || s.level === 'donor_organ'
+                );
+                const atlasColors = ['#2ca02c', '#ff7f0e', '#9467bd', '#e377c2', '#8c564b', '#17becf'];
+                const atlasMedians = atlases.map(a => {
+                    const rows = donorRows.filter(r => r.atlas === a);
+                    const vals = rows.map(r => r.median_rho).filter(v => v !== null);
+                    return vals.length > 0 ? vals.reduce((a2, b) => a2 + b) / vals.length : 0;
+                });
+
+                Plotly.newPlot(atlasDiv, [{
+                    type: 'bar',
+                    x: atlases.map(a => a.replace(/_/g, ' ')),
+                    y: atlasMedians,
+                    marker: { color: atlases.map((_, i) => atlasColors[i % atlasColors.length]) },
+                    text: atlasMedians.map(r => r.toFixed(4)),
+                    textposition: 'outside'
+                }], {
+                    xaxis: { title: 'Atlas', tickangle: -30, tickfont: { size: 9 } },
+                    yaxis: { title: 'Mean of Median \u03c1' },
+                    margin: { l: 50, r: 20, t: 40, b: 80 },
+                    title: { text: 'Median Correlation by Atlas', font: { size: 13 } }
+                }, { responsive: true });
+            }
+
+            // Panel 3: Validation Level Comparison
+            if (levelsDiv) {
+                const allLevels = [...new Set(summary.map(s => s.level))].sort();
+                const levelMedians = allLevels.map(lv => {
+                    const rows = summary.filter(r => r.level === lv);
+                    const vals = rows.map(r => r.median_rho).filter(v => v !== null);
+                    return vals.length > 0 ? vals.reduce((a, b) => a + b) / vals.length : 0;
+                });
+
+                Plotly.newPlot(levelsDiv, [{
+                    type: 'bar',
+                    x: allLevels.map(l => l.replace(/_/g, ' ')),
+                    y: levelMedians,
+                    marker: { color: '#1a5f7a' },
+                    text: levelMedians.map(r => r.toFixed(4)),
+                    textposition: 'outside'
+                }], {
+                    xaxis: { title: 'Aggregation Level', tickangle: -30, tickfont: { size: 9 } },
+                    yaxis: { title: 'Mean of Median \u03c1' },
+                    margin: { l: 50, r: 20, t: 40, b: 100 },
+                    title: { text: 'Correlation by Aggregation Level', font: { size: 13 } }
+                }, { responsive: true });
+            }
+
+            // Panel 4: Summary Scatter
+            if (scatterDiv) {
+                Plotly.newPlot(scatterDiv, [{
+                    type: 'scatter', mode: 'markers',
+                    x: summary.map(s => s.pct_significant || 0),
+                    y: summary.map(s => s.median_rho || 0),
+                    text: summary.map(s => `${s.atlas} / ${s.level} / ${s.signature}`),
+                    marker: {
+                        size: summary.map(s => Math.max(5, Math.min(15, Math.sqrt(s.n_targets || 1)))),
+                        color: summary.map(s => s.median_rho || 0),
+                        colorscale: 'RdYlGn', showscale: true,
+                        colorbar: { title: '\u03c1', len: 0.6 }
+                    },
+                    hovertemplate: '%{text}<br>% Sig: %{x:.1f}%<br>Median \u03c1: %{y:.4f}<extra></extra>'
+                }], {
+                    xaxis: { title: '% Significant (p<0.05)' },
+                    yaxis: { title: 'Median Spearman \u03c1' },
+                    margin: { l: 60, r: 60, t: 40, b: 50 },
+                    title: { text: '% Significant vs Median \u03c1 (all combinations)', font: { size: 13 } }
+                }, { responsive: true });
+            }
+
+            // Key Findings
+            if (findingsDiv) {
+                const donorRows = summary.filter(s =>
+                    s.level === 'donor_only' || s.level === 'donor_organ'
+                );
+                const avgPctSig = donorRows.length > 0
+                    ? (donorRows.reduce((a, r) => a + (r.pct_significant || 0), 0) / donorRows.length).toFixed(1)
+                    : 'N/A';
+                const avgMedianRho = donorRows.length > 0
+                    ? (donorRows.reduce((a, r) => a + (r.median_rho || 0), 0) / donorRows.length).toFixed(4)
+                    : 'N/A';
+                const atlases = [...new Set(donorRows.map(r => r.atlas))];
+                let bestAtlas = '', bestRho = -Infinity;
+                atlases.forEach(a => {
+                    const rows = donorRows.filter(r => r.atlas === a);
+                    const avg = rows.reduce((s, r) => s + (r.median_rho || 0), 0) / rows.length;
+                    if (avg > bestRho) { bestRho = avg; bestAtlas = a; }
+                });
+                findingsDiv.innerHTML = `<ul>
+                    <li><strong>Donor Level:</strong> Average ${avgPctSig}% of targets show significant expression-activity correlation (p&lt;0.05), with median \u03c1 = ${avgMedianRho}</li>
+                    <li><strong>Best Performing Atlas:</strong> ${bestAtlas.replace(/_/g, ' ')} (median \u03c1 = ${bestRho.toFixed(4)})</li>
+                    <li><strong>Cell Type Stratification:</strong> Finer cell-type resolution generally improves correlation strength by reducing biological heterogeneity</li>
+                    <li><strong>Single-Cell Level:</strong> Expressing cells show consistently higher predicted activity than non-expressing cells for most signatures</li>
+                </ul>`;
             }
         }
 
-        // Initialize validation section
+        // ---- Initialization ----
         function initValidationSection() {
-            // Set up event listeners for pseudobulk panel
-            document.getElementById('val-pb-atlas')?.addEventListener('change', () => {
-                // Reset dropdowns when atlas changes
-                resetValidationDropdowns('pb');
-                updateValidationPseudobulk();
-            });
-            document.getElementById('val-pb-sigtype')?.addEventListener('change', updateValidationPseudobulk);
-            document.getElementById('val-pb-signature')?.addEventListener('change', updateValidationPseudobulk);
-            document.getElementById('val-pb-celltype')?.addEventListener('change', updateValidationPseudobulk);
-
-            // Search input for pseudobulk
-            const pbSearch = document.getElementById('val-pb-search');
-            if (pbSearch) {
-                pbSearch.addEventListener('input', debounce(updateValidationPseudobulk, 300));
-                pbSearch.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') updateValidationPseudobulk();
-                });
+            // Donor Level tab listeners
+            document.getElementById('val-donor-atlas')?.addEventListener('change', updateValidationDonor);
+            document.getElementById('val-donor-sigtype')?.addEventListener('change', updateValidationDonor);
+            const donorSearch = document.getElementById('val-donor-search');
+            if (donorSearch) {
+                donorSearch.addEventListener('input', debounce(updateValidationDonor, 300));
+                donorSearch.addEventListener('keydown', (e) => { if (e.key === 'Enter') updateValidationDonor(); });
             }
 
-            // Set up event listeners for single-cell panel
+            // Cell Type Stratified tab listeners
+            document.getElementById('val-ct-atlas')?.addEventListener('change', () => {
+                populateCelltypeLevelDropdown(document.getElementById('val-ct-atlas').value);
+                updateValidationCelltype();
+            });
+            document.getElementById('val-ct-level')?.addEventListener('change', updateValidationCelltype);
+            document.getElementById('val-ct-sigtype')?.addEventListener('change', updateValidationCelltype);
+            const ctSearch = document.getElementById('val-ct-search');
+            if (ctSearch) {
+                ctSearch.addEventListener('input', debounce(updateValidationCelltype, 300));
+                ctSearch.addEventListener('keydown', (e) => { if (e.key === 'Enter') updateValidationCelltype(); });
+            }
+
+            // Single-Cell tab listeners
             document.getElementById('val-sc-atlas')?.addEventListener('change', () => {
-                resetValidationDropdowns('sc');
+                const sigDropdown = document.getElementById('val-sc-signature');
+                if (sigDropdown) { sigDropdown.innerHTML = '<option value="">-- Select --</option>'; }
                 updateValidationSingleCell();
             });
-            document.getElementById('val-sc-sigtype')?.addEventListener('change', updateValidationSingleCell);
+            document.getElementById('val-sc-sigtype')?.addEventListener('change', () => {
+                const sigDropdown = document.getElementById('val-sc-signature');
+                if (sigDropdown) { sigDropdown.innerHTML = '<option value="">-- Select --</option>'; }
+                updateValidationSingleCell();
+            });
             document.getElementById('val-sc-signature')?.addEventListener('change', updateValidationSingleCell);
-
-            // Search input for single-cell
+            document.getElementById('val-sc-cellfilter')?.addEventListener('change', updateValidationSingleCell);
             const scSearch = document.getElementById('val-sc-search');
             if (scSearch) {
                 scSearch.addEventListener('input', debounce(updateValidationSingleCell, 300));
-                scSearch.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') updateValidationSingleCell();
-                });
+                scSearch.addEventListener('keydown', (e) => { if (e.key === 'Enter') updateValidationSingleCell(); });
             }
 
-            // Set up event listeners for atlas-level panel
-            document.getElementById('val-atlas-atlas')?.addEventListener('change', () => {
-                resetValidationDropdowns('atlas');
-                updateValidationAtlas();
-            });
-            document.getElementById('val-atlas-sigtype')?.addEventListener('change', updateValidationAtlas);
-            document.getElementById('val-atlas-signature')?.addEventListener('change', updateValidationAtlas);
-
-            // Search input for atlas level
-            const atlasSearch = document.getElementById('val-atlas-search');
-            if (atlasSearch) {
-                atlasSearch.addEventListener('input', debounce(updateValidationAtlas, 300));
-                atlasSearch.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') updateValidationAtlas();
-                });
-            }
-        }
-
-        // Reset validation dropdowns when atlas changes
-        function resetValidationDropdowns(prefix) {
-            const sigDropdown = document.getElementById(`val-${prefix}-signature`);
-            if (sigDropdown) {
-                // Keep only first option (All Signatures or default)
-                while (sigDropdown.options.length > 1) {
-                    sigDropdown.remove(1);
-                }
-            }
-            const ctDropdown = document.getElementById(`val-${prefix}-celltype`);
-            if (ctDropdown) {
-                while (ctDropdown.options.length > 1) {
-                    ctDropdown.remove(1);
-                }
-            }
+            // Initialize level dropdown for default atlas
+            populateCelltypeLevelDropdown(document.getElementById('val-ct-atlas')?.value || 'cima');
         }
 
         // Debounce helper
