@@ -86,12 +86,23 @@ ls -lh visualization/data/embedded_data.js
 
 Expected size: 150-300 MB (depending on included data)
 
+### Validation Data
+| File | Embedded Key | Status | Notes |
+|------|--------------|--------|-------|
+| `bulk_donor_correlations.json` | N/A | Lazy-loaded | Single-cell atlas donor/celltype correlations |
+| `bulk_rnaseq_validation.json` | N/A | Lazy-loaded | GTEx + TCGA bulk RNA-seq validation |
+| `validation/cima_validation.json` | N/A | Lazy-loaded | CIMA single-cell validation |
+| `validation/inflammation_validation.json` | N/A | Lazy-loaded | Inflammation single-cell validation |
+| `validation/scatlas_validation.json` | N/A | Lazy-loaded | scAtlas single-cell validation |
+
 ## Lazy Loading Fallbacks
 
 The following files have fallback lazy loading if not embedded:
 - `cima_population_stratification.json` - Loaded via `loadPopulationDataIfNeeded()`
 - `cima_eqtl.json` - Loaded via `loadFullEqtlData()`
 - `age_bmi_boxplots.json` - Loaded via `loadBoxplotDataIfNeeded()`
+- `bulk_donor_correlations.json` - Loaded via `loadBulkValidationData()`
+- `bulk_rnaseq_validation.json` - Loaded via `loadBulkRnaseqData()`
 
 ## Common Issues
 
@@ -101,4 +112,4 @@ The following files have fallback lazy loading if not embedded:
 
 ## Last Updated
 
-2026-02-01
+2026-02-07

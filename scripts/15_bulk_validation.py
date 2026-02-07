@@ -1,0 +1,554 @@
+#!/usr/bin/env python3
+"""
+Bulk RNA-seq Validation Pipeline (TCGA + GTEx).
+
+Loads bulk TPM data from TOIL-recomputed TCGA and GTEx datasets,
+maps gene IDs via GENCODE v23 probemap, transforms with log2(TPM+1),
+runs ridge regression activity inference, and saves H5AD files.
+
+This validates that single-cell-derived cytokine signatures generalize
+to independent bulk RNA-seq datasets.
+
+Usage:
+    # Both datasets
+    python scripts/15_bulk_validation.py --dataset all
+
+    # GTEx only
+    python scripts/15_bulk_validation.py --dataset gtex
+
+    # TCGA only
+    python scripts/15_bulk_validation.py --dataset tcga
+
+    # Force overwrite
+    python scripts/15_bulk_validation.py --dataset all --force
+
+    # Choose backend (auto detects GPU)
+    python scripts/15_bulk_validation.py --dataset all --backend auto
+"""
+
+import argparse
+import gc
+import gzip
+import sys
+import time
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+import anndata as ad
+import numpy as np
+import pandas as pd
+
+sys.stdout.reconfigure(line_buffering=True)
+sys.path.insert(0, "/vf/users/parks34/projects/1ridgesig/SecActpy")
+
+from secactpy import load_cytosig, load_secact, ridge
+
+
+# =============================================================================
+# Paths
+# =============================================================================
+
+BULK_DATA_DIR = Path('/data/parks34/projects/2secactpy/data/bulk')
+BASE_OUTPUT_DIR = Path('/data/parks34/projects/2secactpy/results/cross_sample_validation')
+
+# Data files
+TOIL_TPM = BULK_DATA_DIR / 'TcgaTargetGtex_rsem_gene_tpm.gz'
+GTEX_TPM = BULK_DATA_DIR / 'GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_tpm.gct.gz'
+TCGA_TPM = BULK_DATA_DIR / 'tcga_RSEM_gene_tpm.gz'
+PHENOTYPE_FILE = BULK_DATA_DIR / 'TcgaTargetGTEX_phenotype.txt.gz'
+GTEX_SAMPLE_ATTR = BULK_DATA_DIR / 'GTEx_Analysis_v8_Annotations_SampleAttributesDS.txt'
+PROBEMAP = BULK_DATA_DIR / 'gencode.v23.annotation.gene.probemap'
+
+
+def log(msg: str) -> None:
+    """Print timestamped log message."""
+    ts = time.strftime('%H:%M:%S')
+    print(f"[{ts}] {msg}", flush=True)
+
+
+# =============================================================================
+# Signature Loading (same as script 12)
+# =============================================================================
+
+_SIGNATURES_CACHE = None
+
+def load_signatures() -> Dict[str, pd.DataFrame]:
+    """Load all signature matrices (cached)."""
+    global _SIGNATURES_CACHE
+    if _SIGNATURES_CACHE is not None:
+        return _SIGNATURES_CACHE
+
+    log("Loading signature matrices...")
+    cytosig = load_cytosig()
+    secact = load_secact()
+
+    lincytosig_path = Path("/data/parks34/projects/1ridgesig/SecActpy/secactpy/data/LinCytoSig.tsv.gz")
+    with gzip.open(lincytosig_path, 'rt') as f:
+        lincytosig = pd.read_csv(f, sep='\t', index_col=0)
+
+    _SIGNATURES_CACHE = {
+        'cytosig': cytosig,
+        'lincytosig': lincytosig,
+        'secact': secact,
+    }
+    log(f"  CytoSig: {cytosig.shape}, LinCytoSig: {lincytosig.shape}, SecAct: {secact.shape}")
+    return _SIGNATURES_CACHE
+
+
+# =============================================================================
+# Gene ID Mapping
+# =============================================================================
+
+def load_probemap(probemap_path: Path) -> Dict[str, str]:
+    """
+    Load GENCODE v23 probemap: ENSG.version -> HGNC symbol.
+
+    The probemap file has columns: id, gene, chrom, chromStart, chromEnd, strand
+    where 'id' is ENSG.version and 'gene' is HGNC symbol.
+    """
+    log(f"Loading gene probemap: {probemap_path.name}")
+    df = pd.read_csv(probemap_path, sep='\t')
+    mapping = {}
+    for _, row in df.iterrows():
+        ensg_id = str(row['id'])
+        gene_symbol = str(row['gene'])
+        if gene_symbol and gene_symbol != 'nan':
+            mapping[ensg_id] = gene_symbol
+            # Also map without version suffix
+            ensg_base = ensg_id.split('.')[0]
+            if ensg_base not in mapping:
+                mapping[ensg_base] = gene_symbol
+    log(f"  {len(mapping)} gene ID mappings loaded")
+    return mapping
+
+
+# =============================================================================
+# Data Loading
+# =============================================================================
+
+def load_toil_data(
+    dataset: str,
+    probemap: Dict[str, str],
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Load TOIL-recomputed TPM data for GTEx or TCGA.
+
+    Args:
+        dataset: 'gtex' or 'tcga'
+        probemap: ENSG.version -> HGNC symbol mapping
+
+    Returns:
+        (expr_df, metadata_df) where expr_df is samples x genes (log2(TPM+1))
+    """
+    log(f"Loading TOIL combined TPM for {dataset}...")
+
+    # Read TPM matrix (genes x samples, tab-separated, gzipped)
+    # First column is gene ID (ENSG.version)
+    t0 = time.time()
+    tpm = pd.read_csv(TOIL_TPM, sep='\t', index_col=0, compression='gzip')
+    log(f"  Raw matrix: {tpm.shape} ({time.time() - t0:.1f}s)")
+
+    # Load phenotype metadata
+    log("  Loading phenotype metadata...")
+    pheno = pd.read_csv(PHENOTYPE_FILE, sep='\t', compression='gzip')
+    pheno = pheno.set_index('sample')
+
+    # Filter samples by dataset
+    if dataset == 'gtex':
+        # GTEx samples have IDs starting with "GTEX-"
+        gtex_samples = [s for s in tpm.columns if s.startswith('GTEX-')]
+        tpm = tpm[gtex_samples]
+        log(f"  Filtered to {len(gtex_samples)} GTEx samples")
+    elif dataset == 'tcga':
+        # TCGA samples have IDs starting with "TCGA-"
+        tcga_samples = [s for s in tpm.columns if s.startswith('TCGA-')]
+        tpm = tpm[tcga_samples]
+        log(f"  Filtered to {len(tcga_samples)} TCGA samples")
+
+    # Map gene IDs to HGNC symbols
+    log("  Mapping gene IDs to symbols...")
+    gene_ids = tpm.index.tolist()
+    gene_symbols = []
+    valid_rows = []
+    seen_symbols = set()
+
+    for i, gid in enumerate(gene_ids):
+        symbol = probemap.get(gid)
+        if symbol and symbol not in seen_symbols:
+            gene_symbols.append(symbol)
+            valid_rows.append(i)
+            seen_symbols.add(symbol)
+
+    tpm = tpm.iloc[valid_rows]
+    tpm.index = gene_symbols
+    log(f"  After gene mapping: {tpm.shape[0]} unique genes")
+
+    # Transform: log2(TPM + 1)
+    log("  Applying log2(TPM + 1) transform...")
+    tpm = np.log2(tpm + 1)
+
+    # Transpose to samples x genes
+    expr_df = tpm.T
+
+    # Build metadata
+    common_samples = expr_df.index.intersection(pheno.index)
+    metadata = pheno.loc[common_samples].copy()
+
+    if dataset == 'gtex':
+        # Use _primary_site for tissue type
+        metadata = metadata.rename(columns={
+            '_primary_site': 'tissue_type',
+            '_study': 'study',
+        })
+        if 'detailed_category' in metadata.columns:
+            metadata = metadata.rename(columns={'detailed_category': 'tissue_detail'})
+    elif dataset == 'tcga':
+        metadata = metadata.rename(columns={
+            '_primary_site': 'cancer_site',
+            '_study': 'study',
+            'detailed_category': 'cancer_type',
+        })
+
+    metadata['dataset'] = dataset.upper()
+
+    # Align expression with metadata
+    expr_df = expr_df.loc[common_samples]
+    log(f"  Final: {expr_df.shape[0]} samples, {expr_df.shape[1]} genes")
+
+    return expr_df, metadata
+
+
+def load_gtex_standalone(probemap: Dict[str, str]) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Load standalone GTEx v8 TPM as fallback if TOIL is unavailable."""
+    log("Loading standalone GTEx v8 TPM...")
+
+    t0 = time.time()
+    # GCT format: skip first 2 header lines, then tab-separated with Name, Description columns
+    tpm = pd.read_csv(GTEX_TPM, sep='\t', compression='gzip', skiprows=2, index_col=0)
+    description = tpm['Description'] if 'Description' in tpm.columns else None
+    tpm = tpm.drop(columns=['Description'], errors='ignore')
+    log(f"  Raw matrix: {tpm.shape} ({time.time() - t0:.1f}s)")
+
+    # Map gene IDs
+    gene_ids = tpm.index.tolist()
+    gene_symbols = []
+    valid_rows = []
+    seen_symbols = set()
+
+    for i, gid in enumerate(gene_ids):
+        symbol = probemap.get(gid)
+        if not symbol and description is not None:
+            symbol = str(description.iloc[i])
+        if symbol and symbol != 'nan' and symbol not in seen_symbols:
+            gene_symbols.append(symbol)
+            valid_rows.append(i)
+            seen_symbols.add(symbol)
+
+    tpm = tpm.iloc[valid_rows]
+    tpm.index = gene_symbols
+    log(f"  After gene mapping: {tpm.shape[0]} unique genes")
+
+    # log2(TPM + 1)
+    tpm = np.log2(tpm + 1)
+    expr_df = tpm.T
+
+    # Load sample attributes for metadata
+    if GTEX_SAMPLE_ATTR.exists():
+        attrs = pd.read_csv(GTEX_SAMPLE_ATTR, sep='\t')
+        attrs = attrs.set_index('SAMPID')
+        common = expr_df.index.intersection(attrs.index)
+        metadata = attrs.loc[common][['SMTS', 'SMTSD']].copy()
+        metadata = metadata.rename(columns={'SMTS': 'tissue_type', 'SMTSD': 'tissue_detail'})
+        expr_df = expr_df.loc[common]
+    else:
+        metadata = pd.DataFrame(index=expr_df.index)
+        metadata['tissue_type'] = 'Unknown'
+
+    metadata['dataset'] = 'GTEX'
+    log(f"  Final: {expr_df.shape[0]} samples, {expr_df.shape[1]} genes")
+
+    return expr_df, metadata
+
+
+def load_tcga_standalone(probemap: Dict[str, str]) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Load standalone TCGA RSEM TPM as fallback if TOIL is unavailable."""
+    log("Loading standalone TCGA TPM...")
+
+    t0 = time.time()
+    tpm = pd.read_csv(TCGA_TPM, sep='\t', index_col=0, compression='gzip')
+    log(f"  Raw matrix: {tpm.shape} ({time.time() - t0:.1f}s)")
+
+    # Map gene IDs
+    gene_ids = tpm.index.tolist()
+    gene_symbols = []
+    valid_rows = []
+    seen_symbols = set()
+
+    for i, gid in enumerate(gene_ids):
+        symbol = probemap.get(gid)
+        if symbol and symbol not in seen_symbols:
+            gene_symbols.append(symbol)
+            valid_rows.append(i)
+            seen_symbols.add(symbol)
+
+    tpm = tpm.iloc[valid_rows]
+    tpm.index = gene_symbols
+    log(f"  After gene mapping: {tpm.shape[0]} unique genes")
+
+    # log2(TPM + 1)
+    tpm = np.log2(tpm + 1)
+    expr_df = tpm.T
+
+    # Extract cancer type from sample ID (TCGA-XX-XXXX-01A -> project code)
+    # Use phenotype file if available
+    if PHENOTYPE_FILE.exists():
+        pheno = pd.read_csv(PHENOTYPE_FILE, sep='\t', compression='gzip')
+        pheno = pheno.set_index('sample')
+        common = expr_df.index.intersection(pheno.index)
+        metadata = pheno.loc[common].copy()
+        metadata = metadata.rename(columns={
+            '_primary_site': 'cancer_site',
+            'detailed_category': 'cancer_type',
+        })
+        expr_df = expr_df.loc[common]
+    else:
+        metadata = pd.DataFrame(index=expr_df.index)
+        metadata['cancer_type'] = 'Unknown'
+
+    metadata['dataset'] = 'TCGA'
+    log(f"  Final: {expr_df.shape[0]} samples, {expr_df.shape[1]} genes")
+
+    return expr_df, metadata
+
+
+# =============================================================================
+# Activity Inference
+# =============================================================================
+
+def run_activity_inference(
+    expr_df: pd.DataFrame,
+    output_dir: Path,
+    dataset_name: str,
+    force: bool = False,
+    lambda_: float = 5e5,
+    backend: str = 'auto',
+) -> Dict[str, Path]:
+    """
+    Run activity inference on bulk expression data.
+
+    For bulk data, each sample is one "donor" — no cell-type stratification.
+    Mean-center genes across all samples, then run ridge regression.
+
+    Args:
+        expr_df: samples x genes DataFrame (log2(TPM+1) transformed)
+        output_dir: directory to save H5AD files
+        dataset_name: 'gtex' or 'tcga'
+        force: overwrite existing files
+        lambda_: ridge regularization parameter
+        backend: 'auto', 'numpy', or 'cupy'
+
+    Returns:
+        Dict mapping signature_name -> output path
+    """
+    signatures = load_signatures()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    gene_names = list(expr_df.columns)
+    expr_matrix = expr_df.values  # (samples x genes)
+    obs_df = pd.DataFrame(index=expr_df.index)
+
+    output_paths = {}
+
+    for sig_name, sig_matrix in signatures.items():
+        act_path = output_dir / f"{dataset_name}_donor_only_{sig_name}.h5ad"
+
+        if act_path.exists() and not force:
+            log(f"  SKIP {sig_name} (exists): {act_path.name}")
+            output_paths[sig_name] = act_path
+            continue
+
+        log(f"  Computing {sig_name}...")
+
+        # Find common genes
+        expr_genes = set(gene_names)
+        sig_genes = set(sig_matrix.index)
+        common = sorted(expr_genes & sig_genes)
+
+        if len(common) < 100:
+            log(f"    Too few common genes: {len(common)}, skipping")
+            continue
+
+        # Align expression to common genes
+        gene_idx = [gene_names.index(g) for g in common]
+        X = sig_matrix.loc[common].values.copy()  # (genes x targets)
+        np.nan_to_num(X, copy=False, nan=0.0)
+
+        t0 = time.time()
+
+        # Mean-center across all samples, run ridge once
+        Y = expr_matrix[:, gene_idx].T.astype(np.float64)  # (genes x samples)
+        Y -= Y.mean(axis=1, keepdims=True)
+        result = ridge(X, Y, lambda_=lambda_, n_rand=1000, backend=backend, verbose=False)
+        activity = result['zscore'].T.astype(np.float32)
+
+        elapsed = time.time() - t0
+
+        # Create AnnData
+        adata_act = ad.AnnData(
+            X=activity,
+            obs=obs_df.copy(),
+            var=pd.DataFrame(index=list(sig_matrix.columns)),
+        )
+        adata_act.uns['common_genes'] = len(common)
+        adata_act.uns['total_sig_genes'] = len(sig_genes)
+        adata_act.uns['gene_coverage'] = len(common) / len(sig_genes)
+        adata_act.uns['signature'] = sig_name
+        adata_act.uns['source'] = f"{dataset_name}_donor_only_pseudobulk.h5ad"
+        adata_act.uns['transform'] = 'log2(TPM+1)'
+
+        adata_act.write_h5ad(act_path, compression='gzip')
+        output_paths[sig_name] = act_path
+        log(f"    {sig_name}: {activity.shape}, {len(common)} genes, {elapsed:.1f}s -> {act_path.name}")
+
+        del activity, adata_act, X, Y, result
+        gc.collect()
+
+    return output_paths
+
+
+# =============================================================================
+# Main Pipeline
+# =============================================================================
+
+def run_dataset(
+    dataset: str,
+    force: bool = False,
+    backend: str = 'auto',
+) -> None:
+    """Run full pipeline for one dataset (gtex or tcga)."""
+    log(f"\n{'=' * 60}")
+    log(f"DATASET: {dataset.upper()}")
+    log(f"{'=' * 60}")
+
+    output_dir = BASE_OUTPUT_DIR / dataset
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Load gene ID mapping
+    probemap = load_probemap(PROBEMAP)
+
+    # Load expression data
+    # Prefer TOIL combined (uniformly processed); fall back to standalone
+    if TOIL_TPM.exists():
+        expr_df, metadata = load_toil_data(dataset, probemap)
+    elif dataset == 'gtex' and GTEX_TPM.exists():
+        expr_df, metadata = load_gtex_standalone(probemap)
+    elif dataset == 'tcga' and TCGA_TPM.exists():
+        expr_df, metadata = load_tcga_standalone(probemap)
+    else:
+        log(f"ERROR: No data files found for {dataset}. Run scripts/15a_download_bulk_data.sh first.")
+        return
+
+    # Save pseudobulk H5AD (expression)
+    pb_path = output_dir / f"{dataset}_donor_only_pseudobulk.h5ad"
+    if not pb_path.exists() or force:
+        log(f"Saving pseudobulk expression: {pb_path.name}")
+        adata_pb = ad.AnnData(
+            X=expr_df.values.astype(np.float32),
+            obs=metadata,
+            var=pd.DataFrame(index=expr_df.columns),
+        )
+        adata_pb.uns['transform'] = 'log2(TPM+1)'
+        adata_pb.uns['n_samples'] = expr_df.shape[0]
+        adata_pb.uns['n_genes'] = expr_df.shape[1]
+        adata_pb.write_h5ad(pb_path, compression='gzip')
+        log(f"  Saved: {pb_path.name} ({adata_pb.shape})")
+        del adata_pb
+    else:
+        log(f"SKIP pseudobulk (exists): {pb_path.name}")
+
+    # Run activity inference
+    log("\nRunning activity inference...")
+    run_activity_inference(
+        expr_df=expr_df,
+        output_dir=output_dir,
+        dataset_name=dataset,
+        force=force,
+        backend=backend,
+    )
+
+    # Print summary
+    if dataset == 'gtex' and 'tissue_type' in metadata.columns:
+        n_tissues = metadata['tissue_type'].nunique()
+        log(f"\nGTEx summary: {len(metadata)} samples, {n_tissues} tissue types")
+    elif dataset == 'tcga':
+        cancer_col = 'cancer_type' if 'cancer_type' in metadata.columns else 'cancer_site'
+        if cancer_col in metadata.columns:
+            n_types = metadata[cancer_col].nunique()
+            log(f"\nTCGA summary: {len(metadata)} samples, {n_types} cancer types")
+
+    del expr_df, metadata
+    gc.collect()
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Bulk RNA-seq Validation Pipeline (TCGA + GTEx)"
+    )
+    parser.add_argument(
+        '--dataset', nargs='+', default=['all'],
+        help='Dataset(s) to process: gtex, tcga, or all (default: all)',
+    )
+    parser.add_argument(
+        '--force', action='store_true',
+        help='Force overwrite existing files',
+    )
+    parser.add_argument(
+        '--backend', default='auto', choices=['auto', 'numpy', 'cupy'],
+        help='Computation backend (default: auto)',
+    )
+
+    args = parser.parse_args()
+
+    # Check data directory
+    if not BULK_DATA_DIR.exists():
+        log(f"ERROR: Bulk data directory not found: {BULK_DATA_DIR}")
+        log("Run scripts/15a_download_bulk_data.sh first.")
+        sys.exit(1)
+
+    if not PROBEMAP.exists():
+        log(f"ERROR: Gene probemap not found: {PROBEMAP}")
+        log("Run scripts/15a_download_bulk_data.sh first.")
+        sys.exit(1)
+
+    # Determine datasets
+    if 'all' in args.dataset:
+        datasets = ['gtex', 'tcga']
+    else:
+        datasets = args.dataset
+
+    log(f"Datasets: {datasets}")
+    log(f"Backend: {args.backend}")
+    log(f"Force: {args.force}")
+
+    t_start = time.time()
+
+    for dataset in datasets:
+        run_dataset(dataset, force=args.force, backend=args.backend)
+
+    elapsed = time.time() - t_start
+    log(f"\n{'=' * 60}")
+    log(f"ALL DONE ({elapsed / 60:.1f} min)")
+    log(f"{'=' * 60}")
+
+    # Verify output files
+    for dataset in datasets:
+        ddir = BASE_OUTPUT_DIR / dataset
+        files = sorted(ddir.glob('*.h5ad'))
+        log(f"\n{dataset} output files:")
+        for f in files:
+            size_mb = f.stat().st_size / (1024 * 1024)
+            log(f"  {f.name} ({size_mb:.1f} MB)")
+
+
+if __name__ == '__main__':
+    main()

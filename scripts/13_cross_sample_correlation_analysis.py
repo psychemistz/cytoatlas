@@ -254,6 +254,16 @@ ATLAS_CONFIGS = OrderedDict([
         'signatures': ['cytosig', 'lincytosig', 'secact'],
         'gene_col': None,
     }),
+    ('gtex', {
+        'levels': ['donor_only'],
+        'signatures': ['cytosig', 'lincytosig', 'secact'],
+        'gene_col': None,
+    }),
+    ('tcga', {
+        'levels': ['donor_only'],
+        'signatures': ['cytosig', 'lincytosig', 'secact'],
+        'gene_col': None,
+    }),
 ])
 
 

@@ -2495,14 +2495,71 @@
             <p>Validation of activity predictions by correlating inferred activity scores with actual gene expression of signature genes. This demonstrates that predicted activities reflect underlying biology.</p>
 
             <div class="tabs">
-                <button class="tab active" data-tab="val-donor">Donor Level</button>
+                <button class="tab active" data-tab="val-bulk">Bulk RNA-seq</button>
+                <button class="tab" data-tab="val-donor">Donor Level</button>
                 <button class="tab" data-tab="val-celltype">Cell Type Stratified</button>
                 <button class="tab" data-tab="val-singlecell">Single-Cell Level</button>
                 <button class="tab" data-tab="val-summary">Summary</button>
             </div>
 
+            <!-- Bulk RNA-seq Validation (GTEx + TCGA) -->
+            <div class="tab-content active" id="tab-val-bulk">
+                <h3>Bulk RNA-seq Validation (GTEx + TCGA)</h3>
+                <p>External validation against independent bulk RNA-seq datasets: GTEx (~17K normal tissue samples) and TCGA (~11K tumor samples). Demonstrates that single-cell-derived cytokine signatures generalize to bulk data.</p>
+
+                <div class="filter-bar">
+                    <label>Dataset:
+                        <select id="val-bulk-dataset">
+                            <option value="gtex">GTEx (Normal Tissues)</option>
+                            <option value="tcga">TCGA (Tumor Samples)</option>
+                        </select>
+                    </label>
+                    <label>Signature Type:
+                        <select id="val-bulk-sigtype">
+                            <option value="cytosig">CytoSig</option>
+                            <option value="lincytosig">LinCytoSig</option>
+                            <option value="secact">SecAct</option>
+                        </select>
+                    </label>
+                    <label>Target:
+                        <select id="val-bulk-target">
+                            <option value="">Loading...</option>
+                        </select>
+                    </label>
+                    <label style="position: relative;">
+                        <input type="text" id="val-bulk-search" placeholder="Search target..." style="width: 150px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </label>
+                </div>
+
+                <div class="panel-grid">
+                    <div class="panel">
+                        <div class="viz-title">Expression vs Activity</div>
+                        <div class="viz-subtitle">Per-sample: gene expression vs predicted activity (bulk RNA-seq)</div>
+                        <div id="val-bulk-expr-scatter" class="loading" style="height: 400px;">Loading...</div>
+                    </div>
+                    <div class="panel">
+                        <div class="viz-title">Signature Comparison</div>
+                        <div class="viz-subtitle">Median Spearman ρ across signature types for selected dataset</div>
+                        <div id="val-bulk-sig-comparison" class="loading" style="height: 400px;">Loading...</div>
+                    </div>
+                </div>
+
+                <div class="panel-grid">
+                    <div class="panel">
+                        <div class="viz-title">Top 30 Target Ranking</div>
+                        <div class="viz-subtitle">Ranked by |ρ|, colored by direction</div>
+                        <div id="val-bulk-ranking" class="loading" style="height: 500px;">Loading...</div>
+                    </div>
+                    <div class="panel">
+                        <div class="viz-title">GTEx vs TCGA Comparison</div>
+                        <div class="viz-subtitle">Spearman ρ per target: GTEx (x) vs TCGA (y)</div>
+                        <div id="val-bulk-comparison" class="loading" style="height: 500px;">Loading...</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Donor Level Validation -->
-            <div class="tab-content active" id="tab-val-donor">
+            <div class="tab-content" id="tab-val-donor">
                 <h3>Donor Level Validation</h3>
                 <p>Donor-level validation: correlate gene expression with predicted activity across donors, pooling all cell types. Each point represents one signature target.</p>
 
@@ -2515,6 +2572,8 @@
                             <option value="inflammation_ext">Inflammation Ext</option>
                             <option value="scatlas_normal">scAtlas Normal</option>
                             <option value="scatlas_cancer">scAtlas Cancer</option>
+                            <option value="gtex">GTEx</option>
+                            <option value="tcga">TCGA</option>
                         </select>
                     </label>
                     <label>Signature Type:
@@ -2524,6 +2583,11 @@
                             <option value="secact">SecAct</option>
                         </select>
                     </label>
+                    <label>Target:
+                        <select id="val-donor-target">
+                            <option value="">Loading...</option>
+                        </select>
+                    </label>
                     <label style="position: relative;">
                         <input type="text" id="val-donor-search" placeholder="Search target..." style="width: 150px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;">
                     </label>
@@ -2531,9 +2595,9 @@
 
                 <div class="panel-grid">
                     <div class="panel">
-                        <div class="viz-title">Correlation Distribution</div>
-                        <div class="viz-subtitle">Histogram of Spearman ρ across all targets</div>
-                        <div id="val-donor-histogram" class="loading" style="height: 400px;">Loading...</div>
+                        <div class="viz-title">Expression vs Activity</div>
+                        <div class="viz-subtitle">Per-donor: gene expression vs predicted activity</div>
+                        <div id="val-donor-expr-scatter" class="loading" style="height: 400px;">Loading...</div>
                     </div>
                     <div class="panel">
                         <div class="viz-title">Significance Overview</div>
@@ -2570,6 +2634,8 @@
                             <option value="inflammation_ext">Inflammation Ext</option>
                             <option value="scatlas_normal">scAtlas Normal</option>
                             <option value="scatlas_cancer">scAtlas Cancer</option>
+                            <option value="gtex">GTEx</option>
+                            <option value="tcga">TCGA</option>
                         </select>
                     </label>
                     <label>Level:
@@ -3111,6 +3177,7 @@
                 updateMetaAnalysis();
             } else if (section === 'atlas-validation') {
                 initValidationSection();
+                updateValidationBulk();
                 updateValidationDonor();
                 updateValidationCelltype();
                 updateValidationSingleCell();
@@ -11735,8 +11802,10 @@
         // Validation state
         const validationState = {
             bulkData: null,       // bulk_donor_correlations.json
+            bulkRnaseqData: null, // bulk_rnaseq_validation.json (GTEx + TCGA)
             scData: {},           // validation/{atlas}_validation.json → singlecell_validations
             bulkLoaded: false,
+            bulkRnaseqLoaded: false,
             scLoaded: {}
         };
 
@@ -11775,6 +11844,275 @@
             return validationState.scData[atlas];
         }
 
+        // Load bulk RNA-seq validation data (GTEx + TCGA)
+        async function loadBulkRnaseqData() {
+            if (validationState.bulkRnaseqLoaded) return validationState.bulkRnaseqData;
+            try {
+                const response = await fetch('data/bulk_rnaseq_validation.json');
+                if (response.ok) {
+                    validationState.bulkRnaseqData = await response.json();
+                    validationState.bulkRnaseqLoaded = true;
+                    console.log('Loaded bulk RNA-seq validation data:', Object.keys(validationState.bulkRnaseqData));
+                }
+            } catch (e) {
+                console.log('Bulk RNA-seq validation data not available:', e);
+            }
+            return validationState.bulkRnaseqData;
+        }
+
+        // ---- Per-sample scatter for bulk RNA-seq ----
+        function renderBulkExprScatter(data, dataset, sigType) {
+            const div = document.getElementById('val-bulk-expr-scatter');
+            if (!div) return;
+            div.classList.remove('loading');
+
+            const target = document.getElementById('val-bulk-target')?.value;
+            const scatterData = data?.[dataset]?.donor_scatter?.[sigType];
+            if (!scatterData || !target || !scatterData[target]) {
+                div.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No scatter data available for this target.</p>';
+                return;
+            }
+
+            const tdata = scatterData[target];
+            const points = tdata.points || [];
+            const xArr = points.map(p => p[0]);
+            const yArr = points.map(p => p[1]);
+
+            if (xArr.length < 3) {
+                div.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">Insufficient data points.</p>';
+                return;
+            }
+
+            const datasetLabel = dataset === 'gtex' ? 'GTEx' : 'TCGA';
+            const traces = [{
+                type: 'scatter', mode: 'markers', name: 'Samples',
+                x: xArr, y: yArr,
+                marker: {
+                    size: 4,
+                    color: dataset === 'gtex' ? 'rgba(44, 160, 44, 0.4)' : 'rgba(214, 39, 40, 0.4)',
+                    line: { color: dataset === 'gtex' ? 'rgba(44, 160, 44, 0.7)' : 'rgba(214, 39, 40, 0.7)', width: 0.3 }
+                },
+                hovertemplate: 'Expr: %{x:.3f}<br>Activity: %{y:.3f}<extra></extra>'
+            }];
+
+            // Regression line
+            const n = xArr.length;
+            const mx = xArr.reduce((a, b) => a + b, 0) / n;
+            const my = yArr.reduce((a, b) => a + b, 0) / n;
+            const ssxx = xArr.reduce((a, x) => a + (x - mx) * (x - mx), 0);
+            if (ssxx > 0) {
+                const slope = xArr.reduce((a, x, i) => a + (x - mx) * (yArr[i] - my), 0) / ssxx;
+                const intercept = my - slope * mx;
+                const minX = Math.min(...xArr);
+                const maxX = Math.max(...xArr);
+                traces.push({
+                    type: 'scatter', mode: 'lines', name: 'Regression',
+                    x: [minX, maxX], y: [slope * minX + intercept, slope * maxX + intercept],
+                    line: { color: '#333', width: 2, dash: 'dash' },
+                    hoverinfo: 'skip'
+                });
+            }
+
+            let pvalStr = 'N/A';
+            if (tdata.pval !== null && tdata.pval !== undefined) {
+                pvalStr = tdata.pval < 0.001 ? tdata.pval.toExponential(1) : tdata.pval.toFixed(4);
+            }
+
+            Plotly.newPlot(div, traces, {
+                xaxis: { title: `${tdata.gene} Expression (z-score)` },
+                yaxis: { title: `${target} Activity (z-score)` },
+                margin: { l: 60, r: 30, t: 50, b: 50 },
+                showlegend: false,
+                annotations: [{
+                    x: 0.98, y: 0.98, xref: 'paper', yref: 'paper',
+                    text: `Spearman \u03c1 = ${tdata.rho !== null ? tdata.rho.toFixed(3) : 'N/A'}<br>p = ${pvalStr}<br>n = ${tdata.n.toLocaleString()} ${datasetLabel} samples`,
+                    showarrow: false, font: { size: 11 },
+                    bgcolor: 'rgba(255,255,255,0.9)', borderpad: 4, align: 'right'
+                }],
+                title: { text: `${target}: Expression vs Activity (${datasetLabel})`, font: { size: 13 } }
+            }, { responsive: true });
+        }
+
+        // ---- Tab 0: Bulk RNA-seq ----
+        async function updateValidationBulk() {
+            const data = await loadBulkRnaseqData();
+            if (!data) {
+                // Show message on all panels
+                ['val-bulk-expr-scatter', 'val-bulk-sig-comparison', 'val-bulk-ranking', 'val-bulk-comparison'].forEach(id => {
+                    const d = document.getElementById(id);
+                    if (d) { d.classList.remove('loading'); d.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">Bulk RNA-seq validation data not yet available. Run scripts/15_bulk_validation.py and scripts/14_preprocess_bulk_validation.py first.</p>'; }
+                });
+                return;
+            }
+
+            const dataset = document.getElementById('val-bulk-dataset')?.value || 'gtex';
+            const sigType = document.getElementById('val-bulk-sigtype')?.value || 'cytosig';
+            const searchTerm = document.getElementById('val-bulk-search')?.value?.toLowerCase() || '';
+
+            const scatterDiv = document.getElementById('val-bulk-expr-scatter');
+            const sigCompDiv = document.getElementById('val-bulk-sig-comparison');
+            const rankingDiv = document.getElementById('val-bulk-ranking');
+            const compDiv = document.getElementById('val-bulk-comparison');
+
+            [scatterDiv, sigCompDiv, rankingDiv, compDiv].forEach(d => d?.classList.remove('loading'));
+
+            const dsData = data[dataset];
+            if (!dsData) {
+                [scatterDiv, sigCompDiv, rankingDiv, compDiv].forEach(d => {
+                    if (d) d.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No data for selected dataset.</p>';
+                });
+                return;
+            }
+
+            // Populate target dropdown from donor_scatter
+            const targetSelect = document.getElementById('val-bulk-target');
+            if (targetSelect) {
+                const scatterData = dsData.donor_scatter?.[sigType] || {};
+                const availableTargets = Object.keys(scatterData).sort();
+                const currentVal = targetSelect.value;
+                targetSelect.innerHTML = '';
+                availableTargets.forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t;
+                    opt.textContent = t + (scatterData[t]?.gene !== t ? ` (${scatterData[t]?.gene})` : '');
+                    targetSelect.appendChild(opt);
+                });
+                if (availableTargets.includes(currentVal)) {
+                    targetSelect.value = currentVal;
+                } else if (availableTargets.includes('IFNG')) {
+                    targetSelect.value = 'IFNG';
+                } else if (availableTargets.length > 0) {
+                    targetSelect.value = availableTargets[0];
+                }
+            }
+
+            // Panel 1: Expression vs Activity scatter
+            renderBulkExprScatter(data, dataset, sigType);
+
+            // Panel 2: Signature comparison (median rho bar chart)
+            if (sigCompDiv) {
+                const sigTypes = ['cytosig', 'lincytosig', 'secact'];
+                const sigLabels = ['CytoSig', 'LinCytoSig', 'SecAct'];
+                const sigColors = ['#1a5f7a', '#57a0d3', '#ff6b6b'];
+                const medianRhos = sigTypes.map(st => {
+                    const summary = dsData.summary?.[st];
+                    return summary ? summary.median_rho || 0 : 0;
+                });
+                const nTargets = sigTypes.map(st => {
+                    const summary = dsData.summary?.[st];
+                    return summary ? summary.n_targets || 0 : 0;
+                });
+
+                const datasetLabel = dataset === 'gtex' ? 'GTEx' : 'TCGA';
+                Plotly.newPlot(sigCompDiv, [{
+                    type: 'bar', x: sigLabels, y: medianRhos,
+                    marker: { color: sigColors },
+                    text: medianRhos.map((r, i) => `${r.toFixed(4)} (n=${nTargets[i]})`),
+                    textposition: 'outside'
+                }], {
+                    xaxis: { title: 'Signature Type' },
+                    yaxis: { title: 'Median Spearman \u03c1' },
+                    margin: { l: 50, r: 30, t: 50, b: 50 },
+                    title: { text: `Median \u03c1 by Signature Type (${datasetLabel})`, font: { size: 13 } }
+                }, { responsive: true });
+            }
+
+            // Panel 3: Top 30 target ranking by |rho|
+            if (rankingDiv) {
+                const donorLevel = dsData.donor_level?.[sigType] || [];
+                let targets = donorLevel.filter(t => t.level === 'donor_only');
+                if (targets.length === 0) targets = donorLevel;
+
+                if (searchTerm) {
+                    targets = targets.filter(t =>
+                        t.target.toLowerCase().includes(searchTerm) ||
+                        t.gene.toLowerCase().includes(searchTerm)
+                    );
+                }
+
+                const sorted = [...targets].sort((a, b) => Math.abs(b.rho || 0) - Math.abs(a.rho || 0)).slice(0, 30);
+
+                if (sorted.length > 0) {
+                    Plotly.newPlot(rankingDiv, [{
+                        type: 'bar', orientation: 'h',
+                        y: sorted.map(t => t.target).reverse(),
+                        x: sorted.map(t => t.rho || 0).reverse(),
+                        marker: {
+                            color: sorted.map(t => (t.rho || 0) > 0 ? 'rgba(44, 160, 44, 0.7)' : 'rgba(214, 39, 40, 0.7)').reverse(),
+                            line: {
+                                color: sorted.map(t => t.significant ? '#333' : 'transparent').reverse(),
+                                width: sorted.map(t => t.significant ? 1.5 : 0).reverse()
+                            }
+                        },
+                        hovertemplate: '%{y}: \u03c1=%{x:.4f}<extra></extra>'
+                    }], {
+                        xaxis: { title: 'Spearman \u03c1', zeroline: true },
+                        yaxis: { automargin: true, tickfont: { size: 9 } },
+                        margin: { l: 120, r: 20, t: 40, b: 50 },
+                        title: { text: `Top ${sorted.length} Targets by |\u03c1| (bold border = p<0.05)`, font: { size: 13 } }
+                    }, { responsive: true });
+                } else {
+                    rankingDiv.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No targets match filter.</p>';
+                }
+            }
+
+            // Panel 4: GTEx vs TCGA comparison scatter
+            if (compDiv) {
+                const gtexData = data.gtex?.donor_level?.[sigType] || [];
+                const tcgaData = data.tcga?.donor_level?.[sigType] || [];
+
+                if (gtexData.length > 0 && tcgaData.length > 0) {
+                    // Build target -> rho maps
+                    const gtexMap = {};
+                    gtexData.forEach(t => { gtexMap[t.target] = t.rho; });
+                    const tcgaMap = {};
+                    tcgaData.forEach(t => { tcgaMap[t.target] = t.rho; });
+
+                    // Common targets
+                    const commonTargets = Object.keys(gtexMap).filter(t => t in tcgaMap);
+                    const xVals = commonTargets.map(t => gtexMap[t] || 0);
+                    const yVals = commonTargets.map(t => tcgaMap[t] || 0);
+
+                    if (commonTargets.length > 2) {
+                        const r = computePearsonR(xVals, yVals);
+
+                        // Identity line
+                        const minVal = Math.min(Math.min(...xVals), Math.min(...yVals));
+                        const maxVal = Math.max(Math.max(...xVals), Math.max(...yVals));
+
+                        Plotly.newPlot(compDiv, [{
+                            type: 'scatter', mode: 'markers',
+                            x: xVals, y: yVals,
+                            text: commonTargets,
+                            marker: { size: 6, color: 'rgba(31, 119, 180, 0.6)', line: { width: 0.5, color: 'rgba(31, 119, 180, 0.8)' } },
+                            hovertemplate: '%{text}<br>GTEx \u03c1: %{x:.4f}<br>TCGA \u03c1: %{y:.4f}<extra></extra>'
+                        }, {
+                            type: 'scatter', mode: 'lines', name: 'Identity',
+                            x: [minVal, maxVal], y: [minVal, maxVal],
+                            line: { color: '#999', width: 1, dash: 'dot' },
+                            hoverinfo: 'skip'
+                        }], {
+                            xaxis: { title: 'GTEx Spearman \u03c1' },
+                            yaxis: { title: 'TCGA Spearman \u03c1' },
+                            margin: { l: 60, r: 30, t: 50, b: 50 },
+                            showlegend: false,
+                            annotations: [{
+                                x: 0.02, y: 0.98, xref: 'paper', yref: 'paper',
+                                text: `r = ${r.toFixed(3)}<br>n = ${commonTargets.length} targets`,
+                                showarrow: false, font: { size: 11 },
+                                bgcolor: 'rgba(255,255,255,0.9)', borderpad: 4
+                            }],
+                            title: { text: `GTEx vs TCGA: \u03c1 Concordance (${sigType})`, font: { size: 13 } }
+                        }, { responsive: true });
+                    } else {
+                        compDiv.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">Insufficient common targets for comparison.</p>';
+                    }
+                } else {
+                    compDiv.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">Both GTEx and TCGA data needed for comparison. Run the pipeline for both datasets.</p>';
+                }
+            }
+        }
+
         // Helper: compute Pearson r from arrays
         function computePearsonR(xArr, yArr) {
             const n = xArr.length;
@@ -11788,6 +12126,75 @@
             return denom === 0 ? 0 : (n * sumXY - sumX * sumY) / denom;
         }
 
+        // ---- Per-donor scatter renderer (CytoSig Fig 1d style) ----
+        function renderDonorExprScatter(bulk, atlas, sigType) {
+            const div = document.getElementById('val-donor-expr-scatter');
+            if (!div) return;
+            div.classList.remove('loading');
+
+            const target = document.getElementById('val-donor-target')?.value;
+            const scatterData = bulk.donor_scatter?.[atlas]?.[sigType];
+            if (!scatterData || !target || !scatterData[target]) {
+                div.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No scatter data available for this target.</p>';
+                return;
+            }
+
+            const tdata = scatterData[target];
+            const points = tdata.points || [];
+            const xArr = points.map(p => p[0]);
+            const yArr = points.map(p => p[1]);
+
+            if (xArr.length < 3) {
+                div.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">Insufficient data points.</p>';
+                return;
+            }
+
+            const traces = [{
+                type: 'scatter', mode: 'markers', name: 'Donors',
+                x: xArr, y: yArr,
+                marker: { size: 5, color: 'rgba(31, 119, 180, 0.5)', line: { color: 'rgba(31, 119, 180, 0.8)', width: 0.5 } },
+                hovertemplate: 'Expr: %{x:.4f}<br>Activity: %{y:.4f}<extra></extra>'
+            }];
+
+            // Regression line
+            const n = xArr.length;
+            const mx = xArr.reduce((a, b) => a + b, 0) / n;
+            const my = yArr.reduce((a, b) => a + b, 0) / n;
+            const ssxx = xArr.reduce((a, x) => a + (x - mx) * (x - mx), 0);
+            if (ssxx > 0) {
+                const slope = xArr.reduce((a, x, i) => a + (x - mx) * (yArr[i] - my), 0) / ssxx;
+                const intercept = my - slope * mx;
+                const minX = Math.min(...xArr);
+                const maxX = Math.max(...xArr);
+                traces.push({
+                    type: 'scatter', mode: 'lines', name: 'Regression',
+                    x: [minX, maxX], y: [slope * minX + intercept, slope * maxX + intercept],
+                    line: { color: '#d62728', width: 2, dash: 'dash' },
+                    hoverinfo: 'skip'
+                });
+            }
+
+            // Format p-value
+            let pvalStr = 'N/A';
+            if (tdata.pval !== null && tdata.pval !== undefined) {
+                pvalStr = tdata.pval < 0.001 ? tdata.pval.toExponential(1) : tdata.pval.toFixed(4);
+            }
+
+            Plotly.newPlot(div, traces, {
+                xaxis: { title: `${tdata.gene} Expression (z-score)` },
+                yaxis: { title: `${target} Activity (z-score)` },
+                margin: { l: 60, r: 30, t: 50, b: 50 },
+                showlegend: false,
+                annotations: [{
+                    x: 0.98, y: 0.98, xref: 'paper', yref: 'paper',
+                    text: `Spearman \u03c1 = ${tdata.rho !== null ? tdata.rho.toFixed(3) : 'N/A'}<br>p = ${pvalStr}<br>n = ${tdata.n} donors`,
+                    showarrow: false, font: { size: 11 },
+                    bgcolor: 'rgba(255,255,255,0.9)', borderpad: 4, align: 'right'
+                }],
+                title: { text: `${target}: Expression vs Activity`, font: { size: 13 } }
+            }, { responsive: true });
+        }
+
         // ---- Tab 1: Donor Level ----
         async function updateValidationDonor() {
             const bulk = await loadBulkValidationData();
@@ -11797,17 +12204,17 @@
             const sigType = document.getElementById('val-donor-sigtype')?.value || 'cytosig';
             const searchTerm = document.getElementById('val-donor-search')?.value?.toLowerCase() || '';
 
-            const histDiv = document.getElementById('val-donor-histogram');
+            const exprScatterDiv = document.getElementById('val-donor-expr-scatter');
             const overviewDiv = document.getElementById('val-donor-overview');
             const rankingDiv = document.getElementById('val-donor-ranking');
             const scatterDiv = document.getElementById('val-donor-scatter');
 
-            [histDiv, overviewDiv, rankingDiv, scatterDiv].forEach(d => d?.classList.remove('loading'));
+            [exprScatterDiv, overviewDiv, rankingDiv, scatterDiv].forEach(d => d?.classList.remove('loading'));
 
             // Get donor-level data: targets where celltype == "all", donor_only or donor_organ level
             const atlasData = bulk.donor_level[atlas];
             if (!atlasData || !atlasData[sigType]) {
-                if (histDiv) histDiv.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No data available for this atlas/signature combination.</p>';
+                if (exprScatterDiv) exprScatterDiv.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No data available for this atlas/signature combination.</p>';
                 return;
             }
 
@@ -11825,52 +12232,35 @@
             }
 
             if (targets.length === 0) {
-                if (histDiv) histDiv.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No targets match your search.</p>';
+                if (exprScatterDiv) exprScatterDiv.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No targets match your search.</p>';
                 return;
             }
 
-            // Panel 1: Correlation Distribution (histogram)
-            if (histDiv) {
-                const rhoValues = targets.map(t => t.rho).filter(r => r !== null);
-                const sigCount = rhoValues.filter((_, i) => targets[i]?.significant).length;
-                const nsCount = rhoValues.length - sigCount;
-                const medianRho = rhoValues.sort((a, b) => a - b)[Math.floor(rhoValues.length / 2)] || 0;
-                const pctSig = rhoValues.length > 0 ? (100 * sigCount / rhoValues.length).toFixed(1) : 0;
-
-                const sigRhos = targets.filter(t => t.significant).map(t => t.rho);
-                const nsRhos = targets.filter(t => !t.significant).map(t => t.rho);
-
-                const traces = [];
-                if (sigRhos.length > 0) {
-                    traces.push({
-                        type: 'histogram', x: sigRhos, name: 'Significant (p<0.05)',
-                        marker: { color: 'rgba(44, 160, 44, 0.7)' },
-                        xbins: { start: -1, end: 1, size: 0.08 }
-                    });
+            // Populate target dropdown from donor_scatter data
+            const targetSelect = document.getElementById('val-donor-target');
+            if (targetSelect) {
+                const scatterData = bulk.donor_scatter?.[atlas]?.[sigType] || {};
+                const availableTargets = Object.keys(scatterData).sort();
+                const currentVal = targetSelect.value;
+                targetSelect.innerHTML = '';
+                availableTargets.forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t;
+                    opt.textContent = t + (scatterData[t]?.gene !== t ? ` (${scatterData[t]?.gene})` : '');
+                    targetSelect.appendChild(opt);
+                });
+                // Preserve selection if still valid, else prefer IFNG, else first
+                if (availableTargets.includes(currentVal)) {
+                    targetSelect.value = currentVal;
+                } else if (availableTargets.includes('IFNG')) {
+                    targetSelect.value = 'IFNG';
+                } else if (availableTargets.length > 0) {
+                    targetSelect.value = availableTargets[0];
                 }
-                if (nsRhos.length > 0) {
-                    traces.push({
-                        type: 'histogram', x: nsRhos, name: 'Not significant',
-                        marker: { color: 'rgba(200, 200, 200, 0.7)' },
-                        xbins: { start: -1, end: 1, size: 0.08 }
-                    });
-                }
-
-                Plotly.newPlot(histDiv, traces, {
-                    barmode: 'stack',
-                    xaxis: { title: 'Spearman \u03c1', range: [-1, 1] },
-                    yaxis: { title: 'Count' },
-                    margin: { l: 50, r: 30, t: 50, b: 50 },
-                    legend: { x: 0.02, y: 0.98 },
-                    annotations: [{
-                        x: 0.98, y: 0.98, xref: 'paper', yref: 'paper',
-                        text: `Median \u03c1 = ${medianRho.toFixed(3)}<br>${pctSig}% significant<br>n = ${rhoValues.length} targets`,
-                        showarrow: false, font: { size: 11 },
-                        bgcolor: 'rgba(255,255,255,0.9)', borderpad: 4, align: 'right'
-                    }],
-                    title: { text: `Correlation Distribution: ${atlas.replace(/_/g, ' ')} - ${sigType}`, font: { size: 13 } }
-                }, { responsive: true });
             }
+
+            // Panel 1: Per-donor expression vs activity scatter (CytoSig Fig 1d style)
+            renderDonorExprScatter(bulk, atlas, sigType);
 
             // Panel 2: Significance Overview (grouped bar - all 3 sig types)
             if (overviewDiv) {
@@ -12570,9 +12960,32 @@
 
         // ---- Initialization ----
         function initValidationSection() {
+            // Bulk RNA-seq tab listeners
+            document.getElementById('val-bulk-dataset')?.addEventListener('change', updateValidationBulk);
+            document.getElementById('val-bulk-sigtype')?.addEventListener('change', updateValidationBulk);
+            document.getElementById('val-bulk-target')?.addEventListener('change', async () => {
+                const data = await loadBulkRnaseqData();
+                if (!data) return;
+                const dataset = document.getElementById('val-bulk-dataset')?.value || 'gtex';
+                const sigType = document.getElementById('val-bulk-sigtype')?.value || 'cytosig';
+                renderBulkExprScatter(data, dataset, sigType);
+            });
+            const bulkSearch = document.getElementById('val-bulk-search');
+            if (bulkSearch) {
+                bulkSearch.addEventListener('input', debounce(updateValidationBulk, 300));
+                bulkSearch.addEventListener('keydown', (e) => { if (e.key === 'Enter') updateValidationBulk(); });
+            }
+
             // Donor Level tab listeners
             document.getElementById('val-donor-atlas')?.addEventListener('change', updateValidationDonor);
             document.getElementById('val-donor-sigtype')?.addEventListener('change', updateValidationDonor);
+            document.getElementById('val-donor-target')?.addEventListener('change', async () => {
+                const bulk = await loadBulkValidationData();
+                if (!bulk) return;
+                const atlas = document.getElementById('val-donor-atlas')?.value || 'cima';
+                const sigType = document.getElementById('val-donor-sigtype')?.value || 'cytosig';
+                renderDonorExprScatter(bulk, atlas, sigType);
+            });
             const donorSearch = document.getElementById('val-donor-search');
             if (donorSearch) {
                 donorSearch.addEventListener('input', debounce(updateValidationDonor, 300));
