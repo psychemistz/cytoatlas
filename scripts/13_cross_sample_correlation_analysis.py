@@ -19,6 +19,7 @@ Usage:
 
 import argparse
 import json
+import re
 import sys
 import time
 from collections import OrderedDict
@@ -35,6 +36,7 @@ sys.stdout.reconfigure(line_buffering=True)
 BASE_DIR = Path('/data/parks34/projects/2secactpy/results/cross_sample_validation')
 OUTPUT_DIR = BASE_DIR / 'correlations'
 MAPPING_PATH = Path('/vf/users/parks34/projects/2secactpy/cytoatlas-api/static/data/signature_gene_mapping.json')
+CELLTYPE_MAPPING_PATH = Path('/vf/users/parks34/projects/2secactpy/data/lincytosig_celltype_mapping.json')
 
 
 def log(msg: str) -> None:
@@ -95,6 +97,99 @@ def resolve_gene_name(target: str, gene_set: set, cytosig_map: Dict[str, str]) -
 
 
 # =============================================================================
+# LinCytoSig Cell Type Mapping
+# =============================================================================
+
+def load_celltype_mapping() -> Optional[dict]:
+    """Load LinCytoSig cell type mapping from JSON."""
+    if not CELLTYPE_MAPPING_PATH.exists():
+        log(f"WARNING: celltype mapping not found at {CELLTYPE_MAPPING_PATH}")
+        return None
+    with open(CELLTYPE_MAPPING_PATH) as f:
+        return json.load(f)
+
+
+def extract_lincytosig_celltype(target: str) -> Optional[str]:
+    """Extract cell type from LinCytoSig target name (e.g., 'Monocyte__TNF' -> 'Monocyte')."""
+    if '__' not in target:
+        return None
+    return target.split('__')[0]
+
+
+def get_matching_celltypes(
+    lincytosig_ct: str,
+    atlas_key: str,
+    celltype_col: str,
+    mapping: dict,
+    unique_celltypes: Optional[set] = None,
+) -> Optional[List[str]]:
+    """Get atlas cell types matching a LinCytoSig cell type.
+
+    Returns list of matching cell type values, or None if unmappable.
+    """
+    atlas_section = mapping.get(atlas_key)
+    if atlas_section is None:
+        return None
+
+    # Check unmappable list
+    if lincytosig_ct in atlas_section.get('unmappable', []):
+        return None
+
+    ct_mapping = atlas_section.get('mapping', {}).get(lincytosig_ct)
+    if ct_mapping is None:
+        return None
+
+    # scatlas_normal: uses regex patterns against cellType1
+    if atlas_key == 'scatlas_normal':
+        patterns = ct_mapping.get('cellType1_patterns', [])
+        if patterns and unique_celltypes is not None:
+            compiled = [re.compile(p) for p in patterns]
+            matched = []
+            for ct_val in unique_celltypes:
+                for pat in compiled:
+                    if pat.search(str(ct_val)):
+                        matched.append(ct_val)
+                        break
+            return matched if matched else None
+        # Fall through to direct column lookup if no patterns
+        direct = ct_mapping.get(celltype_col, [])
+        return direct if direct else None
+
+    # scatlas_cancer: uses prefix extraction + exact matches
+    if atlas_key == 'scatlas_cancer':
+        matched = set()
+        # Exact matches for this celltype_col
+        exact = ct_mapping.get('cellType1_exact', [])
+        if unique_celltypes is not None:
+            for ct_val in unique_celltypes:
+                ct_str = str(ct_val)
+                if ct_str in exact:
+                    matched.add(ct_str)
+
+            # Prefix-based matching: extract prefix from cellType1 values
+            # and check if prefix maps to this LinCytoSig celltype
+            prefix_map = atlas_section.get('prefix_extraction', {}).get('prefix_to_lincytosig', {})
+            # Build reverse: which prefixes map to this lincytosig_ct?
+            target_prefixes = [p for p, lcs in prefix_map.items() if lcs == lincytosig_ct]
+            if target_prefixes:
+                for ct_val in unique_celltypes:
+                    ct_str = str(ct_val)
+                    # Extract prefix before _NN_ (underscore + digits + underscore)
+                    m = re.match(r'^([A-Za-z]+)_\d+', ct_str)
+                    if m and m.group(1) in target_prefixes:
+                        matched.add(ct_str)
+
+        return sorted(matched) if matched else None
+
+    # CIMA and inflammation: direct column lookup
+    # Try exact column name first, then strip 'pred' suffix (Level1pred -> Level1)
+    direct = ct_mapping.get(celltype_col, [])
+    if not direct and celltype_col.endswith('pred'):
+        direct = ct_mapping.get(celltype_col[:-4], [])
+    return direct if direct else None
+
+
+# =============================================================================
 # Correlation Computation
 # =============================================================================
 
@@ -104,16 +199,20 @@ def compute_correlations_for_level(
     sig_name: str,
     cytosig_map: Dict[str, str],
     gene_col: Optional[str] = None,
+    atlas_key: Optional[str] = None,
+    celltype_mapping: Optional[dict] = None,
 ) -> pd.DataFrame:
     """
     Compute Spearman correlations between expression and activity for all targets.
 
     For donor_only: one correlation per target across all donors.
     For donor_celltype: overall + per-celltype correlations.
+    For LinCytoSig targets: also compute celltype-restricted ('matched') correlations.
 
     Returns DataFrame with columns:
         target, gene, celltype, spearman_rho, spearman_pval, n_samples,
-        mean_expr, std_expr, mean_activity, std_activity
+        mean_expr, std_expr, mean_activity, std_activity,
+        lincytosig_celltype, matched_atlas_celltypes
     """
     # Load data
     pb = ad.read_h5ad(pb_path)
@@ -147,7 +246,8 @@ def compute_correlations_for_level(
     celltype_col = None
     for col in ['cell_type_l1', 'cell_type_l2', 'cell_type_l3', 'cell_type_l4',
                 'Level1', 'Level2', 'Level1pred', 'Level2pred',
-                'tissue', 'cellType1', 'cellType2']:
+                'cellType1', 'cellType2',
+                'tissue', 'tissue_type', 'cancer_type']:
         if col in act.obs.columns:
             has_celltype = True
             celltype_col = col
@@ -175,6 +275,9 @@ def compute_correlations_for_level(
 
         rho, pval = stats.spearmanr(expr_vals[mask], act_vals[mask])
 
+        # Extract LinCytoSig cell type info for new columns
+        lcs_ct = extract_lincytosig_celltype(target) if '__' in target else None
+
         results.append({
             'target': target,
             'gene': gene,
@@ -186,7 +289,56 @@ def compute_correlations_for_level(
             'std_expr': float(np.std(expr_vals[mask])),
             'mean_activity': float(np.mean(act_vals[mask])),
             'std_activity': float(np.std(act_vals[mask])),
+            'lincytosig_celltype': lcs_ct or '',
+            'matched_atlas_celltypes': '',
         })
+
+        # Celltype-restricted ("matched") correlation for LinCytoSig targets
+        if has_celltype and lcs_ct is not None and celltype_mapping is not None and atlas_key is not None:
+            celltypes = act.obs[celltype_col].values
+            unique_cts = set(str(c) for c in celltypes)
+            matched_cts = get_matching_celltypes(
+                lcs_ct, atlas_key, celltype_col, celltype_mapping,
+                unique_celltypes=unique_cts,
+            )
+            if matched_cts is None:
+                # Unmappable
+                results.append({
+                    'target': target,
+                    'gene': gene,
+                    'celltype': 'unmappable',
+                    'spearman_rho': None,
+                    'spearman_pval': None,
+                    'n_samples': 0,
+                    'mean_expr': None,
+                    'std_expr': None,
+                    'mean_activity': None,
+                    'std_activity': None,
+                    'lincytosig_celltype': lcs_ct,
+                    'matched_atlas_celltypes': '',
+                })
+            elif len(matched_cts) > 0:
+                ct_set = set(matched_cts)
+                ct_mask = np.array([str(c) in ct_set for c in celltypes]) & mask
+                if ct_mask.sum() >= 10:
+                    m_expr = expr_vals[ct_mask]
+                    m_act = act_vals[ct_mask]
+                    if np.std(m_expr) > 1e-10 and np.std(m_act) > 1e-10:
+                        m_rho, m_pval = stats.spearmanr(m_expr, m_act)
+                        results.append({
+                            'target': target,
+                            'gene': gene,
+                            'celltype': 'matched',
+                            'spearman_rho': m_rho,
+                            'spearman_pval': m_pval,
+                            'n_samples': int(ct_mask.sum()),
+                            'mean_expr': float(np.mean(m_expr)),
+                            'std_expr': float(np.std(m_expr)),
+                            'mean_activity': float(np.mean(m_act)),
+                            'std_activity': float(np.std(m_act)),
+                            'lincytosig_celltype': lcs_ct,
+                            'matched_atlas_celltypes': ','.join(str(c) for c in matched_cts),
+                        })
 
         # Per-celltype correlations
         if has_celltype:
@@ -214,6 +366,8 @@ def compute_correlations_for_level(
                     'std_expr': float(np.std(ct_expr)),
                     'mean_activity': float(np.mean(ct_act)),
                     'std_activity': float(np.std(ct_act)),
+                    'lincytosig_celltype': lcs_ct or '',
+                    'matched_atlas_celltypes': '',
                 })
 
     return pd.DataFrame(results)
@@ -255,14 +409,16 @@ ATLAS_CONFIGS = OrderedDict([
         'gene_col': None,
     }),
     ('gtex', {
-        'levels': ['donor_only'],
+        'levels': ['donor_only', 'by_tissue'],
         'signatures': ['cytosig', 'lincytosig', 'secact'],
         'gene_col': None,
+        'expr_suffix': 'expression',
     }),
     ('tcga', {
-        'levels': ['donor_only'],
+        'levels': ['donor_only', 'by_cancer'],
         'signatures': ['cytosig', 'lincytosig', 'secact'],
         'gene_col': None,
+        'expr_suffix': 'expression',
     }),
 ])
 
@@ -278,13 +434,24 @@ def run_atlas_correlations(
 
     config = ATLAS_CONFIGS[atlas_name]
     gene_col = config['gene_col']
+    expr_suffix = config.get('expr_suffix', 'pseudobulk')
     process_levels = levels if levels else config['levels']
+
+    # Derive atlas key for celltype mapping lookup
+    # inflammation_main/val/ext all use the 'inflammation' section
+    if atlas_name.startswith('inflammation'):
+        mapping_key = 'inflammation'
+    else:
+        mapping_key = atlas_name
+
+    # Load celltype mapping once
+    celltype_mapping = load_celltype_mapping()
 
     all_results = []
 
     for level in process_levels:
         for sig in config['signatures']:
-            pb_path = BASE_DIR / atlas_name / f"{atlas_name}_{level}_pseudobulk.h5ad"
+            pb_path = BASE_DIR / atlas_name / f"{atlas_name}_{level}_{expr_suffix}.h5ad"
             act_path = BASE_DIR / atlas_name / f"{atlas_name}_{level}_{sig}.h5ad"
 
             if not pb_path.exists() or not act_path.exists():
@@ -298,6 +465,8 @@ def run_atlas_correlations(
                 sig_name=sig,
                 cytosig_map=cytosig_map,
                 gene_col=gene_col,
+                atlas_key=mapping_key,
+                celltype_mapping=celltype_mapping,
             )
 
             if len(df) > 0:

@@ -1,0 +1,277 @@
+{
+  "_description": "Mapping between LinCytoSig cell type prefixes and atlas cell type annotations. LinCytoSig targets use CellType__Cytokine format (e.g., Monocyte__TNF). This maps LinCytoSig cell types to each atlas's cell type annotations for celltype-restricted validation.",
+  "_usage": "For LinCytoSig target 'Monocyte__TNF': find Monocyte in this mapping, get matching atlas cell types, restrict correlation to those cells only.",
+
+  "lincytosig_celltypes": {
+    "immune": ["B_Cell", "Basophil", "Dendritic_Cell", "Macrophage", "Monocyte", "Neutrophil", "NK_Cell", "PBMC", "T_CD4", "T_CD8", "T_Cell"],
+    "stromal": ["Cardiac_Fibroblast", "Chondrocyte", "Dermal_Fibroblast", "Fibroblast", "Lung_Fibroblast", "MSC", "Skeletal_Muscle", "Smooth_Muscle", "Synovial_Fibroblast"],
+    "endothelial": ["Arterial_Endothelial", "Endothelial", "HUVEC", "Lymphatic_Endothelial", "Microvascular_Endothelial"],
+    "epithelial": ["Airway_Epithelial", "Epithelial", "Intestinal_Epithelial", "Keratinocyte", "Renal_Epithelial"],
+    "other": ["Adipocyte", "Hepatocyte", "Neuron", "Osteoblast", "Osteocyte", "Trophoblast"],
+    "stem": ["ESC"],
+    "cancer_lines": ["Breast_Cancer_Line", "Cervical_Cancer_Line", "Colorectal_Cancer_Line", "Leukemia_Line", "Lung_Cancer_Line", "Melanoma_Line", "Osteosarcoma_Line", "Pancreatic_Cancer_Line"]
+  },
+
+  "cima": {
+    "_note": "PBMC-based atlas. Only immune LinCytoSig types are mappable. 4 cell type levels (l1-l4).",
+    "celltype_columns": ["cell_type_l1", "cell_type_l2", "cell_type_l3", "cell_type_l4"],
+    "mapping": {
+      "B_Cell": {
+        "cell_type_l1": ["B"],
+        "cell_type_l2": ["Naive_B", "Memory_B", "Transitional_B"]
+      },
+      "Monocyte": {
+        "cell_type_l1": ["Myeloid"],
+        "cell_type_l2": ["Mono"],
+        "cell_type_l3": ["cMono", "ncMono", "intMono"]
+      },
+      "Dendritic_Cell": {
+        "cell_type_l2": ["DC", "pDC"],
+        "cell_type_l3": ["DC", "pDC"],
+        "cell_type_l4": ["DC2_CD1C", "DC1_CLEC9A", "pDC_IRF4", "DC_CSF2RA", "AS_DC"]
+      },
+      "NK_Cell": {
+        "cell_type_l1": ["ILC"],
+        "cell_type_l2": ["CD56_dim_NK", "CD56_bright_NK", "Transitional_NK", "Proliferative_NK"],
+        "cell_type_l3": ["Mature_NK", "Terminal_NK", "CD56_bright_NK", "Transitional_NK", "Proliferative_NK"]
+      },
+      "T_CD4": {
+        "cell_type_l1": ["CD4_T"],
+        "cell_type_l2": ["CD4_naive", "CD4_helper", "CD4_memory", "CD4_regulatory", "CD4_CTL"]
+      },
+      "T_CD8": {
+        "cell_type_l1": ["CD8_T"],
+        "cell_type_l2": ["CD8_naive", "CD8_CTL", "CD8_memory"]
+      },
+      "T_Cell": {
+        "cell_type_l1": ["CD4_T", "CD8_T", "unconvensional_T"],
+        "cell_type_l2": ["CD4_naive", "CD4_helper", "CD4_memory", "CD4_regulatory", "CD4_CTL", "CD8_naive", "CD8_CTL", "CD8_memory", "NKT", "gdT", "MAIT"]
+      },
+      "PBMC": {
+        "_note": "All cell types",
+        "cell_type_l1": ["CD4_T", "CD8_T", "unconvensional_T", "Myeloid", "B", "ILC"]
+      }
+    },
+    "unmappable": ["Macrophage", "Neutrophil", "Basophil", "Fibroblast", "Endothelial", "Epithelial", "Keratinocyte", "Hepatocyte", "Adipocyte", "Neuron", "MSC", "Smooth_Muscle", "Skeletal_Muscle", "Chondrocyte", "Osteoblast", "Osteocyte", "Trophoblast", "ESC"]
+  },
+
+  "inflammation": {
+    "_note": "PBMC-based atlas. Only immune LinCytoSig types are mappable. 2 cell type levels (Level1, Level2).",
+    "celltype_columns": ["Level1", "Level2"],
+    "mapping": {
+      "B_Cell": {
+        "Level1": ["B"],
+        "Level2": ["B_Naive", "B_Memory_switched", "B_Memory_unswitched", "B_Transitional", "B_Memory_ITGAX", "B_Naive_activated", "B_IFNresponder"]
+      },
+      "Monocyte": {
+        "Level1": ["Mono"],
+        "Level2": ["Mono_classical", "Mono_nonClassical", "Mono_regulatory", "Mono_inflammatory", "Mono_IFNresponse"]
+      },
+      "Dendritic_Cell": {
+        "Level1": ["DC"],
+        "Level2": ["cDC1", "cDC2", "cDC3", "DC_CCR7", "DC4", "DC5", "DC_Proliferative"]
+      },
+      "NK_Cell": {
+        "Level1": ["ILC"],
+        "Level2": ["NK_CD56dimCD16", "NK_lowRibocontent", "NK_adaptive", "NK_CD56high", "NK_CD16high", "NK_IFN1response", "NK_Proliferative"]
+      },
+      "T_CD4": {
+        "Level1": ["T_CD4_Naive", "T_CD4_NonNaive"],
+        "Level2": ["T_CD4_Naive", "T_CD4_EM", "T_CD4_eff", "T_CD4_CM_ribo", "T_CD4_CM", "T_CD4_EMRA", "Th1", "Th0", "Th2", "Tregs", "Tregs_activated"]
+      },
+      "T_CD8": {
+        "Level1": ["T_CD8_Naive", "T_CD8_NonNaive"],
+        "Level2": ["T_CD8_Naive", "T_CD8_CM", "T_CD8_EM_CX3CR1int", "T_CD8_EM_CX3CR1high", "T_CD8_Mem_cytotoxic", "T_CD8_IFNresponse", "T_CD8_CM_stem", "T_CD8_activated", "T_CD8_eff_HOBIT", "T_CD8_arrested"]
+      },
+      "T_Cell": {
+        "Level1": ["T_CD4_Naive", "T_CD4_NonNaive", "T_CD8_Naive", "T_CD8_NonNaive", "UTC"],
+        "Level2": ["T_CD4_Naive", "T_CD4_EM", "T_CD4_eff", "T_CD4_CM_ribo", "T_CD4_CM", "T_CD4_EMRA", "Th1", "Th0", "Th2", "Tregs", "Tregs_activated", "T_CD8_Naive", "T_CD8_CM", "T_CD8_EM_CX3CR1int", "T_CD8_EM_CX3CR1high", "T_CD8_Mem_cytotoxic", "T_CD8_IFNresponse", "T_CD8_CM_stem", "T_CD8_activated", "T_CD8_eff_HOBIT", "T_CD8_arrested", "gdT_V2_Vgamma9", "gdT_V1", "MAIT", "MAIT_17", "T_Proliferative"]
+      },
+      "PBMC": {
+        "_note": "All cell types (exclude LowQuality_cells, Doublets, RBC, Platelets)",
+        "Level1": ["Mono", "T_CD4_Naive", "T_CD4_NonNaive", "T_CD8_NonNaive", "ILC", "B", "T_CD8_Naive", "UTC", "DC", "Cycling_cells", "pDC", "Plasma", "Progenitors"]
+      }
+    },
+    "unmappable": ["Macrophage", "Neutrophil", "Basophil", "Fibroblast", "Endothelial", "Epithelial", "Keratinocyte", "Hepatocyte", "Adipocyte", "Neuron", "MSC", "Smooth_Muscle", "Skeletal_Muscle", "Chondrocyte", "Osteoblast", "Osteocyte", "Trophoblast", "ESC"]
+  },
+
+  "scatlas_normal": {
+    "_note": "Multi-organ atlas. Both immune and tissue-resident LinCytoSig types mappable. Naming is inconsistent across cohorts — multiple aliases per cell type. 2 levels (cellType1, cellType2) + organ column (tissue).",
+    "celltype_columns": ["cellType1", "cellType2"],
+    "organ_column": "tissue",
+    "mapping": {
+      "B_Cell": {
+        "cellType1_patterns": ["^B$", "^B cells$", "^b cell$", "^B_"],
+        "organs": null
+      },
+      "Monocyte": {
+        "cellType1_patterns": ["^Mono", "^mono", "^Monocyte"],
+        "organs": null
+      },
+      "Macrophage": {
+        "cellType1_patterns": ["^Macrophage", "^macrophage", "^Alveolar macrophage", "^Kupffer"],
+        "organs": null
+      },
+      "Dendritic_Cell": {
+        "cellType1_patterns": ["^DC$", "^DC_", "^dendritic", "^Dendritic", "^cDC", "^pDC"],
+        "organs": null
+      },
+      "NK_Cell": {
+        "cellType1_patterns": ["^NK", "^nk", "^ILC"],
+        "organs": null
+      },
+      "T_CD4": {
+        "cellType1_patterns": ["T_CD4", "cd4-positive", "CD4\\+", "T cells CD4"],
+        "organs": null
+      },
+      "T_CD8": {
+        "cellType1_patterns": ["T_CD8", "cd8-positive", "CD8\\+", "T cells CD8"],
+        "organs": null
+      },
+      "T_Cell": {
+        "cellType1_patterns": ["^T cells$", "^T cell$", "^tcells$", "^T_", "^ILCT"],
+        "organs": null
+      },
+      "Neutrophil": {
+        "cellType1_patterns": ["^Neutrophil", "^neutrophil"],
+        "organs": null
+      },
+      "Fibroblast": {
+        "cellType1_patterns": ["^[Ff]ibroblast", "^FB$", "^Fb$", "^Fibroblast lineage"],
+        "organs": null
+      },
+      "Endothelial": {
+        "cellType1_patterns": ["^[Ee]ndothelial", "^vascular"],
+        "organs": null
+      },
+      "Epithelial": {
+        "cellType1_patterns": ["^[Ee]pithelial", "^Alveolar epithelium"],
+        "organs": null
+      },
+      "Keratinocyte": {
+        "cellType1_patterns": ["^[Kk]eratinocyte", "^basal"],
+        "organs": ["Skin"]
+      },
+      "Hepatocyte": {
+        "cellType1_patterns": ["^[Hh]epatocyte"],
+        "organs": ["Liver"]
+      },
+      "Airway_Epithelial": {
+        "cellType1_patterns": ["^[Aa]irway", "^Alveolar epithelium", "^AT2$", "^AT1$", "^Club"],
+        "organs": ["Lung"]
+      },
+      "Intestinal_Epithelial": {
+        "cellType1_patterns": ["^[Ee]nterocyte", "^[Gg]oblet", "^[Pp]aneth", "^intestinal epithelial"],
+        "organs": ["Colon", "SmallIntestine"]
+      },
+      "Renal_Epithelial": {
+        "cellType1_patterns": ["^Proximal tubule", "^Distal tubule", "^[Pp]odocyte", "^renal"],
+        "organs": ["Kidney"]
+      },
+      "Smooth_Muscle": {
+        "cellType1_patterns": ["^[Ss]mooth [Mm]uscle", "^SMC"],
+        "organs": null
+      },
+      "Adipocyte": {
+        "cellType1_patterns": ["^[Aa]dipocyte"],
+        "organs": null
+      },
+      "Neuron": {
+        "cellType1_patterns": ["^[Nn]euron", "^neural"],
+        "organs": ["Brain"]
+      }
+    },
+    "unmappable": ["Basophil", "PBMC", "ESC", "MSC", "Osteoblast", "Osteocyte", "Trophoblast", "Chondrocyte"]
+  },
+
+  "scatlas_cancer": {
+    "_note": "Pan-cancer atlas. 59% of cells are 'Unknown' cellType1. Well-annotated cells use CellType_ClusterNum_Marker pattern (e.g., CD4T_03_GPR183). Extract prefix before first numeric cluster. 2 levels (cellType1, cellType2) + tissue column.",
+    "celltype_columns": ["cellType1", "cellType2"],
+    "tissue_column": "tissue",
+    "tissues": ["Tumor", "Blood", "Adjacent", "Metastasis", "PreLesion", "PleuralFluids"],
+
+    "prefix_extraction": {
+      "_note": "For cellType1 values like 'CD4T_03_GPR183', extract prefix before '_NN_' (underscore + digits + underscore). Map prefix to LinCytoSig celltype.",
+      "prefix_to_lincytosig": {
+        "CD4T": "T_CD4",
+        "CD8T": "T_CD8",
+        "Mph": "Macrophage",
+        "Mono": "Monocyte",
+        "DC": "Dendritic_Cell",
+        "NK": "NK_Cell",
+        "B": "B_Cell",
+        "Plasma": "B_Cell",
+        "Mast": "Basophil",
+        "Neutro": "Neutrophil",
+        "Treg": "T_CD4",
+        "gdT": "T_Cell",
+        "MAIT": "T_Cell",
+        "NKT": "T_Cell"
+      }
+    },
+
+    "mapping": {
+      "B_Cell": {
+        "cellType1_prefixes": ["B"],
+        "cellType1_exact": ["B", "B cells", "B_Cell", "B cell"],
+        "organs": null
+      },
+      "Monocyte": {
+        "cellType1_prefixes": ["Mono"],
+        "cellType1_exact": ["Monocyte", "Monocytes", "Mono"],
+        "organs": null
+      },
+      "Macrophage": {
+        "cellType1_prefixes": ["Mph"],
+        "cellType1_exact": ["Macrophage", "Macrophages", "TAM"],
+        "organs": null
+      },
+      "Dendritic_Cell": {
+        "cellType1_prefixes": ["DC"],
+        "cellType1_exact": ["DC", "Dendritic", "cDC", "pDC"],
+        "organs": null
+      },
+      "NK_Cell": {
+        "cellType1_prefixes": ["NK"],
+        "cellType1_exact": ["NK", "NK cells", "NK_Cell"],
+        "organs": null
+      },
+      "T_CD4": {
+        "cellType1_prefixes": ["CD4T", "Treg"],
+        "cellType1_exact": ["CD4+ T cells", "T_CD4"],
+        "organs": null
+      },
+      "T_CD8": {
+        "cellType1_prefixes": ["CD8T"],
+        "cellType1_exact": ["CD8+ T cells", "T_CD8", "CD8+_Tcells"],
+        "organs": null
+      },
+      "T_Cell": {
+        "cellType1_prefixes": ["CD4T", "CD8T", "Treg", "gdT", "MAIT", "NKT"],
+        "cellType1_exact": ["T_NK", "T/NK cells", "T cells", "T", "T cell"],
+        "organs": null
+      },
+      "Fibroblast": {
+        "cellType1_exact": ["Fibroblast", "Fibroblasts", "CAF"],
+        "organs": null
+      },
+      "Endothelial": {
+        "cellType1_exact": ["Endothelial", "Endothelial cells", "EC"],
+        "organs": null
+      },
+      "Epithelial": {
+        "cellType1_exact": ["Epithelial", "Epithelial cells"],
+        "organs": null
+      },
+      "Hepatocyte": {
+        "cellType1_exact": ["Hepatocyte", "Hepatocytes"],
+        "organs": ["Tumor", "Adjacent"]
+      },
+      "Keratinocyte": {
+        "cellType1_exact": ["Keratinocyte", "Keratinocytes"],
+        "organs": null
+      }
+    },
+    "unmappable": ["PBMC", "ESC", "MSC", "Osteoblast", "Osteocyte", "Trophoblast", "Chondrocyte", "Neuron"]
+  }
+}
