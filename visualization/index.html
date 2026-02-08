@@ -12183,7 +12183,7 @@
                 const opt = document.createElement('option');
                 opt.value = t;
                 const gene = scatterData[t]?.gene;
-                opt.textContent = t + (gene && gene !== t ? ` (${gene})` : '');
+                opt.textContent = gene ? `${t} (${gene})` : t;
                 sel.appendChild(opt);
             });
 
