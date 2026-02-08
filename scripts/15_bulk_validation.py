@@ -457,6 +457,7 @@ def run_activity_inference(
 
         # Mean-center across all samples, run ridge once
         Y = expr_matrix[:, gene_idx].T.astype(np.float64)  # (genes x samples)
+        np.nan_to_num(Y, copy=False, nan=0.0)
         Y -= Y.mean(axis=1, keepdims=True)
         result = ridge(X, Y, lambda_=lambda_, n_rand=1000, backend=backend, verbose=False)
         activity = result['zscore'].T.astype(np.float32)
@@ -607,6 +608,7 @@ def run_stratified_activity_inference(
                 continue
 
             Y_g = expr_matrix[g_mask][:, gene_idx].T.astype(np.float64)  # (genes x samples)
+            np.nan_to_num(Y_g, copy=False, nan=0.0)
             Y_g -= Y_g.mean(axis=1, keepdims=True)  # within-group mean centering
 
             result_g = ridge(X, Y_g, lambda_=lambda_, n_rand=1000, backend=backend, verbose=False)
