@@ -292,11 +292,13 @@ def load_tcga_pancan(probemap: Dict[str, str]) -> Tuple[pd.DataFrame, pd.DataFra
                 pheno_by_prefix[prefix] = sid
 
         # Match PanCancer 7-part barcodes to phenotype 4-part barcodes
+        # Expression: TCGA-OR-A5J1-01A-11R-A29S-07 (4th part has vial letter)
+        # Phenotype:  TCGA-OR-A5J1-01              (4th part is 2-digit code only)
         matched = 0
         for sample_id in expr_df.index:
             parts = str(sample_id).split('-')
             if len(parts) >= 4:
-                prefix = '-'.join(parts[:4])
+                prefix = '-'.join(parts[:3] + [parts[3][:2]])
                 if prefix in pheno_by_prefix:
                     pheno_sid = pheno_by_prefix[prefix]
                     row = pheno.loc[pheno_sid]
