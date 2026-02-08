@@ -12062,36 +12062,23 @@
 
             // Always update nDisplay to reflect actual visible points
             let rho = tdata.rho, pval = tdata.pval, nDisplay = filteredPoints.length;
+            let rhoLabel = 'Spearman \u03c1'; // default label for precomputed value
             const isFiltered = filteredPoints.length !== points.length;
             if (isFiltered && filteredPoints.length >= 10) {
-                // Spearman rho with proper average-rank tie handling
-                const avgRank = (arr) => {
-                    const n = arr.length;
-                    const indexed = arr.map((v, i) => [v, i]).sort((a, b) => a[0] - b[0]);
-                    const ranks = new Array(n);
-                    let i = 0;
-                    while (i < n) {
-                        let j = i;
-                        while (j < n && indexed[j][0] === indexed[i][0]) j++;
-                        const avg = (i + j + 1) / 2; // average rank (1-based)
-                        for (let k = i; k < j; k++) ranks[indexed[k][1]] = avg;
-                        i = j;
-                    }
-                    return ranks;
-                };
-                const rx = avgRank(xArr), ry = avgRank(yArr);
-                const nn = rx.length;
-                const mrx = rx.reduce((a, b) => a + b, 0) / nn;
-                const mry = ry.reduce((a, b) => a + b, 0) / nn;
+                // Compute Pearson r for filtered data (matches OLS regression line direction)
+                const nn = xArr.length;
+                const mx = xArr.reduce((a, b) => a + b, 0) / nn;
+                const my = yArr.reduce((a, b) => a + b, 0) / nn;
                 let num = 0, dx2 = 0, dy2 = 0;
                 for (let i = 0; i < nn; i++) {
-                    const dx = rx[i] - mrx, dy = ry[i] - mry;
+                    const dx = xArr[i] - mx, dy = yArr[i] - my;
                     num += dx * dy; dx2 += dx * dx; dy2 += dy * dy;
                 }
                 rho = (dx2 > 0 && dy2 > 0) ? num / Math.sqrt(dx2 * dy2) : 0;
-                pval = null; // approximate, no exact p-value
+                rhoLabel = 'Pearson r';
+                pval = null;
             } else if (isFiltered) {
-                // Too few points to compute rho reliably
+                // Too few points to compute correlation reliably
                 rho = null;
                 pval = null;
             }
@@ -12126,7 +12113,7 @@
                 pvalStr = pval < 0.001 ? pval.toExponential(1) : pval.toFixed(4);
             }
 
-            let annoText = `Spearman \u03c1 = ${rho !== null ? rho.toFixed(3) : 'N/A'}<br>p = ${pvalStr}<br>n = ${typeof nDisplay === 'number' ? nDisplay.toLocaleString() : nDisplay} ${unitLabel}`;
+            let annoText = `${rhoLabel} = ${rho !== null ? rho.toFixed(3) : 'N/A'}<br>p = ${pvalStr}<br>n = ${typeof nDisplay === 'number' ? nDisplay.toLocaleString() : nDisplay} ${unitLabel}`;
             if (tdata.rho_ci) {
                 annoText += `<br>95% CI: [${tdata.rho_ci[0]}, ${tdata.rho_ci[1]}]`;
             }
