@@ -1,4 +1,4 @@
-"""Chat service with Claude API integration.
+"""Chat service with dual LLM backend: vLLM (OpenAI-compatible) primary, Anthropic fallback.
 
 Implements the LLM-powered chat interface with tool use for CytoAtlas queries.
 """
@@ -23,7 +23,7 @@ from app.schemas.chat import (
     VisualizationType,
 )
 from app.services.context_manager import ContextManager, ConversationContext, get_context_manager
-from app.services.mcp_tools import CYTOATLAS_TOOLS, ToolExecutor, get_tool_executor
+from app.services.mcp_tools import CYTOATLAS_TOOLS, OPENAI_TOOLS, ToolExecutor, get_tool_executor
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -75,87 +75,371 @@ Like other AI systems, CytoAtlas Assistant can make mistakes. Key findings shoul
 
 
 class ChatService:
-    """Service for handling chat interactions with Claude API."""
+    """Service for handling chat interactions with LLM API.
+
+    Uses vLLM (OpenAI-compatible) as primary backend, with Anthropic Claude as fallback.
+    """
 
     def __init__(self):
         self.settings = get_settings()
+        self._llm_client = None
         self._anthropic_client = None
 
     @property
+    def use_vllm(self) -> bool:
+        """Check if vLLM backend is configured."""
+        return bool(self.settings.llm_base_url)
+
+    @property
+    def llm_client(self):
+        """Lazy-load OpenAI-compatible LLM client for vLLM."""
+        if self._llm_client is None:
+            from openai import AsyncOpenAI
+
+            self._llm_client = AsyncOpenAI(
+                base_url=self.settings.llm_base_url,
+                api_key=self.settings.llm_api_key,
+            )
+        return self._llm_client
+
+    @property
     def anthropic_client(self):
-        """Lazy-load Anthropic client."""
+        """Lazy-load Anthropic client (fallback)."""
         if self._anthropic_client is None:
             if not self.settings.anthropic_api_key:
-                raise RuntimeError("ANTHROPIC_API_KEY not configured")
-
+                raise RuntimeError(
+                    "No LLM backend configured: set LLM_BASE_URL for vLLM "
+                    "or ANTHROPIC_API_KEY for Claude fallback"
+                )
             import anthropic
+
             self._anthropic_client = anthropic.Anthropic(
                 api_key=self.settings.anthropic_api_key
             )
         return self._anthropic_client
 
-    async def chat(
+    # ── Tool / visualization helpers ──────────────────────────────────
+
+    def _process_tool_result(
         self,
-        content: str,
-        conversation_id: int | None = None,
-        session_id: str | None = None,
-        user_id: int | None = None,
-        context: dict[str, Any] | None = None,
-    ) -> ChatMessageResponse:
-        """Process a chat message and return the response.
+        tool_name: str,
+        tool_id: str,
+        result: dict,
+        tool_calls: list[ToolCall],
+        tool_results: list[ToolResult],
+        visualizations: list[VisualizationConfig],
+        conversation: ConversationContext,
+    ) -> tuple[ToolCall, ToolResult, DownloadableData | None]:
+        """Process a single tool execution result into schema objects."""
+        tool_call = ToolCall(id=tool_id, name=tool_name, arguments=result)
+        # tool_call is actually built by caller; we need arguments from the call
+        # This helper processes the *result* after execution
 
-        Args:
-            content: User's message content
-            conversation_id: Existing conversation ID (optional)
-            session_id: Session ID for anonymous users
-            user_id: User ID for authenticated users
-            context: Additional context (current page, atlas, etc.)
+        downloadable_data = None
 
-        Returns:
-            ChatMessageResponse with assistant's reply
-        """
-        context_manager = get_context_manager()
-        tool_executor = get_tool_executor()
+        # Check for visualization in result
+        if "visualization" in result:
+            viz_data = result["visualization"]
+            visualizations.append(VisualizationConfig(
+                type=VisualizationType(viz_data["type"]),
+                title=viz_data.get("title"),
+                data=viz_data["data"],
+                config=viz_data.get("config", {}),
+                container_id=viz_data.get("container_id"),
+            ))
 
-        # Get or create conversation
-        conversation = context_manager.get_or_create_conversation(
-            conversation_id, user_id, session_id
+        # Check for export in result
+        if "export_id" in result:
+            downloadable_data = DownloadableData(
+                message_id=len(conversation.messages) + 1,
+                format=result.get("format", "csv"),
+                description=result.get("description", "Exported data"),
+            )
+            conversation.cache_data(result["export_id"], result)
+
+        tool_result = ToolResult(
+            tool_call_id=tool_id,
+            content=json.dumps(result) if isinstance(result, dict) else str(result),
+            is_error="error" in result if isinstance(result, dict) else False,
         )
 
-        # Add user message
-        user_message = conversation.add_user_message(content)
+        return tool_call, tool_result, downloadable_data
 
-        # Build messages for API
-        messages = conversation.to_messages_for_api()
+    # ── vLLM (OpenAI) backend ─────────────────────────────────────────
 
-        # Add context to system prompt if provided
-        system_prompt = SYSTEM_PROMPT
-        if context:
-            system_prompt += f"\n\n## Current Context\n{json.dumps(context, indent=2)}"
+    def _build_openai_assistant_message(
+        self, content: str | None, tool_calls_raw: list[dict]
+    ) -> dict:
+        """Build OpenAI-format assistant message for conversation history."""
+        msg: dict[str, Any] = {"role": "assistant", "content": content or ""}
+        if tool_calls_raw:
+            msg["tool_calls"] = [
+                {
+                    "id": tc["id"],
+                    "type": "function",
+                    "function": {
+                        "name": tc["name"],
+                        "arguments": tc["arguments"],
+                    },
+                }
+                for tc in tool_calls_raw
+            ]
+        return msg
 
-        # Call Claude API
-        try:
-            response = self.anthropic_client.messages.create(
+    async def _chat_vllm(
+        self,
+        messages: list[dict],
+        system_prompt: str,
+        conversation: ConversationContext,
+    ) -> tuple[str, list[ToolCall], list[ToolResult], list[VisualizationConfig], DownloadableData | None, int, int]:
+        """Non-streaming chat via vLLM OpenAI-compatible API."""
+        tool_executor = get_tool_executor()
+        tool_calls: list[ToolCall] = []
+        tool_results: list[ToolResult] = []
+        visualizations: list[VisualizationConfig] = []
+        downloadable_data: DownloadableData | None = None
+        response_text = ""
+        total_prompt_tokens = 0
+        total_completion_tokens = 0
+
+        api_messages = [{"role": "system", "content": system_prompt}] + messages
+
+        response = await self.llm_client.chat.completions.create(
+            model=self.settings.chat_model,
+            max_tokens=self.settings.chat_max_tokens,
+            tools=OPENAI_TOOLS,
+            messages=api_messages,
+        )
+
+        if response.usage:
+            total_prompt_tokens += response.usage.prompt_tokens
+            total_completion_tokens += response.usage.completion_tokens
+
+        # Tool use loop
+        while response.choices[0].finish_reason == "tool_calls":
+            message = response.choices[0].message
+            if message.content:
+                response_text += message.content
+
+            # Build raw tool call list for history
+            raw_tc_list = []
+            current_tool_results = []
+
+            for tc in message.tool_calls:
+                args_str = tc.function.arguments
+                args = json.loads(args_str)
+
+                tool_call = ToolCall(
+                    id=tc.id,
+                    name=tc.function.name,
+                    arguments=args,
+                )
+                tool_calls.append(tool_call)
+                raw_tc_list.append({"id": tc.id, "name": tc.function.name, "arguments": args_str})
+
+                # Execute tool
+                result = await tool_executor.execute_tool(tc.function.name, args)
+
+                _, tool_result, dl_data = self._process_tool_result(
+                    tc.function.name, tc.id, result,
+                    tool_calls, tool_results, visualizations, conversation,
+                )
+                tool_results.append(tool_result)
+                current_tool_results.append(tool_result)
+                if dl_data:
+                    downloadable_data = dl_data
+
+            # Append assistant message + tool results to conversation
+            api_messages.append(self._build_openai_assistant_message(message.content, raw_tc_list))
+            for tr in current_tool_results:
+                api_messages.append({
+                    "role": "tool",
+                    "tool_call_id": tr.tool_call_id,
+                    "content": tr.content,
+                })
+
+            # Get next response
+            response = await self.llm_client.chat.completions.create(
                 model=self.settings.chat_model,
                 max_tokens=self.settings.chat_max_tokens,
-                system=system_prompt,
-                tools=CYTOATLAS_TOOLS,
-                messages=messages,
+                tools=OPENAI_TOOLS,
+                messages=api_messages,
             )
-        except Exception as e:
-            logger.exception("Claude API call failed")
-            raise RuntimeError(f"Chat service error: {str(e)}")
+            if response.usage:
+                total_prompt_tokens += response.usage.prompt_tokens
+                total_completion_tokens += response.usage.completion_tokens
 
-        # Process response
+        # Extract final text
+        final_message = response.choices[0].message
+        if final_message.content:
+            response_text += final_message.content
+
+        return (
+            response_text, tool_calls, tool_results, visualizations,
+            downloadable_data, total_prompt_tokens, total_completion_tokens,
+        )
+
+    async def _chat_stream_vllm(
+        self,
+        messages: list[dict],
+        system_prompt: str,
+        conversation: ConversationContext,
+        message_id: int,
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """Streaming chat via vLLM OpenAI-compatible API."""
+        tool_executor = get_tool_executor()
+        tool_calls: list[ToolCall] = []
+        tool_results: list[ToolResult] = []
+        visualizations: list[VisualizationConfig] = []
+        full_response = ""
+
+        api_messages = [{"role": "system", "content": system_prompt}] + messages
+
+        needs_continuation = True
+        while needs_continuation:
+            needs_continuation = False
+
+            stream = await self.llm_client.chat.completions.create(
+                model=self.settings.chat_model,
+                max_tokens=self.settings.chat_max_tokens,
+                tools=OPENAI_TOOLS,
+                messages=api_messages,
+                stream=True,
+            )
+
+            # Accumulate streamed tool call chunks
+            collected_tool_calls: dict[int, dict] = {}
+            finish_reason = None
+            streamed_content = ""
+
+            async for chunk in stream:
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+                if delta and delta.content:
+                    full_response += delta.content
+                    streamed_content += delta.content
+                    yield StreamChunk(
+                        type="text",
+                        content=delta.content,
+                        message_id=message_id,
+                    )
+                if delta and delta.tool_calls:
+                    for tc_chunk in delta.tool_calls:
+                        idx = tc_chunk.index
+                        if idx not in collected_tool_calls:
+                            collected_tool_calls[idx] = {"id": "", "name": "", "arguments": ""}
+                        if tc_chunk.id:
+                            collected_tool_calls[idx]["id"] = tc_chunk.id
+                        if tc_chunk.function:
+                            if tc_chunk.function.name:
+                                collected_tool_calls[idx]["name"] += tc_chunk.function.name
+                            if tc_chunk.function.arguments:
+                                collected_tool_calls[idx]["arguments"] += tc_chunk.function.arguments
+                if chunk.choices[0].finish_reason:
+                    finish_reason = chunk.choices[0].finish_reason
+
+            # If the model called tools, execute them and continue
+            if finish_reason == "tool_calls" and collected_tool_calls:
+                needs_continuation = True
+                raw_tc_list = []
+                current_tool_results = []
+
+                for idx in sorted(collected_tool_calls.keys()):
+                    tc_data = collected_tool_calls[idx]
+                    args = json.loads(tc_data["arguments"])
+
+                    tool_call = ToolCall(
+                        id=tc_data["id"],
+                        name=tc_data["name"],
+                        arguments=args,
+                    )
+                    tool_calls.append(tool_call)
+                    raw_tc_list.append(tc_data)
+
+                    yield StreamChunk(
+                        type="tool_call",
+                        tool_call=tool_call,
+                        message_id=message_id,
+                    )
+
+                    result = await tool_executor.execute_tool(tc_data["name"], args)
+
+                    _, tool_result, _ = self._process_tool_result(
+                        tc_data["name"], tc_data["id"], result,
+                        tool_calls, tool_results, visualizations, conversation,
+                    )
+                    tool_results.append(tool_result)
+                    current_tool_results.append(tool_result)
+
+                    yield StreamChunk(
+                        type="tool_result",
+                        tool_result=tool_result,
+                        message_id=message_id,
+                    )
+
+                    if "visualization" in result:
+                        viz_data = result["visualization"]
+                        viz = VisualizationConfig(
+                            type=VisualizationType(viz_data["type"]),
+                            title=viz_data.get("title"),
+                            data=viz_data["data"],
+                            config=viz_data.get("config", {}),
+                            container_id=viz_data.get("container_id"),
+                        )
+                        yield StreamChunk(
+                            type="visualization",
+                            visualization=viz,
+                            message_id=message_id,
+                        )
+
+                # Update api_messages for continuation
+                api_messages.append(
+                    self._build_openai_assistant_message(streamed_content or None, raw_tc_list)
+                )
+                for tr in current_tool_results:
+                    api_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tr.tool_call_id,
+                        "content": tr.content,
+                    })
+
+        # Save to conversation
+        conversation.add_assistant_message(
+            content=full_response,
+            tool_calls=tool_calls if tool_calls else None,
+            tool_results=tool_results if tool_results else None,
+            visualizations=visualizations if visualizations else None,
+        )
+
+        yield StreamChunk(type="done", message_id=message_id)
+
+    # ── Anthropic (Claude) fallback backend ───────────────────────────
+
+    async def _chat_anthropic(
+        self,
+        messages: list[dict],
+        system_prompt: str,
+        conversation: ConversationContext,
+    ) -> tuple[str, list[ToolCall], list[ToolResult], list[VisualizationConfig], DownloadableData | None, int, int]:
+        """Non-streaming chat via Anthropic Claude API (fallback)."""
+        tool_executor = get_tool_executor()
         tool_calls: list[ToolCall] = []
         tool_results: list[ToolResult] = []
         visualizations: list[VisualizationConfig] = []
         downloadable_data: DownloadableData | None = None
         response_text = ""
 
+        response = self.anthropic_client.messages.create(
+            model=self.settings.anthropic_chat_model,
+            max_tokens=self.settings.chat_max_tokens,
+            system=system_prompt,
+            tools=CYTOATLAS_TOOLS,
+            messages=messages,
+        )
+
         # Handle tool use loop
         while response.stop_reason == "tool_use":
-            # Extract tool uses from response
             for block in response.content:
                 if block.type == "text":
                     response_text += block.text
@@ -167,10 +451,8 @@ class ChatService:
                     )
                     tool_calls.append(tool_call)
 
-                    # Execute tool
                     result = await tool_executor.execute_tool(block.name, block.input)
 
-                    # Check for visualization in result
                     if "visualization" in result:
                         viz_data = result["visualization"]
                         visualizations.append(VisualizationConfig(
@@ -181,14 +463,12 @@ class ChatService:
                             container_id=viz_data.get("container_id"),
                         ))
 
-                    # Check for export in result
                     if "export_id" in result:
                         downloadable_data = DownloadableData(
                             message_id=len(conversation.messages) + 1,
                             format=result.get("format", "csv"),
                             description=result.get("description", "Exported data"),
                         )
-                        # Cache the data for download
                         conversation.cache_data(result["export_id"], result)
 
                     tool_result = ToolResult(
@@ -198,11 +478,7 @@ class ChatService:
                     )
                     tool_results.append(tool_result)
 
-            # Continue conversation with tool results
-            messages.append({
-                "role": "assistant",
-                "content": response.content,
-            })
+            messages.append({"role": "assistant", "content": response.content})
             messages.append({
                 "role": "user",
                 "content": [
@@ -215,107 +491,139 @@ class ChatService:
                 ],
             })
 
-            # Get next response
             response = self.anthropic_client.messages.create(
-                model=self.settings.chat_model,
+                model=self.settings.anthropic_chat_model,
                 max_tokens=self.settings.chat_max_tokens,
                 system=system_prompt,
                 tools=CYTOATLAS_TOOLS,
                 messages=messages,
             )
 
-        # Extract final text response
+        # Extract final text
         for block in response.content:
             if block.type == "text":
                 response_text += block.text
 
-        # Add assistant message to conversation
-        assistant_message = conversation.add_assistant_message(
-            content=response_text,
-            tool_calls=tool_calls if tool_calls else None,
-            tool_results=tool_results if tool_results else None,
-            visualizations=visualizations if visualizations else None,
-            downloadable_data=downloadable_data,
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
+        return (
+            response_text, tool_calls, tool_results, visualizations,
+            downloadable_data, response.usage.input_tokens, response.usage.output_tokens,
         )
 
-        return ChatMessageResponse(
-            message_id=assistant_message.id,
-            conversation_id=conversation.conversation_id,
-            role=MessageRole.ASSISTANT,
-            content=response_text,
-            tool_calls=tool_calls if tool_calls else None,
-            tool_results=tool_results if tool_results else None,
-            visualizations=visualizations if visualizations else None,
-            downloadable_data=downloadable_data,
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
-            created_at=assistant_message.created_at,
-        )
-
-    async def chat_stream(
+    async def _chat_stream_anthropic(
         self,
-        content: str,
-        conversation_id: int | None = None,
-        session_id: str | None = None,
-        user_id: int | None = None,
-        context: dict[str, Any] | None = None,
+        messages: list[dict],
+        system_prompt: str,
+        conversation: ConversationContext,
+        message_id: int,
     ) -> AsyncGenerator[StreamChunk, None]:
-        """Stream a chat response.
-
-        Yields StreamChunk objects as the response is generated.
-        """
-        context_manager = get_context_manager()
+        """Streaming chat via Anthropic Claude API (fallback)."""
         tool_executor = get_tool_executor()
-
-        # Get or create conversation
-        conversation = context_manager.get_or_create_conversation(
-            conversation_id, user_id, session_id
-        )
-
-        # Add user message
-        user_message = conversation.add_user_message(content)
-
-        # Build messages for API
-        messages = conversation.to_messages_for_api()
-
-        system_prompt = SYSTEM_PROMPT
-        if context:
-            system_prompt += f"\n\n## Current Context\n{json.dumps(context, indent=2)}"
-
         tool_calls: list[ToolCall] = []
         tool_results: list[ToolResult] = []
         visualizations: list[VisualizationConfig] = []
         full_response = ""
-        message_id = len(conversation.messages) + 1
 
-        try:
-            # Stream response
-            with self.anthropic_client.messages.stream(
-                model=self.settings.chat_model,
-                max_tokens=self.settings.chat_max_tokens,
-                system=system_prompt,
-                tools=CYTOATLAS_TOOLS,
-                messages=messages,
-            ) as stream:
-                for event in stream:
-                    if event.type == "content_block_delta":
-                        if hasattr(event.delta, "text"):
-                            full_response += event.delta.text
+        with self.anthropic_client.messages.stream(
+            model=self.settings.anthropic_chat_model,
+            max_tokens=self.settings.chat_max_tokens,
+            system=system_prompt,
+            tools=CYTOATLAS_TOOLS,
+            messages=messages,
+        ) as stream:
+            for event in stream:
+                if event.type == "content_block_delta":
+                    if hasattr(event.delta, "text"):
+                        full_response += event.delta.text
+                        yield StreamChunk(
+                            type="text",
+                            content=event.delta.text,
+                            message_id=message_id,
+                        )
+
+            response = stream.get_final_message()
+
+            if response.stop_reason == "tool_use":
+                for block in response.content:
+                    if block.type == "tool_use":
+                        tool_call = ToolCall(
+                            id=block.id,
+                            name=block.name,
+                            arguments=block.input,
+                        )
+                        tool_calls.append(tool_call)
+
+                        yield StreamChunk(
+                            type="tool_call",
+                            tool_call=tool_call,
+                            message_id=message_id,
+                        )
+
+                        result = await tool_executor.execute_tool(block.name, block.input)
+
+                        tool_result = ToolResult(
+                            tool_call_id=block.id,
+                            content=json.dumps(result) if isinstance(result, dict) else str(result),
+                            is_error="error" in result if isinstance(result, dict) else False,
+                        )
+                        tool_results.append(tool_result)
+
+                        yield StreamChunk(
+                            type="tool_result",
+                            tool_result=tool_result,
+                            message_id=message_id,
+                        )
+
+                        if "visualization" in result:
+                            viz_data = result["visualization"]
+                            viz = VisualizationConfig(
+                                type=VisualizationType(viz_data["type"]),
+                                title=viz_data.get("title"),
+                                data=viz_data["data"],
+                                config=viz_data.get("config", {}),
+                                container_id=viz_data.get("container_id"),
+                            )
+                            visualizations.append(viz)
                             yield StreamChunk(
-                                type="text",
-                                content=event.delta.text,
+                                type="visualization",
+                                visualization=viz,
                                 message_id=message_id,
                             )
 
-                # Get final message for tool handling
-                response = stream.get_final_message()
+                # Continue with tool results
+                current_tool_results = list(tool_results)
 
-                # Handle tool use
-                if response.stop_reason == "tool_use":
+                while response.stop_reason == "tool_use":
+                    messages.append({"role": "assistant", "content": response.content})
+                    messages.append({
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": tr.tool_call_id,
+                                "content": tr.content,
+                            }
+                            for tr in current_tool_results
+                        ],
+                    })
+                    current_tool_results = []
+
+                    response = self.anthropic_client.messages.create(
+                        model=self.settings.anthropic_chat_model,
+                        max_tokens=self.settings.chat_max_tokens,
+                        system=system_prompt,
+                        tools=CYTOATLAS_TOOLS,
+                        messages=messages,
+                    )
+
                     for block in response.content:
-                        if block.type == "tool_use":
+                        if block.type == "text":
+                            full_response += block.text
+                            yield StreamChunk(
+                                type="text",
+                                content=block.text,
+                                message_id=message_id,
+                            )
+                        elif block.type == "tool_use":
                             tool_call = ToolCall(
                                 id=block.id,
                                 name=block.name,
@@ -329,7 +637,6 @@ class ChatService:
                                 message_id=message_id,
                             )
 
-                            # Execute tool
                             result = await tool_executor.execute_tool(block.name, block.input)
 
                             tool_result = ToolResult(
@@ -338,6 +645,7 @@ class ChatService:
                                 is_error="error" in result if isinstance(result, dict) else False,
                             )
                             tool_results.append(tool_result)
+                            current_tool_results.append(tool_result)
 
                             yield StreamChunk(
                                 type="tool_result",
@@ -345,7 +653,6 @@ class ChatService:
                                 message_id=message_id,
                             )
 
-                            # Check for visualization
                             if "visualization" in result:
                                 viz_data = result["visualization"]
                                 viz = VisualizationConfig(
@@ -362,100 +669,6 @@ class ChatService:
                                     message_id=message_id,
                                 )
 
-                    # Continue with tool results - loop until no more tool use
-                    current_tool_results = [tr for tr in tool_results]  # Copy current results
-
-                    while response.stop_reason == "tool_use":
-                        messages.append({"role": "assistant", "content": response.content})
-                        messages.append({
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "tool_result",
-                                    "tool_use_id": tr.tool_call_id,
-                                    "content": tr.content,
-                                }
-                                for tr in current_tool_results
-                            ],
-                        })
-                        current_tool_results = []  # Reset for next round
-
-                        # Get next response
-                        response = self.anthropic_client.messages.create(
-                            model=self.settings.chat_model,
-                            max_tokens=self.settings.chat_max_tokens,
-                            system=system_prompt,
-                            tools=CYTOATLAS_TOOLS,
-                            messages=messages,
-                        )
-
-                        # Process response - could be more text or more tool calls
-                        for block in response.content:
-                            if block.type == "text":
-                                full_response += block.text
-                                yield StreamChunk(
-                                    type="text",
-                                    content=block.text,
-                                    message_id=message_id,
-                                )
-                            elif block.type == "tool_use":
-                                tool_call = ToolCall(
-                                    id=block.id,
-                                    name=block.name,
-                                    arguments=block.input,
-                                )
-                                tool_calls.append(tool_call)
-
-                                yield StreamChunk(
-                                    type="tool_call",
-                                    tool_call=tool_call,
-                                    message_id=message_id,
-                                )
-
-                                # Execute tool
-                                result = await tool_executor.execute_tool(block.name, block.input)
-
-                                tool_result = ToolResult(
-                                    tool_call_id=block.id,
-                                    content=json.dumps(result) if isinstance(result, dict) else str(result),
-                                    is_error="error" in result if isinstance(result, dict) else False,
-                                )
-                                tool_results.append(tool_result)
-                                current_tool_results.append(tool_result)
-
-                                yield StreamChunk(
-                                    type="tool_result",
-                                    tool_result=tool_result,
-                                    message_id=message_id,
-                                )
-
-                                # Check for visualization
-                                if "visualization" in result:
-                                    viz_data = result["visualization"]
-                                    viz = VisualizationConfig(
-                                        type=VisualizationType(viz_data["type"]),
-                                        title=viz_data.get("title"),
-                                        data=viz_data["data"],
-                                        config=viz_data.get("config", {}),
-                                        container_id=viz_data.get("container_id"),
-                                    )
-                                    visualizations.append(viz)
-                                    yield StreamChunk(
-                                        type="visualization",
-                                        visualization=viz,
-                                        message_id=message_id,
-                                    )
-
-        except Exception as e:
-            logger.exception("Streaming chat failed")
-            yield StreamChunk(
-                type="error",
-                content=str(e),
-                message_id=message_id,
-            )
-            return
-
-        # Add assistant message to conversation
         conversation.add_assistant_message(
             content=full_response,
             tool_calls=tool_calls if tool_calls else None,
@@ -463,10 +676,134 @@ class ChatService:
             visualizations=visualizations if visualizations else None,
         )
 
-        yield StreamChunk(
-            type="done",
-            message_id=message_id,
+        yield StreamChunk(type="done", message_id=message_id)
+
+    # ── Public API ────────────────────────────────────────────────────
+
+    async def chat(
+        self,
+        content: str,
+        conversation_id: int | None = None,
+        session_id: str | None = None,
+        user_id: int | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> ChatMessageResponse:
+        """Process a chat message and return the response.
+
+        Tries vLLM first; falls back to Anthropic on connection error.
+        """
+        context_manager = get_context_manager()
+
+        conversation = context_manager.get_or_create_conversation(
+            conversation_id, user_id, session_id
         )
+        user_message = conversation.add_user_message(content)
+        messages = conversation.to_messages_for_api()
+
+        system_prompt = SYSTEM_PROMPT
+        if context:
+            system_prompt += f"\n\n## Current Context\n{json.dumps(context, indent=2)}"
+
+        # Try vLLM primary, then Anthropic fallback
+        try:
+            if self.use_vllm:
+                (
+                    response_text, tool_calls, tool_results,
+                    visualizations, downloadable_data,
+                    input_tokens, output_tokens,
+                ) = await self._chat_vllm(messages, system_prompt, conversation)
+            else:
+                raise ConnectionError("vLLM not configured")
+        except (ConnectionError, OSError) as e:
+            logger.warning("vLLM unavailable (%s), falling back to Anthropic", e)
+            try:
+                (
+                    response_text, tool_calls, tool_results,
+                    visualizations, downloadable_data,
+                    input_tokens, output_tokens,
+                ) = await self._chat_anthropic(messages, system_prompt, conversation)
+            except Exception:
+                logger.exception("Anthropic fallback also failed")
+                raise RuntimeError("All LLM backends unavailable")
+        except Exception as e:
+            logger.exception("LLM API call failed")
+            raise RuntimeError(f"Chat service error: {str(e)}")
+
+        assistant_message = conversation.add_assistant_message(
+            content=response_text,
+            tool_calls=tool_calls if tool_calls else None,
+            tool_results=tool_results if tool_results else None,
+            visualizations=visualizations if visualizations else None,
+            downloadable_data=downloadable_data,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
+
+        return ChatMessageResponse(
+            message_id=assistant_message.id,
+            conversation_id=conversation.conversation_id,
+            role=MessageRole.ASSISTANT,
+            content=response_text,
+            tool_calls=tool_calls if tool_calls else None,
+            tool_results=tool_results if tool_results else None,
+            visualizations=visualizations if visualizations else None,
+            downloadable_data=downloadable_data,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            created_at=assistant_message.created_at,
+        )
+
+    async def chat_stream(
+        self,
+        content: str,
+        conversation_id: int | None = None,
+        session_id: str | None = None,
+        user_id: int | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """Stream a chat response.
+
+        Tries vLLM first; falls back to Anthropic on connection error.
+        """
+        context_manager = get_context_manager()
+
+        conversation = context_manager.get_or_create_conversation(
+            conversation_id, user_id, session_id
+        )
+        user_message = conversation.add_user_message(content)
+        messages = conversation.to_messages_for_api()
+
+        system_prompt = SYSTEM_PROMPT
+        if context:
+            system_prompt += f"\n\n## Current Context\n{json.dumps(context, indent=2)}"
+
+        message_id = len(conversation.messages) + 1
+
+        try:
+            if self.use_vllm:
+                async for chunk in self._chat_stream_vllm(
+                    messages, system_prompt, conversation, message_id
+                ):
+                    yield chunk
+                return
+            else:
+                raise ConnectionError("vLLM not configured")
+        except (ConnectionError, OSError) as e:
+            logger.warning("vLLM streaming unavailable (%s), falling back to Anthropic", e)
+        except Exception as e:
+            logger.exception("Streaming chat failed")
+            yield StreamChunk(type="error", content=str(e), message_id=message_id)
+            return
+
+        # Anthropic fallback for streaming
+        try:
+            async for chunk in self._chat_stream_anthropic(
+                messages, system_prompt, conversation, message_id
+            ):
+                yield chunk
+        except Exception as e:
+            logger.exception("Anthropic streaming fallback failed")
+            yield StreamChunk(type="error", content=str(e), message_id=message_id)
 
     def get_suggestions(self) -> ChatSuggestionsResponse:
         """Get suggested queries for the chat."""

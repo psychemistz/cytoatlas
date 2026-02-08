@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
-# Tool definitions for Claude API
+# Tool definitions (Anthropic format, converted to OpenAI format at bottom)
 CYTOATLAS_TOOLS = [
     {
         "name": "search_entity",
@@ -338,6 +338,28 @@ CYTOATLAS_TOOLS = [
         }
     },
 ]
+
+
+def _to_openai_tools(anthropic_tools: list[dict]) -> list[dict]:
+    """Convert Anthropic tool format to OpenAI function-calling format.
+
+    The JSON Schema bodies (input_schema vs parameters) are identical;
+    only the wrapping object differs between the two APIs.
+    """
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": tool["name"],
+                "description": tool["description"],
+                "parameters": tool["input_schema"],
+            },
+        }
+        for tool in anthropic_tools
+    ]
+
+
+OPENAI_TOOLS = _to_openai_tools(CYTOATLAS_TOOLS)
 
 
 class ToolExecutor:

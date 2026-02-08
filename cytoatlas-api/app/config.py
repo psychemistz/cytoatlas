@@ -170,10 +170,14 @@ class Settings(BaseSettings):
         """Get max upload size in bytes."""
         return self.max_upload_size_gb * 1024 * 1024 * 1024
 
-    # Claude API for Chat
-    anthropic_api_key: str | None = Field(default=None)
-    chat_model: str = Field(default="claude-opus-4-5-20251101")
+    # LLM API for Chat — primary: vLLM (OpenAI-compatible); fallback: Anthropic Claude
+    llm_base_url: str | None = Field(default="http://localhost:8001/v1")
+    llm_api_key: str = Field(default="not-needed")  # vLLM doesn't require auth by default
+    chat_model: str = Field(default="mistralai/Mistral-Small-3.1-24B-Instruct-2503")
     chat_max_tokens: int = Field(default=4096)
+    # Anthropic fallback (used when llm_base_url is not set or vLLM is unreachable)
+    anthropic_api_key: str | None = Field(default=None)
+    anthropic_chat_model: str = Field(default="claude-sonnet-4-5-20250929")
 
     # Chat Rate Limiting
     anon_chat_limit_per_day: int = Field(default=5)

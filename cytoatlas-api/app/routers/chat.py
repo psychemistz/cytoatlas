@@ -414,7 +414,7 @@ async def chat_status() -> dict[str, Any]:
     - Available tools
     - Rate limit information
     """
-    api_configured = bool(settings.anthropic_api_key)
+    api_configured = bool(settings.llm_base_url or settings.anthropic_api_key)
 
     return {
         "status": "operational" if api_configured else "limited",

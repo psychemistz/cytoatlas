@@ -87,7 +87,7 @@ const ChatPage = {
                         </div>
                         <div class="input-footer">
                             <span class="char-count" id="char-count">0 / 10000</span>
-                            <span class="model-info">Powered by Claude</span>
+                            <span class="model-info">Powered by CytoAtlas LLM</span>
                         </div>
                     </div>
                 </main>

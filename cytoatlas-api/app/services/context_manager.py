@@ -99,7 +99,7 @@ class ConversationContext:
         return cached.get("data") if cached else None
 
     def to_messages_for_api(self, max_messages: int = 20) -> list[dict[str, Any]]:
-        """Convert conversation to format for Claude API.
+        """Convert conversation to format for LLM API.
 
         Limits to recent messages to stay within token budget.
         """
