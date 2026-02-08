@@ -12025,9 +12025,15 @@
             const unitLabel = opts.unitLabel || 'samples';
 
             // Filter by group label (tissue/celltype) if points have 3rd element
+            // Supports both string labels and integer-encoded labels (decoded via tdata.groups)
             let filteredPoints = points;
             if (celltypeFilter && points.length > 0 && points[0].length >= 3) {
-                filteredPoints = points.filter(p => p[2] === celltypeFilter);
+                const groups = tdata.groups || [];
+                const filterIdx = groups.indexOf(celltypeFilter);
+                filteredPoints = points.filter(p => {
+                    if (typeof p[2] === 'number') return p[2] === filterIdx;
+                    return p[2] === celltypeFilter;
+                });
             }
 
             // Filter out non-expressing samples (expression at mode minimum = zero-expression z-score)
@@ -12104,8 +12110,7 @@
                 pvalStr = pval < 0.001 ? pval.toExponential(1) : pval.toFixed(4);
             }
 
-            const subsampledNote = isFiltered ? ' (shown)' : '';
-            let annoText = `Spearman \u03c1 = ${rho !== null ? rho.toFixed(3) : 'N/A'}<br>p = ${pvalStr}<br>n = ${typeof nDisplay === 'number' ? nDisplay.toLocaleString() : nDisplay}${subsampledNote} ${unitLabel}`;
+            let annoText = `Spearman \u03c1 = ${rho !== null ? rho.toFixed(3) : 'N/A'}<br>p = ${pvalStr}<br>n = ${typeof nDisplay === 'number' ? nDisplay.toLocaleString() : nDisplay} ${unitLabel}`;
             if (tdata.rho_ci) {
                 annoText += `<br>95% CI: [${tdata.rho_ci[0]}, ${tdata.rho_ci[1]}]`;
             }

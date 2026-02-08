@@ -885,101 +885,13 @@ def build_bulk_rnaseq_json() -> dict:
             atlas_data["summary"] = {}
             atlas_data["donor_level"] = {}
 
-        # Donor scatter (already computed with subsampling in build_donor_scatter)
-        # Build it separately for just this atlas
-        atlas_scatter = {}
-        atlas_prefix, level_name, expr_suffix = ATLAS_H5AD_PATTERNS.get(atlas_key, (atlas_key, "donor_only", "expression"))
-
-        for sig_type in SIG_TYPES:
-            expr_path = atlas_dir / f"{atlas_prefix}_{level_name}_{expr_suffix}.h5ad"
-            act_path = atlas_dir / f"{atlas_prefix}_{level_name}_{sig_type}.h5ad"
-
-            if not expr_path.exists() or not act_path.exists():
-                continue
-
-            expr_adata = ad.read_h5ad(expr_path)
-            act_adata = ad.read_h5ad(act_path)
-
-            gene_set = set(expr_adata.var_names)
-            symbol_to_varname = {}
-            if "symbol" in expr_adata.var.columns:
-                for idx, sym in zip(expr_adata.var_names, expr_adata.var["symbol"]):
-                    if pd.notna(sym):
-                        symbol_to_varname[str(sym)] = idx
-                gene_set = set(symbol_to_varname.keys()) | gene_set
-
-            targets_data = {}
-            common_obs = expr_adata.obs_names.intersection(act_adata.obs_names)
-            if len(common_obs) < 10:
-                atlas_scatter[sig_type] = {}
-                continue
-
-            for target in act_adata.var_names:
-                gene = resolve_gene_name(target, gene_set, cytosig_map)
-                if gene is None:
-                    continue
-                expr_var = symbol_to_varname.get(gene, gene)
-                if expr_var not in set(expr_adata.var_names):
-                    continue
-
-                expr_vals = expr_adata[common_obs, expr_var].X.flatten()
-                act_vals = act_adata[common_obs, target].X.flatten()
-
-                if hasattr(expr_vals, "toarray"):
-                    expr_vals = expr_vals.toarray().flatten()
-                if hasattr(act_vals, "toarray"):
-                    act_vals = act_vals.toarray().flatten()
-
-                mask = np.isfinite(expr_vals) & np.isfinite(act_vals)
-                expr_vals = expr_vals[mask].astype(np.float64)
-                act_vals = act_vals[mask].astype(np.float64)
-
-                if len(expr_vals) < 10:
-                    continue
-
-                rho, pval = stats.spearmanr(expr_vals, act_vals)
-                n_total = len(expr_vals)
-
-                # Z-score normalize expression
-                expr_std = np.std(expr_vals)
-                if expr_std > 1e-10:
-                    expr_vals = (expr_vals - np.mean(expr_vals)) / expr_std
-
-                # Subsample for visualization
-                if n_total > 2000:
-                    rng = np.random.default_rng(42)
-                    idx = rng.choice(n_total, size=2000, replace=False)
-                    idx.sort()
-                    expr_vals = expr_vals[idx]
-                    act_vals = act_vals[idx]
-
-                points = [[round_val(float(e)), round_val(float(a))] for e, a in zip(expr_vals, act_vals)]
-                targets_data[target] = {
-                    "gene": gene,
-                    "rho": round_val(rho),
-                    "pval": float(f"{pval:.2e}") if pval is not None and np.isfinite(pval) else None,
-                    "n": n_total,
-                    "points": points,
-                }
-
-            # Filter to manage file size
-            if sig_type == "lincytosig" and len(targets_data) > 30:
-                sorted_targets = sorted(
-                    targets_data.items(),
-                    key=lambda x: abs(x[1]["rho"]) if x[1]["rho"] is not None else 0,
-                    reverse=True,
-                )
-                targets_data = dict(sorted_targets[:30])
-            elif sig_type == "secact":
-                targets_data = filter_secact_targets(targets_data)
-
-            atlas_scatter[sig_type] = targets_data
-            print(f"    bulk_scatter/{atlas_key}/{sig_type}: {len(targets_data)} targets")
-
-        atlas_data["donor_scatter"] = atlas_scatter
+        # Donor scatter: built as fallback when stratified_scatter is empty (e.g. TCGA).
+        # For GTEx, stratified_scatter has tissue labels and the JS prefers it.
+        stratified_levels = CELLTYPE_H5AD_PATTERNS.get(atlas_key, [])
+        atlas_data["donor_scatter"] = {}  # placeholder, filled below if needed
 
         # Build stratified scatter (by_tissue for GTEx, by_cancer for TCGA)
-        stratified_levels = CELLTYPE_H5AD_PATTERNS.get(atlas_key, [])
+        # All points included (no subsampling) with integer-encoded group labels
         stratified_scatter = {}
 
         for level_entry in stratified_levels:
@@ -1024,6 +936,9 @@ def build_bulk_rnaseq_json() -> dict:
                     expr_adata.obs.loc[common_obs_s, grp_col].dropna().unique().tolist()
                 ) if grp_col else []
 
+                # Build group label -> integer index mapping for compact encoding
+                grp_to_idx = {g: i for i, g in enumerate(groups_available)}
+
                 targets_data_s = {}
 
                 for target in act_adata.var_names:
@@ -1060,21 +975,12 @@ def build_bulk_rnaseq_json() -> dict:
                     if ev_std > 1e-10:
                         ev = (ev - np.mean(ev)) / ev_std
 
-                    # Subsample for visualization
-                    if n_total_s > 2000:
-                        rng = np.random.default_rng(42)
-                        sel = rng.choice(n_total_s, size=2000, replace=False)
-                        sel.sort()
-                        ev = ev[sel]
-                        av = av[sel]
-                        if grp_labels is not None:
-                            grp_labels = grp_labels[sel]
-
+                    # All points included — use 2-decimal precision and integer group labels
                     points_s = []
                     for i in range(len(ev)):
-                        pt = [round_val(float(ev[i])), round_val(float(av[i]))]
+                        pt = [round_val(float(ev[i]), 2), round_val(float(av[i]), 2)]
                         if grp_labels is not None:
-                            pt.append(str(grp_labels[i]))
+                            pt.append(grp_to_idx.get(str(grp_labels[i]), -1))
                         points_s.append(pt)
 
                     targets_data_s[target] = {
@@ -1105,8 +1011,81 @@ def build_bulk_rnaseq_json() -> dict:
 
             stratified_scatter[level_name] = level_scatter
 
-        if stratified_scatter:
+        # Check if stratified_scatter produced any actual target data
+        strat_has_data = any(
+            len(sigs.get(st, {})) > 0
+            for sigs in stratified_scatter.values()
+            for st in SIG_TYPES
+        )
+
+        if strat_has_data:
             atlas_data["stratified_scatter"] = stratified_scatter
+            print(f"    Using stratified_scatter for {atlas_key} (skipping donor_scatter)")
+        else:
+            # Stratified scatter empty — build donor_scatter as fallback (all points)
+            print(f"    Stratified scatter empty for {atlas_key}, building donor_scatter fallback...")
+            atlas_scatter = {}
+            atlas_prefix, level_name, expr_suffix = ATLAS_H5AD_PATTERNS.get(
+                atlas_key, (atlas_key, "donor_only", "expression")
+            )
+            for sig_type in SIG_TYPES:
+                expr_path = atlas_dir / f"{atlas_prefix}_{level_name}_{expr_suffix}.h5ad"
+                act_path = atlas_dir / f"{atlas_prefix}_{level_name}_{sig_type}.h5ad"
+                if not expr_path.exists() or not act_path.exists():
+                    continue
+                expr_adata = ad.read_h5ad(expr_path)
+                act_adata = ad.read_h5ad(act_path)
+                gene_set_fb = set(expr_adata.var_names)
+                sym_to_var_fb = {}
+                if "symbol" in expr_adata.var.columns:
+                    for idx, sym in zip(expr_adata.var_names, expr_adata.var["symbol"]):
+                        if pd.notna(sym):
+                            sym_to_var_fb[str(sym)] = idx
+                    gene_set_fb = set(sym_to_var_fb.keys()) | gene_set_fb
+                targets_data_fb = {}
+                common_obs_fb = expr_adata.obs_names.intersection(act_adata.obs_names)
+                if len(common_obs_fb) < 10:
+                    atlas_scatter[sig_type] = {}
+                    continue
+                for target in act_adata.var_names:
+                    gene = resolve_gene_name(target, gene_set_fb, cytosig_map)
+                    if gene is None:
+                        continue
+                    expr_var_fb = sym_to_var_fb.get(gene, gene)
+                    if expr_var_fb not in set(expr_adata.var_names):
+                        continue
+                    ev_fb = expr_adata[common_obs_fb, expr_var_fb].X.flatten()
+                    av_fb = act_adata[common_obs_fb, target].X.flatten()
+                    if hasattr(ev_fb, "toarray"):
+                        ev_fb = ev_fb.toarray().flatten()
+                    if hasattr(av_fb, "toarray"):
+                        av_fb = av_fb.toarray().flatten()
+                    m_fb = np.isfinite(ev_fb) & np.isfinite(av_fb)
+                    ev_fb = ev_fb[m_fb].astype(np.float64)
+                    av_fb = av_fb[m_fb].astype(np.float64)
+                    if len(ev_fb) < 10:
+                        continue
+                    rho_fb, pval_fb = stats.spearmanr(ev_fb, av_fb)
+                    n_fb = len(ev_fb)
+                    ev_std = np.std(ev_fb)
+                    if ev_std > 1e-10:
+                        ev_fb = (ev_fb - np.mean(ev_fb)) / ev_std
+                    points_fb = [[round_val(float(e), 2), round_val(float(a), 2)] for e, a in zip(ev_fb, av_fb)]
+                    targets_data_fb[target] = {
+                        "gene": gene,
+                        "rho": round_val(rho_fb),
+                        "pval": float(f"{pval_fb:.2e}") if pval_fb is not None and np.isfinite(pval_fb) else None,
+                        "n": n_fb,
+                        "points": points_fb,
+                    }
+                if sig_type == "lincytosig" and len(targets_data_fb) > 30:
+                    sorted_t = sorted(targets_data_fb.items(), key=lambda x: abs(x[1]["rho"]) if x[1]["rho"] is not None else 0, reverse=True)
+                    targets_data_fb = dict(sorted_t[:30])
+                elif sig_type == "secact":
+                    targets_data_fb = filter_secact_targets(targets_data_fb)
+                atlas_scatter[sig_type] = targets_data_fb
+                print(f"    bulk_scatter/{atlas_key}/{sig_type}: {len(targets_data_fb)} targets, {n_fb} pts/target")
+            atlas_data["donor_scatter"] = atlas_scatter
 
         result[atlas_key] = atlas_data
 

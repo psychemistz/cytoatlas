@@ -3,7 +3,7 @@
 #SBATCH --output=/data/parks34/projects/2secactpy/logs/regen_bulk_rnaseq_%j.out
 #SBATCH --error=/data/parks34/projects/2secactpy/logs/regen_bulk_rnaseq_%j.err
 #SBATCH --time=02:00:00
-#SBATCH --mem=64G
+#SBATCH --mem=128G
 #SBATCH --cpus-per-task=4
 #SBATCH --partition=norm
 
@@ -20,7 +20,7 @@ mod = SourceFileLoader('preprocess', '/vf/users/parks34/projects/2secactpy/scrip
 
 import json
 
-print('Regenerating bulk_rnaseq_validation.json with all CytoSig + SecAct targets...')
+print('Regenerating bulk_rnaseq_validation.json (all points, no subsampling)...')
 bulk_rnaseq = mod.build_bulk_rnaseq_json()
 
 if bulk_rnaseq:
@@ -34,10 +34,26 @@ if bulk_rnaseq:
 
     # Print target counts
     for ds in ['gtex', 'tcga']:
-        if ds in bulk_rnaseq:
-            for st in bulk_rnaseq[ds].get('donor_scatter', {}):
-                n = len(bulk_rnaseq[ds]['donor_scatter'][st])
-                print(f'  {ds}/{st}: {n} targets')
+        if ds not in bulk_rnaseq:
+            continue
+        d = bulk_rnaseq[ds]
+        for section in ['donor_scatter', 'stratified_scatter']:
+            if section not in d:
+                continue
+            data = d[section]
+            if section == 'stratified_scatter':
+                for level, sigs in data.items():
+                    for st, targets in sigs.items():
+                        if targets:
+                            first_t = list(targets.values())[0]
+                            n_pts = len(first_t.get('points', []))
+                            print(f'  {ds}/{section}/{level}/{st}: {len(targets)} targets, {n_pts} pts/target')
+            else:
+                for st, targets in data.items():
+                    if targets:
+                        first_t = list(targets.values())[0]
+                        n_pts = len(first_t.get('points', []))
+                        print(f'  {ds}/{section}/{st}: {len(targets)} targets, {n_pts} pts/target')
 else:
     print('ERROR: No data generated')
     sys.exit(1)
