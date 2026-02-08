@@ -2,9 +2,12 @@
 """
 Bulk RNA-seq Validation Pipeline (TCGA + GTEx).
 
-Loads bulk TPM data from TOIL-recomputed TCGA and GTEx datasets,
-maps gene IDs via GENCODE v23 probemap, transforms with log2(TPM+1),
-runs ridge regression activity inference, and saves H5AD files.
+Loads bulk expression data from GTEx v11 (parquet, ~19.8K samples) and
+TCGA PanCancer (TSV, ~11K samples), maps gene IDs to HGNC symbols,
+transforms with log2(x+1), runs ridge regression activity inference,
+and saves H5AD files.
+
+Falls back to TOIL-recomputed unified dataset if primary files are absent.
 
 This validates that single-cell-derived cytokine signatures generalize
 to independent bulk RNA-seq datasets.
@@ -51,12 +54,16 @@ from secactpy import load_cytosig, load_secact, ridge
 BULK_DATA_DIR = Path('/data/parks34/projects/2secactpy/data/bulk')
 BASE_OUTPUT_DIR = Path('/data/parks34/projects/2secactpy/results/cross_sample_validation')
 
-# Data files
+# Primary data files (preferred)
+GTEX_V11_TPM = BULK_DATA_DIR / 'GTEx_Analysis_2025-08-22_v11_RNASeQCv2.4.3_gene_tpm.parquet'
+TCGA_PANCAN = BULK_DATA_DIR / 'EBPlusPlusAdjustPANCAN_IlluminaHiSeq_RNASeqV2.geneExp.tsv'
+
+# Fallback data files
 TOIL_TPM = BULK_DATA_DIR / 'TcgaTargetGtex_rsem_gene_tpm.gz'
-GTEX_TPM = BULK_DATA_DIR / 'GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_tpm.gct.gz'
-TCGA_TPM = BULK_DATA_DIR / 'tcga_RSEM_gene_tpm.gz'
+
+# Metadata / mapping
+GTEX_V11_SAMPLE_ATTR = BULK_DATA_DIR / 'GTEx_Analysis_v11_Annotations_SampleAttributesDS.txt'
 PHENOTYPE_FILE = BULK_DATA_DIR / 'TcgaTargetGTEX_phenotype.txt.gz'
-GTEX_SAMPLE_ATTR = BULK_DATA_DIR / 'GTEx_Analysis_v8_Annotations_SampleAttributesDS.txt'
 PROBEMAP = BULK_DATA_DIR / 'gencode.v23.annotation.gene.probemap'
 
 
@@ -126,12 +133,193 @@ def load_probemap(probemap_path: Path) -> Dict[str, str]:
 # Data Loading
 # =============================================================================
 
+def _map_ensg_to_symbols(
+    gene_ids: List[str],
+    probemap: Dict[str, str],
+    descriptions: Optional[pd.Series] = None,
+) -> Tuple[List[str], List[int]]:
+    """Map ENSG IDs to HGNC symbols using probemap and optional Description column.
+
+    Returns all valid mappings including duplicates. Callers should use
+    groupby(level=0).mean() to average duplicate gene symbols.
+    """
+    gene_symbols = []
+    valid_rows = []
+
+    for i, gid in enumerate(gene_ids):
+        symbol = probemap.get(gid)
+        if not symbol:
+            symbol = probemap.get(gid.split('.')[0])
+        if not symbol and descriptions is not None:
+            desc = str(descriptions.iloc[i])
+            if desc and desc != 'nan':
+                symbol = desc
+        if symbol and symbol != 'nan':
+            gene_symbols.append(symbol)
+            valid_rows.append(i)
+
+    return gene_symbols, valid_rows
+
+
+def load_gtex_v11(probemap: Dict[str, str]) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Load GTEx v11 TPM from parquet (19,788 samples, 74K genes).
+
+    The parquet file has:
+      - Index 'Name': versioned ENSG IDs (ENSG00000223972.6)
+      - Column 'Description': gene symbols (DDX11L1)
+      - Remaining columns: sample TPM values (float32)
+    """
+    log("Loading GTEx v11 TPM (parquet)...")
+    t0 = time.time()
+
+    tpm = pd.read_parquet(GTEX_V11_TPM)
+    log(f"  Raw matrix: {tpm.shape} ({time.time() - t0:.1f}s)")
+
+    # Extract Description column for gene symbol mapping
+    descriptions = tpm['Description'] if 'Description' in tpm.columns else None
+    tpm = tpm.drop(columns=['Description'], errors='ignore')
+
+    # Map gene IDs to HGNC symbols (use Description first, probemap as backup)
+    log("  Mapping gene IDs to symbols...")
+    gene_symbols, valid_rows = _map_ensg_to_symbols(
+        tpm.index.tolist(), probemap, descriptions
+    )
+
+    tpm = tpm.iloc[valid_rows]
+    tpm.index = gene_symbols
+    n_before = tpm.shape[0]
+    n_dup = n_before - tpm.index.nunique()
+    tpm = tpm.groupby(level=0).mean()
+    log(f"  After gene mapping: {tpm.shape[0]} unique genes, {tpm.shape[1]} samples"
+        f" ({n_dup} duplicates averaged)")
+
+    # log2(TPM + 1)
+    log("  Applying log2(TPM + 1) transform...")
+    tpm = np.log2(tpm + 1)
+
+    expr_df = tpm.T  # (samples x genes)
+
+    # Build metadata from GTEx v11 sample attributes (full coverage)
+    metadata = pd.DataFrame(index=expr_df.index)
+    metadata['dataset'] = 'GTEX'
+
+    if GTEX_V11_SAMPLE_ATTR.exists():
+        log("  Loading GTEx v11 sample attributes...")
+        attrs = pd.read_csv(GTEX_V11_SAMPLE_ATTR, sep='\t', low_memory=False,
+                            usecols=['SAMPID', 'SMTS', 'SMTSD'])
+        attrs = attrs.set_index('SAMPID')
+        common = expr_df.index.intersection(attrs.index)
+        if len(common) > 0:
+            metadata.loc[common, 'tissue_type'] = attrs.loc[common, 'SMTS'].values
+            metadata.loc[common, 'tissue_detail'] = attrs.loc[common, 'SMTSD'].values
+            log(f"  Annotations matched for {len(common)}/{len(expr_df)} samples")
+    elif PHENOTYPE_FILE.exists():
+        log("  Falling back to TOIL phenotype metadata...")
+        pheno = pd.read_csv(PHENOTYPE_FILE, sep='\t', compression='gzip', encoding='latin-1')
+        pheno = pheno.set_index('sample')
+        common = expr_df.index.intersection(pheno.index)
+        if len(common) > 0:
+            pheno_sub = pheno.loc[common].copy()
+            if '_primary_site' in pheno_sub.columns:
+                metadata.loc[common, 'tissue_type'] = pheno_sub['_primary_site'].values
+            if 'detailed_category' in pheno_sub.columns:
+                metadata.loc[common, 'tissue_detail'] = pheno_sub['detailed_category'].values
+            log(f"  Phenotype matched for {len(common)}/{len(expr_df)} samples")
+
+    metadata['tissue_type'] = metadata.get('tissue_type', pd.Series('Unknown', index=metadata.index)).fillna('Unknown')
+
+    log(f"  Final: {expr_df.shape[0]} samples, {expr_df.shape[1]} genes")
+    return expr_df, metadata
+
+
+def load_tcga_pancan(probemap: Dict[str, str]) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Load TCGA PanCancer gene expression (11,069 samples, ~20.5K genes).
+
+    The TSV file has:
+      - Index 'gene_id': format 'symbol|entrezID' (e.g., 'TP53|7157')
+      - Columns: TCGA barcode sample IDs
+      - Values: RSEM normalized counts (apply log2(x+1))
+    """
+    log("Loading TCGA PanCancer expression...")
+    t0 = time.time()
+
+    tpm = pd.read_csv(TCGA_PANCAN, sep='\t', index_col=0)
+    log(f"  Raw matrix: {tpm.shape} ({time.time() - t0:.1f}s)")
+
+    # Parse gene symbols from 'symbol|entrezID' index
+    log("  Parsing gene symbols from symbol|entrezID format...")
+    gene_symbols = []
+    valid_rows = []
+
+    for i, gid in enumerate(tpm.index):
+        parts = str(gid).split('|')
+        symbol = parts[0]
+        if symbol and symbol != '?':
+            gene_symbols.append(symbol)
+            valid_rows.append(i)
+
+    tpm = tpm.iloc[valid_rows]
+    tpm.index = gene_symbols
+    n_before = tpm.shape[0]
+    n_dup = n_before - tpm.index.nunique()
+    tpm = tpm.groupby(level=0).mean()
+    log(f"  After gene mapping: {tpm.shape[0]} unique genes, {tpm.shape[1]} samples"
+        f" ({n_dup} duplicates averaged)")
+
+    # log2(x + 1)
+    log("  Applying log2(x + 1) transform...")
+    tpm = np.log2(tpm + 1)
+
+    expr_df = tpm.T  # (samples x genes)
+
+    # Build metadata from phenotype file
+    # TCGA barcodes: PanCancer uses 7-part (TCGA-OR-A5J1-01A-11R-A29S-07),
+    # phenotype uses 4-part (TCGA-OR-A5J1-01). Match on first 4 parts.
+    metadata = pd.DataFrame(index=expr_df.index)
+    metadata['dataset'] = 'TCGA'
+
+    if PHENOTYPE_FILE.exists():
+        log("  Loading phenotype metadata...")
+        pheno = pd.read_csv(PHENOTYPE_FILE, sep='\t', compression='gzip', encoding='latin-1')
+        pheno = pheno.set_index('sample')
+
+        # Build mapping: 4-part barcode prefix -> phenotype row
+        pheno_by_prefix = {}
+        for sid in pheno.index:
+            parts = str(sid).split('-')
+            if len(parts) >= 4:
+                prefix = '-'.join(parts[:4])
+                pheno_by_prefix[prefix] = sid
+
+        # Match PanCancer 7-part barcodes to phenotype 4-part barcodes
+        matched = 0
+        for sample_id in expr_df.index:
+            parts = str(sample_id).split('-')
+            if len(parts) >= 4:
+                prefix = '-'.join(parts[:4])
+                if prefix in pheno_by_prefix:
+                    pheno_sid = pheno_by_prefix[prefix]
+                    row = pheno.loc[pheno_sid]
+                    if '_primary_site' in pheno.columns:
+                        metadata.loc[sample_id, 'cancer_site'] = row['_primary_site']
+                    if 'detailed_category' in pheno.columns:
+                        metadata.loc[sample_id, 'cancer_type'] = row['detailed_category']
+                    matched += 1
+
+        log(f"  Phenotype matched for {matched}/{len(expr_df)} samples")
+
+    metadata['cancer_site'] = metadata.get('cancer_site', pd.Series('Unknown', index=metadata.index)).fillna('Unknown')
+    metadata['cancer_type'] = metadata.get('cancer_type', pd.Series('Unknown', index=metadata.index)).fillna('Unknown')
+
+    log(f"  Final: {expr_df.shape[0]} samples, {expr_df.shape[1]} genes")
+    return expr_df, metadata
+
+
 def load_toil_data(
     dataset: str,
     probemap: Dict[str, str],
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Load TOIL-recomputed TPM data for GTEx or TCGA.
+    """Load TOIL-recomputed TPM data for GTEx or TCGA (fallback).
 
     Args:
         dataset: 'gtex' or 'tcga'
@@ -140,54 +328,42 @@ def load_toil_data(
     Returns:
         (expr_df, metadata_df) where expr_df is samples x genes (log2(TPM+1))
     """
-    log(f"Loading TOIL combined TPM for {dataset}...")
+    log(f"Loading TOIL combined TPM for {dataset} (fallback)...")
 
-    # Read TPM matrix (genes x samples, tab-separated, gzipped)
-    # First column is gene ID (ENSG.version)
     t0 = time.time()
     tpm = pd.read_csv(TOIL_TPM, sep='\t', index_col=0, compression='gzip')
     log(f"  Raw matrix: {tpm.shape} ({time.time() - t0:.1f}s)")
 
     # Load phenotype metadata
     log("  Loading phenotype metadata...")
-    pheno = pd.read_csv(PHENOTYPE_FILE, sep='\t', compression='gzip')
+    pheno = pd.read_csv(PHENOTYPE_FILE, sep='\t', compression='gzip', encoding='latin-1')
     pheno = pheno.set_index('sample')
 
     # Filter samples by dataset
     if dataset == 'gtex':
-        # GTEx samples have IDs starting with "GTEX-"
-        gtex_samples = [s for s in tpm.columns if s.startswith('GTEX-')]
-        tpm = tpm[gtex_samples]
-        log(f"  Filtered to {len(gtex_samples)} GTEx samples")
+        samples = [s for s in tpm.columns if s.startswith('GTEX-')]
+        tpm = tpm[samples]
+        log(f"  Filtered to {len(samples)} GTEx samples")
     elif dataset == 'tcga':
-        # TCGA samples have IDs starting with "TCGA-"
-        tcga_samples = [s for s in tpm.columns if s.startswith('TCGA-')]
-        tpm = tpm[tcga_samples]
-        log(f"  Filtered to {len(tcga_samples)} TCGA samples")
+        samples = [s for s in tpm.columns if s.startswith('TCGA-')]
+        tpm = tpm[samples]
+        log(f"  Filtered to {len(samples)} TCGA samples")
 
     # Map gene IDs to HGNC symbols
     log("  Mapping gene IDs to symbols...")
-    gene_ids = tpm.index.tolist()
-    gene_symbols = []
-    valid_rows = []
-    seen_symbols = set()
-
-    for i, gid in enumerate(gene_ids):
-        symbol = probemap.get(gid)
-        if symbol and symbol not in seen_symbols:
-            gene_symbols.append(symbol)
-            valid_rows.append(i)
-            seen_symbols.add(symbol)
+    gene_symbols, valid_rows = _map_ensg_to_symbols(tpm.index.tolist(), probemap)
 
     tpm = tpm.iloc[valid_rows]
     tpm.index = gene_symbols
-    log(f"  After gene mapping: {tpm.shape[0]} unique genes")
+    n_before = tpm.shape[0]
+    n_dup = n_before - tpm.index.nunique()
+    tpm = tpm.groupby(level=0).mean()
+    log(f"  After gene mapping: {tpm.shape[0]} unique genes ({n_dup} duplicates averaged)")
 
-    # Transform: log2(TPM + 1)
+    # log2(TPM + 1)
     log("  Applying log2(TPM + 1) transform...")
     tpm = np.log2(tpm + 1)
 
-    # Transpose to samples x genes
     expr_df = tpm.T
 
     # Build metadata
@@ -195,7 +371,6 @@ def load_toil_data(
     metadata = pheno.loc[common_samples].copy()
 
     if dataset == 'gtex':
-        # Use _primary_site for tissue type
         metadata = metadata.rename(columns={
             '_primary_site': 'tissue_type',
             '_study': 'study',
@@ -210,112 +385,7 @@ def load_toil_data(
         })
 
     metadata['dataset'] = dataset.upper()
-
-    # Align expression with metadata
     expr_df = expr_df.loc[common_samples]
-    log(f"  Final: {expr_df.shape[0]} samples, {expr_df.shape[1]} genes")
-
-    return expr_df, metadata
-
-
-def load_gtex_standalone(probemap: Dict[str, str]) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Load standalone GTEx v8 TPM as fallback if TOIL is unavailable."""
-    log("Loading standalone GTEx v8 TPM...")
-
-    t0 = time.time()
-    # GCT format: skip first 2 header lines, then tab-separated with Name, Description columns
-    tpm = pd.read_csv(GTEX_TPM, sep='\t', compression='gzip', skiprows=2, index_col=0)
-    description = tpm['Description'] if 'Description' in tpm.columns else None
-    tpm = tpm.drop(columns=['Description'], errors='ignore')
-    log(f"  Raw matrix: {tpm.shape} ({time.time() - t0:.1f}s)")
-
-    # Map gene IDs
-    gene_ids = tpm.index.tolist()
-    gene_symbols = []
-    valid_rows = []
-    seen_symbols = set()
-
-    for i, gid in enumerate(gene_ids):
-        symbol = probemap.get(gid)
-        if not symbol and description is not None:
-            symbol = str(description.iloc[i])
-        if symbol and symbol != 'nan' and symbol not in seen_symbols:
-            gene_symbols.append(symbol)
-            valid_rows.append(i)
-            seen_symbols.add(symbol)
-
-    tpm = tpm.iloc[valid_rows]
-    tpm.index = gene_symbols
-    log(f"  After gene mapping: {tpm.shape[0]} unique genes")
-
-    # log2(TPM + 1)
-    tpm = np.log2(tpm + 1)
-    expr_df = tpm.T
-
-    # Load sample attributes for metadata
-    if GTEX_SAMPLE_ATTR.exists():
-        attrs = pd.read_csv(GTEX_SAMPLE_ATTR, sep='\t')
-        attrs = attrs.set_index('SAMPID')
-        common = expr_df.index.intersection(attrs.index)
-        metadata = attrs.loc[common][['SMTS', 'SMTSD']].copy()
-        metadata = metadata.rename(columns={'SMTS': 'tissue_type', 'SMTSD': 'tissue_detail'})
-        expr_df = expr_df.loc[common]
-    else:
-        metadata = pd.DataFrame(index=expr_df.index)
-        metadata['tissue_type'] = 'Unknown'
-
-    metadata['dataset'] = 'GTEX'
-    log(f"  Final: {expr_df.shape[0]} samples, {expr_df.shape[1]} genes")
-
-    return expr_df, metadata
-
-
-def load_tcga_standalone(probemap: Dict[str, str]) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Load standalone TCGA RSEM TPM as fallback if TOIL is unavailable."""
-    log("Loading standalone TCGA TPM...")
-
-    t0 = time.time()
-    tpm = pd.read_csv(TCGA_TPM, sep='\t', index_col=0, compression='gzip')
-    log(f"  Raw matrix: {tpm.shape} ({time.time() - t0:.1f}s)")
-
-    # Map gene IDs
-    gene_ids = tpm.index.tolist()
-    gene_symbols = []
-    valid_rows = []
-    seen_symbols = set()
-
-    for i, gid in enumerate(gene_ids):
-        symbol = probemap.get(gid)
-        if symbol and symbol not in seen_symbols:
-            gene_symbols.append(symbol)
-            valid_rows.append(i)
-            seen_symbols.add(symbol)
-
-    tpm = tpm.iloc[valid_rows]
-    tpm.index = gene_symbols
-    log(f"  After gene mapping: {tpm.shape[0]} unique genes")
-
-    # log2(TPM + 1)
-    tpm = np.log2(tpm + 1)
-    expr_df = tpm.T
-
-    # Extract cancer type from sample ID (TCGA-XX-XXXX-01A -> project code)
-    # Use phenotype file if available
-    if PHENOTYPE_FILE.exists():
-        pheno = pd.read_csv(PHENOTYPE_FILE, sep='\t', compression='gzip')
-        pheno = pheno.set_index('sample')
-        common = expr_df.index.intersection(pheno.index)
-        metadata = pheno.loc[common].copy()
-        metadata = metadata.rename(columns={
-            '_primary_site': 'cancer_site',
-            'detailed_category': 'cancer_type',
-        })
-        expr_df = expr_df.loc[common]
-    else:
-        metadata = pd.DataFrame(index=expr_df.index)
-        metadata['cancer_type'] = 'Unknown'
-
-    metadata['dataset'] = 'TCGA'
     log(f"  Final: {expr_df.shape[0]} samples, {expr_df.shape[1]} genes")
 
     return expr_df, metadata
@@ -403,7 +473,7 @@ def run_activity_inference(
         adata_act.uns['total_sig_genes'] = len(sig_genes)
         adata_act.uns['gene_coverage'] = len(common) / len(sig_genes)
         adata_act.uns['signature'] = sig_name
-        adata_act.uns['source'] = f"{dataset_name}_donor_only_pseudobulk.h5ad"
+        adata_act.uns['source'] = f"{dataset_name}_donor_only_expression.h5ad"
         adata_act.uns['transform'] = 'log2(TPM+1)'
 
         adata_act.write_h5ad(act_path, compression='gzip')
@@ -411,6 +481,165 @@ def run_activity_inference(
         log(f"    {sig_name}: {activity.shape}, {len(common)} genes, {elapsed:.1f}s -> {act_path.name}")
 
         del activity, adata_act, X, Y, result
+        gc.collect()
+
+    return output_paths
+
+
+def run_stratified_activity_inference(
+    expr_df: pd.DataFrame,
+    metadata: pd.DataFrame,
+    output_dir: Path,
+    dataset_name: str,
+    group_col: str,
+    level_name: str,
+    force: bool = False,
+    lambda_: float = 5e5,
+    backend: str = 'auto',
+    min_samples: int = 30,
+) -> Dict[str, Path]:
+    """
+    Run within-group stratified activity inference (Level 2 validation for bulk).
+
+    For each tissue (GTEx) or cancer type (TCGA), mean-center genes within the
+    group and run ridge regression separately. This asks: "Within lung samples,
+    does the donor with higher IFNG expression also show higher IFNG activity?"
+
+    Args:
+        expr_df: samples x genes DataFrame (log2(TPM+1) transformed)
+        metadata: DataFrame with group_col annotation
+        output_dir: directory to save H5AD files
+        dataset_name: 'gtex' or 'tcga'
+        group_col: column in metadata to group by ('tissue_type' or 'cancer_type')
+        level_name: e.g. 'by_tissue' or 'by_cancer'
+        force: overwrite existing files
+        lambda_: ridge regularization parameter
+        backend: 'auto', 'numpy', or 'cupy'
+        min_samples: minimum samples per group (default 30)
+
+    Returns:
+        Dict mapping signature_name -> output path
+    """
+    signatures = load_signatures()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if group_col not in metadata.columns:
+        log(f"  WARNING: '{group_col}' not in metadata, skipping stratified inference")
+        return {}
+
+    groups = metadata[group_col].dropna()
+    groups = groups[groups != 'Unknown']
+    group_counts = groups.value_counts()
+    valid_groups = group_counts[group_counts >= min_samples].index.tolist()
+    valid_mask = metadata[group_col].isin(valid_groups)
+
+    log(f"\nStratified inference ({level_name}): {len(valid_groups)} groups "
+        f"with >= {min_samples} samples (of {group_counts.shape[0]} total)")
+    for g in sorted(valid_groups):
+        log(f"  {g}: {group_counts[g]} samples")
+
+    # Filter to valid samples
+    expr_valid = expr_df.loc[valid_mask]
+    meta_valid = metadata.loc[valid_mask].copy()
+
+    # Save stratified expression H5AD
+    pb_path = output_dir / f"{dataset_name}_{level_name}_expression.h5ad"
+    if not pb_path.exists() or force:
+        log(f"Saving stratified expression: {pb_path.name}")
+        obs_df = meta_valid[[group_col]].copy()
+        obs_df.columns = [group_col]
+        adata_pb = ad.AnnData(
+            X=expr_valid.values.astype(np.float32),
+            obs=obs_df,
+            var=pd.DataFrame(index=expr_valid.columns),
+        )
+        adata_pb.uns['transform'] = 'log2(TPM+1)'
+        adata_pb.uns['n_samples'] = expr_valid.shape[0]
+        adata_pb.uns['n_groups'] = len(valid_groups)
+        adata_pb.uns['group_col'] = group_col
+        adata_pb.write_h5ad(pb_path, compression='gzip')
+        log(f"  Saved: {pb_path.name} ({adata_pb.shape})")
+        del adata_pb
+    else:
+        log(f"SKIP expression (exists): {pb_path.name}")
+
+    # Run activity inference per group
+    gene_names = list(expr_valid.columns)
+    expr_matrix = expr_valid.values
+    n_samples = expr_matrix.shape[0]
+    group_labels = meta_valid[group_col].values
+
+    output_paths = {}
+
+    for sig_name, sig_matrix in signatures.items():
+        act_path = output_dir / f"{dataset_name}_{level_name}_{sig_name}.h5ad"
+
+        if act_path.exists() and not force:
+            log(f"  SKIP {sig_name} (exists): {act_path.name}")
+            output_paths[sig_name] = act_path
+            continue
+
+        log(f"  Computing {sig_name} (stratified by {group_col})...")
+
+        # Find common genes
+        expr_genes = set(gene_names)
+        sig_genes = set(sig_matrix.index)
+        common = sorted(expr_genes & sig_genes)
+
+        if len(common) < 100:
+            log(f"    Too few common genes: {len(common)}, skipping")
+            continue
+
+        gene_idx = [gene_names.index(g) for g in common]
+        X = sig_matrix.loc[common].values.copy()  # (genes x targets)
+        np.nan_to_num(X, copy=False, nan=0.0)
+
+        n_targets = X.shape[1]
+        activity = np.zeros((n_samples, n_targets), dtype=np.float32)
+
+        t0 = time.time()
+
+        # Run ridge per group with within-group mean centering
+        for g in valid_groups:
+            g_mask = (group_labels == g)
+            n_g = g_mask.sum()
+            if n_g < 3:
+                continue
+
+            Y_g = expr_matrix[g_mask][:, gene_idx].T.astype(np.float64)  # (genes x samples)
+            Y_g -= Y_g.mean(axis=1, keepdims=True)  # within-group mean centering
+
+            result_g = ridge(X, Y_g, lambda_=lambda_, n_rand=1000, backend=backend, verbose=False)
+            activity[g_mask] = result_g['zscore'].T.astype(np.float32)
+
+            del Y_g, result_g
+
+        elapsed = time.time() - t0
+
+        # Create AnnData
+        obs_df = meta_valid[[group_col]].copy()
+        obs_df.columns = [group_col]
+        adata_act = ad.AnnData(
+            X=activity,
+            obs=obs_df,
+            var=pd.DataFrame(index=list(sig_matrix.columns)),
+        )
+        adata_act.uns['common_genes'] = len(common)
+        adata_act.uns['total_sig_genes'] = len(sig_genes)
+        adata_act.uns['gene_coverage'] = len(common) / len(sig_genes)
+        adata_act.uns['signature'] = sig_name
+        adata_act.uns['source'] = f"{dataset_name}_{level_name}_expression.h5ad"
+        adata_act.uns['transform'] = 'log2(TPM+1)'
+        adata_act.uns['group_col'] = group_col
+        adata_act.uns['n_groups'] = len(valid_groups)
+        adata_act.uns['stratified'] = True
+
+        adata_act.write_h5ad(act_path, compression='gzip')
+        output_paths[sig_name] = act_path
+        log(f"    {sig_name}: {activity.shape}, {len(common)} genes, "
+            f"{len(valid_groups)} groups, {elapsed:.1f}s -> {act_path.name}")
+
+        del activity, adata_act, X
         gc.collect()
 
     return output_paths
@@ -437,21 +666,31 @@ def run_dataset(
     probemap = load_probemap(PROBEMAP)
 
     # Load expression data
-    # Prefer TOIL combined (uniformly processed); fall back to standalone
-    if TOIL_TPM.exists():
-        expr_df, metadata = load_toil_data(dataset, probemap)
-    elif dataset == 'gtex' and GTEX_TPM.exists():
-        expr_df, metadata = load_gtex_standalone(probemap)
-    elif dataset == 'tcga' and TCGA_TPM.exists():
-        expr_df, metadata = load_tcga_standalone(probemap)
+    # Prefer primary files (more samples); fall back to TOIL unified
+    if dataset == 'gtex':
+        if GTEX_V11_TPM.exists():
+            expr_df, metadata = load_gtex_v11(probemap)
+        elif TOIL_TPM.exists():
+            expr_df, metadata = load_toil_data('gtex', probemap)
+        else:
+            log(f"ERROR: No GTEx data found. Need {GTEX_V11_TPM.name} or {TOIL_TPM.name}")
+            return
+    elif dataset == 'tcga':
+        if TCGA_PANCAN.exists():
+            expr_df, metadata = load_tcga_pancan(probemap)
+        elif TOIL_TPM.exists():
+            expr_df, metadata = load_toil_data('tcga', probemap)
+        else:
+            log(f"ERROR: No TCGA data found. Need {TCGA_PANCAN.name} or {TOIL_TPM.name}")
+            return
     else:
-        log(f"ERROR: No data files found for {dataset}. Run scripts/15a_download_bulk_data.sh first.")
+        log(f"ERROR: Unknown dataset '{dataset}'. Use 'gtex' or 'tcga'.")
         return
 
-    # Save pseudobulk H5AD (expression)
-    pb_path = output_dir / f"{dataset}_donor_only_pseudobulk.h5ad"
+    # Save bulk expression H5AD
+    pb_path = output_dir / f"{dataset}_donor_only_expression.h5ad"
     if not pb_path.exists() or force:
-        log(f"Saving pseudobulk expression: {pb_path.name}")
+        log(f"Saving bulk expression: {pb_path.name}")
         adata_pb = ad.AnnData(
             X=expr_df.values.astype(np.float32),
             obs=metadata,
@@ -464,7 +703,7 @@ def run_dataset(
         log(f"  Saved: {pb_path.name} ({adata_pb.shape})")
         del adata_pb
     else:
-        log(f"SKIP pseudobulk (exists): {pb_path.name}")
+        log(f"SKIP expression (exists): {pb_path.name}")
 
     # Run activity inference
     log("\nRunning activity inference...")
@@ -475,6 +714,32 @@ def run_dataset(
         force=force,
         backend=backend,
     )
+
+    # Run stratified activity inference (within-tissue / within-cancer-type)
+    if dataset == 'gtex' and 'tissue_type' in metadata.columns:
+        log("\n--- Stratified by tissue ---")
+        run_stratified_activity_inference(
+            expr_df=expr_df,
+            metadata=metadata,
+            output_dir=output_dir,
+            dataset_name=dataset,
+            group_col='tissue_type',
+            level_name='by_tissue',
+            force=force,
+            backend=backend,
+        )
+    elif dataset == 'tcga' and 'cancer_type' in metadata.columns:
+        log("\n--- Stratified by cancer type ---")
+        run_stratified_activity_inference(
+            expr_df=expr_df,
+            metadata=metadata,
+            output_dir=output_dir,
+            dataset_name=dataset,
+            group_col='cancer_type',
+            level_name='by_cancer',
+            force=force,
+            backend=backend,
+        )
 
     # Print summary
     if dataset == 'gtex' and 'tissue_type' in metadata.columns:
@@ -516,9 +781,8 @@ def main():
         sys.exit(1)
 
     if not PROBEMAP.exists():
-        log(f"ERROR: Gene probemap not found: {PROBEMAP}")
-        log("Run scripts/15a_download_bulk_data.sh first.")
-        sys.exit(1)
+        log(f"WARNING: Gene probemap not found: {PROBEMAP}")
+        log("GTEx loading requires probemap. TCGA PanCancer can work without it.")
 
     # Determine datasets
     if 'all' in args.dataset:

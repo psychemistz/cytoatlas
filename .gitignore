@@ -77,5 +77,8 @@ visualization/data/validation/inflammation_validation.json
 visualization/data/validation/cima_validation.json
 visualization/data/boxplot/
 
+# Bulk RNA-seq data (large, downloaded externally)
+data/bulk/
+
 # API static data files (large, generated)
 cytoatlas-api/static/data/*.json

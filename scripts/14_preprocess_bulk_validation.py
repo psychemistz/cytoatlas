@@ -168,7 +168,7 @@ def _load_matched_lookup(atlas_key: str) -> dict:
     csv_path = CORR_DIR / ATLAS_FILES.get(atlas_key, "")
     if not csv_path.exists():
         return {}
-    df = pd.read_csv(csv_path)
+    df = pd.read_csv(csv_path, low_memory=False)
     matched_df = df[df["celltype"] == "matched"]
     lookup = {}
     for _, row in matched_df.iterrows():
@@ -345,7 +345,7 @@ def build_donor_level(atlas_key: str, csv_path: Path) -> dict:
     For LinCytoSig targets, also includes matched_rho from celltype-restricted
     correlations (celltype == 'matched' rows in the CSV).
     """
-    df = pd.read_csv(csv_path)
+    df = pd.read_csv(csv_path, low_memory=False)
 
     # Donor-level = rows where celltype is "all"
     donor_df = df[df["celltype"] == "all"].copy()
@@ -395,11 +395,13 @@ def build_donor_level(atlas_key: str, csv_path: Path) -> dict:
 
 def build_celltype_level(atlas_key: str, csv_path: Path) -> dict:
     """Build celltype-stratified data: aggregated per celltype + top 20 targets."""
-    df = pd.read_csv(csv_path)
+    df = pd.read_csv(csv_path, low_memory=False)
 
     # Celltype-level = rows where celltype is a real cell type name
-    # Exclude special values: 'all', 'matched', 'unmappable'
-    ct_df = df[~df["celltype"].isin(["all", "matched", "unmappable"])].copy()
+    # Exclude special values: 'all', 'matched', 'unmappable', and NaN
+    ct_df = df[
+        df["celltype"].notna() & ~df["celltype"].isin(["all", "matched", "unmappable"])
+    ].copy()
 
     if ct_df.empty:
         return {}
@@ -823,7 +825,7 @@ def build_bulk_rnaseq_json() -> dict:
 
         # Summary from correlation CSV
         if csv_path.exists():
-            df = pd.read_csv(csv_path)
+            df = pd.read_csv(csv_path, low_memory=False)
             overall = df[df["celltype"] == "all"]
             sig_summary = {}
             for sig_type in overall["signature"].unique():

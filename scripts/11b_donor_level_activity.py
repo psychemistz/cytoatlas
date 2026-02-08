@@ -74,9 +74,9 @@ def compute_activity(
     X = signature.loc[common].values  # (genes × targets)
     X = np.nan_to_num(X, nan=0.0)
 
-    # Ridge: X (genes × targets), Y (genes × samples) -> beta (targets × samples)
+    # Ridge: X (genes × targets), Y (genes × samples) -> zscore (targets × samples)
     result = ridge(X, Y, lambda_=lambda_, n_rand=1000, verbose=False)
-    activity = result['beta'].T  # (samples × targets)
+    activity = result['zscore'].T  # (samples × targets)
 
     return activity, common, list(signature.columns)
 

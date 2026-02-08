@@ -161,9 +161,9 @@ def compute_activity(
     X = np.nan_to_num(X, nan=0.0)
 
     # Run ridge regression: X (genes × targets), Y (genes × samples)
-    # Returns dict with 'beta' (targets × samples)
+    # Returns dict with 'zscore' (targets × samples)
     result = ridge(X, Y, lambda_=lambda_, n_rand=1000, verbose=False)
-    activity = result['beta'].T  # Transpose to (samples × targets)
+    activity = result['zscore'].T  # Transpose to (samples × targets)
 
     return activity, common, list(signature.columns)
 
@@ -578,7 +578,7 @@ def run_singlecell_activity(
             Y_batch = X_sub.T  # Transpose to (genes × batch_cells)
             # Note: n_rand=1000 for permutation testing (n_rand=0 not supported on CuPy/GPU)
             result = ridge(S, Y_batch, lambda_=5e5, n_rand=1000, verbose=False)
-            activity = result['beta'].T  # Transpose to (batch_cells × targets)
+            activity = result['zscore'].T  # Transpose to (batch_cells × targets)
             activity_all[start_idx:end_idx] = activity.astype(np.float32)
 
             if (batch_idx + 1) % 50 == 0 or batch_idx == n_batches - 1:

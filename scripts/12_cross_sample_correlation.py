@@ -311,17 +311,11 @@ def generate_pseudobulk_multipass(
         end = min(start + batch_size, n_cells)
         n_batch = end - start
 
-        # Load and normalize
+        # Load raw counts (do NOT normalize per-cell; accumulate raw sums)
         X_batch = adata.X[start:end]
         if sparse.issparse(X_batch):
             X_batch = X_batch.toarray()
         X_batch = X_batch.astype(np.float64)
-
-        # CPM + log1p
-        row_sums = X_batch.sum(axis=1, keepdims=True)
-        row_sums[row_sums == 0] = 1.0
-        X_batch = X_batch / row_sums * 1e6
-        np.log1p(X_batch, out=X_batch)
 
         # Vectorized accumulation for each level using sparse indicator × dense
         for level_name in levels_to_generate:
@@ -377,11 +371,19 @@ def generate_pseudobulk_multipass(
             log(f"  WARNING: No valid groups for {level_name}, skipping")
             continue
 
-        # Build expression matrix: mean = sum / count
+        # Build pseudobulk: sum raw counts -> CPM normalize -> log1p
         valid_indices = np.where(valid_mask)[0]
-        expr_matrix = (sums[valid_indices] / counts[valid_indices, np.newaxis]).astype(np.float32)
+        raw_sums = sums[valid_indices]  # (n_groups x n_genes), raw count sums
         valid_keys = [unique_keys[i] for i in valid_indices]
         valid_counts = counts[valid_indices]
+
+        # CPM normalize each pseudobulk sample
+        row_totals = raw_sums.sum(axis=1, keepdims=True)
+        row_totals[row_totals == 0] = 1.0
+        expr_matrix = (raw_sums / row_totals * 1e6)
+        # log1p transform
+        np.log1p(expr_matrix, out=expr_matrix)
+        expr_matrix = expr_matrix.astype(np.float32)
 
         # Parse group keys back into obs columns
         obs_data = {}
@@ -431,6 +433,20 @@ def generate_pseudobulk_multipass(
 # Activity Inference
 # =============================================================================
 
+def _get_celltype_col(obs_df: pd.DataFrame) -> Optional[str]:
+    """Detect the celltype grouping column in obs, if any.
+
+    For donor-only levels obs has only ['donor', 'n_cells'] -> returns None.
+    For celltype-stratified levels, returns the last non-donor/non-n_cells column
+    (e.g. 'cell_type_l1', 'Level1', 'cellType1', 'tissue').
+    """
+    grouping_cols = [c for c in obs_df.columns if c not in ('donor', 'n_cells')]
+    if not grouping_cols:
+        return None
+    # Return last grouping column (most specific celltype level)
+    return grouping_cols[-1]
+
+
 def run_activity_inference(
     expr_matrix: np.ndarray,
     gene_names: List[str],
@@ -441,9 +457,14 @@ def run_activity_inference(
     gene_symbols: Optional[List[str]] = None,
     force: bool = False,
     lambda_: float = 5e5,
+    backend: str = 'auto',
 ) -> Dict[str, Path]:
     """
     Run CytoSig/LinCytoSig/SecAct activity inference on pseudobulk.
+
+    For donor-only levels: mean-center across all donors, run ridge once.
+    For celltype-stratified levels: split by celltype, mean-center within
+    each celltype, run ridge per celltype, reassemble.
 
     Returns:
         Dict mapping signature_name -> output_path
@@ -453,6 +474,12 @@ def run_activity_inference(
 
     # Use gene symbols for matching if available
     matching_genes = gene_symbols if gene_symbols is not None else gene_names
+
+    # Detect celltype column for within-celltype normalization
+    ct_col = _get_celltype_col(obs_df)
+    if ct_col is not None:
+        log(f"  Within-celltype normalization on '{ct_col}'")
+
     output_paths = {}
 
     for sig_name, sig_matrix in signatures.items():
@@ -474,16 +501,41 @@ def run_activity_inference(
             log(f"    Too few common genes: {len(common)}, skipping")
             continue
 
-        # Align
+        # Align expression to common genes
         gene_idx = [matching_genes.index(g) for g in common]
-        Y = expr_matrix[:, gene_idx].T.astype(np.float64)  # (genes x samples)
         X = sig_matrix.loc[common].values.copy()  # (genes x targets)
         np.nan_to_num(X, copy=False, nan=0.0)
 
-        # Ridge regression
+        n_samples = expr_matrix.shape[0]
+        n_targets = X.shape[1]
+        activity = np.zeros((n_samples, n_targets), dtype=np.float32)
+
         t0 = time.time()
-        result = ridge(X, Y, lambda_=lambda_, n_rand=1000, verbose=False)
-        activity = result['beta'].T.astype(np.float32)  # (samples x targets)
+
+        if ct_col is None:
+            # Donor-only: mean-center across all donors, run ridge once
+            Y = expr_matrix[:, gene_idx].T.astype(np.float64)  # (genes x samples)
+            Y -= Y.mean(axis=1, keepdims=True)
+            result = ridge(X, Y, lambda_=lambda_, n_rand=1000, backend=backend, verbose=False)
+            activity[:] = result['zscore'].T.astype(np.float32)
+            del Y, result
+        else:
+            # Celltype-stratified: run ridge per celltype separately
+            celltypes = obs_df[ct_col].unique()
+            for ct in celltypes:
+                ct_mask = (obs_df[ct_col] == ct).values
+                n_ct = ct_mask.sum()
+                if n_ct < 3:
+                    continue
+
+                Y_ct = expr_matrix[ct_mask][:, gene_idx].T.astype(np.float64)
+                Y_ct -= Y_ct.mean(axis=1, keepdims=True)
+
+                result_ct = ridge(X, Y_ct, lambda_=lambda_, n_rand=1000, backend=backend, verbose=False)
+                activity[ct_mask] = result_ct['zscore'].T.astype(np.float32)
+
+                del Y_ct, result_ct
+
         elapsed = time.time() - t0
 
         # Create AnnData
@@ -497,12 +549,14 @@ def run_activity_inference(
         adata_act.uns['gene_coverage'] = len(common) / len(sig_genes)
         adata_act.uns['signature'] = sig_name
         adata_act.uns['source_pseudobulk'] = f"{atlas_name}_{level_name}_pseudobulk.h5ad"
+        if ct_col is not None:
+            adata_act.uns['celltype_col'] = ct_col
 
         adata_act.write_h5ad(act_path, compression='gzip')
         output_paths[sig_name] = act_path
         log(f"    {sig_name}: {activity.shape}, {len(common)} genes, {elapsed:.1f}s -> {act_path.name}")
 
-        del activity, adata_act, Y, X
+        del activity, adata_act, X
         gc.collect()
 
     return output_paths
@@ -518,6 +572,7 @@ def run_atlas(
     force: bool = False,
     batch_size: int = 50000,
     min_cells: int = 10,
+    backend: str = 'auto',
 ) -> None:
     """Run full cross-sample correlation pipeline for one atlas."""
     if atlas_name not in ATLAS_CONFIGS:
@@ -619,6 +674,11 @@ Examples:
         '--min-cells', type=int, default=10,
         help='Minimum cells per group (default: 10)',
     )
+    parser.add_argument(
+        '--backend', default='auto',
+        choices=['auto', 'numpy', 'cupy'],
+        help='Ridge regression backend (default: auto)',
+    )
 
     args = parser.parse_args()
 
@@ -637,6 +697,7 @@ Examples:
             force=args.force,
             batch_size=args.batch_size,
             min_cells=args.min_cells,
+            backend=args.backend,
         )
 
     elapsed = time.time() - t_start

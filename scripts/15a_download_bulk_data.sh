@@ -10,7 +10,7 @@
 #
 # Output: /data/parks34/projects/2secactpy/data/bulk/
 
-set -euo pipefail
+set -uo pipefail
 
 BULK_DIR="/data/parks34/projects/2secactpy/data/bulk"
 mkdir -p "$BULK_DIR"
@@ -27,18 +27,18 @@ else
     echo "[1/6] TOIL combined TPM already exists, skipping"
 fi
 
-# ---- GTEx v8 standalone ----
+# ---- GTEx v8 standalone (optional fallback - TOIL combined is preferred) ----
 if [ ! -f "GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_tpm.gct.gz" ]; then
-    echo "[2/6] Downloading GTEx v8 TPM (~1.5 GB)..."
-    wget -c https://storage.googleapis.com/gtex_analysis_v8/rna_seq_data/GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_tpm.gct.gz
+    echo "[2/6] Downloading GTEx v8 TPM (~1.5 GB, optional fallback)..."
+    wget -c https://storage.googleapis.com/gtex_analysis_v8/rna_seq_data/GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_tpm.gct.gz || echo "  WARNING: GTEx v8 standalone not available (not critical if TOIL combined exists)"
 else
     echo "[2/6] GTEx v8 TPM already exists, skipping"
 fi
 
-# ---- TCGA standalone ----
+# ---- TCGA standalone (optional fallback - TOIL combined is preferred) ----
 if [ ! -f "tcga_RSEM_gene_tpm.gz" ]; then
-    echo "[3/6] Downloading TCGA TPM (~2 GB)..."
-    wget -c https://toil.xenahubs.net/download/tcga_RSEM_gene_tpm.gz
+    echo "[3/6] Downloading TCGA TPM (~2 GB, optional fallback)..."
+    wget -c https://toil.xenahubs.net/download/tcga_RSEM_gene_tpm.gz || echo "  WARNING: TCGA standalone not available (not critical if TOIL combined exists)"
 else
     echo "[3/6] TCGA TPM already exists, skipping"
 fi
