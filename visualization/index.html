@@ -12064,15 +12064,31 @@
             let rho = tdata.rho, pval = tdata.pval, nDisplay = filteredPoints.length;
             const isFiltered = filteredPoints.length !== points.length;
             if (isFiltered && filteredPoints.length >= 10) {
-                // Approximate Spearman rho from filtered points (ranks)
-                const ranked = (arr) => {
-                    const sorted = [...arr].sort((a, b) => a - b);
-                    return arr.map(v => sorted.indexOf(v) + 1);
+                // Spearman rho with proper average-rank tie handling
+                const avgRank = (arr) => {
+                    const n = arr.length;
+                    const indexed = arr.map((v, i) => [v, i]).sort((a, b) => a[0] - b[0]);
+                    const ranks = new Array(n);
+                    let i = 0;
+                    while (i < n) {
+                        let j = i;
+                        while (j < n && indexed[j][0] === indexed[i][0]) j++;
+                        const avg = (i + j + 1) / 2; // average rank (1-based)
+                        for (let k = i; k < j; k++) ranks[indexed[k][1]] = avg;
+                        i = j;
+                    }
+                    return ranks;
                 };
-                const rx = ranked(xArr), ry = ranked(yArr);
+                const rx = avgRank(xArr), ry = avgRank(yArr);
                 const nn = rx.length;
-                const d2 = rx.reduce((s, v, i) => s + (v - ry[i]) ** 2, 0);
-                rho = 1 - (6 * d2) / (nn * (nn * nn - 1));
+                const mrx = rx.reduce((a, b) => a + b, 0) / nn;
+                const mry = ry.reduce((a, b) => a + b, 0) / nn;
+                let num = 0, dx2 = 0, dy2 = 0;
+                for (let i = 0; i < nn; i++) {
+                    const dx = rx[i] - mrx, dy = ry[i] - mry;
+                    num += dx * dy; dx2 += dx * dx; dy2 += dy * dy;
+                }
+                rho = (dx2 > 0 && dy2 > 0) ? num / Math.sqrt(dx2 * dy2) : 0;
                 pval = null; // approximate, no exact p-value
             } else if (isFiltered) {
                 // Too few points to compute rho reliably

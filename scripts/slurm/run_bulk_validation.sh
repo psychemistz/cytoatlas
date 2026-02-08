@@ -2,8 +2,7 @@
 #SBATCH --job-name=bulk_val
 #SBATCH --time=12:00:00
 #SBATCH --mem=200G
-#SBATCH --gres=gpu:1
-#SBATCH --partition=gpu
+#SBATCH --partition=norm
 #SBATCH --cpus-per-task=8
 #SBATCH --output=logs/bulk_validation/bulk_val_%j.out
 #SBATCH --error=logs/bulk_validation/bulk_val_%j.err
@@ -36,12 +35,10 @@ conda activate secactpy
 
 cd "${PROJECT_DIR}"
 
-nvidia-smi --query-gpu=name,memory.total,memory.free --format=csv
-
 # Step 1: Activity inference (GTEx + TCGA)
 echo ""
 echo "=== Step 1: Activity Inference ==="
-python scripts/15_bulk_validation.py --dataset all --backend auto --force
+python scripts/15_bulk_validation.py --dataset all --backend numpy --force
 
 # Step 2: Correlation analysis
 echo ""
