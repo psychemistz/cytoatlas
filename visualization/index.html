@@ -2517,8 +2517,12 @@
                     <label>Signature Type:
                         <select id="val-bulk-sigtype">
                             <option value="cytosig">CytoSig</option>
-                            <option value="lincytosig">LinCytoSig</option>
                             <option value="secact">SecAct</option>
+                        </select>
+                    </label>
+                    <label id="val-bulk-tissue-label">Tissue Type:
+                        <select id="val-bulk-tissue">
+                            <option value="">All Tissues</option>
                         </select>
                     </label>
                     <label>Target:
@@ -2527,7 +2531,10 @@
                         </select>
                     </label>
                     <label style="position: relative;">
-                        <input type="text" id="val-bulk-search" placeholder="Search target..." style="width: 150px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <input type="text" id="val-bulk-search" placeholder="Search target or gene..." style="width: 180px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </label>
+                    <label style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
+                        <input type="checkbox" id="val-bulk-hide-nonexpr"> Hide non-expressing
                     </label>
                 </div>
 
@@ -2575,7 +2582,7 @@
                         </select>
                     </label>
                     <label style="position: relative;">
-                        <input type="text" id="val-donor-search" placeholder="Search target..." style="width: 150px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <input type="text" id="val-donor-search" placeholder="Search target or gene..." style="width: 150px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;">
                     </label>
                 </div>
 
@@ -2626,7 +2633,7 @@
                         </select>
                     </label>
                     <label style="position: relative;">
-                        <input type="text" id="val-ct-search" placeholder="Search target..." style="width: 150px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <input type="text" id="val-ct-search" placeholder="Search target or gene..." style="width: 150px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;">
                     </label>
                 </div>
 
@@ -2677,7 +2684,7 @@
                         </select>
                     </label>
                     <label style="position: relative;">
-                        <input type="text" id="val-ctr-search" placeholder="Search target..." style="width: 150px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <input type="text" id="val-ctr-search" placeholder="Search target or gene..." style="width: 150px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;">
                     </label>
                 </div>
 
@@ -2733,7 +2740,7 @@
                         </select>
                     </label>
                     <label style="position: relative;">
-                        <input type="text" id="val-sc-search" placeholder="Search target..." style="width: 150px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <input type="text" id="val-sc-search" placeholder="Search target or gene..." style="width: 150px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;">
                     </label>
                 </div>
 
@@ -11830,7 +11837,15 @@
             div.classList.remove('loading');
 
             const target = document.getElementById('val-bulk-target')?.value;
-            const scatterData = data?.[dataset]?.donor_scatter?.[sigType];
+            const tissueFilter = document.getElementById('val-bulk-tissue')?.value || '';
+
+            // Use stratified_scatter (has tissue labels in points) when available, fallback to donor_scatter
+            const stratKey = dataset === 'gtex' ? 'by_tissue' : 'by_cancer';
+            const stratData = data?.[dataset]?.stratified_scatter?.[stratKey]?.[sigType];
+            const donorData = data?.[dataset]?.donor_scatter?.[sigType];
+            // Prefer stratified data (has 3-element points with tissue labels)
+            const scatterData = (stratData && Object.keys(stratData).length > 0) ? stratData : donorData;
+
             if (!scatterData || !target || !scatterData[target]) {
                 div.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No scatter data available for this target.</p>';
                 return;
@@ -11839,11 +11854,17 @@
             const datasetLabel = dataset === 'gtex' ? 'GTEx' : 'TCGA';
             const color = dataset === 'gtex' ? 'rgba(44, 160, 44, 0.4)' : 'rgba(214, 39, 40, 0.4)';
             const colorLine = dataset === 'gtex' ? 'rgba(44, 160, 44, 0.7)' : 'rgba(214, 39, 40, 0.7)';
+            const tissueSuffix = tissueFilter ? ` - ${tissueFilter}` : '';
+            const filterLabel = dataset === 'gtex' ? 'Tissue' : 'Cancer type';
+            const hideNonExpr = document.getElementById('val-bulk-hide-nonexpr')?.checked || false;
             renderValidationScatter('val-bulk-expr-scatter', scatterData[target], target, {
                 color, colorLine,
+                celltypeFilter: tissueFilter,
+                hideNonExpr,
+                filterLabel,
                 markerSize: 4,
                 unitLabel: `${datasetLabel} samples`,
-                titleSuffix: ` (${datasetLabel})`,
+                titleSuffix: ` (${datasetLabel}${tissueSuffix})`,
             });
         }
 
@@ -11868,8 +11889,52 @@
                 return;
             }
 
-            // Populate target dropdown from donor_scatter (with search support)
-            const scatterData = dsData.donor_scatter?.[sigType] || {};
+            // Populate tissue/cancer type dropdown from stratified_scatter groups
+            // (not tissue_types, which may include tissues excluded by min_samples filter)
+            const tissueLabel = document.getElementById('val-bulk-tissue-label');
+            const tissueSel = document.getElementById('val-bulk-tissue');
+            if (tissueSel) {
+                const curTissue = tissueSel.value;
+                const stratKey = dataset === 'gtex' ? 'by_tissue' : 'by_cancer';
+                const stratSigData = dsData.stratified_scatter?.[stratKey]?.[sigType] || {};
+                // Extract unique group labels from the first available target's groups field
+                let groupLabels = [];
+                for (const t of Object.keys(stratSigData)) {
+                    if (stratSigData[t]?.groups?.length > 0) {
+                        groupLabels = stratSigData[t].groups;
+                        break;
+                    }
+                }
+
+                if (dataset === 'gtex') {
+                    if (tissueLabel) tissueLabel.childNodes[0].textContent = 'Tissue Type: ';
+                    tissueSel.innerHTML = '<option value="">All Tissues</option>';
+                    groupLabels.sort().forEach(t => {
+                        const opt = document.createElement('option');
+                        opt.value = t;
+                        opt.textContent = t;
+                        tissueSel.appendChild(opt);
+                    });
+                } else {
+                    if (tissueLabel) tissueLabel.childNodes[0].textContent = 'Cancer Type: ';
+                    const cancerTypes = groupLabels.filter(c => c !== 'Unknown');
+                    tissueSel.innerHTML = '<option value="">All Cancer Types</option>';
+                    cancerTypes.sort().forEach(t => {
+                        const opt = document.createElement('option');
+                        opt.value = t;
+                        opt.textContent = t;
+                        tissueSel.appendChild(opt);
+                    });
+                }
+                // Restore previous selection if still available
+                const options = Array.from(tissueSel.options).map(o => o.value);
+                if (options.includes(curTissue)) tissueSel.value = curTissue;
+            }
+
+            // Use stratified_scatter when available for target dropdown (has tissue labels in points)
+            const stratKey = dataset === 'gtex' ? 'by_tissue' : 'by_cancer';
+            const stratData = dsData.stratified_scatter?.[stratKey]?.[sigType] || {};
+            const scatterData = Object.keys(stratData).length > 0 ? stratData : (dsData.donor_scatter?.[sigType] || {});
             populateTargetDropdown('val-bulk-target', scatterData, 'IFNG', 'val-bulk-search');
 
             renderBulkExprScatter(data, dataset, sigType);
@@ -11954,28 +12019,45 @@
 
             const points = tdata.points || [];
             const celltypeFilter = opts.celltypeFilter || '';
+            const hideNonExpr = opts.hideNonExpr || false;
             const color = opts.color || 'rgba(31, 119, 180, 0.5)';
             const colorLine = opts.colorLine || 'rgba(31, 119, 180, 0.8)';
             const unitLabel = opts.unitLabel || 'samples';
 
-            // Filter by celltype if points have 3rd element (celltype label)
+            // Filter by group label (tissue/celltype) if points have 3rd element
             let filteredPoints = points;
             if (celltypeFilter && points.length > 0 && points[0].length >= 3) {
                 filteredPoints = points.filter(p => p[2] === celltypeFilter);
+            }
+
+            // Filter out non-expressing samples (expression at mode minimum = zero-expression z-score)
+            if (hideNonExpr && filteredPoints.length > 0) {
+                // Detect the non-expressing spike: find the most common rounded x value
+                const xRounded = filteredPoints.map(p => Math.round(p[0] * 100) / 100);
+                const freq = {};
+                xRounded.forEach(v => { freq[v] = (freq[v] || 0) + 1; });
+                const modeVal = Object.entries(freq).sort((a, b) => b[1] - a[1])[0];
+                // If the mode represents >10% of points and is negative, it's likely the non-expressing spike
+                if (modeVal && modeVal[1] > filteredPoints.length * 0.1 && parseFloat(modeVal[0]) < 0) {
+                    const spikeVal = parseFloat(modeVal[0]);
+                    filteredPoints = filteredPoints.filter(p => Math.round(p[0] * 100) / 100 !== spikeVal);
+                }
             }
 
             const xArr = filteredPoints.map(p => p[0]);
             const yArr = filteredPoints.map(p => p[1]);
 
             if (xArr.length < 3) {
+                const filterLabel = opts.filterLabel || 'Cell type';
                 div.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">Insufficient data points' +
-                    (celltypeFilter ? ` for cell type "${celltypeFilter}".` : '.') + '</p>';
+                    (celltypeFilter ? ` for ${filterLabel.toLowerCase()} "${celltypeFilter}".` : '.') + '</p>';
                 return;
             }
 
-            // Recompute rho for filtered subset
-            let rho = tdata.rho, pval = tdata.pval, nDisplay = tdata.n;
-            if (celltypeFilter && filteredPoints.length !== points.length && filteredPoints.length >= 10) {
+            // Always update nDisplay to reflect actual visible points
+            let rho = tdata.rho, pval = tdata.pval, nDisplay = filteredPoints.length;
+            const isFiltered = filteredPoints.length !== points.length;
+            if (isFiltered && filteredPoints.length >= 10) {
                 // Approximate Spearman rho from filtered points (ranks)
                 const ranked = (arr) => {
                     const sorted = [...arr].sort((a, b) => a - b);
@@ -11985,8 +12067,11 @@
                 const nn = rx.length;
                 const d2 = rx.reduce((s, v, i) => s + (v - ry[i]) ** 2, 0);
                 rho = 1 - (6 * d2) / (nn * (nn * nn - 1));
-                nDisplay = filteredPoints.length;
                 pval = null; // approximate, no exact p-value
+            } else if (isFiltered) {
+                // Too few points to compute rho reliably
+                rho = null;
+                pval = null;
             }
 
             const traces = [{
@@ -12019,12 +12104,17 @@
                 pvalStr = pval < 0.001 ? pval.toExponential(1) : pval.toFixed(4);
             }
 
-            let annoText = `Spearman \u03c1 = ${rho !== null ? rho.toFixed(3) : 'N/A'}<br>p = ${pvalStr}<br>n = ${typeof nDisplay === 'number' ? nDisplay.toLocaleString() : nDisplay} ${unitLabel}`;
+            const subsampledNote = isFiltered ? ' (shown)' : '';
+            let annoText = `Spearman \u03c1 = ${rho !== null ? rho.toFixed(3) : 'N/A'}<br>p = ${pvalStr}<br>n = ${typeof nDisplay === 'number' ? nDisplay.toLocaleString() : nDisplay}${subsampledNote} ${unitLabel}`;
             if (tdata.rho_ci) {
                 annoText += `<br>95% CI: [${tdata.rho_ci[0]}, ${tdata.rho_ci[1]}]`;
             }
             if (celltypeFilter) {
-                annoText += `<br>Cell type: ${celltypeFilter}`;
+                const filterLabel = opts.filterLabel || 'Cell type';
+                annoText += `<br>${filterLabel}: ${celltypeFilter}`;
+            }
+            if (hideNonExpr) {
+                annoText += `<br>(non-expressing hidden)`;
             }
 
             const titleSuffix = opts.titleSuffix || '';
@@ -12047,24 +12137,44 @@
         function populateTargetDropdown(selectId, scatterData, preferredTarget, searchInputId) {
             const sel = document.getElementById(selectId);
             if (!sel) return;
-            const available = Object.keys(scatterData || {}).sort();
+            const allAvailable = Object.keys(scatterData || {}).sort();
             const cur = sel.value;
+
+            // Get search term and filter available targets
+            let term = '';
+            if (searchInputId) {
+                term = document.getElementById(searchInputId)?.value?.trim().toLowerCase() || '';
+            }
+
+            let available = allAvailable;
+            if (term) {
+                // Filter to show only matching targets (match target name or gene name)
+                available = allAvailable.filter(t =>
+                    t.toLowerCase().includes(term)
+                    || (scatterData[t]?.gene || '').toLowerCase().includes(term)
+                );
+                // If no matches found, show all targets
+                if (available.length === 0) available = allAvailable;
+            }
+
             sel.innerHTML = '';
             available.forEach(t => {
                 const opt = document.createElement('option');
                 opt.value = t;
-                opt.textContent = t + (scatterData[t]?.gene !== t ? ` (${scatterData[t]?.gene})` : '');
+                const gene = scatterData[t]?.gene;
+                opt.textContent = t + (gene && gene !== t ? ` (${gene})` : '');
                 sel.appendChild(opt);
             });
-            // Search input match takes priority
-            if (searchInputId) {
-                const term = document.getElementById(searchInputId)?.value?.trim().toLowerCase() || '';
-                if (term) {
-                    const match = available.find(t => t.toLowerCase().includes(term)
-                        || (scatterData[t]?.gene || '').toLowerCase().includes(term));
-                    if (match) { sel.value = match; return; }
-                }
+
+            // If searching, select the best match
+            if (term && available.length > 0) {
+                // Prefer exact match on target name, then gene name, then first partial
+                const exact = available.find(t => t.toLowerCase() === term);
+                const geneExact = available.find(t => (scatterData[t]?.gene || '').toLowerCase() === term);
+                sel.value = exact || geneExact || available[0];
+                return;
             }
+
             if (available.includes(cur)) sel.value = cur;
             else if (preferredTarget && available.includes(preferredTarget)) sel.value = preferredTarget;
             else if (available.length > 0) sel.value = available[0];
@@ -12215,25 +12325,41 @@
             let filteredVals = scVals.filter(sv => sv.signature_type === sigType);
             if (filteredVals.length === 0) filteredVals = scVals;
 
-            // Populate signature/target dropdown
+            // Populate signature/target dropdown (with search filtering)
             const sigDropdown = document.getElementById('val-sc-signature');
             if (sigDropdown) {
-                const currentOptions = new Set(Array.from(sigDropdown.options).map(o => o.value));
-                const sigs = [...new Set(filteredVals.map(sv => sv.signature).filter(Boolean))].sort();
+                let sigs = [...new Set(filteredVals.map(sv => sv.signature).filter(Boolean))].sort();
+                // Filter by search term (match signature name or gene name)
+                if (searchTerm) {
+                    const filtered = sigs.filter(sig => {
+                        const sv = filteredVals.find(v => v.signature === sig);
+                        return sig.toLowerCase().includes(searchTerm)
+                            || (sv?.gene || '').toLowerCase().includes(searchTerm);
+                    });
+                    if (filtered.length > 0) sigs = filtered;
+                }
+                sigDropdown.innerHTML = '';
                 sigs.forEach(sig => {
-                    if (!currentOptions.has(sig)) {
-                        const opt = document.createElement('option');
-                        opt.value = sig;
-                        opt.textContent = sig;
-                        sigDropdown.appendChild(opt);
-                    }
+                    const opt = document.createElement('option');
+                    opt.value = sig;
+                    const sv = filteredVals.find(v => v.signature === sig);
+                    const gene = sv?.gene;
+                    opt.textContent = sig + (gene && gene !== sig ? ` (${gene})` : '');
+                    sigDropdown.appendChild(opt);
                 });
             }
 
             let targetSig = selectedSig;
             if (searchTerm) {
-                const match = filteredVals.find(sv => sv.signature?.toLowerCase().includes(searchTerm));
-                if (match) targetSig = match.signature;
+                // Prefer exact match, then partial
+                const exact = filteredVals.find(sv =>
+                    sv.signature?.toLowerCase() === searchTerm
+                    || (sv.gene || '').toLowerCase() === searchTerm);
+                const partial = filteredVals.find(sv =>
+                    sv.signature?.toLowerCase().includes(searchTerm)
+                    || (sv.gene || '').toLowerCase().includes(searchTerm));
+                if (exact) targetSig = exact.signature;
+                else if (partial) targetSig = partial.signature;
             }
 
             const scVal = filteredVals.find(sv => sv.signature === targetSig) || filteredVals[0];
@@ -12383,6 +12509,20 @@
             document.getElementById('val-bulk-dataset')?.addEventListener('change', updateValidationBulk);
             document.getElementById('val-bulk-sigtype')?.addEventListener('change', updateValidationBulk);
             document.getElementById('val-bulk-target')?.addEventListener('change', async () => {
+                const data = await loadBulkRnaseqData();
+                if (!data) return;
+                const dataset = document.getElementById('val-bulk-dataset')?.value || 'gtex';
+                const sigType = document.getElementById('val-bulk-sigtype')?.value || 'cytosig';
+                renderBulkExprScatter(data, dataset, sigType);
+            });
+            document.getElementById('val-bulk-tissue')?.addEventListener('change', async () => {
+                const data = await loadBulkRnaseqData();
+                if (!data) return;
+                const dataset = document.getElementById('val-bulk-dataset')?.value || 'gtex';
+                const sigType = document.getElementById('val-bulk-sigtype')?.value || 'cytosig';
+                renderBulkExprScatter(data, dataset, sigType);
+            });
+            document.getElementById('val-bulk-hide-nonexpr')?.addEventListener('change', async () => {
                 const data = await loadBulkRnaseqData();
                 if (!data) return;
                 const dataset = document.getElementById('val-bulk-dataset')?.value || 'gtex';

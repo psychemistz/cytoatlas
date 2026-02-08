@@ -62,6 +62,44 @@ ATLAS_H5AD_PATTERNS = {
 
 SIG_TYPES = ["cytosig", "lincytosig", "secact"]
 
+# CytoSig signature names — always keep these in SecAct dropdown even if not top-N
+CYTOSIG_NAMES = {
+    "Activin A", "BDNF", "BMP2", "BMP4", "BMP6", "CD40L", "CXCL12", "EGF",
+    "FGF2", "GCSF", "GDF11", "GMCSF", "HGF", "IFN1", "IFNG", "IFNL",
+    "IL10", "IL12", "IL13", "IL15", "IL17A", "IL1A", "IL1B", "IL2", "IL21",
+    "IL22", "IL27", "IL3", "IL36", "IL4", "IL6", "LIF", "LTA", "MCSF", "NO",
+    "OSM", "TGFB1", "TGFB3", "TNFA", "TRAIL", "TWEAK", "VEGFA", "WNT3A",
+}
+# Additional key IDs to always keep in SecAct (user-specified + common cytokines)
+SECACT_MUST_KEEP = CYTOSIG_NAMES | {
+    "IFNL1", "IL6", "CCL2", "CCL5", "CXCL10", "CSF1", "CSF2", "CSF3",
+    "TNF", "TGFB2", "IL18", "IL33", "IL23A", "IL17F",
+}
+SECACT_TOP_N = 100
+
+
+def filter_secact_targets(targets_data: dict, top_n: int = SECACT_TOP_N) -> dict:
+    """Keep top N SecAct targets by |rho| plus must-keep IDs."""
+    if len(targets_data) <= top_n:
+        return targets_data
+
+    # Sort by |rho| descending
+    sorted_targets = sorted(
+        targets_data.items(),
+        key=lambda x: abs(x[1]["rho"]) if x[1]["rho"] is not None else 0,
+        reverse=True,
+    )
+
+    # Take top N
+    kept = dict(sorted_targets[:top_n])
+
+    # Add must-keep targets that aren't already included
+    for target in targets_data:
+        if target not in kept and target in SECACT_MUST_KEEP:
+            kept[target] = targets_data[target]
+
+    return kept
+
 # Celltype-level H5AD file patterns: atlas -> [(level_name, file_prefix)]
 # file_prefix is used as: {prefix}_pseudobulk.h5ad, {prefix}_{sig_type}.h5ad
 CELLTYPE_H5AD_PATTERNS = {
@@ -924,14 +962,16 @@ def build_bulk_rnaseq_json() -> dict:
                     "points": points,
                 }
 
-            # For lincytosig/secact, keep top 30 by |rho|
-            if sig_type != "cytosig" and len(targets_data) > 30:
+            # Filter to manage file size
+            if sig_type == "lincytosig" and len(targets_data) > 30:
                 sorted_targets = sorted(
                     targets_data.items(),
                     key=lambda x: abs(x[1]["rho"]) if x[1]["rho"] is not None else 0,
                     reverse=True,
                 )
                 targets_data = dict(sorted_targets[:30])
+            elif sig_type == "secact":
+                targets_data = filter_secact_targets(targets_data)
 
             atlas_scatter[sig_type] = targets_data
             print(f"    bulk_scatter/{atlas_key}/{sig_type}: {len(targets_data)} targets")
@@ -1046,14 +1086,16 @@ def build_bulk_rnaseq_json() -> dict:
                         "points": points_s,
                     }
 
-                # For lincytosig/secact, keep top 30 by |rho|
-                if sig_type != "cytosig" and len(targets_data_s) > 30:
+                # Filter to manage file size
+                if sig_type == "lincytosig" and len(targets_data_s) > 30:
                     sorted_t = sorted(
                         targets_data_s.items(),
                         key=lambda x: abs(x[1]["rho"]) if x[1]["rho"] is not None else 0,
                         reverse=True,
                     )
                     targets_data_s = dict(sorted_t[:30])
+                elif sig_type == "secact":
+                    targets_data_s = filter_secact_targets(targets_data_s)
 
                 level_scatter[sig_type] = targets_data_s
                 print(f"    bulk_stratified/{atlas_key}/{level_name}/{sig_type}: {len(targets_data_s)} targets")
