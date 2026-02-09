@@ -98,6 +98,23 @@ class AtlasRegisterRequest(BaseModel):
     # Optional
     publication: str | None = None
     doi: str | None = None
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "name": "my_pbmc_atlas",
+                    "display_name": "My PBMC Atlas",
+                    "description": "Single-cell RNA-seq of PBMCs from healthy donors",
+                    "h5ad_path": "/data/my_atlas/pbmc.h5ad",
+                    "atlas_type": "immune",
+                    "species": "human",
+                    "publication": "Smith et al. 2024",
+                    "doi": "10.1234/example.2024",
+                }
+            ]
+        }
+    }
     contact_email: str | None = None
 
     class Config:

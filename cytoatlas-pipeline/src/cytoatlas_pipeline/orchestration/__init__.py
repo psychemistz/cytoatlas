@@ -18,6 +18,14 @@ from cytoatlas_pipeline.orchestration.recovery import (
     RecoveryManager,
     recover_job,
 )
+from cytoatlas_pipeline.orchestration.dependency_graph import (
+    DependencyGraph,
+    Stage,
+)
+from cytoatlas_pipeline.orchestration.runner import (
+    PipelineRunner,
+    StageStatus,
+)
 
 __all__ = [
     "Job",
@@ -28,4 +36,8 @@ __all__ = [
     "ScheduledTask",
     "RecoveryManager",
     "recover_job",
+    "DependencyGraph",
+    "Stage",
+    "PipelineRunner",
+    "StageStatus",
 ]

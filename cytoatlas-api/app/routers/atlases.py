@@ -303,3 +303,63 @@ async def get_organs(
             detail="Organ data not available for this atlas",
         )
     return await service.get_organs()
+
+
+@router.get("/{atlas_name}/boxplots/{variable}/{signature}")
+async def get_boxplot_data(
+    variable: str = Path(..., description="Variable name (e.g., age, bmi)"),
+    signature: str = Path(..., description="Signature name"),
+    service: GenericAtlasService = Depends(get_atlas_service),
+    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
+) -> dict:
+    """
+    Get boxplot data for variable vs signature.
+
+    Returns distribution of signature activity across variable bins.
+    """
+    available_vars = service.get_available_variables()
+    if variable not in available_vars:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Variable '{variable}' not available for this atlas. "
+            f"Available: {available_vars}",
+        )
+
+    result = await service.get_boxplot_data(variable, signature, signature_type)
+    if not result:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No boxplot data found for {variable} vs {signature}",
+        )
+
+    return result
+
+
+@router.get("/{atlas_name}/heatmap/activity")
+async def get_heatmap_data(
+    service: Annotated[GenericAtlasService, Depends(get_atlas_service)],
+    data_type: str = Query("activity", pattern="^(activity|correlation|differential)$"),
+    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
+    limit: int = Query(100, ge=1, le=500),
+) -> list[dict]:
+    """
+    Get heatmap data (cell type x signature matrix).
+
+    Returns data suitable for generating heatmaps.
+    """
+    return await service.get_heatmap_data(data_type, signature_type, limit)
+
+
+@router.get("/{atlas_name}/cell-type-correlations")
+async def get_cell_type_correlations(
+    service: Annotated[GenericAtlasService, Depends(get_atlas_service)],
+    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
+    limit: int = Query(1000, ge=1, le=10000),
+) -> list[dict]:
+    """
+    Get cell type correlations (signature-signature co-expression).
+
+    Returns correlation matrix showing which signatures are co-expressed
+    across cell types.
+    """
+    return await service.get_cell_type_correlations(signature_type, limit)

@@ -6,6 +6,7 @@ from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -34,8 +35,74 @@ from app.routers import (
     validation_router,
     websocket_router,
 )
+from app.routers.pipeline import router as pipeline_router
 
 settings = get_settings()
+
+
+# OpenAPI tags metadata
+tags_metadata = [
+    {
+        "name": "Health",
+        "description": "Health check and system status endpoints",
+    },
+    {
+        "name": "Atlases (Unified API)",
+        "description": "Unified dynamic API for all atlases. Use these endpoints instead of atlas-specific routes. "
+        "Supports built-in atlases (CIMA, Inflammation, scAtlas) and user-registered atlases.",
+    },
+    {
+        "name": "CIMA Atlas (Legacy)",
+        "description": "**DEPRECATED**: Use `/atlases/cima/...` instead. Legacy CIMA-specific endpoints. "
+        "Kept for backward compatibility but will be removed in a future version.",
+    },
+    {
+        "name": "Inflammation Atlas (Legacy)",
+        "description": "**DEPRECATED**: Use `/atlases/inflammation/...` instead. Legacy Inflammation-specific endpoints. "
+        "Kept for backward compatibility but will be removed in a future version.",
+    },
+    {
+        "name": "scAtlas (Legacy)",
+        "description": "**DEPRECATED**: Use `/atlases/scatlas/...` instead. Legacy scAtlas-specific endpoints. "
+        "Kept for backward compatibility but will be removed in a future version.",
+    },
+    {
+        "name": "Cross-Atlas",
+        "description": "Cross-atlas comparison and integration endpoints",
+    },
+    {
+        "name": "Validation",
+        "description": "Data validation and credibility assessment",
+    },
+    {
+        "name": "Search",
+        "description": "Global search across all atlases",
+    },
+    {
+        "name": "Gene",
+        "description": "Gene-centric views and analysis",
+    },
+    {
+        "name": "Export",
+        "description": "Data export in various formats",
+    },
+    {
+        "name": "Chat",
+        "description": "Claude AI assistant for data exploration",
+    },
+    {
+        "name": "Submit",
+        "description": "User dataset submission",
+    },
+    {
+        "name": "Auth",
+        "description": "Authentication and authorization",
+    },
+    {
+        "name": "Pipeline",
+        "description": "Pipeline status and management",
+    },
+]
 
 
 @asynccontextmanager
@@ -120,12 +187,39 @@ def create_app() -> FastAPI:
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
+        openapi_tags=tags_metadata,
         lifespan=lifespan,
     )
 
+    # Add API version header and caching middleware
+    @app.middleware("http")
+    async def add_api_version_and_cache_headers(request: Request, call_next):
+        """Add API version header and cache control to all responses."""
+        response = await call_next(request)
+        response.headers["X-API-Version"] = "1.0"
+
+        # Add cache headers for data endpoints (GET only)
+        if request.method == "GET" and request.url.path.startswith(settings.api_v1_prefix):
+            # Don't cache health checks or websocket connections
+            if not request.url.path.endswith("/health") and "/ws" not in request.url.path:
+                response.headers["Cache-Control"] = "public, max-age=3600"
+
+        # Add deprecation header for legacy endpoints
+        if request.url.path.startswith(f"{settings.api_v1_prefix}/cima") or \
+           request.url.path.startswith(f"{settings.api_v1_prefix}/inflammation") or \
+           request.url.path.startswith(f"{settings.api_v1_prefix}/scatlas"):
+            # Extract atlas name from path
+            path_parts = request.url.path.split("/")
+            if len(path_parts) >= 4:
+                atlas_name = path_parts[3]  # /api/v1/cima/...
+                response.headers["X-Deprecated"] = f"Use /atlases/{atlas_name}/... instead"
+                response.headers["Deprecation"] = "true"
+
+        return response
+
     # Middleware (NOTE: FastAPI processes in REVERSE order of add_middleware calls)
-    # Execution order: SecurityHeaders -> CORS -> Audit -> RequestLogging -> Metrics
-    # So add in reverse: Metrics first, SecurityHeaders last
+    # Execution order: GZip -> SecurityHeaders -> CORS -> Audit -> RequestLogging -> Metrics
+    # So add in reverse: Metrics first, GZip last
     app.add_middleware(MetricsMiddleware)
     app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(AuditMiddleware)
@@ -137,6 +231,9 @@ def create_app() -> FastAPI:
         allow_headers=["Authorization", "Content-Type", "X-API-Key", "X-Request-ID"],
     )
     app.add_middleware(SecurityHeadersMiddleware)
+
+    # Add GZip compression (minimum 1000 bytes)
+    app.add_middleware(GZipMiddleware, minimum_size=1000)
 
     # Global exception handler
     @app.exception_handler(Exception)
@@ -173,6 +270,7 @@ def create_app() -> FastAPI:
     app.include_router(submit_router, prefix=api_prefix)
     app.include_router(chat_router, prefix=api_prefix)
     app.include_router(websocket_router, prefix=api_prefix)
+    app.include_router(pipeline_router, prefix=api_prefix)  # Pipeline management
 
     # Mount static files (CSS, JS, assets)
     if STATIC_DIR.exists():

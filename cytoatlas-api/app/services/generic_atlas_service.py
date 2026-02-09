@@ -308,6 +308,99 @@ class GenericAtlasService(BaseService):
 
         return variables
 
+    @cached(prefix="atlas", ttl=3600)
+    async def get_boxplot_data(
+        self,
+        variable: str,
+        signature: str,
+        signature_type: str = "CytoSig",
+    ) -> dict:
+        """
+        Get boxplot data for a variable vs signature.
+
+        Args:
+            variable: Variable name (e.g., 'age', 'bmi')
+            signature: Signature name
+            signature_type: CytoSig or SecAct
+
+        Returns:
+            Boxplot data with bins and distributions
+        """
+        try:
+            data = await self.load_atlas_json(f"boxplot_{variable}.json")
+        except FileNotFoundError:
+            return {}
+
+        # Filter by signature
+        if isinstance(data, list):
+            results = [d for d in data if d.get("signature") == signature]
+            if results:
+                return results[0]
+        elif isinstance(data, dict):
+            # Handle nested structure
+            return data.get(signature, {})
+
+        return {}
+
+    @cached(prefix="atlas", ttl=3600)
+    async def get_heatmap_data(
+        self,
+        data_type: str = "activity",
+        signature_type: str = "CytoSig",
+        limit: int = 100,
+    ) -> list[dict]:
+        """
+        Get heatmap data (cell type x signature matrix).
+
+        Args:
+            data_type: Type of data ('activity', 'correlation', 'differential')
+            signature_type: CytoSig or SecAct
+            limit: Maximum number of signatures to return
+
+        Returns:
+            List of cell type x signature values
+        """
+        try:
+            if data_type == "activity":
+                data = await self.load_atlas_json("celltype.json")
+            elif data_type == "correlation":
+                data = await self.load_atlas_json("correlations.json")
+            elif data_type == "differential":
+                data = await self.load_atlas_json("differential.json")
+            else:
+                return []
+        except FileNotFoundError:
+            return []
+
+        results = self.filter_by_signature_type(data, signature_type)
+        return results[:limit]
+
+    @cached(prefix="atlas", ttl=3600)
+    async def get_cell_type_correlations(
+        self,
+        signature_type: str = "CytoSig",
+        limit: int = 1000,
+    ) -> list[dict]:
+        """
+        Get cell type correlations (signature x signature).
+
+        Returns correlation matrix showing which signatures are co-expressed.
+
+        Args:
+            signature_type: CytoSig or SecAct
+            limit: Maximum number of correlations to return
+
+        Returns:
+            List of signature-signature correlations
+        """
+        try:
+            data = await self.load_atlas_json("celltype_correlations.json")
+        except FileNotFoundError:
+            return []
+
+        results = self.filter_by_signature_type(data, signature_type)
+        return results[:limit]
+
 
 # Factory function for dependency injection
 def get_atlas_service(atlas_name: str | None = None) -> GenericAtlasService:

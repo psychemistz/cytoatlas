@@ -1,0 +1,21 @@
+# Default pipeline configuration
+data_paths:
+  cima_h5ad: "/data/Jiang_Lab/Data/Seongyong/CIMA/Cell_Atlas/CIMA_RNA_6484974cells_36326genes_compressed.h5ad"
+  cima_biochem: "/data/Jiang_Lab/Data/Seongyong/CIMA/Cell_Atlas/CIMA_Sample_Blood_Biochemistry_Results.csv"
+  cima_metabolites: "/data/Jiang_Lab/Data/Seongyong/CIMA/Cell_Atlas/CIMA_Sample_Plasma_Metabolites_and_Lipids_Results.csv"
+  inflammation_main: "/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_ATLAS_main_afterQC.h5ad"
+  inflammation_validation: "/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_ATLAS_validation_afterQC.h5ad"
+  inflammation_external: "/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_ATLAS_external_afterQC.h5ad"
+  scatlas_normal: "/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/igt_s9_fine_counts.h5ad"
+  scatlas_cancer: "/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/PanCancer_igt_s9_fine_counts.h5ad"
+
+output_paths:
+  results: "/vf/users/parks34/projects/2secactpy/results"
+  visualization: "/vf/users/parks34/projects/2secactpy/visualization/data"
+  figures: "/vf/users/parks34/projects/2secactpy/results/figures"
+
+pipeline:
+  seed: 42
+  n_permutations: 1000
+  batch_size: 10000
+  min_cells: 50

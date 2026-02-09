@@ -93,6 +93,24 @@ class CorrelationResult(StatisticBase):
     p_value: float
     q_value: float | None = None
 
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "cell_type": "Monocytes",
+                    "signature": "IL6",
+                    "signature_type": "CytoSig",
+                    "variable": "age",
+                    "value": 0.45,
+                    "rho": 0.45,
+                    "p_value": 1.2e-5,
+                    "q_value": 0.003,
+                    "n_samples": 500,
+                }
+            ]
+        }
+    }
+
 
 class DifferentialResult(StatisticBase):
     """Differential analysis result schema."""
@@ -107,6 +125,30 @@ class DifferentialResult(StatisticBase):
     median_g1: float
     median_g2: float
 
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "cell_type": "CD4+ T cells",
+                    "signature": "IL17A",
+                    "signature_type": "CytoSig",
+                    "comparison": "disease_vs_healthy",
+                    "group1": "disease",
+                    "group2": "healthy",
+                    "value": 1.8,
+                    "activity_diff": 1.8,
+                    "mean_g1": 2.1,
+                    "mean_g2": 0.3,
+                    "median_g1": 1.9,
+                    "median_g2": 0.2,
+                    "p_value": 3.5e-8,
+                    "q_value": 1.2e-6,
+                    "n_samples": 200,
+                }
+            ]
+        }
+    }
+
 
 class ActivityResult(BaseModel):
     """Activity score result schema."""
@@ -118,6 +160,22 @@ class ActivityResult(BaseModel):
     std_activity: float | None = None
     n_cells: int | None = None
     n_samples: int | None = None
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "cell_type": "CD8+ T cells",
+                    "signature": "IFNG",
+                    "signature_type": "CytoSig",
+                    "mean_activity": 2.34,
+                    "std_activity": 0.89,
+                    "n_cells": 12543,
+                    "n_samples": 150,
+                }
+            ]
+        }
+    }
 
 
 class HeatmapData(BaseModel):

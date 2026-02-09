@@ -17,7 +17,11 @@ from app.schemas.cima import (
 from app.schemas.common import PaginatedResponse
 from app.services.cima_service import CIMAService
 
-router = APIRouter(prefix="/cima", tags=["CIMA Atlas"])
+router = APIRouter(
+    prefix="/cima",
+    tags=["CIMA Atlas (Legacy)"],
+    deprecated=True,
+)
 
 
 def get_cima_service() -> CIMAService:

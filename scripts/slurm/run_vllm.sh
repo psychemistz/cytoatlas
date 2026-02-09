@@ -42,6 +42,8 @@ python -m vllm.entrypoints.openai.api_server \
     --max-model-len 32768 \
     --enable-auto-tool-choice \
     --tool-call-parser mistral \
+    --tokenizer-mode mistral \
+    --limit-mm-per-prompt '{"image": 0}' \
     --enable-prefix-caching &
 VLLM_PID=$!
 

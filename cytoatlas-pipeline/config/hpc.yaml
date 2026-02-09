@@ -1,0 +1,7 @@
+# HPC-specific overrides
+compute:
+  use_gpu: true
+  gpu_memory: "48GB"
+  n_workers: 4
+  time_limit: "48:00:00"
+  partition: "gpu"

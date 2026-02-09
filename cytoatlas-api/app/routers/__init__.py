@@ -9,6 +9,7 @@ from app.routers.export import router as export_router
 from app.routers.gene import router as gene_router
 from app.routers.health import router as health_router
 from app.routers.inflammation import router as inflammation_router
+from app.routers.pipeline import router as pipeline_router
 from app.routers.scatlas import router as scatlas_router
 from app.routers.search import router as search_router
 from app.routers.submit import router as submit_router
@@ -25,6 +26,7 @@ __all__ = [
     "gene_router",
     "health_router",
     "inflammation_router",
+    "pipeline_router",
     "scatlas_router",
     "search_router",
     "submit_router",

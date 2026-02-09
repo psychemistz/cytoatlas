@@ -19,7 +19,11 @@ from app.schemas.scatlas import (
 )
 from app.services.scatlas_service import ScAtlasService
 
-router = APIRouter(prefix="/scatlas", tags=["scAtlas"])
+router = APIRouter(
+    prefix="/scatlas",
+    tags=["scAtlas (Legacy)"],
+    deprecated=True,
+)
 
 
 def get_scatlas_service() -> ScAtlasService:

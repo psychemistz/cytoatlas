@@ -1,0 +1,53 @@
+stages:
+  pilot:
+    script: "scripts/00_pilot_analysis.py"
+    inputs: ["data_paths.cima_h5ad"]
+    outputs: ["results/pilot/"]
+    gpu: false
+    time_estimate: "2h"
+
+  cima:
+    script: "scripts/01_cima_activity.py"
+    inputs: ["data_paths.cima_h5ad", "data_paths.cima_biochem", "data_paths.cima_metabolites"]
+    outputs: ["results/cima/"]
+    depends_on: ["pilot"]
+    gpu: true
+    time_estimate: "12h"
+
+  inflammation:
+    script: "scripts/02_inflam_activity.py"
+    inputs: ["data_paths.inflammation_main", "data_paths.inflammation_validation", "data_paths.inflammation_external"]
+    outputs: ["results/inflammation/"]
+    depends_on: ["pilot"]
+    gpu: true
+    time_estimate: "8h"
+
+  scatlas:
+    script: "scripts/03_scatlas_analysis.py"
+    inputs: ["data_paths.scatlas_normal", "data_paths.scatlas_cancer"]
+    outputs: ["results/scatlas/"]
+    depends_on: ["pilot"]
+    gpu: true
+    time_estimate: "10h"
+
+  integrated:
+    script: "scripts/04_integrated.py"
+    inputs: ["results/cima/", "results/inflammation/", "results/scatlas/"]
+    outputs: ["results/integrated/"]
+    depends_on: ["cima", "inflammation", "scatlas"]
+    gpu: false
+    time_estimate: "2h"
+
+  figures:
+    script: "scripts/05_figures.py"
+    outputs: ["results/figures/"]
+    depends_on: ["integrated"]
+    gpu: false
+    time_estimate: "1h"
+
+  visualization:
+    script: "scripts/06_preprocess_viz_data.py"
+    outputs: ["visualization/data/"]
+    depends_on: ["integrated"]
+    gpu: false
+    time_estimate: "4h"
