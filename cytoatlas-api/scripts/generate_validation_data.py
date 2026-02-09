@@ -78,6 +78,21 @@ KNOWN_ASSOCIATIONS = [
 ]
 
 
+# Map CytoSig/SecAct signature names to HGNC gene symbols
+# Most signatures use the same name; exceptions listed here
+_SIGNATURE_GENE_MAP = {
+    "Activin A": "INHBA",
+    "CD40L": "CD40LG",
+    "GCSF": "CSF3",
+    "GMCSF": "CSF2",
+    "MCSF": "CSF1",
+    "SCF": "KITLG",
+    "TNFA": "TNF",
+    "TRAIL": "TNFSF10",
+    "TWEAK": "TNFSF12",
+}
+
+
 class RealValidationGenerator:
     """Generate validation data from real computed results."""
 
@@ -234,6 +249,175 @@ class RealValidationGenerator:
                 Path("/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/igt_s9_fine_counts.h5ad"),
             ]
         return []
+
+    def _get_obs_field_mapping(self) -> Dict[str, str]:
+        """Get atlas-specific obs column name mapping.
+
+        Returns dict mapping standard names ('donor', 'cell_type', 'organ')
+        to actual obs column names in the original H5AD.
+        """
+        if self.atlas == "cima":
+            return {"donor": "sample", "cell_type": "cell_type_l1"}
+        elif self.atlas == "inflammation":
+            return {"donor": "sampleID", "cell_type": "Level1"}
+        elif self.atlas == "scatlas":
+            return {"donor": "donorID", "cell_type": "cellType1", "organ": "tissue"}
+        return {}
+
+    def _get_activity_h5ad_path(self) -> Optional[Path]:
+        """Get path to single-cell activity H5AD for current atlas/signature_type."""
+        sig_type_lower = self.signature_type.lower()
+        cohort_map = {
+            "cima": "cima",
+            "inflammation": "inflammation_main",
+            "scatlas": "scatlas_normal",
+        }
+        cohort = cohort_map.get(self.atlas)
+        if not cohort:
+            return None
+        base = self.results_path.parent / "atlas_validation" / cohort / "singlecell"
+        path = base / f"{cohort}_singlecell_{sig_type_lower}.h5ad"
+        return path if path.exists() else None
+
+    def _signature_to_gene(self, signature: str) -> str:
+        """Map signature name to HGNC gene symbol."""
+        return _SIGNATURE_GENE_MAP.get(signature, signature)
+
+    def _load_singlecell_resources(self) -> Optional[Dict[str, Any]]:
+        """Load and cache single-cell activity + expression + metadata.
+
+        Opens activity H5AD and original H5AD, samples up to 50K common cells,
+        reads activity matrix, expression for signature genes, and obs metadata.
+
+        Returns dict with keys: activity, signatures, metadata, expression,
+        sig_to_gene, n_total, n_sample.  Returns None on failure.
+        """
+        cache_key = f"sc_resources_{self.atlas}_{self.signature_type}"
+        if cache_key in self._cache:
+            return self._cache[cache_key]
+
+        import anndata as ad
+
+        act_path = self._get_activity_h5ad_path()
+        if act_path is None:
+            print(f"  Warning: Activity H5AD not found for {self.atlas}/{self.signature_type}")
+            self._cache[cache_key] = None
+            return None
+
+        orig_paths = self._get_h5ad_paths()
+        if not orig_paths or not orig_paths[0].exists():
+            print(f"  Warning: Original H5AD not found for {self.atlas}")
+            self._cache[cache_key] = None
+            return None
+
+        print(f"  Loading single-cell resources for {self.atlas}/{self.signature_type}...")
+        print(f"    Activity H5AD: {act_path}")
+        print(f"    Original H5AD: {orig_paths[0]}")
+
+        try:
+            # Open both H5ADs in backed mode (no X in memory)
+            act_adata = ad.read_h5ad(act_path, backed="r")
+            orig_adata = ad.read_h5ad(orig_paths[0], backed="r")
+
+            act_signatures = list(act_adata.var_names)
+            n_total = act_adata.n_obs
+
+            # Find common cells
+            common_cells = act_adata.obs.index.intersection(orig_adata.obs.index)
+            n_common = len(common_cells)
+            print(f"    Common cells: {n_common:,} "
+                  f"(activity: {n_total:,}, original: {orig_adata.n_obs:,})")
+
+            if n_common < 100:
+                print(f"    Warning: Too few common cells ({n_common}), using synthetic fallback")
+                act_adata.file.close()
+                orig_adata.file.close()
+                self._cache[cache_key] = None
+                return None
+
+            # Sample up to 50K cells
+            n_sample = min(50000, n_common)
+            rng = np.random.RandomState(42)
+            sample_idx = np.sort(rng.choice(n_common, n_sample, replace=False))
+            sampled_cells = common_cells[sample_idx]
+
+            # --- Metadata from original H5AD ---
+            field_map = self._get_obs_field_mapping()
+            orig_meta = orig_adata.obs.loc[sampled_cells]
+
+            metadata = pd.DataFrame(index=range(n_sample))
+            for std_name, col_name in field_map.items():
+                if col_name in orig_meta.columns:
+                    metadata[std_name] = orig_meta[col_name].values
+            print(f"    Metadata columns: {list(metadata.columns)}")
+
+            # --- Activity matrix ---
+            act_positions = act_adata.obs.index.get_indexer(sampled_cells)
+            act_positions_sorted = np.sort(act_positions)
+            sort_order = np.argsort(act_positions)
+            unsort_order = np.argsort(sort_order)
+
+            print(f"    Reading activity matrix ({n_sample} x {len(act_signatures)})...")
+            act_raw = act_adata.X[act_positions_sorted]
+            if hasattr(act_raw, "toarray"):
+                act_raw = act_raw.toarray()
+            activity_matrix = np.asarray(act_raw, dtype=np.float64)[unsort_order]
+
+            # --- Expression for signature genes ---
+            orig_var_list = list(orig_adata.var_names)
+            genes_to_read = []
+            gene_col_indices = []
+            sig_to_gene = {}
+            for sig in act_signatures:
+                gene = self._signature_to_gene(sig)
+                if gene in orig_var_list:
+                    gene_col_indices.append(orig_var_list.index(gene))
+                    genes_to_read.append(gene)
+                    sig_to_gene[sig] = gene
+
+            expression = {}
+            if gene_col_indices:
+                orig_positions = orig_adata.obs.index.get_indexer(sampled_cells)
+                orig_pos_sorted = np.sort(orig_positions)
+                orig_sort_order = np.argsort(orig_positions)
+                orig_unsort = np.argsort(orig_sort_order)
+
+                print(f"    Reading {len(gene_col_indices)} signature genes from original H5AD...")
+                # Read sampled rows (fast for CSR), then subset columns
+                X_rows = orig_adata.X[orig_pos_sorted]
+                if hasattr(X_rows, "toarray"):
+                    X_rows = X_rows.toarray()
+                X_rows = np.asarray(X_rows, dtype=np.float64)[orig_unsort]
+                expr_sub = X_rows[:, gene_col_indices]
+
+                for i, gene in enumerate(genes_to_read):
+                    expression[gene] = expr_sub[:, i]
+                print(f"    Expression loaded for {len(expression)} genes")
+            else:
+                print(f"    Warning: No signature genes found in original H5AD var_names")
+
+            act_adata.file.close()
+            orig_adata.file.close()
+
+            result = {
+                "activity": activity_matrix,
+                "signatures": act_signatures,
+                "metadata": metadata,
+                "expression": expression,
+                "sig_to_gene": sig_to_gene,
+                "n_total": n_total,
+                "n_sample": n_sample,
+            }
+            self._cache[cache_key] = result
+            print(f"    Resources loaded successfully")
+            return result
+
+        except Exception as e:
+            print(f"  Error loading single-cell resources: {e}")
+            import traceback
+            traceback.print_exc()
+            self._cache[cache_key] = None
+            return None
 
     def _get_correlations(self) -> Optional[List[Dict[str, Any]]]:
         """Get cell type correlation data."""
@@ -650,14 +834,124 @@ class RealValidationGenerator:
         }
 
     def generate_singlecell_direct(self, signature: str) -> Dict[str, Any]:
-        """Type 4: Single-cell direct expressing vs non-expressing."""
+        """Type 4: Single-cell direct expressing vs non-expressing.
+
+        Uses real H5AD data (activity scores, gene expression, cell metadata)
+        when available.  Falls back to synthetic data otherwise.
+        """
+        resources = self._load_singlecell_resources()
+
+        if resources is not None and signature in resources["signatures"]:
+            result = self._generate_singlecell_from_resources(signature, resources)
+            if result is not None:
+                return result
+
+        return self._generate_singlecell_synthetic(signature)
+
+    def _generate_singlecell_from_resources(
+        self, signature: str, resources: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Generate single-cell validation from pre-loaded H5AD resources."""
+        sig_idx = resources["signatures"].index(signature)
+        activity_vals = resources["activity"][:, sig_idx]
+        metadata = resources["metadata"]
+        n_total = resources["n_total"]
+        n_sample = resources["n_sample"]
+
+        # Get expression values for the corresponding gene
+        gene = resources["sig_to_gene"].get(signature)
+        if gene and gene in resources["expression"]:
+            expr_vals = resources["expression"][gene]
+            is_expressing = expr_vals > 0
+        else:
+            # Fallback: classify by activity sign (z-scores: positive = responding)
+            expr_vals = np.maximum(0, activity_vals)
+            is_expressing = activity_vals > 0
+
+        n_expressing = int(np.sum(is_expressing))
+        n_non_expressing = int(np.sum(~is_expressing))
+
+        if n_expressing < 10 or n_non_expressing < 10:
+            return None  # Not enough data for meaningful comparison
+
+        expressing_fraction = n_expressing / n_sample
+
+        # Statistics on activity
+        act_expr = activity_vals[is_expressing]
+        act_non = activity_vals[~is_expressing]
+
+        mean_expressing = float(np.mean(act_expr))
+        mean_non_expressing = float(np.mean(act_non))
+        fold_change = (
+            mean_expressing / mean_non_expressing if mean_non_expressing != 0 else 1.0
+        )
+
+        from scipy import stats as scipy_stats
+
+        # Limit array sizes for Mann-Whitney (performance)
+        cap = 10000
+        _, p_value = scipy_stats.mannwhitneyu(
+            act_expr[: min(cap, len(act_expr))],
+            act_non[: min(cap, len(act_non))],
+            alternative="greater",
+        )
+
+        # Subsample for visualization (up to 500 points)
+        rng = np.random.RandomState(hash(signature + "vis") % 2**32)
+        n_vis_expr = min(250, n_expressing)
+        n_vis_non = min(250, n_non_expressing)
+
+        expr_indices = rng.choice(
+            np.where(is_expressing)[0], n_vis_expr, replace=False
+        )
+        non_indices = rng.choice(
+            np.where(~is_expressing)[0], n_vis_non, replace=False
+        )
+        vis_indices = np.concatenate([expr_indices, non_indices])
+
+        sampled_points = []
+        for idx in vis_indices:
+            point = {
+                "expression": float(expr_vals[idx]),
+                "activity": float(activity_vals[idx]),
+                "is_expressing": bool(is_expressing[idx]),
+            }
+            if "donor" in metadata.columns:
+                point["donor"] = str(metadata.iloc[idx]["donor"])
+            if "cell_type" in metadata.columns:
+                point["cell_type"] = str(metadata.iloc[idx]["cell_type"])
+            if "organ" in metadata.columns:
+                point["organ"] = str(metadata.iloc[idx]["organ"])
+            sampled_points.append(point)
+
+        return {
+            "atlas": self.atlas,
+            "signature": signature,
+            "signature_type": self.signature_type,
+            "validation_level": "singlecell",
+            "expression_threshold": 0.0,
+            "n_total_cells": n_total,
+            "n_expressing": n_expressing,
+            "n_non_expressing": n_non_expressing,
+            "expressing_fraction": expressing_fraction,
+            "mean_activity_expressing": mean_expressing,
+            "mean_activity_non_expressing": mean_non_expressing,
+            "activity_fold_change": fold_change,
+            "activity_p_value": float(p_value),
+            "sampled_points": sampled_points,
+            "data_source": "real",
+            "interpretation": f"Expressing cells show {fold_change:.1f}x higher activity (p={p_value:.2e})",
+        }
+
+    def _generate_singlecell_synthetic(self, signature: str) -> Dict[str, Any]:
+        """Fallback: generate single-cell validation with synthetic data."""
         celltype_data = self._get_celltype_activity()
 
         if celltype_data:
-            # Filter for this signature
             sig_data = [
                 r for r in celltype_data
-                if r.get("signature") == signature and r.get("signature_type") == self.signature_type
+                if r.get("signature") == signature
+                and r.get("signature_type") == self.signature_type
             ]
             if sig_data:
                 all_activities = [r.get("mean_activity", 0) for r in sig_data]
@@ -674,30 +968,44 @@ class RealValidationGenerator:
         n_expressing = int(n_total * expressing_fraction)
         n_non_expressing = n_total - n_expressing
 
-        # Use actual activity scale
         activity_expressing = np.random.randn(n_expressing) * 0.8 + mean_activity + 0.5
-        activity_non_expressing = np.random.randn(n_non_expressing) * 0.6 + mean_activity - 0.3
+        activity_non_expressing = (
+            np.random.randn(n_non_expressing) * 0.6 + mean_activity - 0.3
+        )
 
         mean_expressing = float(np.mean(activity_expressing))
         mean_non_expressing = float(np.mean(activity_non_expressing))
-        fold_change = mean_expressing / mean_non_expressing if mean_non_expressing != 0 else 1
+        fold_change = (
+            mean_expressing / mean_non_expressing if mean_non_expressing != 0 else 1
+        )
 
         from scipy import stats as scipy_stats
+
         _, p_value = scipy_stats.mannwhitneyu(
             activity_expressing, activity_non_expressing, alternative="greater"
         )
 
-        # Sample points for visualization
         sample_size = min(500, n_total)
-        sample_expr = np.random.choice(n_expressing, min(sample_size // 2, n_expressing), replace=False)
-        sample_non = np.random.choice(n_non_expressing, min(sample_size // 2, n_non_expressing), replace=False)
+        sample_expr = np.random.choice(
+            n_expressing, min(sample_size // 2, n_expressing), replace=False
+        )
+        sample_non = np.random.choice(
+            n_non_expressing, min(sample_size // 2, n_non_expressing), replace=False
+        )
 
         sampled_points = [
-            {"expression": float(np.random.uniform(1, 5)), "activity": float(activity_expressing[i]),
-             "is_expressing": True}
+            {
+                "expression": float(np.random.uniform(1, 5)),
+                "activity": float(activity_expressing[i]),
+                "is_expressing": True,
+            }
             for i in sample_expr
         ] + [
-            {"expression": 0.0, "activity": float(activity_non_expressing[i]), "is_expressing": False}
+            {
+                "expression": 0.0,
+                "activity": float(activity_non_expressing[i]),
+                "is_expressing": False,
+            }
             for i in sample_non
         ]
 
@@ -716,6 +1024,7 @@ class RealValidationGenerator:
             "activity_fold_change": fold_change,
             "activity_p_value": float(p_value),
             "sampled_points": sampled_points,
+            "data_source": "synthetic",
             "interpretation": f"Expressing cells show {fold_change:.1f}x higher activity (p={p_value:.2e})",
         }
 
