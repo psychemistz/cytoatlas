@@ -1,0 +1,86 @@
+{
+    "age": [
+        {
+            "cell_type": "CD4_T",
+            "signature": "IFNG",
+            "signature_type": "CytoSig",
+            "variable": "Age",
+            "rho": 0.25,
+            "pvalue": 0.001,
+            "qvalue": 0.01,
+            "n_samples": 421
+        },
+        {
+            "cell_type": "CD8_T",
+            "signature": "IFNG",
+            "signature_type": "CytoSig",
+            "variable": "Age",
+            "rho": 0.32,
+            "pvalue": 0.0005,
+            "qvalue": 0.005,
+            "n_samples": 421
+        },
+        {
+            "cell_type": "NK_cells",
+            "signature": "TNF",
+            "signature_type": "CytoSig",
+            "variable": "Age",
+            "rho": -0.15,
+            "pvalue": 0.05,
+            "qvalue": 0.12,
+            "n_samples": 421
+        },
+        {
+            "cell_type": "Monocytes",
+            "signature": "IL6",
+            "signature_type": "CytoSig",
+            "variable": "Age",
+            "rho": 0.38,
+            "pvalue": 0.0001,
+            "qvalue": 0.002,
+            "n_samples": 421
+        },
+        {
+            "cell_type": "CD4_T",
+            "signature": "CCL2",
+            "signature_type": "SecAct",
+            "variable": "Age",
+            "rho": 0.18,
+            "pvalue": 0.02,
+            "qvalue": 0.08,
+            "n_samples": 421
+        }
+    ],
+    "bmi": [
+        {
+            "cell_type": "CD4_T",
+            "signature": "IL6",
+            "signature_type": "CytoSig",
+            "variable": "BMI",
+            "rho": 0.22,
+            "pvalue": 0.003,
+            "qvalue": 0.015,
+            "n_samples": 421
+        },
+        {
+            "cell_type": "Monocytes",
+            "signature": "TNF",
+            "signature_type": "CytoSig",
+            "variable": "BMI",
+            "rho": 0.28,
+            "pvalue": 0.0008,
+            "qvalue": 0.008,
+            "n_samples": 421
+        },
+        {
+            "cell_type": "Macrophages",
+            "signature": "IL1B",
+            "signature_type": "CytoSig",
+            "variable": "BMI",
+            "rho": 0.35,
+            "pvalue": 0.0002,
+            "qvalue": 0.003,
+            "n_samples": 421
+        }
+    ]
+}

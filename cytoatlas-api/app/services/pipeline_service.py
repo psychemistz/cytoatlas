@@ -24,9 +24,9 @@ class PipelineService(BaseService):
         """Initialize pipeline service."""
         super().__init__(db=None)
 
-        # Paths
-        self.pipeline_yaml = Path(settings.root_path).parent / "cytoatlas-pipeline" / "pipeline.yaml"
-        self.status_file = Path(settings.root_path).parent / "results" / ".pipeline_status.json"
+        # Paths - use results_base_path as the anchor
+        self.pipeline_yaml = settings.results_base_path.parent / "cytoatlas-pipeline" / "pipeline.yaml"
+        self.status_file = settings.results_base_path / ".pipeline_status.json"
 
     async def get_status(self) -> dict[str, Any]:
         """

@@ -1,0 +1,187 @@
+{
+    "sample_validations": [
+        {
+            "signature": "IFNG",
+            "signature_type": "CytoSig",
+            "n_samples": 50,
+            "points": [
+                {"id": "S001", "x": 1.2, "y": 0.95, "n_cells": 500, "disease": "healthy"},
+                {"id": "S002", "x": 2.1, "y": 1.85, "n_cells": 600, "disease": "healthy"},
+                {"id": "S003", "x": 0.5, "y": 0.42, "n_cells": 450, "disease": "RA"},
+                {"id": "S004", "x": 3.0, "y": 2.75, "n_cells": 700, "disease": "RA"},
+                {"id": "S005", "x": 1.8, "y": 1.55, "n_cells": 520, "disease": "healthy"}
+            ],
+            "stats": {
+                "slope": 0.92,
+                "intercept": -0.05,
+                "r_squared": 0.88,
+                "pearson_r": 0.94,
+                "spearman_rho": 0.91,
+                "p_value": 0.00001,
+                "n_points": 50
+            },
+            "interpretation": "Strong positive correlation between expression and activity"
+        }
+    ],
+    "celltype_validations": [
+        {
+            "signature": "IFNG",
+            "signature_type": "CytoSig",
+            "n_cell_types": 15,
+            "points": [
+                {"cell_type": "CD8_T", "expression": 2.5, "activity": 1.52, "n_cells": 12000, "n_samples": 115},
+                {"cell_type": "NK_cells", "expression": 2.8, "activity": 1.78, "n_cells": 8000, "n_samples": 100},
+                {"cell_type": "CD4_T", "expression": 1.2, "activity": 0.85, "n_cells": 15000, "n_samples": 120},
+                {"cell_type": "Monocytes", "expression": 0.3, "activity": -0.15, "n_cells": 20000, "n_samples": 130}
+            ],
+            "stats": {
+                "slope": 0.65,
+                "intercept": -0.12,
+                "r_squared": 0.82,
+                "pearson_r": 0.91,
+                "spearman_rho": 0.88,
+                "p_value": 0.0001,
+                "n_points": 15
+            },
+            "observed_top_cell_types": ["NK_cells", "CD8_T", "CD4_T"],
+            "biological_concordance": true,
+            "interpretation": "IFNG highest in NK and CD8 T cells as expected"
+        }
+    ],
+    "pseudobulk_vs_sc": [
+        {
+            "signature": "IFNG",
+            "signature_type": "CytoSig",
+            "n_cell_types": 15,
+            "points": [
+                {
+                    "cell_type": "CD8_T",
+                    "pseudobulk_expression": 2.5,
+                    "sc_activity_mean": 1.48,
+                    "sc_activity_median": 1.35,
+                    "sc_activity_std": 0.65,
+                    "n_cells": 12000
+                },
+                {
+                    "cell_type": "NK_cells",
+                    "pseudobulk_expression": 2.8,
+                    "sc_activity_mean": 1.72,
+                    "sc_activity_median": 1.60,
+                    "sc_activity_std": 0.58,
+                    "n_cells": 8000
+                }
+            ],
+            "stats_vs_mean": {
+                "slope": 0.58,
+                "intercept": 0.02,
+                "r_squared": 0.85,
+                "pearson_r": 0.92,
+                "spearman_rho": 0.89,
+                "p_value": 0.00005,
+                "n_points": 15
+            },
+            "stats_vs_median": {
+                "slope": 0.52,
+                "intercept": -0.01,
+                "r_squared": 0.82,
+                "pearson_r": 0.91,
+                "spearman_rho": 0.87,
+                "p_value": 0.0001,
+                "n_points": 15
+            },
+            "interpretation": "High concordance between pseudobulk and single-cell approaches"
+        }
+    ],
+    "singlecell_validations": [
+        {
+            "signature": "IFNG",
+            "signature_type": "CytoSig",
+            "expression_threshold": 0.0,
+            "n_total_cells": 10000,
+            "n_expressing": 2500,
+            "n_non_expressing": 7500,
+            "expressing_fraction": 0.25,
+            "mean_activity_expressing": 1.85,
+            "mean_activity_non_expressing": 0.42,
+            "activity_fold_change": 4.4,
+            "activity_p_value": 0.0000001,
+            "sampled_points": [
+                {"activity": 2.1, "is_expressing": true},
+                {"activity": 0.3, "is_expressing": false},
+                {"activity": 1.8, "is_expressing": true},
+                {"activity": 0.5, "is_expressing": false}
+            ],
+            "interpretation": "Expressing cells show significantly higher IFNG activity"
+        }
+    ],
+    "biological_associations": {
+        "results": [
+            {
+                "signature": "IFNG",
+                "expected_cell_type": "CD8_T",
+                "expected_direction": "high",
+                "observed_rank": 2,
+                "observed_activity": 1.52,
+                "observed_percentile": 92,
+                "top_5_cell_types": ["NK_cells", "CD8_T", "CD4_T", "Dendritic_cells", "Monocytes"],
+                "is_validated": true,
+                "validation_criteria": "top 3"
+            },
+            {
+                "signature": "IL17A",
+                "expected_cell_type": "Th17",
+                "expected_direction": "high",
+                "observed_rank": 1,
+                "observed_activity": 2.10,
+                "observed_percentile": 98,
+                "top_5_cell_types": ["Th17", "CD4_T", "NK_cells", "Monocytes", "B_cells"],
+                "is_validated": true,
+                "validation_criteria": "top 3"
+            },
+            {
+                "signature": "TNF",
+                "expected_cell_type": "Monocytes",
+                "expected_direction": "high",
+                "observed_rank": 1,
+                "observed_activity": 1.95,
+                "observed_percentile": 95,
+                "top_5_cell_types": ["Monocytes", "Macrophages", "Dendritic_cells", "NK_cells", "CD8_T"],
+                "is_validated": true,
+                "validation_criteria": "top 3"
+            }
+        ],
+        "n_tested": 3,
+        "n_validated": 3,
+        "validation_rate": 1.0,
+        "interpretation": "All tested biological associations were validated"
+    },
+    "gene_coverage": [
+        {
+            "signature": "IFNG",
+            "signature_type": "CytoSig",
+            "n_signature_genes": 50,
+            "n_detected": 45,
+            "n_missing": 5,
+            "coverage_pct": 90.0,
+            "detected_genes": ["STAT1", "IRF1", "GBP1"],
+            "missing_genes": ["GENE_X", "GENE_Y"],
+            "mean_expression_detected": 1.2,
+            "median_expression_detected": 0.95,
+            "coverage_quality": "good",
+            "interpretation": "90% gene coverage is sufficient for reliable inference"
+        }
+    ],
+    "cv_stability": [
+        {
+            "signature": "IFNG",
+            "signature_type": "CytoSig",
+            "n_folds": 5,
+            "mean_activity": 1.25,
+            "std_activity": 0.08,
+            "cv_coefficient": 0.064,
+            "fold_activities": [1.20, 1.28, 1.22, 1.30, 1.25],
+            "stability_score": 0.94,
+            "stability_grade": "excellent"
+        }
+    ]
+}

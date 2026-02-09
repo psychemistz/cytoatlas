@@ -1,0 +1,80 @@
+[
+    {
+        "cell_type": "CD8_T",
+        "signature": "IFNG",
+        "signature_type": "CytoSig",
+        "disease": "Rheumatoid Arthritis",
+        "activity_diff": 1.45,
+        "mean_disease": 2.10,
+        "mean_healthy": 0.65,
+        "pvalue": 0.00001,
+        "qvalue": 0.0002,
+        "n_disease": 45,
+        "n_healthy": 80
+    },
+    {
+        "cell_type": "Monocytes",
+        "signature": "TNF",
+        "signature_type": "CytoSig",
+        "disease": "Rheumatoid Arthritis",
+        "activity_diff": 1.82,
+        "mean_disease": 2.50,
+        "mean_healthy": 0.68,
+        "pvalue": 0.000005,
+        "qvalue": 0.0001,
+        "n_disease": 45,
+        "n_healthy": 80
+    },
+    {
+        "cell_type": "Th17",
+        "signature": "IL17A",
+        "signature_type": "CytoSig",
+        "disease": "Psoriasis",
+        "activity_diff": 2.35,
+        "mean_disease": 2.80,
+        "mean_healthy": 0.45,
+        "pvalue": 0.0000001,
+        "qvalue": 0.000005,
+        "n_disease": 30,
+        "n_healthy": 80
+    },
+    {
+        "cell_type": "CD4_T",
+        "signature": "IL6",
+        "signature_type": "CytoSig",
+        "disease": "COVID-19",
+        "activity_diff": 1.15,
+        "mean_disease": 1.60,
+        "mean_healthy": 0.45,
+        "pvalue": 0.0005,
+        "qvalue": 0.005,
+        "n_disease": 60,
+        "n_healthy": 80
+    },
+    {
+        "cell_type": "NK_cells",
+        "signature": "IFNG",
+        "signature_type": "CytoSig",
+        "disease": "COVID-19",
+        "activity_diff": -0.85,
+        "mean_disease": 0.90,
+        "mean_healthy": 1.75,
+        "pvalue": 0.002,
+        "qvalue": 0.012,
+        "n_disease": 60,
+        "n_healthy": 80
+    },
+    {
+        "cell_type": "Macrophages",
+        "signature": "CCL2",
+        "signature_type": "SecAct",
+        "disease": "Ulcerative Colitis",
+        "activity_diff": 1.55,
+        "mean_disease": 2.20,
+        "mean_healthy": 0.65,
+        "pvalue": 0.0001,
+        "qvalue": 0.002,
+        "n_disease": 35,
+        "n_healthy": 80
+    }
+]

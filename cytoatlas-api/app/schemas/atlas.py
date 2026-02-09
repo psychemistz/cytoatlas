@@ -99,6 +99,8 @@ class AtlasRegisterRequest(BaseModel):
     publication: str | None = None
     doi: str | None = None
 
+    contact_email: str | None = None
+
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -115,19 +117,6 @@ class AtlasRegisterRequest(BaseModel):
             ]
         }
     }
-    contact_email: str | None = None
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "name": "my_immune_atlas",
-                "display_name": "My Immune Cell Atlas",
-                "description": "Single-cell RNA-seq of PBMCs from healthy donors",
-                "h5ad_path": "/data/my_atlas/cells.h5ad",
-                "atlas_type": "immune",
-                "species": "human",
-            }
-        }
 
 
 class AtlasResponse(BaseModel):

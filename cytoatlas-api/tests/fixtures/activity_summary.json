@@ -1,0 +1,92 @@
+[
+    {
+        "cell_type": "CD4_T",
+        "signature": "IFNG",
+        "signature_type": "CytoSig",
+        "mean_activity": 0.85,
+        "std_activity": 0.32,
+        "n_samples": 120,
+        "n_cells": 15000
+    },
+    {
+        "cell_type": "CD8_T",
+        "signature": "IFNG",
+        "signature_type": "CytoSig",
+        "mean_activity": 1.52,
+        "std_activity": 0.45,
+        "n_samples": 115,
+        "n_cells": 12000
+    },
+    {
+        "cell_type": "NK_cells",
+        "signature": "IFNG",
+        "signature_type": "CytoSig",
+        "mean_activity": 1.78,
+        "std_activity": 0.38,
+        "n_samples": 100,
+        "n_cells": 8000
+    },
+    {
+        "cell_type": "Monocytes",
+        "signature": "TNF",
+        "signature_type": "CytoSig",
+        "mean_activity": 1.95,
+        "std_activity": 0.42,
+        "n_samples": 130,
+        "n_cells": 20000
+    },
+    {
+        "cell_type": "Th17",
+        "signature": "IL17A",
+        "signature_type": "CytoSig",
+        "mean_activity": 2.10,
+        "std_activity": 0.55,
+        "n_samples": 80,
+        "n_cells": 5000
+    },
+    {
+        "cell_type": "CD4_T",
+        "signature": "IL6",
+        "signature_type": "CytoSig",
+        "mean_activity": -0.35,
+        "std_activity": 0.28,
+        "n_samples": 120,
+        "n_cells": 15000
+    },
+    {
+        "cell_type": "B_cells",
+        "signature": "IL10",
+        "signature_type": "CytoSig",
+        "mean_activity": 0.42,
+        "std_activity": 0.22,
+        "n_samples": 110,
+        "n_cells": 9500
+    },
+    {
+        "cell_type": "Macrophages",
+        "signature": "CCL2",
+        "signature_type": "SecAct",
+        "mean_activity": 1.65,
+        "std_activity": 0.50,
+        "n_samples": 95,
+        "n_cells": 7000
+    },
+    {
+        "cell_type": "Dendritic_cells",
+        "signature": "IL12",
+        "signature_type": "CytoSig",
+        "mean_activity": 0.92,
+        "std_activity": 0.35,
+        "n_samples": 90,
+        "n_cells": 4500
+    },
+    {
+        "cell_type": "Tregs",
+        "signature": "TGFB1",
+        "signature_type": "CytoSig",
+        "mean_activity": 1.28,
+        "std_activity": 0.40,
+        "n_samples": 85,
+        "n_cells": 3500
+    }
+]
