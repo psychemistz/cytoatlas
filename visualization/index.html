@@ -2647,30 +2647,42 @@
                             <option value="secact">SecAct</option>
                         </select>
                     </label>
+                    <label id="val-ct-level-label">Level:
+                        <select id="val-ct-level"></select>
+                    </label>
+                    <label id="val-ct-group-label">Cell Type:
+                        <select id="val-ct-group">
+                            <option value="">All</option>
+                        </select>
+                    </label>
                     <label>Target:
                         <select id="val-ct-target">
                             <option value="">Loading...</option>
                         </select>
                     </label>
-                    <label>Cell Type:
-                        <select id="val-ct-celltype">
-                            <option value="">All Cell Types</option>
-                        </select>
-                    </label>
                     <label style="position: relative;">
                         <input type="text" id="val-ct-search" placeholder="Search target or gene..." style="width: 150px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;">
                     </label>
+                    <label style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
+                        <input type="checkbox" id="val-ct-hide-nonexpr"> Hide non-expressing
+                    </label>
                 </div>
 
-                <!-- Suggested additional analyses:
-                     1. Per-Cell-Type Scatter Grid: small multiples, one scatter per cell type
-                     2. Cell Type x Target Heatmap: rows=cell types, columns=targets, color=rho
-                     3. Aggregation Level Ladder: same target across donor_only → donor_l1 → donor_l2 -->
                 <div class="panel-grid">
                     <div class="panel" style="grid-column: span 2;">
                         <div class="viz-title">Expression vs Activity</div>
                         <div class="viz-subtitle">Per donor×celltype: gene expression vs predicted activity</div>
                         <div id="val-ct-expr-scatter" class="loading" style="height: 400px;">Loading...</div>
+                    </div>
+                    <div class="panel">
+                        <div class="viz-title">Per-Group Pearson r</div>
+                        <div class="viz-subtitle">Expression–activity correlation per group</div>
+                        <div id="val-ct-corr-bar" style="height: 400px;"></div>
+                    </div>
+                    <div class="panel">
+                        <div class="viz-title">Per-Group Activity Distribution</div>
+                        <div class="viz-subtitle">Activity z-score distribution per group</div>
+                        <div id="val-ct-activity-box" style="height: 400px;"></div>
                     </div>
                 </div>
             </div>
@@ -12212,6 +12224,33 @@
             },
         };
 
+        const CELLTYPE_LEVEL_CONFIG = {
+            cima: {
+                levels: { donor_l1: 'L1', donor_l2: 'L2', donor_l3: 'L3', donor_l4: 'L4' },
+                groupLabel: 'Cell Type',
+            },
+            inflammation_main: {
+                levels: { donor_l1: 'L1', donor_l2: 'L2' },
+                groupLabel: 'Cell Type',
+            },
+            inflammation_val: {
+                levels: { donor_l1: 'L1', donor_l2: 'L2' },
+                groupLabel: 'Cell Type',
+            },
+            inflammation_ext: {
+                levels: { donor_l1: 'L1', donor_l2: 'L2' },
+                groupLabel: 'Cell Type',
+            },
+            scatlas_normal: {
+                levels: { donor_organ: 'Organ', donor_organ_celltype1: 'Cell Type 1', donor_organ_celltype2: 'Cell Type 2' },
+                groupLabel: { donor_organ: 'Organ', donor_organ_celltype1: 'Cell Type', donor_organ_celltype2: 'Cell Type' },
+            },
+            scatlas_cancer: {
+                levels: { donor_organ: 'Sample Type', donor_organ_celltype1: 'Cell Type 1', donor_organ_celltype2: 'Cell Type 2' },
+                groupLabel: { donor_organ: 'Sample Type', donor_organ_celltype1: 'Cell Type', donor_organ_celltype2: 'Cell Type' },
+            },
+        };
+
         // ---- Donor Level: get scatter data for current level selection ----
         function getDonorScatterData(bulk, atlas, sigType) {
             const level = document.getElementById('val-donor-level')?.value || '';
@@ -12726,25 +12765,240 @@
             else if (available.length > 0) sel.value = available[0];
         }
 
-        // ---- Per-donor×celltype scatter renderer (celltype-level) ----
-        function renderCelltypeExprScatter(bulk, atlas, sigType) {
+        // ---- Cell Type Level: get scatter data for current level selection ----
+        function getCTScatterData(bulk, atlas, sigType) {
+            const level = document.getElementById('val-ct-level')?.value || '';
+            const ctData = bulk.celltype_scatter?.[atlas]?.[level]?.[sigType];
+            if (ctData && Object.keys(ctData).length > 0) return ctData;
+            return bulk.donor_scatter?.[atlas]?.[sigType] || {};
+        }
+
+        // ---- Cell Type Level: get grouped points for bar chart / boxplot ----
+        function getCTGroupPoints(bulk, atlas, sigType) {
             const target = document.getElementById('val-ct-target')?.value;
-            // Try celltype_scatter first (all levels merged), fall back to donor_scatter
-            const scatterData = bulk.celltype_scatter?.[atlas]?.[sigType]
-                             || bulk.donor_scatter?.[atlas]?.[sigType];
-            if (!scatterData || !target || !scatterData[target]) {
-                const div = document.getElementById('val-ct-expr-scatter');
-                if (div) { div.classList.remove('loading'); div.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No scatter data available for this target.</p>'; }
+            const hideNonExpr = document.getElementById('val-ct-hide-nonexpr')?.checked || false;
+            const level = document.getElementById('val-ct-level')?.value || '';
+
+            const scatterData = bulk.celltype_scatter?.[atlas]?.[level]?.[sigType];
+            if (!scatterData || !target || !scatterData[target]) return null;
+
+            const tdata = scatterData[target];
+            const points = tdata.points || [];
+            if (points.length === 0 || points[0].length < 3) return null;
+
+            const groupMap = {};
+            points.forEach(p => {
+                const label = String(p[2]);
+                if (!groupMap[label]) groupMap[label] = { name: label, x: [], y: [] };
+                groupMap[label].x.push(p[0]);
+                groupMap[label].y.push(p[1]);
+            });
+
+            if (hideNonExpr) {
+                Object.values(groupMap).forEach(gp => {
+                    if (gp.x.length === 0) return;
+                    const xRounded = gp.x.map(v => Math.round(v * 100) / 100);
+                    const freq = {};
+                    xRounded.forEach(v => { freq[v] = (freq[v] || 0) + 1; });
+                    const modeVal = Object.entries(freq).sort((a, b) => b[1] - a[1])[0];
+                    if (modeVal && modeVal[1] > gp.x.length * 0.1 && parseFloat(modeVal[0]) < 0) {
+                        const spikeVal = parseFloat(modeVal[0]);
+                        const keep = [];
+                        for (let i = 0; i < gp.x.length; i++) {
+                            if (Math.round(gp.x[i] * 100) / 100 !== spikeVal) keep.push(i);
+                        }
+                        gp.x = keep.map(i => gp.x[i]);
+                        gp.y = keep.map(i => gp.y[i]);
+                    }
+                });
+            }
+
+            return { target, groupPoints: groupMap };
+        }
+
+        // ---- Cell Type Level: Per-group Pearson r bar chart ----
+        function renderCTCorrBar(bulk, atlas, sigType) {
+            const div = document.getElementById('val-ct-corr-bar');
+            if (!div) return;
+
+            const result = getCTGroupPoints(bulk, atlas, sigType);
+            if (!result) {
+                div.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No grouped data available.</p>';
                 return;
             }
-            const celltypeFilter = document.getElementById('val-ct-celltype')?.value || '';
+
+            const { target, groupPoints } = result;
+            const groupFilter = document.getElementById('val-ct-group')?.value || '';
+            const config = CELLTYPE_LEVEL_CONFIG[atlas] || {};
+            const level = document.getElementById('val-ct-level')?.value || '';
+            const groupLabel = typeof config.groupLabel === 'object' ? (config.groupLabel[level] || 'Group') : (config.groupLabel || 'Group');
+
+            const groupCorrs = [];
+            Object.values(groupPoints).forEach(gp => {
+                if (gp.x.length >= 10) {
+                    groupCorrs.push({ name: gp.name, r: computePearsonR(gp.x, gp.y), n: gp.x.length });
+                }
+            });
+
+            if (groupCorrs.length === 0) {
+                div.innerHTML = `<p style="text-align:center; padding:2rem; color:#666;">No ${groupLabel.toLowerCase()}s with \u226510 samples.</p>`;
+                return;
+            }
+
+            groupCorrs.sort((a, b) => b.r - a.r);
+
+            const names = groupCorrs.map(g => g.name);
+            const rValues = groupCorrs.map(g => g.r);
+            const nValues = groupCorrs.map(g => g.n);
+            const sortedR = rValues.slice().sort((a, b) => a - b);
+            const medianR = sortedR[Math.floor(sortedR.length / 2)];
+
+            const colors = rValues.map(r => {
+                const norm = Math.max(0, Math.min(1, (r + 1) / 2));
+                const red = Math.round(220 * (1 - norm) + 44 * norm);
+                const green = Math.round(44 * (1 - norm) + 160 * norm);
+                const blue = Math.round(40 * (1 - norm) + 44 * norm);
+                return `rgba(${red}, ${green}, ${blue}, 0.7)`;
+            });
+
+            const borderColors = names.map(name =>
+                (groupFilter && name === groupFilter) ? 'rgba(0, 0, 0, 0.9)' : 'rgba(0, 0, 0, 0.1)'
+            );
+            const borderWidths = names.map(name =>
+                (groupFilter && name === groupFilter) ? 3 : 1
+            );
+
+            const trace = {
+                x: names, y: rValues, type: 'bar',
+                marker: { color: colors, line: { color: borderColors, width: borderWidths } },
+                text: nValues.map(n => `n=${n}`),
+                hovertemplate: '<b>%{x}</b><br>Pearson r = %{y:.3f}<br>%{text}<extra></extra>',
+            };
+
+            const layout = {
+                title: { text: `${target} \u2014 Pearson r per ${groupLabel}`, font: { size: 13 } },
+                xaxis: { tickangle: -45, tickfont: { size: 9 }, automargin: true },
+                yaxis: { title: 'Pearson r', range: [-1, 1] },
+                shapes: [{
+                    type: 'line', x0: -0.5, x1: names.length - 0.5,
+                    y0: medianR, y1: medianR,
+                    line: { color: 'rgba(0,0,0,0.4)', width: 1.5, dash: 'dash' },
+                }],
+                annotations: [{
+                    x: 1, y: 1, xref: 'paper', yref: 'paper', xanchor: 'right', yanchor: 'top',
+                    text: `${groupCorrs.length} ${groupLabel.toLowerCase()}s | median r = ${medianR.toFixed(3)}`,
+                    showarrow: false, font: { size: 11, color: '#555' },
+                    bgcolor: 'rgba(255,255,255,0.8)', borderpad: 4,
+                }],
+                margin: { t: 40, b: 120, l: 60, r: 20 },
+                plot_bgcolor: '#fafafa',
+            };
+
+            Plotly.newPlot(div, [trace], layout, { responsive: true, displayModeBar: false });
+        }
+
+        // ---- Cell Type Level: Per-group activity distribution boxplot ----
+        function renderCTActivityBox(bulk, atlas, sigType) {
+            const div = document.getElementById('val-ct-activity-box');
+            if (!div) return;
+
+            const result = getCTGroupPoints(bulk, atlas, sigType);
+            if (!result) {
+                div.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No grouped data available.</p>';
+                return;
+            }
+
+            const { target, groupPoints } = result;
+            const groupFilter = document.getElementById('val-ct-group')?.value || '';
+            const config = CELLTYPE_LEVEL_CONFIG[atlas] || {};
+            const level = document.getElementById('val-ct-level')?.value || '';
+            const groupLabel = typeof config.groupLabel === 'object' ? (config.groupLabel[level] || 'Group') : (config.groupLabel || 'Group');
+
+            const groups = Object.values(groupPoints)
+                .filter(gp => gp.y.length >= 10)
+                .map(gp => {
+                    const sorted = gp.y.slice().sort((a, b) => a - b);
+                    return { name: gp.name, y: gp.y, median: sorted[Math.floor(sorted.length / 2)], n: gp.y.length };
+                })
+                .sort((a, b) => b.median - a.median);
+
+            if (groups.length === 0) {
+                div.innerHTML = `<p style="text-align:center; padding:2rem; color:#666;">No ${groupLabel.toLowerCase()}s with \u226510 samples.</p>`;
+                return;
+            }
+
+            const traces = groups.map(g => {
+                const isSelected = groupFilter && g.name === groupFilter;
+                const baseColor = isSelected ? 'rgba(255, 127, 14, ' : 'rgba(148, 103, 189, ';
+                return {
+                    y: g.y,
+                    type: 'box',
+                    name: g.name,
+                    boxpoints: 'outliers',
+                    marker: { color: baseColor + '0.5)', size: 3 },
+                    line: { color: baseColor + '0.9)', width: isSelected ? 2.5 : 1.5 },
+                    fillcolor: baseColor + (isSelected ? '0.3)' : '0.15)'),
+                    whiskerwidth: 0.5,
+                    hoverinfo: 'y+name',
+                };
+            });
+
+            const layout = {
+                title: { text: `${target} \u2014 Activity Distribution per ${groupLabel}`, font: { size: 13 } },
+                yaxis: { title: 'Activity (z-score)' },
+                xaxis: { tickangle: -45, tickfont: { size: 9 }, automargin: true },
+                annotations: [{
+                    x: 1, y: 1, xref: 'paper', yref: 'paper', xanchor: 'right', yanchor: 'top',
+                    text: `${groups.length} ${groupLabel.toLowerCase()}s`,
+                    showarrow: false, font: { size: 11, color: '#555' },
+                    bgcolor: 'rgba(255,255,255,0.8)', borderpad: 4,
+                }],
+                margin: { t: 40, b: 120, l: 60, r: 20 },
+                plot_bgcolor: '#fafafa',
+                showlegend: false,
+            };
+
+            Plotly.newPlot(div, traces, layout, { responsive: true, displayModeBar: false });
+        }
+
+        // ---- Cell Type Level: render both group panels ----
+        function renderCTGroupPanels(bulk, atlas, sigType) {
+            renderCTCorrBar(bulk, atlas, sigType);
+            renderCTActivityBox(bulk, atlas, sigType);
+        }
+
+        // ---- Per-donor×celltype scatter renderer (celltype-level) ----
+        function renderCelltypeExprScatter(bulk, atlas, sigType) {
+            const div = document.getElementById('val-ct-expr-scatter');
+            if (!div) return;
+            div.classList.remove('loading');
+
+            const target = document.getElementById('val-ct-target')?.value;
+            const groupFilter = document.getElementById('val-ct-group')?.value || '';
+            const hideNonExpr = document.getElementById('val-ct-hide-nonexpr')?.checked || false;
+            const scatterData = getCTScatterData(bulk, atlas, sigType);
+            if (!scatterData || !target || !scatterData[target]) {
+                div.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No scatter data available for this target.</p>';
+                renderCTGroupPanels(bulk, atlas, sigType);
+                return;
+            }
+
+            const config = CELLTYPE_LEVEL_CONFIG[atlas] || {};
+            const level = document.getElementById('val-ct-level')?.value || '';
+            const groupLabel = typeof config.groupLabel === 'object' ? (config.groupLabel[level] || 'Group') : (config.groupLabel || 'Group');
+            const filterSuffix = groupFilter ? ` - ${groupFilter}` : '';
+
             renderValidationScatter('val-ct-expr-scatter', scatterData[target], target, {
-                celltypeFilter,
                 color: 'rgba(148, 103, 189, 0.5)',
                 colorLine: 'rgba(148, 103, 189, 0.8)',
+                celltypeFilter: groupFilter,
+                hideNonExpr,
+                filterLabel: groupLabel,
                 unitLabel: 'donor\u00d7celltype',
-                titleSuffix: celltypeFilter ? ` (${celltypeFilter})` : ' (cell type level)',
+                titleSuffix: filterSuffix ? ` (${filterSuffix.trim()})` : ' (cell type level)',
             });
+
+            renderCTGroupPanels(bulk, atlas, sigType);
         }
 
         async function updateValidationCelltype() {
@@ -12754,33 +13008,73 @@
             const atlas = document.getElementById('val-ct-atlas')?.value || 'cima';
             const sigType = document.getElementById('val-ct-sigtype')?.value || 'cytosig';
 
-            const scatterDiv = document.getElementById('val-ct-expr-scatter');
-            scatterDiv?.classList.remove('loading');
+            const exprScatterDiv = document.getElementById('val-ct-expr-scatter');
+            exprScatterDiv?.classList.remove('loading');
 
-            const scatterData = bulk.celltype_scatter?.[atlas]?.[sigType]
-                             || bulk.donor_scatter?.[atlas]?.[sigType] || {};
-            populateTargetDropdown('val-ct-target', scatterData, 'IFNG', 'val-ct-search');
+            const config = CELLTYPE_LEVEL_CONFIG[atlas] || {};
+            const levels = config.levels || {};
 
-            // Populate celltype dropdown from celltype_level data or from scatter data celltypes
-            const target = document.getElementById('val-ct-target')?.value;
-            const ctSel = document.getElementById('val-ct-celltype');
-            if (ctSel) {
-                const cur = ctSel.value;
-                ctSel.innerHTML = '<option value="">All Cell Types</option>';
-                // Try scatter data celltypes first (from celltype_scatter)
-                let celltypes = scatterData?.[target]?.celltypes || [];
-                // Fall back to celltype_level metadata
-                if (celltypes.length === 0) {
-                    celltypes = getCelltypesForAtlas(bulk, atlas);
+            // Populate Level dropdown
+            const levelSel = document.getElementById('val-ct-level');
+            if (levelSel) {
+                const curLevel = levelSel.value;
+                levelSel.innerHTML = '';
+                const availLevels = Object.keys(levels);
+                const ctAtlas = bulk.celltype_scatter?.[atlas] || {};
+                availLevels.forEach(lv => {
+                    if (ctAtlas[lv]) {
+                        const opt = document.createElement('option');
+                        opt.value = lv;
+                        opt.textContent = levels[lv];
+                        levelSel.appendChild(opt);
+                    }
+                });
+                const opts = Array.from(levelSel.options).map(o => o.value);
+                if (opts.includes(curLevel)) levelSel.value = curLevel;
+                else if (opts.length > 0) levelSel.value = opts[0];
+            }
+
+            const level = levelSel?.value || '';
+
+            // Get scatter data from celltype_scatter for selected level
+            const scatterData = getCTScatterData(bulk, atlas, sigType);
+
+            if (!scatterData || Object.keys(scatterData).length === 0) {
+                if (exprScatterDiv) exprScatterDiv.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No data available for this atlas/signature combination.</p>';
+                return;
+            }
+
+            // Update group label
+            const groupLabelEl = document.getElementById('val-ct-group-label');
+            if (groupLabelEl) {
+                const labelText = typeof config.groupLabel === 'object' ? (config.groupLabel[level] || 'Group') : (config.groupLabel || 'Group');
+                groupLabelEl.childNodes[0].textContent = labelText + ': ';
+            }
+
+            // Populate Group dropdown from celltypes of the first target in scatter data
+            const groupSel = document.getElementById('val-ct-group');
+            if (groupSel) {
+                const curGroup = groupSel.value;
+                const glText = typeof config.groupLabel === 'object' ? (config.groupLabel[level] || 'Group') : (config.groupLabel || 'Group');
+                groupSel.innerHTML = `<option value="">All ${glText}s</option>`;
+                let celltypes = [];
+                for (const t of Object.keys(scatterData)) {
+                    if (scatterData[t]?.celltypes?.length > 0) {
+                        celltypes = scatterData[t].celltypes;
+                        break;
+                    }
                 }
                 celltypes.forEach(ct => {
                     const opt = document.createElement('option');
                     opt.value = ct;
                     opt.textContent = ct.replace(/_/g, ' ');
-                    ctSel.appendChild(opt);
+                    groupSel.appendChild(opt);
                 });
-                if (celltypes.includes(cur)) ctSel.value = cur;
+                if (celltypes.includes(curGroup)) groupSel.value = curGroup;
             }
+
+            // Populate target dropdown
+            populateTargetDropdown('val-ct-target', scatterData, 'IFNG', 'val-ct-search');
 
             renderCelltypeExprScatter(bulk, atlas, sigType);
         }
@@ -13115,32 +13409,22 @@
             // Cell Type Level tab listeners
             document.getElementById('val-ct-atlas')?.addEventListener('change', updateValidationCelltype);
             document.getElementById('val-ct-sigtype')?.addEventListener('change', updateValidationCelltype);
-            document.getElementById('val-ct-target')?.addEventListener('change', async () => {
+            document.getElementById('val-ct-level')?.addEventListener('change', updateValidationCelltype);
+            document.getElementById('val-ct-group')?.addEventListener('change', async () => {
                 const bulk = await loadBulkValidationData();
                 if (!bulk) return;
                 const atlas = document.getElementById('val-ct-atlas')?.value || 'cima';
                 const sigType = document.getElementById('val-ct-sigtype')?.value || 'cytosig';
-                // Re-populate celltype dropdown for new target
-                const scatterData = bulk.celltype_scatter?.[atlas]?.[sigType]
-                                 || bulk.donor_scatter?.[atlas]?.[sigType] || {};
-                const target = document.getElementById('val-ct-target')?.value;
-                const ctSel = document.getElementById('val-ct-celltype');
-                if (ctSel) {
-                    const cur = ctSel.value;
-                    ctSel.innerHTML = '<option value="">All Cell Types</option>';
-                    let celltypes = scatterData?.[target]?.celltypes || [];
-                    if (celltypes.length === 0) celltypes = getCelltypesForAtlas(bulk, atlas);
-                    celltypes.forEach(ct => {
-                        const opt = document.createElement('option');
-                        opt.value = ct;
-                        opt.textContent = ct.replace(/_/g, ' ');
-                        ctSel.appendChild(opt);
-                    });
-                    if (celltypes.includes(cur)) ctSel.value = cur;
-                }
                 renderCelltypeExprScatter(bulk, atlas, sigType);
             });
-            document.getElementById('val-ct-celltype')?.addEventListener('change', async () => {
+            document.getElementById('val-ct-hide-nonexpr')?.addEventListener('change', async () => {
+                const bulk = await loadBulkValidationData();
+                if (!bulk) return;
+                const atlas = document.getElementById('val-ct-atlas')?.value || 'cima';
+                const sigType = document.getElementById('val-ct-sigtype')?.value || 'cytosig';
+                renderCelltypeExprScatter(bulk, atlas, sigType);
+            });
+            document.getElementById('val-ct-target')?.addEventListener('change', async () => {
                 const bulk = await loadBulkValidationData();
                 if (!bulk) return;
                 const atlas = document.getElementById('val-ct-atlas')?.value || 'cima';

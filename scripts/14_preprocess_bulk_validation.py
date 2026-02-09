@@ -230,8 +230,7 @@ def build_donor_scatter() -> dict:
     and activity H5AD files, then extracts per-donor (expression, activity) pairs.
 
     Returns dict: {atlas: {sig_type: {target: {gene, rho, pval, n, points}}}}
-    - CytoSig: all targets included
-    - LinCytoSig/SecAct: top 30 by |rho| to keep file size manageable
+    All targets included for each signature type.
     """
     cytosig_map = load_target_to_gene_mapping()
     result = {}
@@ -336,15 +335,6 @@ def build_donor_scatter() -> dict:
                     entry.update(matched_lookup[mkey])
 
                 targets_data[target] = entry
-
-            # For lincytosig/secact, keep only top 30 by |rho|
-            if sig_type != "cytosig" and len(targets_data) > 30:
-                sorted_targets = sorted(
-                    targets_data.items(),
-                    key=lambda x: abs(x[1]["rho"]) if x[1]["rho"] is not None else 0,
-                    reverse=True,
-                )
-                targets_data = dict(sorted_targets[:30])
 
             atlas_result[sig_type] = targets_data
             print(f"    donor_scatter/{atlas_key}/{sig_type}: {len(targets_data)} targets")
@@ -625,15 +615,6 @@ def build_celltype_scatter() -> dict:
                         "points": points,
                     }
 
-                # For lincytosig/secact, keep top 30 by |rho|
-                if sig_type != "cytosig" and len(targets_data) > 30:
-                    sorted_targets = sorted(
-                        targets_data.items(),
-                        key=lambda x: abs(x[1]["rho"]) if x[1]["rho"] is not None else 0,
-                        reverse=True,
-                    )
-                    targets_data = dict(sorted_targets[:30])
-
                 level_result[sig_type] = targets_data
                 print(f"    celltype_scatter/{atlas_key}/{level_name}/{sig_type}: {len(targets_data)} targets")
 
@@ -799,15 +780,6 @@ def build_resampled_scatter() -> dict:
                         "celltypes": celltypes_available,
                         "points": points,
                     }
-
-                # For lincytosig/secact, keep top 30 by |rho|
-                if sig_type != "cytosig" and len(targets_data) > 30:
-                    sorted_targets = sorted(
-                        targets_data.items(),
-                        key=lambda x: abs(x[1]["rho"]) if x[1]["rho"] is not None else 0,
-                        reverse=True,
-                    )
-                    targets_data = dict(sorted_targets[:30])
 
                 level_result[sig_type] = targets_data
                 print(f"    resampled_scatter/{atlas_key}/{level_name}/{sig_type}: {len(targets_data)} targets")
