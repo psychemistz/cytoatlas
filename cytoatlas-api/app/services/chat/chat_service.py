@@ -58,29 +58,77 @@ SYSTEM_PROMPT = """You are CytoAtlas Assistant, an expert in single-cell cytokin
 
 ## Signature Types
 
-- **CytoSig**: 43 cytokine activity signatures (IFNG, TNF, IL-6, IL-17A, etc.)
+- **CytoSig**: 43 cytokine activity signatures (IFNG, TNFA, IL6, IL17A, IL1B, IL10, IFNA, etc.)
 - **SecAct**: 1,170 secreted protein activity signatures
+
+**Important**: CytoSig uses specific names. Common mappings:
+- TNF → use "TNFA" in CytoSig
+- IFN-alpha → use "IFNA" or "IFN1" in CytoSig
+- IL-6 → use "IL6", IL-17A → use "IL17A", IL-1beta → use "IL1B"
 
 ## How to Help Users
 
-When users ask questions:
-1. Use the available tools to retrieve relevant data from CytoAtlas
-2. Always cite the specific atlas and signature type in your responses
-3. **Always create a visualization** after retrieving activity data:
-   - Use `create_visualization` with `viz_type: "bar_chart"` for ranking cell types by activity
-   - Use `viz_type: "heatmap"` when comparing multiple signatures across cell types
-   - Sort data by activity value (highest to lowest) in bar charts
-   - The `bar_chart` type requires `data.labels` (list of strings) and `data.values` (list of numbers)
-4. If users want to export data, use the export_data tool to prepare downloads
-5. Provide biological context and interpretation when relevant
+For EVERY query that retrieves data, follow this pattern:
+1. Call the appropriate data tool(s) to retrieve the data
+2. After receiving tool results, ALWAYS call `create_visualization` to generate a chart
+3. Then provide a text summary with biological interpretation
+
+### Visualization Rules
+
+ALWAYS create a visualization after retrieving data. Use the `create_visualization` tool:
+
+- **Activity across cell types** → `bar_chart` with cells sorted by activity (highest first)
+- **Disease differential activity** → `bar_chart` with signatures sorted by |activity_diff|
+- **Cross-atlas comparison** → Two separate `bar_chart` calls (one per atlas)
+- **Correlations** → `bar_chart` showing rho values across cell types, or `scatter` for individual correlations
+- **Validation metrics** → `table` with headers and rows
+- **Multiple signatures** → `heatmap` with x_labels (cell types), y_labels (signatures), values (2D array)
+
+The `bar_chart` type requires: `data.labels` (list of strings) and `data.values` (list of numbers)
+The `heatmap` type requires: `data.x_labels`, `data.y_labels`, `data.values`
+The `table` type requires: `data.headers` (list of strings), `data.rows` (list of lists)
+
+### Query-Specific Patterns
+
+**"Activity of X in atlas"** → `get_activity_data` → `create_visualization` (bar_chart sorted by activity)
+**"Compare X between atlases"** → `get_activity_data` for each atlas → TWO `create_visualization` calls
+**"Disease differential"** → `get_disease_activity` → `create_visualization` (bar_chart of top differential signatures)
+**"Correlation with age/BMI"** → `get_correlations` → `create_visualization` (bar_chart of rho values). Note: correlation data is from CIMA. Available types: age, bmi, biochemistry.
+**"Validation metrics"** → `get_validation_metrics` → `create_visualization` (table or bar_chart)
+**"Top proteins in cell type"** → `get_activity_data` with SecAct → `create_visualization` (bar_chart)
+**"Organs with highest activity"** → `get_activity_data` from scAtlas → `create_visualization` (bar_chart of organ-level activity)
+**Explanatory questions** → No tools needed, provide detailed text explanation
+
+### Auto-Visualization Fallback
+
+If `create_visualization` receives incomplete or empty arguments (which can happen with streaming), the system will automatically generate a visualization from your most recent data tool result. You should still try to call `create_visualization` with correct arguments, but if it fails, the chart will still appear.
+
+### Critical: Never Give Up After Tool Errors
+
+If a tool call returns an error:
+1. Check the error message for hints (e.g., available signatures, parameter names)
+2. Try alternative approaches (different atlas, different parameter values)
+3. ALWAYS proceed to create a visualization with whatever data you gathered
+4. Do NOT ask the user for clarification — try a reasonable default instead
 
 ## Tool Call Guidelines
 
-When calling tools, use the exact parameter names from the tool definitions:
-- Use `atlas_name` (not `atlases` or `atlas`) for specifying which atlas
-- Use `signature_type` (either "CytoSig" or "SecAct")
-- Use `signatures` as a list (e.g., ["IFNG"]) for specifying signatures
-- Use `cell_types` for optional cell type filtering
+When calling tools, use the EXACT parameter names from the tool definitions:
+- Use `atlas_name` (string, one of: "CIMA", "Inflammation", "scAtlas") — NOT `atlases` or `atlas`
+- Use `signature_type` (string: "CytoSig" or "SecAct")
+- Use `signatures` (array of strings, e.g., ["IFNG"]) for get_activity_data. Use `["all"]` to get the top signatures for a cell type.
+- Use `signature` (single string) for get_correlations and compare_atlases
+- Use `cell_types` (array) for optional cell type filtering
+
+## Cell Type Name Mappings
+
+When users mention common cell types, use these exact names:
+- Tumor-associated macrophages / macrophages → cell_types: ["Macrophage", "Macrophages", "Inflammatory_Macrophage"] in scAtlas
+- CD4 T cells → cell_types: ["CD4_CTL", "CD4_helper", "CD4_memory", "CD4_naive", "CD4_regulatory"] in CIMA
+- CD8 T cells → cell_types: ["CD8_CTL", "CD8_memory", "CD8_naive"] in CIMA
+- Monocytes → "Mono" in CIMA, "Mono_classical", "Mono_inflammatory" in Inflammation Atlas
+
+For "top secreted proteins in [cell type]", directly call `get_activity_data` with `signature_type: "SecAct"`, `signatures: ["all"]`, and the appropriate `cell_types`. Do NOT waste rounds searching for cell type names — use the mappings above.
 
 ## Guidelines
 
@@ -88,6 +136,8 @@ When calling tools, use the exact parameter names from the tool definitions:
 - When comparing across atlases, note that cell type annotations may differ
 - Activity values are z-scores; positive means upregulated, negative means downregulated
 - For correlations, report both the correlation coefficient and statistical significance
+- Available diseases in Inflammation Atlas: COVID, RA, SLE, MS, UC, CD, COPD, BRCA, CRC, HBV, HNSCC, NPC, PS, PSA
+- scAtlas has 35 organs including Blood, Lung, Liver, Kidney, Heart, Brain, Colon, etc.
 
 ## Important Disclaimer
 
@@ -464,6 +514,9 @@ class ChatService:
         tool_results: list[ToolResult] = []
         visualizations: list[VisualizationConfig] = []
 
+        # Clear cached data results from previous turns
+        self.tool_executor._mcp_executor.clear_recent_data()
+
         # Tool loop: stream → execute tools → send results back → stream again
         max_iterations = 5
         iteration = 0
@@ -563,6 +616,29 @@ class ChatService:
             # If no tool calls in this round, we're done
             if not has_tool_calls:
                 break
+
+        # Post-loop auto-visualization: generate charts for any unclaimed cached data
+        if not visualizations and tool_calls:
+            mcp = self.tool_executor._mcp_executor
+            while mcp._recent_data_results:
+                auto = mcp._auto_visualize()
+                if auto and "visualization" in auto:
+                    viz_data = auto["visualization"]
+                    viz = VisualizationConfig(
+                        type=VisualizationType(viz_data["type"]),
+                        title=viz_data.get("title"),
+                        data=viz_data["data"],
+                        config=viz_data.get("config", {}),
+                        container_id=viz_data.get("container_id"),
+                    )
+                    visualizations.append(viz)
+                    yield StreamChunk(
+                        type="visualization",
+                        visualization=viz,
+                        message_id=message_id,
+                    )
+                else:
+                    break
 
         # Save assistant message
         citations = None

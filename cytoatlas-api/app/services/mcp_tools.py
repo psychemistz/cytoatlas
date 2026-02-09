@@ -365,9 +365,21 @@ OPENAI_TOOLS = _to_openai_tools(CYTOATLAS_TOOLS)
 class ToolExecutor:
     """Executes MCP tools against CytoAtlas data."""
 
+    # Tools whose results can be auto-visualized
+    _DATA_TOOLS = {
+        "get_activity_data", "compare_atlases", "get_disease_activity",
+        "get_correlations", "get_validation_metrics",
+    }
+
     def __init__(self):
         self.settings = get_settings()
         self._data_cache: dict[str, Any] = {}
+        # Cache of recent data tool results for auto-visualization fallback
+        self._recent_data_results: list[dict[str, Any]] = []
+
+    def clear_recent_data(self):
+        """Clear cached data results. Call at start of each conversation turn."""
+        self._recent_data_results.clear()
 
     # Common parameter name mistakes from Mistral (wrong → correct)
     _PARAM_ALIASES = {
@@ -408,10 +420,23 @@ class ToolExecutor:
         arguments = self._normalize_args(arguments)
 
         try:
-            return await handler(arguments)
+            result = await handler(arguments)
         except Exception as e:
             logger.exception(f"Tool execution error: {tool_name}")
             return {"error": str(e)}
+
+        # Cache successful data tool results for auto-visualization fallback
+        if tool_name in self._DATA_TOOLS and "error" not in result:
+            self._recent_data_results.append({
+                "tool_name": tool_name,
+                "arguments": arguments,
+                "result": result,
+            })
+            # Keep only last 5 results
+            if len(self._recent_data_results) > 5:
+                self._recent_data_results = self._recent_data_results[-5:]
+
+        return result
 
     async def _execute_search_entity(self, args: dict[str, Any]) -> dict[str, Any]:
         """Execute search_entity tool."""
@@ -459,26 +484,25 @@ class ToolExecutor:
                 return json.load(f)
 
         # Fallback to celltype data for basic stats
-        celltype_path = self.settings.viz_data_path / f"{prefix}_celltype.json"
-        if celltype_path.exists():
-            with open(celltype_path) as f:
-                data = json.load(f)
-                cell_types = sorted(set(r.get("cell_type") for r in data if r.get("cell_type")))
-                cytosig_sigs = sorted(set(
-                    r.get("signature") for r in data
-                    if r.get("signature_type") == "CytoSig" and r.get("signature")
-                ))
-                secact_sigs = sorted(set(
-                    r.get("signature") for r in data
-                    if r.get("signature_type") == "SecAct" and r.get("signature")
-                ))
-                return {
-                    "atlas_name": atlas_name,
-                    "n_cell_types": len(cell_types),
-                    "n_signatures_cytosig": len(cytosig_sigs),
-                    "n_signatures_secact": len(secact_sigs),
-                    "cell_types": cell_types[:20],
-                }
+        records = self._load_celltype_records(prefix)
+        if records is not None:
+            data = records
+            cell_types = sorted(set(r.get("cell_type") for r in data if r.get("cell_type")))
+            cytosig_sigs = sorted(set(
+                r.get("signature") for r in data
+                if r.get("signature_type") == "CytoSig" and r.get("signature")
+            ))
+            secact_sigs = sorted(set(
+                r.get("signature") for r in data
+                if r.get("signature_type") == "SecAct" and r.get("signature")
+            ))
+            return {
+                "atlas_name": atlas_name,
+                "n_cell_types": len(cell_types),
+                "n_signatures_cytosig": len(cytosig_sigs),
+                "n_signatures_secact": len(secact_sigs),
+                "cell_types": cell_types[:20],
+            }
 
         return {"error": "Summary data not available"}
 
@@ -491,18 +515,14 @@ class ToolExecutor:
         if not prefix:
             return {"error": f"Unknown atlas: {atlas_name}"}
 
-        # Use the celltype.json file which has the actual data
-        activity_path = self.settings.viz_data_path / f"{prefix}_celltype.json"
-        if activity_path.exists():
-            with open(activity_path) as f:
-                data = json.load(f)
-                # Extract unique cell types from the list of records
-                cell_types = sorted(set(r.get("cell_type") for r in data if r.get("cell_type")))
-                return {
-                    "atlas_name": atlas_name,
-                    "cell_types": cell_types,
-                    "count": len(cell_types)
-                }
+        data = self._load_celltype_records(prefix)
+        if data is not None:
+            cell_types = sorted(set(r.get("cell_type") for r in data if r.get("cell_type")))
+            return {
+                "atlas_name": atlas_name,
+                "cell_types": cell_types,
+                "count": len(cell_types)
+            }
 
         return {"error": "Cell type data not available"}
 
@@ -510,29 +530,48 @@ class ToolExecutor:
         """Execute list_signatures tool."""
         sig_type = args["signature_type"]
 
-        # Extract signatures from cima_celltype.json which has all signatures
-        celltype_path = self.settings.viz_data_path / "cima_celltype.json"
-        if celltype_path.exists():
-            with open(celltype_path) as f:
-                data = json.load(f)
-                # Extract unique signatures of the specified type
+        # Try each atlas to find signatures
+        for prefix in ["cima", "inflammation", "scatlas"]:
+            data = self._load_celltype_records(prefix)
+            if data is not None:
                 signatures = sorted(set(
                     r.get("signature") for r in data
                     if r.get("signature_type") == sig_type and r.get("signature")
                 ))
-                return {
-                    "signature_type": sig_type,
-                    "signatures": signatures,
-                    "count": len(signatures)
-                }
+                if signatures:
+                    return {
+                        "signature_type": sig_type,
+                        "signatures": signatures,
+                        "count": len(signatures),
+                    }
 
         return {"error": f"{sig_type} signature data not available"}
+
+    def _load_celltype_records(self, prefix: str) -> list[dict] | None:
+        """Load cell type activity records, handling different file formats.
+
+        Files may be:
+        - {prefix}_celltype.json (flat list of records)
+        - {prefix}_celltypes.json (nested dict with 'data' key)
+        """
+        # Try flat list format first
+        for fname in [f"{prefix}_celltype.json", f"{prefix}_celltypes.json"]:
+            path = self.settings.viz_data_path / fname
+            if path.exists():
+                with open(path) as f:
+                    data = json.load(f)
+                # Handle nested format (scAtlas)
+                if isinstance(data, dict) and "data" in data:
+                    return data["data"]
+                if isinstance(data, list):
+                    return data
+        return None
 
     async def _execute_get_activity_data(self, args: dict[str, Any]) -> dict[str, Any]:
         """Execute get_activity_data tool."""
         atlas_name = args["atlas_name"]
         sig_type = args["signature_type"]
-        signatures = args["signatures"]
+        signatures = args.get("signatures", [])
         cell_types_filter = args.get("cell_types")
 
         prefix_map = {"CIMA": "cima", "Inflammation": "inflammation", "scAtlas": "scatlas"}
@@ -541,14 +580,72 @@ class ToolExecutor:
         if not prefix:
             return {"error": f"Unknown atlas: {atlas_name}"}
 
-        # The actual data files are named {prefix}_celltype.json and contain
-        # a list of records with cell_type, signature, signature_type, mean_activity
-        activity_path = self.settings.viz_data_path / f"{prefix}_celltype.json"
-        if not activity_path.exists():
+        data = self._load_celltype_records(prefix)
+        if data is None:
             return {"error": f"Activity data not available for {atlas_name}"}
 
-        with open(activity_path) as f:
-            data = json.load(f)
+        # Handle wildcard/empty signatures: return top signatures for the cell type
+        # This handles cases like signatures=["SecAct"], signatures=["all"], or signatures=[]
+        is_wildcard = (
+            not signatures
+            or signatures == [sig_type]
+            or signatures == ["all"]
+            or signatures == ["*"]
+        )
+
+        if is_wildcard and cell_types_filter:
+            # Common cell type aliases for flexible matching
+            _CT_ALIASES = {
+                "tams": "macrophage",
+                "tumor_associated_macrophages": "macrophage",
+                "tumor_associated_macrophage": "macrophage",
+                "tam": "macrophage",
+                "tregs": "regulatory",
+                "treg": "regulatory",
+                "nk_cells": "nk",
+                "b_cells": "b_",
+                "t_cells": "t_",
+            }
+
+            # Build match terms from cell_types_filter
+            ct_lower_map = {ct.lower().replace(" ", "_").replace("-", "_"): ct for ct in cell_types_filter}
+            # Expand aliases
+            expanded_terms = set(ct_lower_map.keys())
+            for term in list(expanded_terms):
+                alias = _CT_ALIASES.get(term)
+                if alias:
+                    expanded_terms.add(alias)
+
+            # Return top N most active signatures for the specified cell types
+            ct_records = [
+                r for r in data
+                if r.get("signature_type") == sig_type
+                and any(
+                    term in r.get("cell_type", "").lower().replace(" ", "_")
+                    for term in expanded_terms
+                )
+            ]
+            if ct_records:
+                # Sort by absolute activity
+                ct_records.sort(key=lambda r: abs(r.get("mean_activity", 0)), reverse=True)
+                top_records = ct_records[:25]
+                result = {
+                    "atlas_name": atlas_name,
+                    "signature_type": sig_type,
+                    "cell_types": sorted(set(r.get("cell_type") for r in top_records)),
+                    "query_mode": "top_signatures",
+                    "signatures": sorted(set(r.get("signature") for r in top_records)),
+                    "cell_types_ranked": [
+                        {"cell_type": r.get("cell_type"), "signature": r.get("signature"),
+                         "activity": r.get("mean_activity")}
+                        for r in top_records
+                    ],
+                }
+                return result
+            return {
+                "error": f"No {sig_type} data for cell types: {cell_types_filter}",
+                "available_cell_types": sorted(set(r.get("cell_type") for r in data if r.get("signature_type") == sig_type))[:30],
+            }
 
         # Data is a list of records
         # Filter by signature type and requested signatures
@@ -617,6 +714,35 @@ class ToolExecutor:
                 for ct, act in sorted_cts
             ]
 
+        # For scAtlas: add organ-level summary (average activity per organ)
+        if atlas_name == "scAtlas" and any(r.get("organ") for r in filtered):
+            from collections import defaultdict
+            organ_activities: dict[str, list[float]] = defaultdict(list)
+            for record in filtered:
+                organ = record.get("organ")
+                activity = record.get("mean_activity")
+                if organ and activity is not None:
+                    organ_activities[organ].append(activity)
+
+            organ_summary = sorted(
+                [
+                    {"organ": organ, "mean_activity": round(sum(acts) / len(acts), 4), "n_cell_types": len(acts)}
+                    for organ, acts in organ_activities.items()
+                ],
+                key=lambda x: x["mean_activity"],
+                reverse=True,
+            )
+            result["organ_summary"] = organ_summary
+
+            # For large scAtlas results, remove per-cell-type detail to avoid truncation
+            if len(result.get("cell_types", [])) > 40:
+                result.pop("activity", None)
+                result.pop("cell_types", None)
+                ranked = result.get("cell_types_ranked", [])
+                if len(ranked) > 40:
+                    result["cell_types_ranked"] = ranked[:20] + ranked[-20:]
+                    result["_cell_types_truncated"] = True
+
         return result
 
     async def _execute_get_correlations(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -626,28 +752,91 @@ class ToolExecutor:
         corr_type = args["correlation_type"]
         cell_type = args.get("cell_type")
 
-        sig_prefix = "cytosig" if sig_type == "CytoSig" else "secact"
-        corr_path = self.settings.viz_data_path / f"cima_{sig_prefix}_{corr_type}_correlations.json"
+        # Main correlations file: cima_correlations.json with age/bmi/biochemistry keys
+        corr_path = self.settings.viz_data_path / "cima_correlations.json"
 
         if not corr_path.exists():
-            return {"error": f"Correlation data not available for {corr_type}"}
+            return {"error": "Correlation data not available"}
 
         with open(corr_path) as f:
             data = json.load(f)
 
-        if signature not in data:
-            return {"error": f"Signature {signature} not found in correlation data"}
+        if corr_type not in data:
+            return {
+                "error": f"Correlation type '{corr_type}' not found",
+                "available_types": list(data.keys()),
+            }
 
-        correlations = data[signature]
+        records = data[corr_type]
 
-        if cell_type:
-            correlations = [c for c in correlations if c.get("cell_type") == cell_type]
+        # Filter by signature name (field is 'protein') and signature type (field is 'signature')
+        sig_type_map = {"CytoSig": "CytoSig", "SecAct": "SecAct"}
+        correlations = [
+            r for r in records
+            if r.get("protein") == signature
+            and r.get("signature") == sig_type_map.get(sig_type, sig_type)
+        ]
+
+        # Try case-insensitive match
+        if not correlations:
+            sig_lower = signature.lower()
+            correlations = [
+                r for r in records
+                if r.get("protein", "").lower() == sig_lower
+                and r.get("signature") == sig_type_map.get(sig_type, sig_type)
+            ]
+
+        if not correlations:
+            available = sorted(set(
+                r.get("protein") for r in records
+                if r.get("signature") == sig_type_map.get(sig_type, sig_type)
+            ))[:20]
+            return {
+                "error": f"Signature '{signature}' not found in {corr_type} correlations",
+                "available_signatures": available,
+            }
+
+        # Try cell-type-specific correlations (always when available for richer data)
+        ct_corr_path = self.settings.viz_data_path / "cima_celltype_correlations.json"
+        if ct_corr_path.exists():
+            with open(ct_corr_path) as f:
+                ct_data = json.load(f)
+
+            # File is a dict with {age: [...], bmi: [...]} structure
+            ct_records = ct_data.get(corr_type, [])
+            if ct_records:
+                sig_matched = sig_type_map.get(sig_type, sig_type)
+
+                # Get all cell types for this signature first
+                all_ct_correlations = [
+                    r for r in ct_records
+                    if r.get("protein") == signature
+                    and r.get("signature") == sig_matched
+                ]
+
+                if cell_type and all_ct_correlations:
+                    # Flexible cell type matching: try exact, contains, prefix
+                    ct_lower = cell_type.lower().replace(" ", "_").replace("-", "_")
+                    # Extract key prefix (e.g., "cd4" from "cd4_t_cell")
+                    ct_prefix = ct_lower.split("_")[0]
+
+                    ct_correlations = [
+                        r for r in all_ct_correlations
+                        if r.get("cell_type", "").lower() == ct_lower
+                        or ct_lower in r.get("cell_type", "").lower()
+                        or r.get("cell_type", "").lower().startswith(ct_prefix + "_")
+                        or r.get("cell_type", "").lower() == ct_prefix
+                    ]
+                    if ct_correlations:
+                        correlations = ct_correlations
+                elif all_ct_correlations:
+                    correlations = all_ct_correlations
 
         return {
             "signature": signature,
             "signature_type": sig_type,
             "correlation_type": corr_type,
-            "correlations": correlations[:50]  # Limit for readability
+            "correlations": correlations[:50],
         }
 
     async def _execute_get_disease_activity(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -656,8 +845,7 @@ class ToolExecutor:
         sig_type = args["signature_type"]
         top_n = args.get("top_n", 20)
 
-        sig_prefix = "cytosig" if sig_type == "CytoSig" else "secact"
-        diff_path = self.settings.viz_data_path / f"inflam_{sig_prefix}_differential.json"
+        diff_path = self.settings.viz_data_path / "inflammation_differential.json"
 
         if not diff_path.exists():
             return {"error": "Differential activity data not available"}
@@ -665,30 +853,59 @@ class ToolExecutor:
         with open(diff_path) as f:
             data = json.load(f)
 
-        # Find disease in data
-        disease_data = None
-        for d in data.get("diseases", []):
+        # Data is a flat list of records with 'disease', 'protein', 'signature' (=sig type) fields
+        all_diseases = sorted(set(r.get("disease", "") for r in data if r.get("disease")))
+
+        # Find matching disease (case-insensitive, partial match)
+        matched_disease = None
+        for d in all_diseases:
             if d.lower() == disease.lower() or disease.lower() in d.lower():
-                disease_data = data.get(d)
+                matched_disease = d
                 break
 
-        if not disease_data:
+        if not matched_disease:
             return {
                 "error": f"Disease not found: {disease}",
-                "available_diseases": data.get("diseases", [])[:20]
+                "available_diseases": all_diseases
             }
 
-        # Sort by effect size and take top N
+        # Filter records for this disease and signature type
+        # Note: field 'signature' in this file means CytoSig/SecAct type
+        sig_type_map = {"CytoSig": "CytoSig", "SecAct": "SecAct"}
+        disease_records = [
+            r for r in data
+            if r.get("disease") == matched_disease
+            and r.get("signature") == sig_type_map.get(sig_type, sig_type)
+        ]
+
+        if not disease_records:
+            return {
+                "error": f"No {sig_type} data for {matched_disease}",
+                "available_diseases": all_diseases,
+            }
+
+        # Sort by absolute activity difference and take top N
         sorted_data = sorted(
-            disease_data,
-            key=lambda x: abs(x.get("effect_size", 0)),
+            disease_records,
+            key=lambda x: abs(x.get("activity_diff", 0)),
             reverse=True
         )[:top_n]
 
         return {
-            "disease": disease,
+            "disease": matched_disease,
             "signature_type": sig_type,
-            "differential_signatures": sorted_data
+            "n_total": len(disease_records),
+            "differential_signatures": [
+                {
+                    "signature": r.get("protein"),
+                    "activity_diff": r.get("activity_diff"),
+                    "pvalue": r.get("pvalue"),
+                    "qvalue": r.get("qvalue"),
+                    "mean_disease": r.get("mean_g1"),
+                    "mean_healthy": r.get("mean_g2"),
+                }
+                for r in sorted_data
+            ],
         }
 
     async def _execute_compare_atlases(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -710,12 +927,9 @@ class ToolExecutor:
             if not prefix:
                 continue
 
-            celltype_path = self.settings.viz_data_path / f"{prefix}_celltype.json"
-            if not celltype_path.exists():
+            data = self._load_celltype_records(prefix)
+            if data is None:
                 continue
-
-            with open(celltype_path) as f:
-                data = json.load(f)
 
             # Filter for the signature
             sig_lower = signature.lower()
@@ -744,26 +958,57 @@ class ToolExecutor:
         atlas_name = args["atlas_name"]
         validation_type = args.get("validation_type", "all")
 
-        prefix_map = {"CIMA": "cima", "Inflammation": "inflam", "scAtlas": "scatlas"}
+        prefix_map = {"CIMA": "cima", "Inflammation": "inflammation", "scAtlas": "scatlas"}
         prefix = prefix_map.get(atlas_name)
 
         if not prefix:
             return {"error": f"Unknown atlas: {atlas_name}"}
 
-        validation_path = self.settings.viz_data_path / f"{prefix}_validation.json"
-        if not validation_path.exists():
-            return {"error": "Validation data not available"}
+        # Check validation/ subdirectory first, then root
+        for vpath in [
+            self.settings.viz_data_path / "validation" / f"{prefix}_validation.json",
+            self.settings.viz_data_path / f"{prefix}_validation.json",
+            self.settings.viz_data_path / f"{prefix}_atlas_validation.json",
+        ]:
+            if vpath.exists():
+                with open(vpath) as f:
+                    data = json.load(f)
 
-        with open(validation_path) as f:
-            data = json.load(f)
+                if validation_type == "all":
+                    # Summarize to avoid huge response
+                    summary = {
+                        "atlas": data.get("atlas", atlas_name),
+                        "signature_types": data.get("signature_types", []),
+                        "available_metrics": list(data.keys()),
+                    }
+                    for key in ["gene_coverage", "cv_stability", "biological_associations"]:
+                        if key in data:
+                            items = data[key]
+                            if isinstance(items, list):
+                                summary[key] = {
+                                    "count": len(items),
+                                    "sample": items[:5] if items else [],
+                                }
+                            else:
+                                summary[key] = items
+                    return summary
 
-        if validation_type == "all":
-            return data
+                if validation_type in data:
+                    items = data[validation_type]
+                    if isinstance(items, list) and len(items) > 30:
+                        return {
+                            validation_type: items[:30],
+                            "_truncated": True,
+                            "_total": len(items),
+                        }
+                    return {validation_type: items}
 
-        if validation_type in data:
-            return {validation_type: data[validation_type]}
+                return {
+                    "error": f"Validation type '{validation_type}' not found",
+                    "available_types": list(data.keys()),
+                }
 
-        return {"error": f"Validation type not found: {validation_type}"}
+        return {"error": f"Validation data not available for {atlas_name}"}
 
     async def _execute_export_data(self, args: dict[str, Any]) -> dict[str, Any]:
         """Execute export_data tool."""
@@ -790,11 +1035,23 @@ class ToolExecutor:
         }
 
     async def _execute_create_visualization(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Execute create_visualization tool."""
-        viz_type = args["viz_type"]
-        title = args["title"]
-        data = args["data"]
+        """Execute create_visualization tool.
+
+        If args are empty/incomplete (garbled JSON from Mistral), auto-generates
+        a visualization from the most recent cached data tool result.
+        """
+        viz_type = args.get("viz_type")
+        title = args.get("title")
+        data = args.get("data")
         config = args.get("config", {})
+
+        # If args are empty or missing required fields, auto-generate from cache
+        if not viz_type or not data:
+            auto = self._auto_visualize()
+            if auto:
+                logger.info("Auto-generated visualization from cached data (garbled args fallback)")
+                return auto
+            return {"error": "create_visualization requires viz_type, title, and data"}
 
         # Validate data structure based on viz type
         if viz_type == "heatmap":
@@ -812,6 +1069,11 @@ class ToolExecutor:
 
         missing = [r for r in required if r not in data]
         if missing:
+            # Try auto-generation as fallback
+            auto = self._auto_visualize()
+            if auto:
+                logger.info("Auto-generated visualization (missing fields: %s)", missing)
+                return auto
             return {"error": f"Missing required data fields for {viz_type}: {missing}"}
 
         import uuid
@@ -824,6 +1086,233 @@ class ToolExecutor:
                 "data": data,
                 "config": config,
                 "container_id": container_id,
+            }
+        }
+
+    def _auto_visualize(self) -> dict[str, Any] | None:
+        """Auto-generate a visualization from the most recent cached data result.
+
+        Returns a visualization dict or None if no suitable data is cached.
+        """
+        if not self._recent_data_results:
+            return None
+
+        import uuid
+
+        # Pop the oldest unused cached result
+        cached = self._recent_data_results.pop(0)
+        tool_name = cached["tool_name"]
+        args = cached["arguments"]
+        result = cached["result"]
+
+        # Handle pending visualization from compare_atlases (second chart)
+        if tool_name == "_pending_viz" and "_viz" in result:
+            return {"visualization": result["_viz"]}
+
+        if tool_name == "get_activity_data":
+            return self._auto_viz_activity(result, args)
+        elif tool_name == "compare_atlases":
+            return self._auto_viz_comparison(result, args)
+        elif tool_name == "get_disease_activity":
+            return self._auto_viz_disease(result, args)
+        elif tool_name == "get_correlations":
+            return self._auto_viz_correlations(result, args)
+        elif tool_name == "get_validation_metrics":
+            return self._auto_viz_validation(result, args)
+
+        return None
+
+    def _auto_viz_activity(self, result: dict, args: dict) -> dict[str, Any] | None:
+        """Generate bar chart from get_activity_data result."""
+        import uuid
+
+        ranked = result.get("cell_types_ranked")
+        if not ranked:
+            # Try organ_summary for scAtlas
+            organ_summary = result.get("organ_summary")
+            if organ_summary:
+                labels = [o["organ"] for o in organ_summary[:25]]
+                values = [o["mean_activity"] for o in organ_summary[:25]]
+                sigs = result.get("signatures", [""])
+                title = f"{sigs[0]} Activity Across Organs ({args.get('atlas_name', 'scAtlas')})"
+                return {
+                    "visualization": {
+                        "type": "bar_chart",
+                        "title": title,
+                        "data": {"labels": labels, "values": values},
+                        "config": {"x_label": "Organ", "y_label": "Mean Activity (z-score)"},
+                        "container_id": f"viz-{uuid.uuid4().hex[:8]}",
+                    }
+                }
+            return None
+
+        # Handle top_signatures mode (wildcard query for a cell type)
+        if result.get("query_mode") == "top_signatures":
+            labels = [r.get("signature", "?") for r in ranked]
+            values = [r.get("activity", 0) for r in ranked]
+            cell_types = result.get("cell_types", [""])
+            atlas = args.get("atlas_name", "")
+            title = f"Top {result.get('signature_type', '')} Signatures in {', '.join(cell_types)} ({atlas})"
+        else:
+            labels = [r["cell_type"] for r in ranked]
+            values = [r["activity"] for r in ranked]
+            sigs = result.get("signatures", [""])
+            atlas = args.get("atlas_name", "")
+            title = f"{sigs[0]} Activity Across Cell Types ({atlas})"
+
+        return {
+            "visualization": {
+                "type": "bar_chart",
+                "title": title,
+                "data": {"labels": labels, "values": values},
+                "config": {"x_label": "Signature" if result.get("query_mode") == "top_signatures" else "Cell Type",
+                           "y_label": "Activity (z-score)"},
+                "container_id": f"viz-{uuid.uuid4().hex[:8]}",
+            }
+        }
+
+    def _auto_viz_comparison(self, result: dict, args: dict) -> dict[str, Any] | None:
+        """Generate bar charts from compare_atlases result (one per atlas)."""
+        import uuid
+
+        comparison = result.get("comparison", {})
+        if not comparison:
+            return None
+
+        sig = result.get("signature", "")
+        visualizations = []
+
+        for atlas_name, atlas_data in comparison.items():
+            if not atlas_data:
+                continue
+            sorted_items = sorted(atlas_data.items(), key=lambda x: x[1], reverse=True)
+            labels = [item[0] for item in sorted_items]
+            values = [round(item[1], 4) for item in sorted_items]
+
+            visualizations.append({
+                "type": "bar_chart",
+                "title": f"{sig} Activity in {atlas_name}",
+                "data": {"labels": labels, "values": values},
+                "config": {"x_label": "Cell Type", "y_label": "Activity (z-score)"},
+                "container_id": f"viz-{uuid.uuid4().hex[:8]}",
+            })
+
+        if not visualizations:
+            return None
+
+        # Return first visualization; if there are more, push them back into cache
+        # as additional visualization results
+        first_viz = {"visualization": visualizations[0]}
+        if len(visualizations) > 1:
+            # Store remaining as pending auto-viz results
+            for extra_viz in visualizations[1:]:
+                self._recent_data_results.insert(0, {
+                    "tool_name": "_pending_viz",
+                    "arguments": {},
+                    "result": {"_viz": extra_viz},
+                })
+        return first_viz
+
+    def _auto_viz_disease(self, result: dict, args: dict) -> dict[str, Any] | None:
+        """Generate bar chart from get_disease_activity result."""
+        import uuid
+
+        sigs = result.get("differential_signatures", [])
+        if not sigs:
+            return None
+
+        labels = [s.get("protein", s.get("signature", "?")) for s in sigs[:25]]
+        values = [s.get("activity_diff", 0) for s in sigs[:25]]
+        disease = args.get("disease", "")
+        title = f"Top Differentially Active Cytokines in {disease}"
+
+        return {
+            "visualization": {
+                "type": "bar_chart",
+                "title": title,
+                "data": {"labels": labels, "values": values},
+                "config": {"x_label": "Cytokine", "y_label": "Activity Difference (z-score)"},
+                "container_id": f"viz-{uuid.uuid4().hex[:8]}",
+            }
+        }
+
+    def _auto_viz_correlations(self, result: dict, args: dict) -> dict[str, Any] | None:
+        """Generate bar chart from get_correlations result."""
+        import uuid
+
+        correlations = result.get("correlations", [])
+        if not correlations:
+            return None
+
+        sig = args.get("signature", "")
+        corr_type = args.get("correlation_type", "")
+
+        # Sort by absolute rho value (most significant first)
+        sorted_corrs = sorted(correlations, key=lambda c: abs(c.get("rho", 0)), reverse=True)
+
+        labels = []
+        values = []
+        for c in sorted_corrs[:25]:
+            label = c.get("cell_type", c.get("feature", c.get("protein", "?")))
+            labels.append(label)
+            values.append(round(c.get("rho", c.get("correlation", 0)), 4))
+
+        # Even a single record is worth showing
+        title = f"{sig} {corr_type.title()} Correlation Across Cell Types"
+
+        return {
+            "visualization": {
+                "type": "bar_chart",
+                "title": title,
+                "data": {"labels": labels, "values": values},
+                "config": {"x_label": "Cell Type", "y_label": f"Correlation with {corr_type.title()} (rho)"},
+                "container_id": f"viz-{uuid.uuid4().hex[:8]}",
+            }
+        }
+
+    def _auto_viz_validation(self, result: dict, args: dict) -> dict[str, Any] | None:
+        """Generate bar chart from get_validation_metrics result."""
+        import uuid
+
+        atlas = args.get("atlas_name", "")
+
+        # Extract gene_coverage as the most visualizable metric
+        gene_cov = result.get("gene_coverage", {})
+        if isinstance(gene_cov, dict) and "sample" in gene_cov:
+            items = gene_cov["sample"]
+        elif isinstance(gene_cov, list):
+            items = gene_cov[:20]
+        else:
+            # Try cv_stability
+            cv = result.get("cv_stability", {})
+            if isinstance(cv, dict) and "sample" in cv:
+                items = cv["sample"]
+            elif isinstance(cv, list):
+                items = cv[:20]
+            else:
+                return None
+
+        if not items:
+            return None
+
+        # Items should be dicts with signature_type + some metric
+        labels = []
+        values = []
+        for item in items:
+            label = item.get("signature_type", item.get("signature", "?"))
+            val = item.get("median_coverage", item.get("median_cv", item.get("value", 0)))
+            labels.append(str(label))
+            values.append(float(val) if val is not None else 0)
+
+        title = f"Validation Metrics for {atlas} Atlas"
+
+        return {
+            "visualization": {
+                "type": "bar_chart",
+                "title": title,
+                "data": {"labels": labels, "values": values},
+                "config": {"x_label": "Metric", "y_label": "Value"},
+                "container_id": f"viz-{uuid.uuid4().hex[:8]}",
             }
         }
 

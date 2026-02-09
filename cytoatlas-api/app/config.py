@@ -193,7 +193,7 @@ class Settings(BaseSettings):
     llm_base_url: str | None = Field(default="http://localhost:8001/v1")
     llm_api_key: str = Field(default="not-needed")  # vLLM doesn't require auth by default
     chat_model: str = Field(default="mistralai/Mistral-Small-3.1-24B-Instruct-2503")
-    chat_max_tokens: int = Field(default=4096)
+    chat_max_tokens: int = Field(default=8192)
     # Anthropic fallback (used when llm_base_url is not set or vLLM is unreachable)
     anthropic_api_key: str | None = Field(default=None)
     anthropic_chat_model: str = Field(default="claude-sonnet-4-5-20250929")
