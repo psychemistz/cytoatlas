@@ -7,6 +7,8 @@ Semi-automated doc generator that:
 - Inspects H5AD files for column metadata
 - Analyzes JSON files for schema inference
 - Generates markdown scaffolds for manual curation
+- Inventories API endpoints by router
+- Catalogs Pydantic schemas
 """
 
 import os
@@ -17,6 +19,7 @@ import argparse
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from collections import defaultdict
+import re
 
 # Paths
 PROJECT_ROOT = Path("/vf/users/parks34/projects/2secactpy")
@@ -232,6 +235,212 @@ def format_bytes(size: int) -> str:
     return f"{size:.1f} TB"
 
 
+def extract_api_endpoints(router_dir: Path) -> Dict[str, List[Dict[str, str]]]:
+    """Extract API endpoints from FastAPI router files."""
+    endpoints_by_router = defaultdict(list)
+
+    router_files = list(router_dir.glob("*.py"))
+
+    for router_file in router_files:
+        if router_file.name == "__init__.py":
+            continue
+
+        try:
+            with open(router_file, 'r') as f:
+                content = f.read()
+
+            # Extract route decorators: @router.get/post/put/delete/patch(...)
+            pattern = r'@router\.(get|post|put|delete|patch|options)\((["\']([^"\']+)["\'])'
+            matches = re.findall(pattern, content)
+
+            for method, full_path, path in matches:
+                endpoints_by_router[router_file.stem].append({
+                    'method': method.upper(),
+                    'path': path
+                })
+        except Exception as e:
+            print(f"  Warning: Failed to parse {router_file.name}: {e}")
+
+    return dict(endpoints_by_router)
+
+
+def extract_pydantic_schemas(schemas_dir: Path) -> Dict[str, List[str]]:
+    """Extract Pydantic model definitions from schema files."""
+    schemas_by_file = defaultdict(list)
+
+    schema_files = list(schemas_dir.glob("*.py"))
+
+    for schema_file in schema_files:
+        if schema_file.name == "__init__.py":
+            continue
+
+        try:
+            with open(schema_file, 'r') as f:
+                source = f.read()
+
+            tree = ast.parse(source)
+
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ClassDef):
+                    # Check if it's a Pydantic model (BaseModel subclass)
+                    for base in node.bases:
+                        if (isinstance(base, ast.Name) and 'Model' in base.id) or \
+                           (isinstance(base, ast.Attribute) and 'BaseModel' in ast.unparse(base)):
+                            schemas_by_file[schema_file.stem].append(node.name)
+                            break
+        except Exception as e:
+            print(f"  Warning: Failed to parse {schema_file.name}: {e}")
+
+    return dict(schemas_by_file)
+
+
+def inventory_data_files(viz_data_dir: Path) -> Dict[str, Any]:
+    """Catalog all visualization data files with metadata."""
+    inventory = {
+        'total_size': 0,
+        'total_files': 0,
+        'by_atlas': defaultdict(lambda: {'files': [], 'size': 0}),
+        'largest_files': []
+    }
+
+    file_info = []
+
+    for json_file in sorted(viz_data_dir.glob("**/*.json")):
+        if json_file.is_file():
+            size = json_file.stat().st_size
+
+            # Determine atlas
+            name = json_file.name
+            if 'cima' in name.lower():
+                atlas = 'cima'
+            elif 'inflam' in name.lower():
+                atlas = 'inflammation'
+            elif 'scatlas' in name.lower() or 'cancer' in name.lower() or 'exhaustion' in name.lower():
+                atlas = 'scatlas'
+            elif 'cross_atlas' in name or 'validation' in name:
+                atlas = 'cross_atlas'
+            else:
+                atlas = 'other'
+
+            file_info.append({
+                'name': name,
+                'path': str(json_file.relative_to(viz_data_dir)),
+                'size': size,
+                'size_human': format_bytes(size),
+                'atlas': atlas
+            })
+
+            inventory['total_size'] += size
+            inventory['total_files'] += 1
+            inventory['by_atlas'][atlas]['files'].append(name)
+            inventory['by_atlas'][atlas]['size'] += size
+
+    # Sort by size, keep top 10
+    file_info.sort(key=lambda x: x['size'], reverse=True)
+    inventory['largest_files'] = file_info[:10]
+
+    return inventory
+
+
+def generate_endpoint_inventory(endpoints: Dict[str, List[Dict[str, str]]]) -> str:
+    """Generate markdown documentation for API endpoint inventory."""
+    doc = "# CytoAtlas API Endpoint Inventory\n\n"
+    doc += f"**Generated**: {__import__('datetime').datetime.now().isoformat()}\n\n"
+
+    total_endpoints = sum(len(eps) for eps in endpoints.values())
+    doc += f"**Total Endpoints**: {total_endpoints}\n"
+    doc += f"**Total Routers**: {len(endpoints)}\n\n"
+
+    # Summary table
+    doc += "## Summary by Router\n\n"
+    doc += "| Router | GET | POST | PUT | DELETE | PATCH | Total |\n"
+    doc += "|--------|-----|------|-----|--------|-------|-------|\n"
+
+    for router_name in sorted(endpoints.keys()):
+        endpoints_list = endpoints[router_name]
+        methods = defaultdict(int)
+        for ep in endpoints_list:
+            methods[ep['method']] += 1
+
+        row = f"| {router_name} "
+        for method in ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']:
+            row += f"| {methods.get(method, 0)} "
+        row += f"| {len(endpoints_list)} |\n"
+        doc += row
+
+    # Detail by router
+    doc += "\n## Endpoints by Router\n\n"
+
+    for router_name in sorted(endpoints.keys()):
+        doc += f"### {router_name}\n\n"
+        doc += "| Method | Path |\n"
+        doc += "|--------|------|\n"
+
+        for ep in endpoints[router_name]:
+            doc += f"| {ep['method']} | `{ep['path']}` |\n"
+
+        doc += "\n"
+
+    return doc
+
+
+def generate_schema_inventory(schemas: Dict[str, List[str]]) -> str:
+    """Generate markdown documentation for Pydantic schema inventory."""
+    doc = "# CytoAtlas Pydantic Schema Inventory\n\n"
+    doc += f"**Generated**: {__import__('datetime').datetime.now().isoformat()}\n\n"
+
+    total_schemas = sum(len(models) for models in schemas.values())
+    doc += f"**Total Schemas**: {total_schemas}\n"
+    doc += f"**Total Files**: {len(schemas)}\n\n"
+
+    doc += "## Schemas by File\n\n"
+
+    for file_name in sorted(schemas.keys()):
+        models = schemas[file_name]
+        doc += f"### {file_name}\n\n"
+
+        for model_name in sorted(models):
+            doc += f"- `{model_name}`\n"
+
+        doc += f"\n({len(models)} schemas)\n\n"
+
+    return doc
+
+
+def generate_data_file_inventory(inventory: Dict[str, Any]) -> str:
+    """Generate markdown documentation for data file inventory."""
+    doc = "# CytoAtlas Data File Inventory\n\n"
+    doc += f"**Generated**: {__import__('datetime').datetime.now().isoformat()}\n\n"
+
+    doc += "## Summary\n\n"
+    doc += f"| Metric | Value |\n"
+    doc += f"|--------|-------|\n"
+    doc += f"| Total Files | {inventory['total_files']} |\n"
+    doc += f"| Total Size | {format_bytes(inventory['total_size'])} |\n\n"
+
+    doc += "## Largest Files\n\n"
+    doc += "| Rank | File | Size | Atlas |\n"
+    doc += "|------|------|------|-------|\n"
+
+    for i, f in enumerate(inventory['largest_files'], 1):
+        doc += f"| {i} | `{f['name']}` | {f['size_human']} | {f['atlas']} |\n"
+
+    doc += "\n## Files by Atlas\n\n"
+
+    for atlas in sorted(inventory['by_atlas'].keys()):
+        atlas_data = inventory['by_atlas'][atlas]
+        doc += f"### {atlas}\n\n"
+        doc += f"**Files**: {len(atlas_data['files'])}\n"
+        doc += f"**Total Size**: {format_bytes(atlas_data['size'])}\n\n"
+
+        for fname in sorted(atlas_data['files']):
+            doc += f"- `{fname}`\n"
+
+        doc += "\n"
+
+    return doc
+
+
 def generate_dataset_doc(atlas: str, h5ad_meta: Dict, csv_metas: List[Dict]) -> str:
     """Generate dataset documentation markdown."""
 
@@ -408,15 +617,18 @@ def main():
     parser.add_argument('--datasets', action='store_true', help='Generate dataset docs')
     parser.add_argument('--pipelines', action='store_true', help='Generate pipeline docs')
     parser.add_argument('--json', action='store_true', help='Generate JSON catalog')
+    parser.add_argument('--endpoints', action='store_true', help='Generate API endpoint inventory')
+    parser.add_argument('--schemas', action='store_true', help='Generate Pydantic schema inventory')
+    parser.add_argument('--data-files', action='store_true', help='Generate data file inventory')
     parser.add_argument('--all', action='store_true', help='Generate all docs')
     parser.add_argument('--inspect-only', action='store_true', help='Only inspect, do not write')
     args = parser.parse_args()
 
-    if not any([args.datasets, args.pipelines, args.json, args.all]):
+    if not any([args.datasets, args.pipelines, args.json, args.endpoints, args.schemas, args.data_files, args.all]):
         args.all = True
 
     if args.all:
-        args.datasets = args.pipelines = args.json = True
+        args.datasets = args.pipelines = args.json = args.endpoints = args.schemas = args.data_files = True
 
     print("=" * 60)
     print("CytoAtlas Documentation Generator")
@@ -553,6 +765,66 @@ def main():
             with open(out_path, 'w') as f:
                 f.write(doc)
             print(f"\nWrote: {out_path}")
+
+    # API endpoint inventory
+    if args.endpoints:
+        print("\n## Scanning API Endpoints")
+
+        router_dir = PROJECT_ROOT / "cytoatlas-api" / "app" / "routers"
+        if router_dir.exists():
+            endpoints = extract_api_endpoints(router_dir)
+            print(f"  Found {len(endpoints)} routers")
+            total_eps = sum(len(eps) for eps in endpoints.values())
+            print(f"  Found {total_eps} endpoints")
+
+            if not args.inspect_only:
+                doc = generate_endpoint_inventory(endpoints)
+                out_path = DOCS_DIR / "API_ENDPOINTS.md"
+
+                with open(out_path, 'w') as f:
+                    f.write(doc)
+                print(f"  Wrote: {out_path}")
+        else:
+            print(f"  Skipping (router directory not found): {router_dir}")
+
+    # Pydantic schema inventory
+    if args.schemas:
+        print("\n## Scanning Pydantic Schemas")
+
+        schemas_dir = PROJECT_ROOT / "cytoatlas-api" / "app" / "schemas"
+        if schemas_dir.exists():
+            schemas = extract_pydantic_schemas(schemas_dir)
+            print(f"  Found {len(schemas)} schema files")
+            total_schemas = sum(len(models) for models in schemas.values())
+            print(f"  Found {total_schemas} schema models")
+
+            if not args.inspect_only:
+                doc = generate_schema_inventory(schemas)
+                out_path = DOCS_DIR / "API_SCHEMAS.md"
+
+                with open(out_path, 'w') as f:
+                    f.write(doc)
+                print(f"  Wrote: {out_path}")
+        else:
+            print(f"  Skipping (schemas directory not found): {schemas_dir}")
+
+    # Data file inventory
+    if args.data_files:
+        print("\n## Inventorying Data Files")
+
+        if VIZ_DATA_DIR.exists():
+            inventory = inventory_data_files(VIZ_DATA_DIR)
+            print(f"  Found {inventory['total_files']} files ({format_bytes(inventory['total_size'])})")
+
+            if not args.inspect_only:
+                doc = generate_data_file_inventory(inventory)
+                out_path = DOCS_DIR / "DATA_FILES.md"
+
+                with open(out_path, 'w') as f:
+                    f.write(doc)
+                print(f"  Wrote: {out_path}")
+        else:
+            print(f"  Skipping (data directory not found): {VIZ_DATA_DIR}")
 
     print("\n" + "=" * 60)
     print("Done!")

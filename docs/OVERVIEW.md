@@ -1,208 +1,114 @@
-# CytoAtlas Project Architecture
+# CytoAtlas Project Overview
 
-High-level overview of the Pan-Disease Single-Cell Cytokine Activity Atlas project.
+Brief overview of the Pan-Disease Single-Cell Cytokine Activity Atlas project.
 
-## System Architecture
+**For comprehensive architecture details, see [ARCHITECTURE.md](ARCHITECTURE.md).**
 
-```mermaid
-flowchart TB
-    subgraph Data["Data Sources (19M+ cells)"]
-        CIMA[CIMA Atlas<br/>6.5M cells]
-        INFLAM[Inflammation Atlas<br/>6.3M cells]
-        SCATLAS[scAtlas<br/>6.4M cells]
-    end
+## What is CytoAtlas?
 
-    subgraph Signatures["Signature Matrices"]
-        CYTOSIG[CytoSig<br/>44 cytokines]
-        SECACT[SecAct<br/>1,249 proteins]
-    end
+Pan-Disease Single-Cell Cytokine Activity Atlas - computes cytokine and secreted protein activity signatures across **12+ million human immune cells** from three major single-cell atlases:
 
-    subgraph Processing["Analysis Pipeline"]
-        SCRIPTS[Python Scripts<br/>00-07_*.py]
-        SLURM[SLURM HPC<br/>GPU Acceleration]
-    end
+| Atlas | Cells | Focus |
+|-------|-------|-------|
+| CIMA | 6.5M | Healthy aging, metabolism |
+| Inflammation | 6.3M | Disease activity, treatment response |
+| scAtlas | 6.4M | Organ signatures, cancer comparison |
 
-    subgraph Results["Analysis Results"]
-        CSV[CSV Files<br/>Correlations, Differential]
-        H5AD[H5AD Files<br/>Activity Matrices]
-    end
+## Quick Facts
 
-    subgraph Visualization["Web Visualization"]
-        JSON[JSON Files<br/>30+ files]
-        HTML[Dashboard<br/>index.html]
-    end
+- **Total cells analyzed**: 17M+
+- **REST API endpoints**: 188+ across 14 routers
+- **Signature types**: CytoSig (44), LinCytoSig (178), SecAct (1,249)
+- **Web UI pages**: 8 interactive pages with Plotly + D3.js
+- **Analysis scripts**: 7 Python pipelines + 5 SLURM batch jobs
 
-    subgraph API["REST API"]
-        FASTAPI[FastAPI<br/>188+ endpoints]
-        MCP[MCP Tools<br/>Claude Integration]
-    end
+## Key Components
 
-    Data --> Processing
-    Signatures --> Processing
-    Processing --> Results
-    Results --> JSON
-    JSON --> HTML
-    JSON --> FASTAPI
-    FASTAPI --> MCP
-```
+1. **Analysis Pipeline** (`scripts/00-07_*.py`)
+   - GPU-accelerated activity inference (CuPy)
+   - Pseudo-bulk aggregation (sample × cell type)
+   - Ridge regression against signature matrices
 
-## Core Components
+2. **REST API** (`cytoatlas-api/`)
+   - FastAPI backend with 188+ endpoints
+   - JSON-based data access with caching
+   - Optional PostgreSQL + Redis for scaling
 
-### 1. Data Layer
+3. **Web Portal** (`cytoatlas-api/static/`)
+   - Single-Page Application (8 pages)
+   - Interactive visualizations (Plotly, D3.js)
+   - Real-time search and chat integration
 
-| Component | Location | Description |
-|-----------|----------|-------------|
-| H5AD Files | `/data/Jiang_Lab/Data/Seongyong/` | Raw single-cell data in AnnData format |
-| Signature Matrices | `secactpy` package | CytoSig and SecAct signature matrices |
-| Metadata | CSV files | Sample-level clinical and experimental data |
+4. **Validation System**
+   - 5-type credibility assessment
+   - 175-336MB validation data per atlas
+   - Quality metrics dashboard
 
-### 2. Analysis Layer
-
-| Component | Location | Description |
-|-----------|----------|-------------|
-| Analysis Scripts | `scripts/*.py` | Main analysis pipelines |
-| SLURM Scripts | `scripts/slurm/*.sh` | HPC job submission |
-| SecActpy | External package | Ridge regression for activity inference |
-
-### 3. Output Layer
-
-| Component | Location | Description |
-|-----------|----------|-------------|
-| Results | `results/` | CSV and H5AD analysis outputs |
-| JSON Data | `visualization/data/` | Web-optimized JSON files |
-| Figures | `results/figures/` | Publication-quality figures |
-
-### 4. Presentation Layer
-
-| Component | Location | Description |
-|-----------|----------|-------------|
-| Dashboard | `visualization/index.html` | Interactive web visualization |
-| REST API | `cytoatlas-api/` | FastAPI backend (188+ endpoints) |
-| Documentation | `docs/` | Project documentation |
-
-## Analysis Pipeline
-
-### Phase 0: Pilot Validation
-Validate methodology on 100K cell subsets from each atlas.
-
-### Phase 1-3: Atlas-Specific Analysis
-Compute activities and statistical analyses for each atlas independently.
-
-### Phase 4: Cross-Atlas Integration
-Compare patterns across atlases for conserved and atlas-specific signatures.
-
-### Phase 5: Visualization
-Preprocess results into JSON for web dashboard consumption.
-
-## Key Technical Decisions
-
-### Activity Calculation
-
-Uses **ridge regression** with permutation-based p-values:
-```python
-result = ridge_batch(
-    X=signature_matrix,    # genes × proteins
-    Y=expression_matrix,   # genes × samples
-    lambda_=5e5,           # regularization
-    n_rand=1000,           # permutations
-)
-```
-
-### Activity Difference (not Log2FC)
-
-Activities are z-scores that can be negative, so we use simple difference:
-```python
-activity_diff = group1_mean - group2_mean  # NOT log2(group1/group2)
-```
-
-### Pseudo-bulk Aggregation
-
-Primary analysis level aggregates cells by sample × cell type:
-1. Sum raw counts per group
-2. TPM normalize
-3. Log2 transform
-4. Subtract row mean (differential expression)
-5. Ridge regression
-
-### Memory Efficiency
-
-- **Backed mode**: H5AD files loaded with `backed='r'`
-- **Chunked processing**: 50K cells per chunk
-- **GPU acceleration**: CuPy for 10-34x speedup
-
-## Technology Stack
-
-| Layer | Technologies |
-|-------|--------------|
-| Analysis | Python, NumPy, Pandas, SciPy, AnnData |
-| GPU | CuPy (NVIDIA CUDA) |
-| HPC | SLURM, NIH Biowulf |
-| API | FastAPI, Pydantic |
-| Visualization | Plotly.js, D3.js, HTML/CSS/JS |
-| Documentation | Markdown, Mermaid diagrams |
-
-## File Naming Conventions
-
-### Analysis Outputs
-- `{atlas}_{analysis_type}.csv` - Tabular results
-- `{atlas}_{signature}_pseudobulk.h5ad` - Activity matrices
-- `{atlas}_{signature}_singlecell.h5ad` - Per-cell activities
-
-### JSON Files
-- `{atlas}_{panel}.json` - Panel-specific data
-- `{atlas}_{panel}_filtered.json` - Size-optimized version
-- `{atlas}_{panel}_top.json` - Top N results
-
-## API Structure
+## High-Level Data Flow
 
 ```
-cytoatlas-api/
-├── app/
-│   ├── main.py              # FastAPI application
-│   ├── routers/             # API endpoints by atlas
-│   ├── services/            # Business logic
-│   ├── schemas/             # Pydantic models
-│   └── core/                # Configuration, security
+Raw H5AD (282GB)
+    ↓
+Python Scripts (GPU acceleration)
+    ↓
+Results CSV + H5AD
+    ↓
+Preprocessing (JSON generation)
+    ↓
+visualization/data/ (30+ JSON files)
+    ↓
+REST API (caching layer)
+    ↓
+Web Dashboard (visualization)
 ```
-
-### Key Routers
-| Router | Endpoints | Description |
-|--------|-----------|-------------|
-| `/api/v1/cima/` | ~32 | CIMA correlations, differential |
-| `/api/v1/inflammation/` | ~44 | Disease, treatment response |
-| `/api/v1/scatlas/` | ~36 | Organs, cancer, exhaustion |
-| `/api/v1/cross-atlas/` | ~28 | Cross-atlas comparison |
-| `/api/v1/validation/` | ~12 | 5-type credibility assessment |
 
 ## Getting Started
 
-### Environment Setup
-```bash
-source ~/bin/myconda
-conda activate secactpy
-```
+### View Dashboard Locally
 
-### Run Analysis
 ```bash
-# Full pipeline
-sbatch scripts/slurm/run_all.sh
-
-# Individual atlas
-python scripts/01_cima_activity.py
-```
-
-### Start API
-```bash
+cd /vf/users/parks34/projects/2secactpy
 cd cytoatlas-api
+pip install -e .
 uvicorn app.main:app --reload
+# Open http://localhost:8000/
 ```
 
-### View Dashboard
-Open `visualization/index.html` in a browser.
+### Run Analysis Pipeline
 
-## Related Documentation
+```bash
+cd /data/parks34/projects/2secactpy
+python scripts/00_pilot_analysis.py --n-cells 100000
+python scripts/01_cima_activity.py --mode pseudobulk
+```
 
-- [Datasets](datasets/README.md) - Data source details
-- [Pipelines](pipelines/README.md) - Analysis pipeline docs
-- [Outputs](outputs/README.md) - Output file documentation
-- [API Mapping](outputs/visualization/api_mapping.md) - JSON to API mapping
+### Submit SLURM Job (HPC)
+
+```bash
+sbatch scripts/slurm/run_all.sh           # Full pipeline
+sbatch scripts/slurm/run_all.sh --pilot   # Pilot only
+```
+
+## Documentation Map
+
+| Document | Purpose |
+|----------|---------|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | **Start here**: Comprehensive system architecture |
+| [CLAUDE.md](../CLAUDE.md) | Quick reference, TODOs, lessons learned |
+| [datasets/README.md](datasets/README.md) | Data source specifications |
+| [pipelines/README.md](pipelines/README.md) | Analysis pipeline details |
+| [outputs/README.md](outputs/README.md) | Output file structure |
+| [decisions/](decisions/) | Architecture Decision Records (ADRs) |
+| [archive/](archive/) | Archived plans from earlier phases |
+
+## Key Resources
+
+- **Activity Method**: Ridge regression (z-score activities, not log2FC)
+- **Signature Matrices**: CytoSig (44 cytokines) + SecAct (1,249 secreted proteins)
+- **HPC Cluster**: NIH Biowulf (SLURM)
+- **GPU Acceleration**: CuPy with NumPy fallback
+- **Environment Setup**: `conda activate secactpy`
+
+---
+
+**For detailed architecture, design decisions, and implementation details, see [ARCHITECTURE.md](ARCHITECTURE.md).**

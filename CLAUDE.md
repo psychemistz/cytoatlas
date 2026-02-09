@@ -21,10 +21,13 @@ Comprehensive documentation is available in the `docs/` directory:
 | Document | Description |
 |----------|-------------|
 | [docs/README.md](docs/README.md) | Documentation index |
-| [docs/OVERVIEW.md](docs/OVERVIEW.md) | High-level project architecture |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | **MAIN**: Complete system architecture (component inventory, data flow, technology stack, API design, DDD roadmap) |
+| [docs/OVERVIEW.md](docs/OVERVIEW.md) | Quick project overview (redirect to ARCHITECTURE.md) |
 | [docs/datasets/](docs/datasets/) | Dataset specifications (CIMA, Inflammation, scAtlas) |
 | [docs/pipelines/](docs/pipelines/) | Analysis pipeline documentation |
 | [docs/outputs/](docs/outputs/) | Output file catalog and API mapping |
+| [docs/decisions/](docs/decisions/) | Architecture Decision Records (ADRs): Parquet, repository pattern, RBAC |
+| [docs/archive/](docs/archive/) | Archived plans from earlier project phases |
 | [docs/registry.json](docs/registry.json) | Machine-readable documentation registry |
 | [docs/EMBEDDED_DATA_CHECKLIST.md](docs/EMBEDDED_DATA_CHECKLIST.md) | **IMPORTANT**: Checklist of JSON files required in embedded_data.js |
 
@@ -138,6 +141,44 @@ visualization/
 └── index.html       # Interactive visualization
 ```
 
+## Data Layer Architecture
+
+### Data Storage Layers (Tiered Caching)
+
+| Tier | Name | Medium | TTL | Size | Use Case |
+|------|------|--------|-----|------|----------|
+| 1 | Hot Data | Redis or in-memory dict | 1 hour | ~100MB | Frequently accessed correlations, disease activity |
+| 2 | Warm Data | JSON files (visualization/data/) | Persistent | ~500MB | Pre-computed results, on-demand loading |
+| 3 | Cold Data | CSV files (results/*/*.csv) | Persistent | ~50GB | Raw analysis outputs, validation, regeneration |
+
+### Repository Pattern (Planned for Round 3)
+
+Protocol-based abstraction for testability and backend swappability:
+
+```python
+class DataRepository(Protocol):
+    async def get_correlations(self, gene: str) -> CorrelationData: ...
+    async def get_disease_activity(self, disease: str) -> ActivityData: ...
+
+# Implementations
+class JSONRepository(DataRepository):      # Current
+    # Load from visualization/data/*.json
+
+class ParquetRepository(DataRepository):   # Future
+    # Load from results/*.parquet (faster for large files)
+
+class PostgreSQLRepository(DataRepository): # Future
+    # Query from database tables
+```
+
+### Parquet Backend (Planned for Round 3)
+
+Current limitation: JSON files up to 1.8GB loaded entirely into memory. Future improvement:
+- Store large files (validation_cima.json, validation_inflammation.json) as Parquet
+- Use PyArrow predicate pushdown for efficient filtering
+- Reduce memory footprint by 60-80%
+- Maintain backward compatibility through repository abstraction
+
 ## Statistical Methods
 
 | Method | Use Case | Function |
@@ -205,34 +246,108 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 | Chat | ~4 | Claude AI assistant |
 | Submit | ~4 | Dataset submission |
 
-### Current Status (2026-01-31)
+### Current Status (2026-02-09, Round 1 Complete)
 
-- **API Backend**: 95% complete (14 routers, all services implemented)
-- **Frontend SPA**: 90% complete (8 pages)
-- **Validation Data**: Complete (generated for all 3 atlases)
-- **User Auth**: Scaffolding only
-- **Dataset Submission**: Scaffolding only
+**Analysis & Data Generation**
+- ✅ All 7 analysis pipelines complete (pilot, CIMA, Inflammation, scAtlas, integrated, figures, immune)
+- ✅ 30+ JSON visualization files generated (~500MB)
+- ✅ Validation data complete for all 3 atlases (~175-336MB each)
 
-See `cytoatlas-api/ARCHITECTURE.md` for detailed API documentation.
+**API Backend**
+- ✅ 188+ endpoints across 14 routers (100% functional)
+- ✅ All 12 services implemented (JSON loading, caching, filtering)
+- ✅ Validation service (5-type credibility assessment, 636 lines)
+- ✅ Chat service (Claude API integration)
+- ⏳ Database models created (PostgreSQL integration not yet active)
+- ⏳ Rate limiting scaffolding
+- ✅ In-memory cache with Redis fallback
+
+**Web Portal**
+- ✅ 8-page SPA (Landing, Explore, Compare, Validate, Submit, Chat, About, Contact)
+- ✅ 40+ interactive visualization panels (Plotly, D3.js)
+- ✅ Responsive design (mobile, tablet, desktop)
+
+**Documentation (Round 1)**
+- ✅ Comprehensive ARCHITECTURE.md created (14 sections, DDD roadmap)
+- ✅ OVERVIEW.md refactored (brief overview, redirects to ARCHITECTURE)
+- ✅ Archive system created (docs/archive/ for stale plans)
+- ⏳ ADRs in progress (docs/decisions/)
+
+**Security & Hardening (Planned for Round 2)**
+- ⏳ Full JWT authentication
+- ⏳ RBAC model (5 roles: anonymous, viewer, researcher, data_curator, admin)
+- ⏳ Audit logging (all data access)
+- ⏳ Rate limiting enforcement
+
+See `docs/ARCHITECTURE.md` for detailed system documentation.
+
+## Security Model (Planned for Round 2)
+
+### Role-Based Access Control (RBAC)
+
+Five-role model to be implemented:
+
+| Role | Permissions | Use Case |
+|------|-------------|----------|
+| **anonymous** | Read public data, search, basic API endpoints | Unauthenticated public access |
+| **viewer** | Read all public datasets, access dashboard | Registered users |
+| **researcher** | Download data, access advanced analytics | Academic researchers |
+| **data_curator** | Submit custom datasets, manage metadata | Dataset maintainers |
+| **admin** | System administration, user management, audit logs | System operators |
+
+### Default Security Posture
+
+- API endpoints default to **anonymous** role (most permissive)
+- Sensitive operations (data export, submission) require **researcher+** role
+- System administration requires **admin** role
+- All role assignments logged to audit trail
+
+### Audit Logging
+
+Will be implemented in Round 2:
+- All data access (user, timestamp, IP, endpoint, dataset)
+- Sensitive operations (downloads, exports, submissions)
+- Authentication events (login, logout, token refresh)
+- Administrative actions (role changes, dataset registration)
+- Retention: 90 days in PostgreSQL, 30 days in logs
 
 ## Master Plan
 
 For comprehensive project status and implementation details, see:
 `/home/parks34/.claude/plans/cytoatlas-master-plan.md`
 
-### Critical TODOs
+### Critical TODOs (by Priority)
 
-1. ~~**Generate Validation JSON Data**~~ ✅ Complete (2026-01-31)
-   - Generated: `visualization/data/validation/*.json` for all 3 atlases
+#### Round 1: Documentation Cleanup ✅ Complete (2026-02-09)
+- ✅ Archive stale plans (docs/archive/)
+- ✅ Create ARCHITECTURE.md (comprehensive, 14 sections)
+- ✅ Update CLAUDE.md (current status, data layer, security)
+- ✅ Create docs/decisions/ with ADRs (Parquet, repository, RBAC)
+- ✅ Clean docs/ directory (consolidate overlapping files)
+- ✅ Auto-doc generation script (optional)
 
-2. **Production Hardening** (Priority 1)
-   - JWT authentication
-   - Prometheus metrics
-   - Load testing
+#### Round 2: Security Hardening (Priority 1)
+- [ ] Full JWT authentication (RFC 7519 compliant)
+- [ ] RBAC enforcement (5-role model)
+- [ ] Audit logging (database + file)
+- [ ] Rate limiting (per user/IP)
+- [ ] Prometheus metrics (response time, error rate, cache hit)
+- [ ] OAuth providers (Google, ORCID)
+- [ ] Load testing (k6 or Locust)
 
-3. **Dataset Submission** (Priority 2)
-   - Chunked file upload
-   - Celery background processing
+#### Round 3: Data Layer Migration (Priority 2)
+- [ ] Repository pattern implementation (protocol-based abstraction)
+- [ ] Parquet backend for large files (validation_*.json)
+- [ ] PostgreSQL backend option (for persistence)
+- [ ] Query optimization (predicate pushdown, column selection)
+
+#### Round 4: Extensibility & Scaling (Priority 3)
+- [ ] User-submitted datasets (CELEX-style workflow)
+- [ ] Chunked file upload (multipart/form-data)
+- [ ] Celery background processing (async activity inference)
+- [ ] API versioning (v1, v2 support)
+- [ ] GraphQL option (complementary to REST)
+- [ ] External data integration (cellxgene, GEO)
 
 ## Git Configuration
 
@@ -249,15 +364,26 @@ git config user.name "Seongyong Park"
 - Activity values are z-scores (can be negative) → use `activity_diff` not `log2fc`
 - Gene mapping: CytoSig names (e.g., `TNFA`) differ from HGNC symbols (e.g., `TNF`) - always check `signature_gene_mapping.json`
 - JSON files with `*_complete.json` suffix are duplicates - delete them
+- Large JSON files (>500MB) will become bottleneck in memory → plan Parquet migration early
 
 ### API Development
 - Always test endpoints with real data paths, not mocks
 - Use `get_signature_names()` helper for bidirectional gene name lookup
 - Pydantic v2 syntax: use `field_validator` not `validator`
+- Repository pattern improves testability: plan abstract interfaces before implementation
+- In-memory cache with Redis fallback works well on HPC (no external dependencies required)
 
 ### Frontend
 - Check `docs/EMBEDDED_DATA_CHECKLIST.md` before adding new JSON files
 - Use "Δ Activity" label (not "Log2FC") in UI for differential displays
+- Vanilla JS SPA works well for moderate complexity; consider framework if >50 pages
+
+### Architecture & Security
+- Security defaults to most permissive (anonymous) → explicit role checks required
+- Audit logging must include context (user, IP, timestamp, dataset) for compliance
+- Documentation-first approach (ARCHITECTURE.md) prevents architectural drift
+- ADRs enable team alignment on design trade-offs (Parquet vs. JSON, repository pattern, RBAC)
+- Tiered caching strategy (hot/warm/cold) is essential for HPC environments
 
 ## Workflow Tips
 
