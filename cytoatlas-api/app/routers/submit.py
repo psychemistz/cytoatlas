@@ -150,8 +150,10 @@ async def validate_h5ad(
     """
     try:
         return await service.validate_h5ad(file_path)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Validation failed: {str(e)}")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Validation failed")
 
 
 @router.post("/process", response_model=ProcessResponse)
@@ -184,8 +186,12 @@ async def start_processing(
             signature_types=request.signature_types,
             user_id=current_user.id,
         )
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to start processing: {str(e)}")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to start processing")
 
 
 @router.get("/jobs", response_model=JobListResponse)

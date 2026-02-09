@@ -110,6 +110,7 @@ class Settings(BaseSettings):
     # Rate Limiting
     rate_limit_requests: int = 100
     rate_limit_window: int = 60  # seconds
+    trusted_proxies: str = ""  # Comma-separated CIDR ranges (e.g., "10.0.0.0/8,172.16.0.0/12")
 
     # Data Paths
     h5ad_base_path: Path = Field(default=Path("/data/Jiang_Lab/Data/Seongyong"))

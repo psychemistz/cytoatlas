@@ -1,5 +1,10 @@
-"""Rate limiting middleware and utilities."""
+"""Rate limiting middleware and utilities.
 
+Includes defense against X-Forwarded-For header spoofing via trusted_proxies config.
+"""
+
+import ipaddress
+import logging
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
@@ -7,7 +12,100 @@ from fastapi import Depends, HTTPException, Request, status
 from app.config import get_settings
 from app.core.cache import CacheService, get_cache
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
+
+# Parse trusted proxies at module load time
+_trusted_proxies: set[ipaddress.IPv4Network | ipaddress.IPv6Network] = set()
+
+
+def _parse_trusted_proxies() -> set[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+    """Parse trusted_proxies setting into a set of IP networks."""
+    proxies = set()
+    raw = getattr(settings, "trusted_proxies", "")
+    if not raw:
+        return proxies
+    for entry in raw.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        try:
+            proxies.add(ipaddress.ip_network(entry, strict=False))
+        except ValueError:
+            logger.warning("Invalid trusted proxy entry: %s", entry)
+    return proxies
+
+
+def get_trusted_proxies() -> set[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+    """Get cached trusted proxies set."""
+    global _trusted_proxies
+    if not _trusted_proxies:
+        _trusted_proxies = _parse_trusted_proxies()
+    return _trusted_proxies
+
+
+def get_real_client_ip(request: Request) -> str:
+    """Extract the real client IP from a request, safely handling forwarded headers.
+
+    Only trusts X-Forwarded-For and X-Real-IP headers when the immediate
+    connection comes from a trusted proxy. This prevents IP spoofing by
+    untrusted clients sending fake forwarded headers.
+
+    Args:
+        request: The incoming FastAPI request
+
+    Returns:
+        The best-effort real client IP address
+    """
+    # Direct connection IP
+    direct_ip = request.client.host if request.client else "unknown"
+    if direct_ip == "unknown":
+        return direct_ip
+
+    trusted = get_trusted_proxies()
+
+    # If no trusted proxies configured, always use direct connection IP
+    # This is the safe default - never trust forwarded headers without config
+    if not trusted:
+        return direct_ip
+
+    # Check if the direct connection is from a trusted proxy
+    try:
+        direct_addr = ipaddress.ip_address(direct_ip)
+    except ValueError:
+        return direct_ip
+
+    is_trusted = any(direct_addr in network for network in trusted)
+    if not is_trusted:
+        # Connection is not from a trusted proxy - ignore forwarded headers
+        return direct_ip
+
+    # Connection is from a trusted proxy - read forwarded headers
+    # X-Real-IP takes precedence (set by nginx/reverse proxy)
+    x_real_ip = request.headers.get("X-Real-IP")
+    if x_real_ip:
+        # Validate it looks like an IP
+        try:
+            ipaddress.ip_address(x_real_ip.strip())
+            return x_real_ip.strip()
+        except ValueError:
+            logger.warning("Invalid X-Real-IP header: %s", x_real_ip)
+
+    # Fall back to X-Forwarded-For (take the leftmost/client IP)
+    x_forwarded_for = request.headers.get("X-Forwarded-For")
+    if x_forwarded_for:
+        # X-Forwarded-For format: client, proxy1, proxy2
+        # The leftmost entry is the original client (if we trust the proxy chain)
+        ips = [ip.strip() for ip in x_forwarded_for.split(",")]
+        if ips:
+            try:
+                ipaddress.ip_address(ips[0])
+                return ips[0]
+            except ValueError:
+                logger.warning("Invalid X-Forwarded-For first entry: %s", ips[0])
+
+    # Fall through to direct IP
+    return direct_ip
 
 
 class RateLimiter:
@@ -72,9 +170,13 @@ class RateLimitMiddleware:
         request: Request,
         cache: Annotated[CacheService, Depends(get_cache)],
     ) -> None:
-        """Check rate limit for request."""
-        # Get client identifier (IP or user ID)
-        client_ip = request.client.host if request.client else "unknown"
+        """Check rate limit for request.
+
+        Uses secure IP extraction that only trusts forwarded headers
+        from configured trusted proxies.
+        """
+        # Get real client IP (safe against X-Forwarded-For spoofing)
+        client_ip = get_real_client_ip(request)
 
         # Check if authenticated user
         user_id = getattr(request.state, "user_id", None)

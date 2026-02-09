@@ -334,6 +334,23 @@ class AnthropicClient(LLMClient):
                 }
 
 
+def _sanitize_llm_error(error: Exception) -> str:
+    """Sanitize LLM error messages to avoid leaking internal details.
+
+    Removes API keys, URLs, file paths, and other sensitive information
+    from error messages before they could be exposed to users.
+    """
+    import re
+    msg = str(error)
+    # Remove API keys/tokens
+    msg = re.sub(r"(api[_-]?key|token|authorization)[=:\s]+\S+", r"\1=[REDACTED]", msg, flags=re.IGNORECASE)
+    # Remove URLs (may contain internal hostnames/ports)
+    msg = re.sub(r"https?://[^\s]+", "[URL]", msg)
+    # Remove file paths
+    msg = re.sub(r"(/[^\s:]+)+", "[path]", msg)
+    return msg
+
+
 class DualLLMClient(LLMClient):
     """Client that tries vLLM first, falls back to Anthropic on connection error."""
 
@@ -382,10 +399,18 @@ class DualLLMClient(LLMClient):
             try:
                 return await self.vllm_client.chat(messages, tools, model, max_tokens)
             except (ConnectionError, OSError) as e:
-                logger.warning("vLLM unavailable (%s), falling back to Anthropic", e)
+                logger.warning("vLLM unavailable (%s), falling back to Anthropic", _sanitize_llm_error(e))
+            except Exception as e:
+                logger.error("vLLM error: %s", _sanitize_llm_error(e))
+                if not self.anthropic_client:
+                    raise RuntimeError("LLM service error") from None
 
         if self.anthropic_client:
-            return await self.anthropic_client.chat(messages, tools, model, max_tokens)
+            try:
+                return await self.anthropic_client.chat(messages, tools, model, max_tokens)
+            except Exception as e:
+                logger.error("Anthropic error: %s", _sanitize_llm_error(e))
+                raise RuntimeError("LLM service error") from None
 
         raise RuntimeError("All LLM backends unavailable")
 
@@ -403,12 +428,20 @@ class DualLLMClient(LLMClient):
                     yield chunk
                 return
             except (ConnectionError, OSError) as e:
-                logger.warning("vLLM streaming unavailable (%s), falling back to Anthropic", e)
+                logger.warning("vLLM streaming unavailable (%s), falling back to Anthropic", _sanitize_llm_error(e))
+            except Exception as e:
+                logger.error("vLLM streaming error: %s", _sanitize_llm_error(e))
+                if not self.anthropic_client:
+                    raise RuntimeError("LLM service error") from None
 
         if self.anthropic_client:
-            async for chunk in self.anthropic_client.chat_stream(messages, tools, model, max_tokens):
-                yield chunk
-            return
+            try:
+                async for chunk in self.anthropic_client.chat_stream(messages, tools, model, max_tokens):
+                    yield chunk
+                return
+            except Exception as e:
+                logger.error("Anthropic streaming error: %s", _sanitize_llm_error(e))
+                raise RuntimeError("LLM service error") from None
 
         raise RuntimeError("All LLM backends unavailable")
 

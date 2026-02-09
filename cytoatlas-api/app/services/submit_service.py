@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import shutil
 import uuid
 from datetime import datetime
@@ -26,6 +27,109 @@ from app.schemas.submit import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Allowed file extensions for upload
+ALLOWED_EXTENSIONS = {".h5ad", ".csv", ".tsv", ".json"}
+
+# Maximum filename length
+MAX_FILENAME_LENGTH = 255
+
+
+def _sanitize_filename(filename: str) -> str:
+    """Sanitize a filename to prevent path traversal and injection.
+
+    Args:
+        filename: The original filename
+
+    Returns:
+        Sanitized filename
+
+    Raises:
+        ValueError: If filename is invalid or contains traversal attempts
+    """
+    if not filename:
+        raise ValueError("Filename cannot be empty")
+
+    # Strip any directory components (path traversal defense)
+    basename = os.path.basename(filename)
+
+    # Reject if basename differs from input (contained directory separators)
+    if basename != filename and "/" in filename or "\\" in filename:
+        logger.warning("Path traversal attempt detected in filename: %s", filename[:100])
+        raise ValueError("Filename must not contain directory separators")
+
+    # Check for null bytes
+    if "\x00" in basename:
+        raise ValueError("Filename contains invalid characters")
+
+    # Check for path traversal patterns
+    if ".." in basename:
+        raise ValueError("Filename must not contain '..'")
+
+    # Check length
+    if len(basename) > MAX_FILENAME_LENGTH:
+        raise ValueError(f"Filename too long (max {MAX_FILENAME_LENGTH} characters)")
+
+    # Check extension
+    ext = os.path.splitext(basename)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise ValueError(
+            f"File extension '{ext}' not allowed. "
+            f"Allowed extensions: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
+        )
+
+    # Remove any non-alphanumeric characters except .-_ and spaces
+    sanitized = re.sub(r"[^\w\s\-.]", "", basename)
+    if not sanitized:
+        raise ValueError("Filename contains only invalid characters")
+
+    return sanitized
+
+
+def _validate_path_within_directory(file_path: Path, allowed_dir: Path) -> Path:
+    """Validate that a resolved file path is within the allowed directory.
+
+    Prevents symlink escapes and path traversal.
+
+    Args:
+        file_path: Path to validate
+        allowed_dir: Directory the path must be within
+
+    Returns:
+        Resolved, validated path
+
+    Raises:
+        ValueError: If the path escapes the allowed directory
+    """
+    try:
+        resolved = file_path.resolve()
+        allowed_resolved = allowed_dir.resolve()
+    except (OSError, RuntimeError) as e:
+        raise ValueError(f"Invalid path: {e}")
+
+    # Check containment
+    try:
+        resolved.relative_to(allowed_resolved)
+    except ValueError:
+        logger.warning(
+            "Path traversal attempt: %s is not within %s",
+            resolved, allowed_resolved,
+        )
+        raise ValueError("File path must be within the upload directory")
+
+    # Check for symlink pointing outside
+    if file_path.is_symlink():
+        link_target = file_path.resolve()
+        try:
+            link_target.relative_to(allowed_resolved)
+        except ValueError:
+            logger.warning(
+                "Symlink escape attempt: %s -> %s (outside %s)",
+                file_path, link_target, allowed_resolved,
+            )
+            raise ValueError("Symbolic links pointing outside the upload directory are not allowed")
+
+    return resolved
 
 
 class UploadSession:
@@ -115,15 +219,18 @@ class SubmitService:
     ) -> UploadInitResponse:
         """Initialize a chunked upload session."""
         # Validate file size
+        if file_size <= 0:
+            raise ValueError("File size must be positive")
         if file_size > self.settings.max_upload_size_bytes:
             raise ValueError(
                 f"File size ({file_size / 1024**3:.1f}GB) exceeds maximum "
                 f"({self.settings.max_upload_size_gb}GB)"
             )
 
-        # Validate filename
+        # Sanitize and validate filename (prevents path traversal)
+        filename = _sanitize_filename(filename)
         if not filename.endswith(".h5ad"):
-            raise ValueError("Only .h5ad files are supported")
+            raise ValueError("Only .h5ad files are supported for upload")
 
         # Create upload ID and directories
         upload_id = str(uuid.uuid4())
@@ -180,7 +287,19 @@ class SubmitService:
         if chunk_index < 0 or chunk_index >= session.total_chunks:
             raise ValueError(f"Invalid chunk index: {chunk_index}")
 
-        # Write chunk to file
+        # Validate chunk size (prevent oversized chunks)
+        max_chunk = session.chunk_size * 2  # Allow some overhead
+        if len(chunk_data) > max_chunk:
+            raise ValueError(
+                f"Chunk too large ({len(chunk_data)} bytes, max {max_chunk} bytes)"
+            )
+
+        # Validate cumulative upload size
+        projected_total = session.bytes_received + len(chunk_data)
+        if projected_total > session.file_size * 1.1:  # 10% tolerance
+            raise ValueError("Total uploaded bytes exceed declared file size")
+
+        # Write chunk to file (path is safe since chunks_dir is created by us)
         chunk_path = session.chunks_dir / f"chunk_{chunk_index:06d}"
         async with aiofiles.open(chunk_path, "wb") as f:
             await f.write(chunk_data)
@@ -225,8 +344,9 @@ class SubmitService:
             missing = session.total_chunks - len(session.received_chunks)
             raise ValueError(f"Upload incomplete: {missing} chunks missing")
 
-        # Assemble chunks
-        output_path = session.upload_dir / session.filename
+        # Assemble chunks (validate path stays within upload directory)
+        output_path = session.upload_dir / _sanitize_filename(session.filename)
+        _validate_path_within_directory(output_path, self.settings.upload_dir)
         hasher = hashlib.sha256()
 
         async with aiofiles.open(output_path, "wb") as out_f:
@@ -261,6 +381,21 @@ class SubmitService:
 
     async def validate_h5ad(self, file_path: str) -> H5ADValidationResult:
         """Validate H5AD file structure."""
+        # Validate file path is within upload directory (prevent path traversal)
+        path = Path(file_path)
+        _validate_path_within_directory(path, self.settings.upload_dir)
+
+        # Validate extension
+        ext = path.suffix.lower()
+        if ext != ".h5ad":
+            raise ValueError(f"Expected .h5ad file, got '{ext}'")
+
+        # Check file exists and is a regular file (not symlink to outside)
+        if not path.exists():
+            raise ValueError("File not found")
+        if path.is_symlink():
+            _validate_path_within_directory(path.resolve(), self.settings.upload_dir)
+
         from app.tasks.process_atlas import validate_h5ad_task
 
         # Run validation (can be async via Celery or directly)
@@ -277,6 +412,14 @@ class SubmitService:
         user_id: int,
     ) -> ProcessResponse:
         """Start H5AD processing job."""
+        # Validate file path is within upload directory
+        path = Path(file_path)
+        _validate_path_within_directory(path, self.settings.upload_dir)
+        if not path.exists():
+            raise ValueError("File not found")
+        if path.suffix.lower() != ".h5ad":
+            raise ValueError("Only .h5ad files can be processed")
+
         from app.tasks.process_atlas import process_h5ad_task
 
         # Create job record (in production, this would be database insert)

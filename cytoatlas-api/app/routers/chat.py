@@ -1,14 +1,18 @@
 """Chat router for LLM-powered natural language interface."""
 
 import json
+import logging
 import time
 from typing import Annotated, Any
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 
 from app.config import get_settings
 from app.core.cache import CacheService, get_cache
+from app.core.rate_limit import get_real_client_ip
 from app.core.security import get_current_user_optional
 from app.models.user import User
 from app.schemas.chat import (
@@ -41,19 +45,26 @@ async def check_rate_limit(
     user: User | None,
     session_id: str,
     cache: CacheService | None = None,
+    request: Request | None = None,
 ) -> None:
     """Check if the user/session has exceeded rate limits.
 
     Uses Redis when available, falls back to in-memory tracking.
     Authenticated users get higher limits than anonymous users.
+    Rate limiting uses both IP and session/user_id to prevent bypass.
     """
     # Determine rate limit based on authentication status
+    ip_key: str | None = None
     if user:
         limit = settings.auth_chat_limit_per_day
         key = f"chat_ratelimit:user:{user.id}"
     else:
         limit = settings.anon_chat_limit_per_day
+        # Use both session_id and IP for anonymous users to prevent bypass
+        # (changing session_id alone should not reset the rate limit)
+        client_ip = get_real_client_ip(request) if request else "unknown"
         key = f"chat_ratelimit:session:{session_id}"
+        ip_key = f"chat_ratelimit:ip:{client_ip}"
 
     window = 86400  # 24 hours in seconds
     current_time = time.time()
@@ -61,29 +72,35 @@ async def check_rate_limit(
     # Try Redis first if available
     if cache and cache.redis:
         try:
-            cache_key = key
-            current = await cache.get(cache_key)
+            # Check all applicable keys (session + IP for anonymous users)
+            redis_keys = [key]
+            if ip_key is not None:
+                redis_keys.append(ip_key)
 
-            if current is None:
-                await cache.set(cache_key, "1", ttl=window)
-                return
+            for cache_key in redis_keys:
+                current = await cache.get(cache_key)
 
-            count = int(current)
-            if count >= limit:
-                ttl = await cache.redis.ttl(cache_key)
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=f"Chat rate limit exceeded. Daily limit: {limit} messages. "
-                           f"Try again in {ttl // 3600} hours.",
-                    headers={
-                        "X-RateLimit-Limit": str(limit),
-                        "X-RateLimit-Remaining": "0",
-                        "X-RateLimit-Reset": str(ttl),
-                        "Retry-After": str(ttl),
-                    },
-                )
+                if current is None:
+                    await cache.set(cache_key, "1", ttl=window)
+                    continue
 
-            await cache.incr(cache_key)
+                count = int(current)
+                if count >= limit:
+                    ttl = await cache.redis.ttl(cache_key)
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail=f"Chat rate limit exceeded. Daily limit: {limit} messages. "
+                               f"Try again in {ttl // 3600} hours.",
+                        headers={
+                            "X-RateLimit-Limit": str(limit),
+                            "X-RateLimit-Remaining": "0",
+                            "X-RateLimit-Reset": str(ttl),
+                            "Retry-After": str(ttl),
+                        },
+                    )
+
+                await cache.incr(cache_key)
+
             return
         except HTTPException:
             raise
@@ -102,31 +119,41 @@ async def check_rate_limit(
         for k in expired_keys:
             del _rate_limit_store[k]
 
-    if key in _rate_limit_store:
-        count, window_start = _rate_limit_store[key]
+    # Check both session-based and IP-based limits for anonymous users
+    keys_to_check = [key]
+    if ip_key is not None:
+        keys_to_check.append(ip_key)
 
-        # Check if window has expired
-        if current_time - window_start > window:
-            _rate_limit_store[key] = (1, current_time)
-            return
+    for check_key in keys_to_check:
+        if check_key in _rate_limit_store:
+            count, window_start = _rate_limit_store[check_key]
 
-        if count >= limit:
-            remaining_time = int(window - (current_time - window_start))
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Chat rate limit exceeded. Daily limit: {limit} messages. "
-                       f"Try again in {remaining_time // 3600} hours.",
-                headers={
-                    "X-RateLimit-Limit": str(limit),
-                    "X-RateLimit-Remaining": "0",
-                    "X-RateLimit-Reset": str(remaining_time),
-                    "Retry-After": str(remaining_time),
-                },
-            )
+            # Check if window has expired
+            if current_time - window_start > window:
+                _rate_limit_store[check_key] = (0, current_time)
+                continue
 
-        _rate_limit_store[key] = (count + 1, window_start)
-    else:
-        _rate_limit_store[key] = (1, current_time)
+            if count >= limit:
+                remaining_time = int(window - (current_time - window_start))
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"Chat rate limit exceeded. Daily limit: {limit} messages. "
+                           f"Try again in {remaining_time // 3600} hours.",
+                    headers={
+                        "X-RateLimit-Limit": str(limit),
+                        "X-RateLimit-Remaining": "0",
+                        "X-RateLimit-Reset": str(remaining_time),
+                        "Retry-After": str(remaining_time),
+                    },
+                )
+
+    # Increment all applicable counters
+    for check_key in keys_to_check:
+        if check_key in _rate_limit_store:
+            count, window_start = _rate_limit_store[check_key]
+            _rate_limit_store[check_key] = (count + 1, window_start)
+        else:
+            _rate_limit_store[check_key] = (1, current_time)
 
 
 @router.post("/message", response_model=ChatMessageResponse)
@@ -157,8 +184,8 @@ async def send_message(
     session_id = request_data.session_id or get_session_id(request)
     user_id = current_user.id if current_user else None
 
-    # Check rate limits
-    await check_rate_limit(current_user, session_id, cache)
+    # Check rate limits (pass request for secure IP extraction)
+    await check_rate_limit(current_user, session_id, cache, request)
 
     try:
         response = await service.chat(
@@ -171,12 +198,24 @@ async def send_message(
 
         return response
 
-    except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
+    except ValueError as e:
+        # Input validation errors (e.g., prompt injection blocked) are safe to show
+        raise HTTPException(status_code=400, detail=str(e))
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    except RuntimeError:
+        # LLM backend unavailable - don't leak backend details
+        raise HTTPException(
+            status_code=503,
+            detail="Chat service is temporarily unavailable. Please try again later.",
+        )
+    except Exception:
+        # Never leak internal error details to client
+        logger.exception("Unexpected error in chat endpoint")
+        raise HTTPException(
+            status_code=500,
+            detail="An unexpected error occurred. Please try again.",
+        )
 
 
 @router.post("/message/stream")
@@ -210,7 +249,7 @@ async def send_message_stream(
     session_id = request_data.session_id or get_session_id(request)
     user_id = current_user.id if current_user else None
 
-    await check_rate_limit(current_user, session_id, cache)
+    await check_rate_limit(current_user, session_id, cache, request)
 
     async def generate():
         try:
@@ -222,8 +261,10 @@ async def send_message_stream(
                 context=request_data.context,
             ):
                 yield f"data: {chunk.model_dump_json()}\n\n"
-        except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+        except Exception:
+            # Never leak internal error details in SSE stream
+            logger.exception("Unexpected error in chat stream")
+            yield f"data: {json.dumps({'type': 'error', 'content': 'An unexpected error occurred. Please try again.'})}\n\n"
 
     return StreamingResponse(
         generate(),

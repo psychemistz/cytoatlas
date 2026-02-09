@@ -238,16 +238,31 @@ def create_app() -> FastAPI:
     # Global exception handler
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-        """Handle uncaught exceptions."""
-        # Log the actual error (but don't expose to client)
+        """Handle uncaught exceptions.
+
+        SECURITY: Never expose stack traces, internal paths, or
+        implementation details to clients regardless of debug mode.
+        Debug details are logged server-side only.
+        """
+        # Log the actual error server-side (with full details)
         logger.error(f"Unhandled exception: {exc}", exc_info=True)
+
+        # In development debug mode, include the exception type (but not
+        # full traceback or file paths) to aid local development.
+        if settings.debug and settings.environment == "development":
+            detail = f"{type(exc).__name__}: {str(exc)}"
+            # Strip any file paths from the message
+            import re
+            detail = re.sub(r"(/[^\s:]+)+", "[path]", detail)
+        else:
+            detail = "An unexpected error occurred"
 
         return JSONResponse(
             status_code=500,
             content={
                 "success": False,
                 "error": "Internal server error",
-                "detail": "An unexpected error occurred" if not settings.debug else str(exc),
+                "detail": detail,
             },
         )
 

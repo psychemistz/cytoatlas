@@ -1,0 +1,3 @@
+# Generated audit reports (run-specific, not committed)
+audit_report_*.txt
+bandit_results_*.json

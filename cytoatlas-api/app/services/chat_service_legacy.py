@@ -757,9 +757,9 @@ class ChatService:
             except Exception:
                 logger.exception("Anthropic fallback also failed")
                 raise RuntimeError("All LLM backends unavailable")
-        except Exception as e:
+        except Exception:
             logger.exception("LLM API call failed")
-            raise RuntimeError(f"Chat service error: {str(e)}")
+            raise RuntimeError("Chat service encountered an error. Please try again.")
 
         assistant_message = conversation.add_assistant_message(
             content=response_text,
@@ -822,9 +822,9 @@ class ChatService:
                 raise ConnectionError("vLLM not configured")
         except (ConnectionError, OSError) as e:
             logger.warning("vLLM streaming unavailable (%s), falling back to Anthropic", e)
-        except Exception as e:
+        except Exception:
             logger.exception("Streaming chat failed")
-            yield StreamChunk(type="error", content=str(e), message_id=message_id)
+            yield StreamChunk(type="error", content="An unexpected error occurred. Please try again.", message_id=message_id)
             return
 
         # Anthropic fallback for streaming
@@ -833,9 +833,9 @@ class ChatService:
                 messages, system_prompt, conversation, message_id
             ):
                 yield chunk
-        except Exception as e:
+        except Exception:
             logger.exception("Anthropic streaming fallback failed")
-            yield StreamChunk(type="error", content=str(e), message_id=message_id)
+            yield StreamChunk(type="error", content="Chat service is temporarily unavailable. Please try again later.", message_id=message_id)
 
     def get_suggestions(self) -> ChatSuggestionsResponse:
         """Get suggested queries for the chat."""
