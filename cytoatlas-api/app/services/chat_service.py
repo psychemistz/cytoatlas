@@ -104,7 +104,7 @@ class ChatService:
 
     @property
     def anthropic_client(self):
-        """Lazy-load Anthropic client (fallback)."""
+        """Lazy-load async Anthropic client (fallback)."""
         if self._anthropic_client is None:
             if not self.settings.anthropic_api_key:
                 raise RuntimeError(
@@ -113,7 +113,7 @@ class ChatService:
                 )
             import anthropic
 
-            self._anthropic_client = anthropic.Anthropic(
+            self._anthropic_client = anthropic.AsyncAnthropic(
                 api_key=self.settings.anthropic_api_key
             )
         return self._anthropic_client
@@ -430,7 +430,7 @@ class ChatService:
         downloadable_data: DownloadableData | None = None
         response_text = ""
 
-        response = self.anthropic_client.messages.create(
+        response = await self.anthropic_client.messages.create(
             model=self.settings.anthropic_chat_model,
             max_tokens=self.settings.chat_max_tokens,
             system=system_prompt,
@@ -491,7 +491,7 @@ class ChatService:
                 ],
             })
 
-            response = self.anthropic_client.messages.create(
+            response = await self.anthropic_client.messages.create(
                 model=self.settings.anthropic_chat_model,
                 max_tokens=self.settings.chat_max_tokens,
                 system=system_prompt,
@@ -523,14 +523,14 @@ class ChatService:
         visualizations: list[VisualizationConfig] = []
         full_response = ""
 
-        with self.anthropic_client.messages.stream(
+        async with self.anthropic_client.messages.stream(
             model=self.settings.anthropic_chat_model,
             max_tokens=self.settings.chat_max_tokens,
             system=system_prompt,
             tools=CYTOATLAS_TOOLS,
             messages=messages,
         ) as stream:
-            for event in stream:
+            async for event in stream:
                 if event.type == "content_block_delta":
                     if hasattr(event.delta, "text"):
                         full_response += event.delta.text
@@ -540,7 +540,7 @@ class ChatService:
                             message_id=message_id,
                         )
 
-            response = stream.get_final_message()
+            response = await stream.get_final_message()
 
             if response.stop_reason == "tool_use":
                 for block in response.content:
@@ -607,7 +607,7 @@ class ChatService:
                     })
                     current_tool_results = []
 
-                    response = self.anthropic_client.messages.create(
+                    response = await self.anthropic_client.messages.create(
                         model=self.settings.anthropic_chat_model,
                         max_tokens=self.settings.chat_max_tokens,
                         system=system_prompt,
