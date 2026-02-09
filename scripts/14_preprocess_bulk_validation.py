@@ -310,16 +310,8 @@ def build_donor_scatter() -> dict:
 
                 n_total = len(expr_vals)
 
-                # Subsample scatter points if too many (keep rho from full data)
-                if n_total > 2000:
-                    rng = np.random.default_rng(42)
-                    idx = rng.choice(n_total, size=2000, replace=False)
-                    idx.sort()
-                    expr_vals = expr_vals[idx]
-                    act_vals = act_vals[idx]
-
-                # Round points to 4 decimals for compactness
-                points = [[round_val(float(e)), round_val(float(a))] for e, a in zip(expr_vals, act_vals)]
+                # All points included — use 2-decimal precision for compactness
+                points = [[round_val(float(e), 2), round_val(float(a), 2)] for e, a in zip(expr_vals, act_vals)]
 
                 entry = {
                     "gene": gene,
@@ -588,22 +580,13 @@ def build_celltype_scatter() -> dict:
                     if expr_std > 1e-10:
                         expr_vals = (expr_vals - np.mean(expr_vals)) / expr_std
 
-                    # Subsample if too many
-                    if n_total > 2000:
-                        rng = np.random.default_rng(42)
-                        idx = rng.choice(n_total, size=2000, replace=False)
-                        idx.sort()
-                        expr_vals = expr_vals[idx]
-                        act_vals = act_vals[idx]
-                        if ct_labels is not None:
-                            ct_labels = ct_labels[idx]
-
-                    # Points: [expr, activity, celltype_label]
+                    # All points included — integer-encode group labels for compactness
+                    ct_to_idx = {ct: i for i, ct in enumerate(celltypes_available)}
                     points = []
                     for i in range(len(expr_vals)):
-                        pt = [round_val(float(expr_vals[i])), round_val(float(act_vals[i]))]
+                        pt = [round_val(float(expr_vals[i]), 2), round_val(float(act_vals[i]), 2)]
                         if ct_labels is not None:
-                            pt.append(str(ct_labels[i]))
+                            pt.append(ct_to_idx.get(str(ct_labels[i]), -1))
                         points.append(pt)
 
                     targets_data[target] = {
@@ -612,6 +595,7 @@ def build_celltype_scatter() -> dict:
                         "pval": float(f"{pval:.2e}") if pval is not None and np.isfinite(pval) else None,
                         "n": n_total,
                         "celltypes": celltypes_available,
+                        "groups": celltypes_available,
                         "points": points,
                     }
 
@@ -754,21 +738,13 @@ def build_resampled_scatter() -> dict:
                     if expr_std > 1e-10:
                         expr_vals = (expr_vals - np.mean(expr_vals)) / expr_std
 
-                    # Subsample for JSON
-                    if n_total > 2000:
-                        rng = np.random.default_rng(42)
-                        idx = rng.choice(n_total, size=2000, replace=False)
-                        idx.sort()
-                        expr_vals = expr_vals[idx]
-                        act_vals = act_vals[idx]
-                        if ct_labels is not None:
-                            ct_labels = ct_labels[idx]
-
+                    # All points included — integer-encode group labels for compactness
+                    ct_to_idx = {ct: i for i, ct in enumerate(celltypes_available)}
                     points = []
                     for i in range(len(expr_vals)):
-                        pt = [round_val(float(expr_vals[i])), round_val(float(act_vals[i]))]
+                        pt = [round_val(float(expr_vals[i]), 2), round_val(float(act_vals[i]), 2)]
                         if ct_labels is not None:
-                            pt.append(str(ct_labels[i]))
+                            pt.append(ct_to_idx.get(str(ct_labels[i]), -1))
                         points.append(pt)
 
                     targets_data[target] = {
@@ -778,6 +754,7 @@ def build_resampled_scatter() -> dict:
                         "n": n_total,
                         "rho_ci": rho_ci,
                         "celltypes": celltypes_available,
+                        "groups": celltypes_available,
                         "points": points,
                     }
 
