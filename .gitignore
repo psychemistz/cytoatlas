@@ -61,6 +61,7 @@ slurm_logs/
 visualization/data/*.json
 visualization/data/*.js
 visualization/data/*.h5ad
+visualization/data_lite/
 
 # Coverage
 .coverage

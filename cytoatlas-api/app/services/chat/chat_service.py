@@ -66,9 +66,21 @@ SYSTEM_PROMPT = """You are CytoAtlas Assistant, an expert in single-cell cytokin
 When users ask questions:
 1. Use the available tools to retrieve relevant data from CytoAtlas
 2. Always cite the specific atlas and signature type in your responses
-3. For complex patterns, create visualizations to illustrate your findings
+3. **Always create a visualization** after retrieving activity data:
+   - Use `create_visualization` with `viz_type: "bar_chart"` for ranking cell types by activity
+   - Use `viz_type: "heatmap"` when comparing multiple signatures across cell types
+   - Sort data by activity value (highest to lowest) in bar charts
+   - The `bar_chart` type requires `data.labels` (list of strings) and `data.values` (list of numbers)
 4. If users want to export data, use the export_data tool to prepare downloads
 5. Provide biological context and interpretation when relevant
+
+## Tool Call Guidelines
+
+When calling tools, use the exact parameter names from the tool definitions:
+- Use `atlas_name` (not `atlases` or `atlas`) for specifying which atlas
+- Use `signature_type` (either "CytoSig" or "SecAct")
+- Use `signatures` as a list (e.g., ["IFNG"]) for specifying signatures
+- Use `cell_types` for optional cell type filtering
 
 ## Guidelines
 
@@ -452,65 +464,105 @@ class ChatService:
         tool_results: list[ToolResult] = []
         visualizations: list[VisualizationConfig] = []
 
-        # Stream from LLM
-        async for chunk in self.llm_client.chat_stream(api_messages, OPENAI_TOOLS):
-            if chunk["type"] == "content":
-                full_response += chunk["content"]
-                yield StreamChunk(
-                    type="text",
-                    content=chunk["content"],
-                    message_id=message_id,
-                )
+        # Tool loop: stream → execute tools → send results back → stream again
+        max_iterations = 5
+        iteration = 0
 
-            elif chunk["type"] == "tool_calls":
-                # Execute tools
-                for tc_data in chunk["tool_calls"]:
-                    tool_call = ToolCall(
-                        id=tc_data["id"],
-                        name=tc_data["name"],
-                        arguments=tc_data["arguments"],
-                    )
-                    tool_calls.append(tool_call)
+        while iteration < max_iterations:
+            iteration += 1
+            has_tool_calls = False
 
+            async for chunk in self.llm_client.chat_stream(api_messages, OPENAI_TOOLS):
+                if chunk["type"] == "content":
+                    full_response += chunk["content"]
                     yield StreamChunk(
-                        type="tool_call",
-                        tool_call=tool_call,
+                        type="text",
+                        content=chunk["content"],
                         message_id=message_id,
                     )
 
-                    # Execute and validate result
-                    result = await self.tool_executor.execute_tool(tc_data["name"], tc_data["arguments"])
-                    result = validate_tool_result(result)
+                elif chunk["type"] == "tool_calls":
+                    has_tool_calls = True
+                    round_tool_calls = []
 
-                    tool_result = ToolResult(
-                        tool_call_id=tc_data["id"],
-                        content=json.dumps(result) if isinstance(result, dict) else str(result),
-                        is_error="error" in result if isinstance(result, dict) else False,
-                    )
-                    tool_results.append(tool_result)
-
-                    yield StreamChunk(
-                        type="tool_result",
-                        tool_result=tool_result,
-                        message_id=message_id,
-                    )
-
-                    # Check for visualization
-                    if "visualization" in result:
-                        viz_data = result["visualization"]
-                        viz = VisualizationConfig(
-                            type=VisualizationType(viz_data["type"]),
-                            title=viz_data.get("title"),
-                            data=viz_data["data"],
-                            config=viz_data.get("config", {}),
-                            container_id=viz_data.get("container_id"),
+                    # Execute tools
+                    for tc_data in chunk["tool_calls"]:
+                        tool_call = ToolCall(
+                            id=tc_data["id"],
+                            name=tc_data["name"],
+                            arguments=tc_data["arguments"],
                         )
-                        visualizations.append(viz)
+                        tool_calls.append(tool_call)
+                        round_tool_calls.append(tool_call)
+
                         yield StreamChunk(
-                            type="visualization",
-                            visualization=viz,
+                            type="tool_call",
+                            tool_call=tool_call,
                             message_id=message_id,
                         )
+
+                        # Execute and validate result
+                        result = await self.tool_executor.execute_tool(tc_data["name"], tc_data["arguments"])
+                        result = validate_tool_result(result)
+
+                        tool_result = ToolResult(
+                            tool_call_id=tc_data["id"],
+                            content=json.dumps(result) if isinstance(result, dict) else str(result),
+                            is_error="error" in result if isinstance(result, dict) else False,
+                        )
+                        tool_results.append(tool_result)
+
+                        yield StreamChunk(
+                            type="tool_result",
+                            tool_result=tool_result,
+                            message_id=message_id,
+                        )
+
+                        # Check for visualization
+                        if "visualization" in result:
+                            viz_data = result["visualization"]
+                            viz = VisualizationConfig(
+                                type=VisualizationType(viz_data["type"]),
+                                title=viz_data.get("title"),
+                                data=viz_data["data"],
+                                config=viz_data.get("config", {}),
+                                container_id=viz_data.get("container_id"),
+                            )
+                            visualizations.append(viz)
+                            yield StreamChunk(
+                                type="visualization",
+                                visualization=viz,
+                                message_id=message_id,
+                            )
+
+                    # Build assistant message with tool calls for the continuation
+                    api_messages.append({
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.name,
+                                    "arguments": json.dumps(tc.arguments),
+                                },
+                            }
+                            for tc in round_tool_calls
+                        ],
+                    })
+
+                    # Add tool results to conversation
+                    for tr in tool_results[-len(round_tool_calls):]:
+                        api_messages.append({
+                            "role": "tool",
+                            "tool_call_id": tr.tool_call_id,
+                            "content": tr.content,
+                        })
+
+            # If no tool calls in this round, we're done
+            if not has_tool_calls:
+                break
 
         # Save assistant message
         citations = None

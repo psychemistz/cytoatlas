@@ -41,6 +41,8 @@ mimetypes.add_type('text/css', '.css')
 class CytoAtlasRequestHandler(http.server.SimpleHTTPRequestHandler):
     """Custom HTTP request handler with CORS, caching, and health check."""
 
+    lite_mode = False  # Set via class attribute before server starts
+
     def __init__(self, *args, directory=None, **kwargs):
         self.server_start_time = datetime.now().isoformat()
         super().__init__(*args, directory=directory, **kwargs)
@@ -90,6 +92,10 @@ class CytoAtlasRequestHandler(http.server.SimpleHTTPRequestHandler):
         parsed_path = urlparse(self.path)
         path = parsed_path.path
 
+        # Lite mode: rewrite /data/ requests to /data_lite/
+        if self.lite_mode and path.startswith('/data/'):
+            self.path = self.path.replace('/data/', '/data_lite/', 1)
+
         # Health check endpoint
         if path == '/api/health':
             self.send_health_response()
@@ -114,18 +120,20 @@ class CytoAtlasRequestHandler(http.server.SimpleHTTPRequestHandler):
             'server': 'CytoAtlas Dev Server',
             'version': '1.0.0',
             'timestamp': datetime.now().isoformat(),
-            'uptime_since': self.server_start_time
+            'uptime_since': self.server_start_time,
+            'lite_mode': self.lite_mode,
         }
         self.send_json_response(health_data)
 
     def send_data_listing(self):
         """List available data files in the data directory."""
-        data_dir = Path(self.directory) / 'data'
+        subdir = 'data_lite' if self.lite_mode else 'data'
+        data_dir = Path(self.directory) / subdir
         if data_dir.exists():
             files = [f.name for f in data_dir.iterdir() if f.is_file()]
-            self.send_json_response({'files': sorted(files)})
+            self.send_json_response({'files': sorted(files), 'source': subdir})
         else:
-            self.send_json_response({'files': [], 'error': 'Data directory not found'})
+            self.send_json_response({'files': [], 'error': f'{subdir} directory not found'})
 
     def send_json_response(self, data, status=200):
         """Send a JSON response."""
@@ -144,13 +152,21 @@ class ThreadedHTTPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     daemon_threads = True
 
 
-def run_server(host, port, directory):
+def run_server(host, port, directory, lite=False):
     """Run the development server."""
     # Ensure directory exists
     directory = Path(directory).resolve()
     if not directory.exists():
         print(f"Error: Directory '{directory}' does not exist")
         sys.exit(1)
+
+    if lite:
+        lite_dir = directory / 'data_lite'
+        if not lite_dir.exists():
+            print(f"Error: Lite data directory '{lite_dir}' does not exist.")
+            print("  Run: python scripts/create_data_lite.py")
+            sys.exit(1)
+        CytoAtlasRequestHandler.lite_mode = True
 
     # Change to the serving directory
     os.chdir(directory)
@@ -171,10 +187,13 @@ def run_server(host, port, directory):
     signal.signal(signal.SIGTERM, signal_handler)
 
     # Print startup message
+    mode_label = "LITE MODE" if lite else "FULL DATA"
     print("=" * 60)
-    print("  CytoAtlas Development Server")
+    print(f"  CytoAtlas Development Server ({mode_label})")
     print("=" * 60)
     print(f"  Serving from: {directory}")
+    if lite:
+        print(f"  Data source:  data_lite/ (rewriting /data/ -> /data_lite/)")
     print(f"  Local URL:    http://{host}:{port}")
     print(f"  Health check: http://{host}:{port}/api/health")
     print(f"  Data listing: http://{host}:{port}/api/data")
@@ -200,6 +219,7 @@ def main():
         epilog='''
 Examples:
   python dev-server.py                    # Serve current directory on port 8080
+  python dev-server.py --lite             # Serve with lite data (~100 MB vs 8.7 GB)
   python dev-server.py -p 3000            # Use port 3000
   python dev-server.py -d ./visualization # Serve specific directory
   python dev-server.py --host 0.0.0.0     # Allow external connections
@@ -221,10 +241,15 @@ Examples:
         default='.',
         help='Directory to serve (default: current directory)'
     )
+    parser.add_argument(
+        '--lite',
+        action='store_true',
+        help='Serve lite data (rewrites /data/ requests to /data_lite/)'
+    )
 
     args = parser.parse_args()
 
-    run_server(args.host, args.port, args.directory)
+    run_server(args.host, args.port, args.directory, lite=args.lite)
 
 
 if __name__ == '__main__':

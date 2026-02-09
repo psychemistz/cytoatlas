@@ -69,12 +69,28 @@ class VLLMClient(LLMClient):
             )
         return self._client
 
-    @staticmethod
-    def _ensure_json_string(args: str | dict) -> str:
+    # Expected keys for each tool — used to score JSON repair candidates
+    _TOOL_KEYS = {
+        "get_activity_data": {"atlas_name", "signature_type", "signatures"},
+        "get_correlations": {"signature", "signature_type", "correlation_type"},
+        "get_disease_activity": {"disease", "signature_type"},
+        "compare_atlases": {"signature", "signature_type"},
+        "get_atlas_summary": {"atlas_name"},
+        "list_cell_types": {"atlas_name"},
+        "list_signatures": {"signature_type"},
+        "search_entity": {"query"},
+        "get_validation_metrics": {"atlas_name"},
+        "export_data": {"data_type", "format", "parameters"},
+        "create_visualization": {"viz_type", "title", "data"},
+    }
+
+    @classmethod
+    def _ensure_json_string(cls, args: str | dict, tool_name: str = "") -> str:
         """Ensure tool call arguments are a valid JSON string.
 
         Mistral may produce duplicated/garbled JSON during streaming.
-        Strategy: try as-is, then try extracting valid JSON substrings.
+        Strategy: try as-is, then collect all valid JSON substrings
+        and pick the one with the most expected keys for the tool.
         """
         if isinstance(args, dict):
             return json.dumps(args)
@@ -84,19 +100,41 @@ class VLLMClient(LLMClient):
         except (json.JSONDecodeError, TypeError):
             pass
 
-        # Mistral often duplicates the JSON — try each '{' as a start
-        for i in range(len(args) - 1, -1, -1):
+        # Collect all valid JSON candidates starting from each '{'
+        candidates = []
+        for i in range(len(args)):
             if args[i] == '{':
                 candidate = args[i:]
                 try:
-                    json.loads(candidate)
-                    logger.info("Repaired tool args from pos %d: %s (original: %s)", i, candidate, args)
-                    return candidate
+                    parsed = json.loads(candidate)
+                    candidates.append((i, candidate, parsed))
                 except (json.JSONDecodeError, TypeError):
                     continue
 
-        logger.warning("Could not repair tool args: %s", args)
-        return "{}"
+        if not candidates:
+            logger.warning("Could not repair tool args: %s", args)
+            return "{}"
+
+        # Score candidates by how many expected keys they contain
+        expected_keys = cls._TOOL_KEYS.get(tool_name, set())
+        best = candidates[0]
+        best_score = -1
+
+        for i, candidate, parsed in candidates:
+            if not isinstance(parsed, dict):
+                continue
+            score = len(expected_keys & set(parsed.keys()))
+            # Prefer candidates with more keys overall (breaks ties)
+            score = score * 100 + len(parsed)
+            if score > best_score:
+                best_score = score
+                best = (i, candidate, parsed)
+
+        logger.info(
+            "Repaired tool args for %s from pos %d: %s (original: %s, candidates: %d)",
+            tool_name, best[0], best[1], args, len(candidates),
+        )
+        return best[1]
 
     async def chat(
         self,
@@ -117,14 +155,16 @@ class VLLMClient(LLMClient):
         tool_calls = None
 
         if message.tool_calls:
-            tool_calls = [
-                {
+            tool_calls = []
+            for tc in message.tool_calls:
+                repaired = self._ensure_json_string(
+                    tc.function.arguments, tool_name=tc.function.name
+                )
+                tool_calls.append({
                     "id": tc.id,
                     "name": tc.function.name,
-                    "arguments": json.loads(tc.function.arguments),
-                }
-                for tc in message.tool_calls
-            ]
+                    "arguments": json.loads(repaired),
+                })
 
         return {
             "content": message.content,
@@ -191,7 +231,7 @@ class VLLMClient(LLMClient):
             tool_calls = []
             for idx in sorted(collected_tool_calls.keys()):
                 tc_data = collected_tool_calls[idx]
-                repaired = self._ensure_json_string(tc_data["arguments"])
+                repaired = self._ensure_json_string(tc_data["arguments"], tool_name=tc_data["name"])
                 tool_calls.append({
                     "id": tc_data["id"],
                     "name": tc_data["name"],

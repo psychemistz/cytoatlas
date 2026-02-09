@@ -369,11 +369,43 @@ class ToolExecutor:
         self.settings = get_settings()
         self._data_cache: dict[str, Any] = {}
 
+    # Common parameter name mistakes from Mistral (wrong → correct)
+    _PARAM_ALIASES = {
+        "atlases": "atlas_name",      # Mistral confuses with compare_atlases
+        "atlas": "atlas_name",
+        "sig_type": "signature_type",
+        "type": "signature_type",
+        "sigs": "signatures",
+        "signature_names": "signatures",
+        "query_text": "query",
+        "cell_type_filter": "cell_types",
+    }
+
+    def _normalize_args(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Normalize parameter names to handle LLM mistakes.
+
+        Maps common parameter name variations to the expected names.
+        Also handles cases where atlas_name is provided as a list.
+        """
+        normalized = {}
+        for key, value in args.items():
+            canonical = self._PARAM_ALIASES.get(key, key)
+            normalized[canonical] = value
+
+        # If atlas_name was provided as a list (from atlases), extract first value
+        if isinstance(normalized.get("atlas_name"), list):
+            normalized["atlas_name"] = normalized["atlas_name"][0]
+
+        return normalized
+
     async def execute_tool(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Execute a tool and return the result."""
         handler = getattr(self, f"_execute_{tool_name}", None)
         if handler is None:
             return {"error": f"Unknown tool: {tool_name}"}
+
+        # Normalize parameter names to handle LLM mistakes
+        arguments = self._normalize_args(arguments)
 
         try:
             return await handler(arguments)
