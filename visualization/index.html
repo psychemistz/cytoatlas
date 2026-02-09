@@ -2575,8 +2575,6 @@
                             <option value="inflammation_ext">Inflammation Ext</option>
                             <option value="scatlas_normal">scAtlas Normal</option>
                             <option value="scatlas_cancer">scAtlas Cancer</option>
-                            <option value="gtex">GTEx</option>
-                            <option value="tcga">TCGA</option>
                         </select>
                     </label>
                     <label>Signature Type:
@@ -2584,6 +2582,14 @@
                             <option value="cytosig">CytoSig</option>
                             <option value="lincytosig">LinCytoSig</option>
                             <option value="secact">SecAct</option>
+                        </select>
+                    </label>
+                    <label id="val-donor-level-label">Level:
+                        <select id="val-donor-level"></select>
+                    </label>
+                    <label id="val-donor-group-label">Cell Type:
+                        <select id="val-donor-group">
+                            <option value="">All</option>
                         </select>
                     </label>
                     <label>Target:
@@ -2594,17 +2600,26 @@
                     <label style="position: relative;">
                         <input type="text" id="val-donor-search" placeholder="Search target or gene..." style="width: 150px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;">
                     </label>
+                    <label style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
+                        <input type="checkbox" id="val-donor-hide-nonexpr"> Hide non-expressing
+                    </label>
                 </div>
 
-                <!-- Suggested additional analyses:
-                     1. Atlas Comparison Overlay: overlay scatter from 2+ atlases for same target
-                     2. Target Ranking Waterfall: horizontal bar of all targets sorted by rho
-                     3. Demographic Stratification: split scatter by age/sex groups -->
                 <div class="panel-grid">
                     <div class="panel" style="grid-column: span 2;">
                         <div class="viz-title">Expression vs Activity</div>
                         <div class="viz-subtitle">Per-donor: gene expression vs predicted activity</div>
                         <div id="val-donor-expr-scatter" class="loading" style="height: 400px;">Loading...</div>
+                    </div>
+                    <div class="panel">
+                        <div class="viz-title">Per-Group Pearson r</div>
+                        <div class="viz-subtitle">Expression–activity correlation per group</div>
+                        <div id="val-donor-corr-bar" style="height: 400px;"></div>
+                    </div>
+                    <div class="panel">
+                        <div class="viz-title">Per-Group Activity Distribution</div>
+                        <div class="viz-subtitle">Activity z-score distribution per group</div>
+                        <div id="val-donor-activity-box" style="height: 400px;"></div>
                     </div>
                 </div>
             </div>
@@ -12169,6 +12184,242 @@
             return denom === 0 ? 0 : (n * sumXY - sumX * sumY) / denom;
         }
 
+        // ---- Donor Level: config for level/group label per atlas ----
+        const DONOR_LEVEL_CONFIG = {
+            cima: {
+                levels: { donor_l1: 'L1', donor_l2: 'L2', donor_l3: 'L3', donor_l4: 'L4' },
+                groupLabel: 'Cell Type',
+            },
+            inflammation_main: {
+                levels: { donor_l1: 'L1', donor_l2: 'L2' },
+                groupLabel: 'Cell Type',
+            },
+            inflammation_val: {
+                levels: { donor_l1: 'L1', donor_l2: 'L2' },
+                groupLabel: 'Cell Type',
+            },
+            inflammation_ext: {
+                levels: { donor_l1: 'L1', donor_l2: 'L2' },
+                groupLabel: 'Cell Type',
+            },
+            scatlas_normal: {
+                levels: { donor_organ: 'Organ', donor_organ_celltype1: 'Cell Type 1', donor_organ_celltype2: 'Cell Type 2' },
+                groupLabel: { donor_organ: 'Organ', donor_organ_celltype1: 'Cell Type', donor_organ_celltype2: 'Cell Type' },
+            },
+            scatlas_cancer: {
+                levels: { donor_organ: 'Sample Type', donor_organ_celltype1: 'Cell Type 1', donor_organ_celltype2: 'Cell Type 2' },
+                groupLabel: { donor_organ: 'Sample Type', donor_organ_celltype1: 'Cell Type', donor_organ_celltype2: 'Cell Type' },
+            },
+        };
+
+        // ---- Donor Level: get scatter data for current level selection ----
+        function getDonorScatterData(bulk, atlas, sigType) {
+            const level = document.getElementById('val-donor-level')?.value || '';
+            // Try celltype_scatter first (has level grouping)
+            const ctData = bulk.celltype_scatter?.[atlas]?.[level]?.[sigType];
+            if (ctData && Object.keys(ctData).length > 0) return ctData;
+            // Fall back to donor_scatter (no level/group info)
+            return bulk.donor_scatter?.[atlas]?.[sigType] || {};
+        }
+
+        // ---- Donor Level: get grouped points for bar chart / boxplot ----
+        function getDonorGroupPoints(bulk, atlas, sigType) {
+            const target = document.getElementById('val-donor-target')?.value;
+            const hideNonExpr = document.getElementById('val-donor-hide-nonexpr')?.checked || false;
+            const level = document.getElementById('val-donor-level')?.value || '';
+
+            const scatterData = bulk.celltype_scatter?.[atlas]?.[level]?.[sigType];
+            if (!scatterData || !target || !scatterData[target]) return null;
+
+            const tdata = scatterData[target];
+            const points = tdata.points || [];
+            if (points.length === 0 || points[0].length < 3) return null;
+
+            // Group points by the 3rd element (celltype/organ string label)
+            const groupMap = {};
+            points.forEach(p => {
+                const label = String(p[2]);
+                if (!groupMap[label]) groupMap[label] = { name: label, x: [], y: [] };
+                groupMap[label].x.push(p[0]);
+                groupMap[label].y.push(p[1]);
+            });
+
+            // Apply hide-non-expressing filter per group
+            if (hideNonExpr) {
+                Object.values(groupMap).forEach(gp => {
+                    if (gp.x.length === 0) return;
+                    const xRounded = gp.x.map(v => Math.round(v * 100) / 100);
+                    const freq = {};
+                    xRounded.forEach(v => { freq[v] = (freq[v] || 0) + 1; });
+                    const modeVal = Object.entries(freq).sort((a, b) => b[1] - a[1])[0];
+                    if (modeVal && modeVal[1] > gp.x.length * 0.1 && parseFloat(modeVal[0]) < 0) {
+                        const spikeVal = parseFloat(modeVal[0]);
+                        const keep = [];
+                        for (let i = 0; i < gp.x.length; i++) {
+                            if (Math.round(gp.x[i] * 100) / 100 !== spikeVal) keep.push(i);
+                        }
+                        gp.x = keep.map(i => gp.x[i]);
+                        gp.y = keep.map(i => gp.y[i]);
+                    }
+                });
+            }
+
+            return { target, groupPoints: groupMap };
+        }
+
+        // ---- Donor Level: Per-group Pearson r bar chart ----
+        function renderDonorCorrBar(bulk, atlas, sigType) {
+            const div = document.getElementById('val-donor-corr-bar');
+            if (!div) return;
+
+            const result = getDonorGroupPoints(bulk, atlas, sigType);
+            if (!result) {
+                div.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No grouped data available.</p>';
+                return;
+            }
+
+            const { target, groupPoints } = result;
+            const groupFilter = document.getElementById('val-donor-group')?.value || '';
+            const config = DONOR_LEVEL_CONFIG[atlas] || {};
+            const level = document.getElementById('val-donor-level')?.value || '';
+            const groupLabel = typeof config.groupLabel === 'object' ? (config.groupLabel[level] || 'Group') : (config.groupLabel || 'Group');
+
+            // Compute Pearson r per group (require >= 10 points)
+            const groupCorrs = [];
+            Object.values(groupPoints).forEach(gp => {
+                if (gp.x.length >= 10) {
+                    groupCorrs.push({ name: gp.name, r: computePearsonR(gp.x, gp.y), n: gp.x.length });
+                }
+            });
+
+            if (groupCorrs.length === 0) {
+                div.innerHTML = `<p style="text-align:center; padding:2rem; color:#666;">No ${groupLabel.toLowerCase()}s with \u226510 samples.</p>`;
+                return;
+            }
+
+            groupCorrs.sort((a, b) => b.r - a.r);
+
+            const names = groupCorrs.map(g => g.name);
+            const rValues = groupCorrs.map(g => g.r);
+            const nValues = groupCorrs.map(g => g.n);
+            const sortedR = rValues.slice().sort((a, b) => a - b);
+            const medianR = sortedR[Math.floor(sortedR.length / 2)];
+
+            const colors = rValues.map(r => {
+                const norm = Math.max(0, Math.min(1, (r + 1) / 2));
+                const red = Math.round(220 * (1 - norm) + 44 * norm);
+                const green = Math.round(44 * (1 - norm) + 160 * norm);
+                const blue = Math.round(40 * (1 - norm) + 44 * norm);
+                return `rgba(${red}, ${green}, ${blue}, 0.7)`;
+            });
+
+            const borderColors = names.map(name =>
+                (groupFilter && name === groupFilter) ? 'rgba(0, 0, 0, 0.9)' : 'rgba(0, 0, 0, 0.1)'
+            );
+            const borderWidths = names.map(name =>
+                (groupFilter && name === groupFilter) ? 3 : 1
+            );
+
+            const trace = {
+                x: names, y: rValues, type: 'bar',
+                marker: { color: colors, line: { color: borderColors, width: borderWidths } },
+                text: nValues.map(n => `n=${n}`),
+                hovertemplate: '<b>%{x}</b><br>Pearson r = %{y:.3f}<br>%{text}<extra></extra>',
+            };
+
+            const layout = {
+                title: { text: `${target} \u2014 Pearson r per ${groupLabel}`, font: { size: 13 } },
+                xaxis: { tickangle: -45, tickfont: { size: 9 }, automargin: true },
+                yaxis: { title: 'Pearson r', range: [-1, 1] },
+                shapes: [{
+                    type: 'line', x0: -0.5, x1: names.length - 0.5,
+                    y0: medianR, y1: medianR,
+                    line: { color: 'rgba(0,0,0,0.4)', width: 1.5, dash: 'dash' },
+                }],
+                annotations: [{
+                    x: 1, y: 1, xref: 'paper', yref: 'paper', xanchor: 'right', yanchor: 'top',
+                    text: `${groupCorrs.length} ${groupLabel.toLowerCase()}s | median r = ${medianR.toFixed(3)}`,
+                    showarrow: false, font: { size: 11, color: '#555' },
+                    bgcolor: 'rgba(255,255,255,0.8)', borderpad: 4,
+                }],
+                margin: { t: 40, b: 120, l: 60, r: 20 },
+                plot_bgcolor: '#fafafa',
+            };
+
+            Plotly.newPlot(div, [trace], layout, { responsive: true, displayModeBar: false });
+        }
+
+        // ---- Donor Level: Per-group activity distribution boxplot ----
+        function renderDonorActivityBox(bulk, atlas, sigType) {
+            const div = document.getElementById('val-donor-activity-box');
+            if (!div) return;
+
+            const result = getDonorGroupPoints(bulk, atlas, sigType);
+            if (!result) {
+                div.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No grouped data available.</p>';
+                return;
+            }
+
+            const { target, groupPoints } = result;
+            const groupFilter = document.getElementById('val-donor-group')?.value || '';
+            const config = DONOR_LEVEL_CONFIG[atlas] || {};
+            const level = document.getElementById('val-donor-level')?.value || '';
+            const groupLabel = typeof config.groupLabel === 'object' ? (config.groupLabel[level] || 'Group') : (config.groupLabel || 'Group');
+
+            // Build list of groups with enough samples, sorted by median activity
+            const groups = Object.values(groupPoints)
+                .filter(gp => gp.y.length >= 10)
+                .map(gp => {
+                    const sorted = gp.y.slice().sort((a, b) => a - b);
+                    return { name: gp.name, y: gp.y, median: sorted[Math.floor(sorted.length / 2)], n: gp.y.length };
+                })
+                .sort((a, b) => b.median - a.median);
+
+            if (groups.length === 0) {
+                div.innerHTML = `<p style="text-align:center; padding:2rem; color:#666;">No ${groupLabel.toLowerCase()}s with \u226510 samples.</p>`;
+                return;
+            }
+
+            const traces = groups.map(g => {
+                const isSelected = groupFilter && g.name === groupFilter;
+                const baseColor = isSelected ? 'rgba(255, 127, 14, ' : 'rgba(31, 119, 180, ';
+                return {
+                    y: g.y,
+                    type: 'box',
+                    name: g.name,
+                    boxpoints: 'outliers',
+                    marker: { color: baseColor + '0.5)', size: 3 },
+                    line: { color: baseColor + '0.9)', width: isSelected ? 2.5 : 1.5 },
+                    fillcolor: baseColor + (isSelected ? '0.3)' : '0.15)'),
+                    whiskerwidth: 0.5,
+                    hoverinfo: 'y+name',
+                };
+            });
+
+            const layout = {
+                title: { text: `${target} \u2014 Activity Distribution per ${groupLabel}`, font: { size: 13 } },
+                yaxis: { title: 'Activity (z-score)' },
+                xaxis: { tickangle: -45, tickfont: { size: 9 }, automargin: true },
+                annotations: [{
+                    x: 1, y: 1, xref: 'paper', yref: 'paper', xanchor: 'right', yanchor: 'top',
+                    text: `${groups.length} ${groupLabel.toLowerCase()}s`,
+                    showarrow: false, font: { size: 11, color: '#555' },
+                    bgcolor: 'rgba(255,255,255,0.8)', borderpad: 4,
+                }],
+                margin: { t: 40, b: 120, l: 60, r: 20 },
+                plot_bgcolor: '#fafafa',
+                showlegend: false,
+            };
+
+            Plotly.newPlot(div, traces, layout, { responsive: true, displayModeBar: false });
+        }
+
+        // ---- Donor Level: render both group panels ----
+        function renderDonorGroupPanels(bulk, atlas, sigType) {
+            renderDonorCorrBar(bulk, atlas, sigType);
+            renderDonorActivityBox(bulk, atlas, sigType);
+        }
+
         // ---- Per-donor scatter renderer (uses shared renderer) ----
         function renderDonorExprScatter(bulk, atlas, sigType) {
             const div = document.getElementById('val-donor-expr-scatter');
@@ -12176,17 +12427,31 @@
             div.classList.remove('loading');
 
             const target = document.getElementById('val-donor-target')?.value;
-            const scatterData = bulk.donor_scatter?.[atlas]?.[sigType];
+            const groupFilter = document.getElementById('val-donor-group')?.value || '';
+            const hideNonExpr = document.getElementById('val-donor-hide-nonexpr')?.checked || false;
+            const scatterData = getDonorScatterData(bulk, atlas, sigType);
             if (!scatterData || !target || !scatterData[target]) {
                 div.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No scatter data available for this target.</p>';
+                renderDonorGroupPanels(bulk, atlas, sigType);
                 return;
             }
+
+            const config = DONOR_LEVEL_CONFIG[atlas] || {};
+            const level = document.getElementById('val-donor-level')?.value || '';
+            const groupLabel = typeof config.groupLabel === 'object' ? (config.groupLabel[level] || 'Group') : (config.groupLabel || 'Group');
+            const filterSuffix = groupFilter ? ` - ${groupFilter}` : '';
 
             renderValidationScatter('val-donor-expr-scatter', scatterData[target], target, {
                 color: 'rgba(31, 119, 180, 0.5)',
                 colorLine: 'rgba(31, 119, 180, 0.8)',
+                celltypeFilter: groupFilter,
+                hideNonExpr,
+                filterLabel: groupLabel,
                 unitLabel: 'donors',
+                titleSuffix: filterSuffix ? ` (${filterSuffix.trim()})` : '',
             });
+
+            renderDonorGroupPanels(bulk, atlas, sigType);
         }
 
         // ---- Tab 1: Donor Level ----
@@ -12200,15 +12465,72 @@
             const exprScatterDiv = document.getElementById('val-donor-expr-scatter');
             exprScatterDiv?.classList.remove('loading');
 
-            // Get donor-level data
-            const atlasData = bulk.donor_level[atlas];
-            if (!atlasData || !atlasData[sigType]) {
+            const config = DONOR_LEVEL_CONFIG[atlas] || {};
+            const levels = config.levels || {};
+
+            // Populate Level dropdown
+            const levelSel = document.getElementById('val-donor-level');
+            if (levelSel) {
+                const curLevel = levelSel.value;
+                levelSel.innerHTML = '';
+                const availLevels = Object.keys(levels);
+                // Only show levels that have data in celltype_scatter
+                const ctAtlas = bulk.celltype_scatter?.[atlas] || {};
+                availLevels.forEach(lv => {
+                    if (ctAtlas[lv]) {
+                        const opt = document.createElement('option');
+                        opt.value = lv;
+                        opt.textContent = levels[lv];
+                        levelSel.appendChild(opt);
+                    }
+                });
+                // Restore previous selection or use first
+                const opts = Array.from(levelSel.options).map(o => o.value);
+                if (opts.includes(curLevel)) levelSel.value = curLevel;
+                else if (opts.length > 0) levelSel.value = opts[0];
+            }
+
+            const level = levelSel?.value || '';
+
+            // Get scatter data from celltype_scatter for selected level
+            const scatterData = getDonorScatterData(bulk, atlas, sigType);
+
+            if (!scatterData || Object.keys(scatterData).length === 0) {
                 if (exprScatterDiv) exprScatterDiv.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No data available for this atlas/signature combination.</p>';
                 return;
             }
 
-            // Populate target dropdown from donor_scatter data (with search support)
-            const scatterData = bulk.donor_scatter?.[atlas]?.[sigType] || {};
+            // Update group label
+            const groupLabel = document.getElementById('val-donor-group-label');
+            if (groupLabel) {
+                const labelText = typeof config.groupLabel === 'object' ? (config.groupLabel[level] || 'Group') : (config.groupLabel || 'Group');
+                groupLabel.childNodes[0].textContent = labelText + ': ';
+            }
+
+            // Populate Group dropdown from celltypes of the first target in scatter data
+            const groupSel = document.getElementById('val-donor-group');
+            if (groupSel) {
+                const curGroup = groupSel.value;
+                const glText = typeof config.groupLabel === 'object' ? (config.groupLabel[level] || 'Group') : (config.groupLabel || 'Group');
+                groupSel.innerHTML = `<option value="">All ${glText}s</option>`;
+                // Find celltypes from any target that has them
+                let celltypes = [];
+                for (const t of Object.keys(scatterData)) {
+                    if (scatterData[t]?.celltypes?.length > 0) {
+                        celltypes = scatterData[t].celltypes;
+                        break;
+                    }
+                }
+                celltypes.forEach(ct => {
+                    const opt = document.createElement('option');
+                    opt.value = ct;
+                    opt.textContent = ct.replace(/_/g, ' ');
+                    groupSel.appendChild(opt);
+                });
+                if (celltypes.includes(curGroup)) groupSel.value = curGroup;
+            }
+
+            // Populate target dropdown
             populateTargetDropdown('val-donor-target', scatterData, 'IFNG', 'val-donor-search');
 
             renderDonorExprScatter(bulk, atlas, sigType);
@@ -12762,6 +13084,21 @@
             // Donor Level tab listeners
             document.getElementById('val-donor-atlas')?.addEventListener('change', updateValidationDonor);
             document.getElementById('val-donor-sigtype')?.addEventListener('change', updateValidationDonor);
+            document.getElementById('val-donor-level')?.addEventListener('change', updateValidationDonor);
+            document.getElementById('val-donor-group')?.addEventListener('change', async () => {
+                const bulk = await loadBulkValidationData();
+                if (!bulk) return;
+                const atlas = document.getElementById('val-donor-atlas')?.value || 'cima';
+                const sigType = document.getElementById('val-donor-sigtype')?.value || 'cytosig';
+                renderDonorExprScatter(bulk, atlas, sigType);
+            });
+            document.getElementById('val-donor-hide-nonexpr')?.addEventListener('change', async () => {
+                const bulk = await loadBulkValidationData();
+                if (!bulk) return;
+                const atlas = document.getElementById('val-donor-atlas')?.value || 'cima';
+                const sigType = document.getElementById('val-donor-sigtype')?.value || 'cytosig';
+                renderDonorExprScatter(bulk, atlas, sigType);
+            });
             document.getElementById('val-donor-target')?.addEventListener('change', async () => {
                 const bulk = await loadBulkValidationData();
                 if (!bulk) return;

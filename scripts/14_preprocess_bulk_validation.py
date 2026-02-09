@@ -122,10 +122,12 @@ CELLTYPE_H5AD_PATTERNS = {
         ("donor_l2", "inflammation_ext_donor_l2"),
     ],
     "scatlas_normal": [
+        ("donor_organ", "scatlas_normal_donor_organ"),
         ("donor_organ_celltype1", "scatlas_normal_donor_organ_celltype1"),
         ("donor_organ_celltype2", "scatlas_normal_donor_organ_celltype2"),
     ],
     "scatlas_cancer": [
+        ("donor_organ", "scatlas_cancer_donor_organ"),
         ("donor_organ_celltype1", "scatlas_cancer_donor_organ_celltype1"),
         ("donor_organ_celltype2", "scatlas_cancer_donor_organ_celltype2"),
     ],
@@ -545,6 +547,7 @@ def build_celltype_scatter() -> dict:
                 ct_col = None
                 for col in ["cell_type_l1", "cell_type_l2", "cell_type_l3", "cell_type_l4",
                             "cellType1", "cellType2", "celltype", "cell_type",
+                            "Level1", "Level2", "tissue",
                             "tissue_type", "cancer_type"]:
                     if col in expr_adata.obs.columns:
                         ct_col = col
