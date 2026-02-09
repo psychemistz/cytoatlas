@@ -12,6 +12,8 @@ set -e
 module load CUDA/12.8.1 cuDNN
 
 export HF_HOME=/data/parks34/.cache/huggingface
+export no_proxy=localhost,127.0.0.1
+export NO_PROXY=localhost,127.0.0.1
 
 source ~/bin/myconda
 conda activate secactpy
@@ -74,7 +76,6 @@ export H5AD_BASE_PATH=/data/Jiang_Lab/Data/Seongyong
 export LLM_BASE_URL=http://localhost:$VLLM_PORT/v1
 
 cd "$API_DIR"
-pip install -e . --quiet
 
 NODE_IP=$(hostname -i)
 echo "=========================================="
