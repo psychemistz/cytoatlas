@@ -2495,14 +2495,88 @@
             <p>Validation of activity predictions by correlating inferred activity scores with actual gene expression of signature genes. This demonstrates that predicted activities reflect underlying biology.</p>
 
             <div class="tabs">
-                <button class="tab active" data-tab="val-bulk">Bulk RNA-seq</button>
+                <button class="tab active" data-tab="val-summary">Summary</button>
+                <button class="tab" data-tab="val-bulk">Bulk RNA-seq</button>
                 <button class="tab" data-tab="val-donor">Donor Level</button>
                 <button class="tab" data-tab="val-celltype">Cell Type Level</button>
                 <button class="tab" data-tab="val-singlecell">Single-Cell Level</button>
             </div>
 
+            <!-- Validation Summary -->
+            <div class="tab-content active" id="tab-val-summary">
+                <h3>Validation Summary</h3>
+                <p>Overview of activity prediction quality across all validation levels and atlases.</p>
+
+                <div class="filter-bar">
+                    <label>Signature Type:
+                        <select id="val-sum-sigtype">
+                            <option value="CytoSig">CytoSig (44)</option>
+                            <option value="SecAct">SecAct</option>
+                        </select>
+                    </label>
+                </div>
+
+                <!-- Row 1: Heatmap (full-width) -->
+                <div class="panel-grid">
+                    <div class="panel" style="grid-column: span 2;">
+                        <div class="viz-title">Multi-Level Validation Heatmap</div>
+                        <div class="viz-subtitle">Metric per signature across validation levels (top 30 by median)</div>
+                        <div id="val-sum-heatmap" style="height: 500px;">Loading...</div>
+                    </div>
+                </div>
+
+                <!-- Row 2: Distribution + Cross-Atlas (2-column) -->
+                <div class="panel-grid" style="margin-top: 1.5rem;">
+                    <div class="panel">
+                        <div class="viz-title">Validation Level Distribution</div>
+                        <div class="viz-subtitle">Pearson r distribution across all signatures, grouped by level and atlas</div>
+                        <div id="val-sum-distribution" style="height: 400px;">Loading...</div>
+                    </div>
+                    <div class="panel">
+                        <div class="viz-title">Cross-Atlas Consistency</div>
+                        <div class="viz-subtitle">Same signature's validation metric in atlas A vs atlas B</div>
+                        <div id="val-sum-crossatlas" style="height: 400px;">Loading...</div>
+                    </div>
+                </div>
+
+                <!-- Row 3: Bio Concordance + Quality (2-column) -->
+                <div class="panel-grid" style="margin-top: 1.5rem;">
+                    <div class="panel">
+                        <div class="viz-title">Biological Concordance</div>
+                        <div class="viz-subtitle">Known marker-cell type associations validated across atlases</div>
+                        <div id="val-sum-bio" style="height: 350px; overflow-y: auto;"></div>
+                    </div>
+                    <div class="panel">
+                        <div class="viz-title">Quality Overview</div>
+                        <div class="viz-subtitle">Gene coverage and cross-validation stability distribution</div>
+                        <div id="val-sum-quality" style="height: 350px;">Loading...</div>
+                    </div>
+                </div>
+
+                <!-- Row 4: Ranking Table (full-width) -->
+                <div class="panel-grid" style="margin-top: 1.5rem;">
+                    <div class="panel" style="grid-column: span 2;">
+                        <div class="viz-title">Signature Ranking</div>
+                        <div class="viz-subtitle">All signatures ranked by composite validation score (click column to sort)</div>
+                        <div style="margin-bottom: 0.5rem;">
+                            <label>Atlas:
+                                <select id="val-sum-table-atlas">
+                                    <option value="all">All Atlases</option>
+                                    <option value="cima">CIMA</option>
+                                    <option value="inflammation">Inflammation</option>
+                                    <option value="scatlas">scAtlas</option>
+                                </select>
+                            </label>
+                            <input type="text" id="val-sum-table-search" placeholder="Search signature..."
+                                   style="margin-left: 1rem; padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px;">
+                        </div>
+                        <div id="val-sum-table" style="max-height: 500px; overflow-y: auto;"></div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Bulk RNA-seq Validation (GTEx + TCGA) -->
-            <div class="tab-content active" id="tab-val-bulk">
+            <div class="tab-content" id="tab-val-bulk">
                 <h3>Bulk RNA-seq Validation (GTEx + TCGA)</h3>
                 <p>External validation against independent bulk RNA-seq datasets: GTEx (~17K normal tissue samples) and TCGA (~11K tumor samples). Demonstrates that single-cell-derived cytokine signatures generalize to bulk data.</p>
 
@@ -3138,6 +3212,7 @@
                 updateMetaAnalysis();
             } else if (section === 'atlas-validation') {
                 initValidationSection();
+                updateValidationSummary();
                 updateValidationBulk();
                 updateValidationDonor();
                 updateValidationCelltype();
@@ -11764,9 +11839,11 @@
             bulkData: null,       // bulk_donor_correlations.json
             bulkRnaseqData: null, // bulk_rnaseq_validation.json (GTEx + TCGA)
             scData: {},           // validation/{atlas}_validation.json → singlecell_validations
+            fullData: {},         // validation/{atlas}_validation.json → full raw JSON
             bulkLoaded: false,
             bulkRnaseqLoaded: false,
-            scLoaded: {}
+            scLoaded: {},
+            fullLoaded: {}
         };
 
         // Load bulk donor correlation data
@@ -11818,6 +11895,619 @@
                 console.log('Bulk RNA-seq validation data not available:', e);
             }
             return validationState.bulkRnaseqData;
+        }
+
+        // Load full validation data per atlas (all sections, not just singlecell_validations)
+        async function loadFullValidationData(atlas) {
+            if (validationState.fullLoaded[atlas]) return validationState.fullData[atlas];
+            try {
+                const response = await fetch(`data/validation/${atlas}_validation.json`);
+                if (response.ok) {
+                    const raw = await response.json();
+                    validationState.fullData[atlas] = raw;
+                    validationState.fullLoaded[atlas] = true;
+                    // Also populate scData if not already loaded
+                    if (!validationState.scLoaded[atlas]) {
+                        validationState.scData[atlas] = raw.singlecell_validations || [];
+                        validationState.scLoaded[atlas] = true;
+                    }
+                    console.log(`Loaded full validation for ${atlas}:`, Object.keys(raw));
+                }
+            } catch (e) {
+                console.log(`Full validation data for ${atlas} not available:`, e);
+                validationState.fullData[atlas] = {};
+                validationState.fullLoaded[atlas] = true;
+            }
+            return validationState.fullData[atlas];
+        }
+
+        // Load all validation data for summary tab
+        async function loadAllValidationData() {
+            const atlases = ['cima', 'inflammation', 'scatlas'];
+            await Promise.all(atlases.map(a => loadFullValidationData(a)));
+            return validationState.fullData;
+        }
+
+        // Collect per-(atlas, signature) metrics from all validation levels
+        function collectValidationMetrics(sigType) {
+            const metrics = [];
+            const atlases = ['cima', 'inflammation', 'scatlas'];
+            for (const atlas of atlases) {
+                const data = validationState.fullData[atlas];
+                if (!data) continue;
+
+                // Build lookup maps by signature for each validation level
+                const sampleMap = {};
+                (data.sample_validations || []).forEach(v => {
+                    if (v.signature_type === sigType) sampleMap[v.signature] = v;
+                });
+                const ctMap = {};
+                (data.celltype_validations || []).forEach(v => {
+                    if (v.signature_type === sigType) ctMap[v.signature] = v;
+                });
+                const pbMap = {};
+                (data.pseudobulk_vs_sc || []).forEach(v => {
+                    if (v.signature_type === sigType) pbMap[v.signature] = v;
+                });
+                const scMap = {};
+                (data.singlecell_validations || []).forEach(v => {
+                    if (v.signature_type === sigType) scMap[v.signature] = v;
+                });
+                const covMap = {};
+                (data.gene_coverage || []).forEach(v => {
+                    if (v.signature_type === sigType) covMap[v.signature] = v;
+                });
+                const stabMap = {};
+                (data.cv_stability || []).forEach(v => {
+                    if (v.signature_type === sigType) stabMap[v.signature] = v;
+                });
+
+                // Collect all unique signatures
+                const sigs = new Set([
+                    ...Object.keys(sampleMap), ...Object.keys(ctMap),
+                    ...Object.keys(pbMap), ...Object.keys(scMap)
+                ]);
+
+                for (const sig of sigs) {
+                    const s = sampleMap[sig];
+                    const ct = ctMap[sig];
+                    const pb = pbMap[sig];
+                    const sc = scMap[sig];
+                    const cov = covMap[sig];
+                    const stab = stabMap[sig];
+                    metrics.push({
+                        signature: sig,
+                        atlas: atlas,
+                        sample_r: s?.stats?.pearson_r ?? null,
+                        celltype_r: ct?.stats?.pearson_r ?? null,
+                        pb_vs_sc_r: pb?.stats_vs_mean?.pearson_r ?? null,
+                        sc_fold_change: sc?.activity_fold_change ?? null,
+                        sc_pvalue: sc?.activity_p_value ?? null,
+                        coverage_pct: cov?.coverage_pct ?? null,
+                        coverage_quality: cov?.coverage_quality ?? null,
+                        stability_score: stab?.stability_score ?? null,
+                        stability_grade: stab?.stability_grade ?? null,
+                    });
+                }
+            }
+            return metrics;
+        }
+
+        // Compute composite quality grade
+        function computeGrade(m) {
+            const ct = m.celltype_r ?? -1;
+            const cov = m.coverage_pct ?? 0;
+            const stab = m.stability_score ?? 0;
+            if (ct >= 0.7 && cov >= 90 && stab >= 0.8) return 'A';
+            if (ct >= 0.5 && cov >= 80 && stab >= 0.6) return 'B';
+            if (ct >= 0.3 && cov >= 70 && stab >= 0.4) return 'C';
+            if (ct >= 0.1 && cov >= 50) return 'D';
+            return 'F';
+        }
+
+        // ---- Validation Summary Panels ----
+
+        // Panel 1: Multi-Level Validation Heatmap
+        function renderSummaryHeatmap(allMetrics, sigType) {
+            const div = document.getElementById('val-sum-heatmap');
+            if (!div) return;
+
+            if (allMetrics.length === 0) {
+                div.innerHTML = '<p style="text-align:center;color:#666;padding:2rem;">No validation data available.</p>';
+                return;
+            }
+
+            // Group by signature, compute median of each metric across atlases
+            const sigMap = {};
+            allMetrics.forEach(m => {
+                if (!sigMap[m.signature]) sigMap[m.signature] = [];
+                sigMap[m.signature].push(m);
+            });
+
+            const metricKeys = ['sample_r', 'celltype_r', 'pb_vs_sc_r', 'sc_fold_change', 'coverage_pct', 'stability_score'];
+            const metricLabels = ['Sample r', 'CellType r', 'PB vs SC r', 'SC FC', 'Coverage %', 'Stability'];
+
+            function median(arr) {
+                const vals = arr.filter(v => v !== null && !isNaN(v)).sort((a, b) => a - b);
+                if (vals.length === 0) return null;
+                const mid = Math.floor(vals.length / 2);
+                return vals.length % 2 ? vals[mid] : (vals[mid - 1] + vals[mid]) / 2;
+            }
+
+            // For each signature, compute median of medians for ranking
+            const sigScores = Object.entries(sigMap).map(([sig, ms]) => {
+                const medians = metricKeys.map(k => {
+                    const vals = ms.map(m => m[k]).filter(v => v !== null);
+                    return median(vals);
+                });
+                // Normalize coverage to 0-1 for ranking
+                const normMedians = medians.map((v, i) => {
+                    if (v === null) return 0;
+                    if (metricKeys[i] === 'coverage_pct') return v / 100;
+                    return v;
+                });
+                const overallMedian = median(normMedians.filter(v => v !== 0));
+                return { sig, medians, overallMedian: overallMedian ?? 0 };
+            });
+
+            sigScores.sort((a, b) => b.overallMedian - a.overallMedian);
+            const top30 = sigScores.slice(0, 30);
+
+            // Build heatmap data
+            const yLabels = top30.map(s => s.sig).reverse(); // Plotly bottom-to-top
+            const z = [];
+            const hoverText = [];
+            for (let j = 0; j < metricKeys.length; j++) {
+                const row = [];
+                const hrow = [];
+                for (let i = top30.length - 1; i >= 0; i--) {
+                    const val = top30[i].medians[j];
+                    // Normalize coverage_pct (0-100) to 0-1 scale for consistent color mapping
+                    const zVal = (metricKeys[j] === 'coverage_pct' && val !== null) ? val / 100 : val;
+                    row.push(zVal);
+                    const ms = sigMap[top30[i].sig];
+                    const details = ms.map(m => `${m.atlas}: ${m[metricKeys[j]] !== null ? (metricKeys[j] === 'coverage_pct' ? m[metricKeys[j]].toFixed(1) + '%' : m[metricKeys[j]].toFixed(3)) : 'N/A'}`).join('<br>');
+                    hrow.push(`<b>${top30[i].sig}</b> — ${metricLabels[j]}<br>Median: ${val !== null ? (metricKeys[j] === 'coverage_pct' ? val.toFixed(1) + '%' : val.toFixed(3)) : 'N/A'}<br>${details}`);
+                }
+                z.push(row);
+                hoverText.push(hrow);
+            }
+
+            const trace = {
+                z: z,
+                x: yLabels,
+                y: metricLabels,
+                type: 'heatmap',
+                colorscale: 'RdYlGn',
+                hoverongaps: false,
+                text: hoverText,
+                hoverinfo: 'text',
+                colorbar: { title: 'Value', len: 0.5 }
+            };
+
+            const layout = {
+                margin: { l: 100, r: 40, t: 30, b: 120 },
+                xaxis: { tickangle: -45, tickfont: { size: 10 } },
+                yaxis: { tickfont: { size: 11 } },
+                paper_bgcolor: 'transparent',
+                plot_bgcolor: 'transparent'
+            };
+
+            Plotly.newPlot(div, [trace], layout, { responsive: true, displayModeBar: false });
+        }
+
+        // Panel 2: Validation Level Distribution
+        function renderSummaryDistribution(allMetrics, sigType) {
+            const div = document.getElementById('val-sum-distribution');
+            if (!div) return;
+
+            const atlasColors = { cima: '#1f77b4', inflammation: '#ff7f0e', scatlas: '#2ca02c' };
+            const atlasLabels = { cima: 'CIMA', inflammation: 'Inflammation', scatlas: 'scAtlas' };
+            const levels = [
+                { key: 'sample_r', label: 'Sample r' },
+                { key: 'celltype_r', label: 'CellType r' },
+                { key: 'pb_vs_sc_r', label: 'PB vs SC r' }
+            ];
+
+            const traces = [];
+            const atlases = ['cima', 'inflammation', 'scatlas'];
+
+            for (const atlas of atlases) {
+                const am = allMetrics.filter(m => m.atlas === atlas);
+                for (const level of levels) {
+                    const vals = am.map(m => m[level.key]).filter(v => v !== null);
+                    if (vals.length === 0) continue;
+                    traces.push({
+                        y: vals,
+                        x: vals.map(() => level.label),
+                        type: 'box',
+                        name: atlasLabels[atlas],
+                        marker: { color: atlasColors[atlas] },
+                        boxpoints: 'outliers',
+                        legendgroup: atlas,
+                        showlegend: level === levels[0],
+                        offsetgroup: atlas
+                    });
+                }
+            }
+
+            if (traces.length === 0) {
+                div.innerHTML = '<p style="text-align:center;color:#666;padding:2rem;">No data available.</p>';
+                return;
+            }
+
+            const layout = {
+                boxmode: 'group',
+                yaxis: { title: 'Pearson r', zeroline: true },
+                xaxis: { title: '' },
+                margin: { l: 60, r: 20, t: 20, b: 60 },
+                legend: { orientation: 'h', y: 1.08 },
+                paper_bgcolor: 'transparent',
+                plot_bgcolor: 'transparent'
+            };
+
+            Plotly.newPlot(div, traces, layout, { responsive: true, displayModeBar: false });
+        }
+
+        // Panel 3: Cross-Atlas Consistency
+        function renderSummaryCrossAtlas(allMetrics, sigType) {
+            const div = document.getElementById('val-sum-crossatlas');
+            if (!div) return;
+
+            const pairs = [
+                { a: 'cima', b: 'inflammation', label: 'CIMA vs Inflam' },
+                { a: 'cima', b: 'scatlas', label: 'CIMA vs scAtlas' },
+                { a: 'inflammation', b: 'scatlas', label: 'Inflam vs scAtlas' }
+            ];
+            const pairColors = ['#1f77b4', '#ff7f0e', '#2ca02c'];
+
+            // Build atlas → {signature: celltype_r} maps
+            const atlasMap = {};
+            allMetrics.forEach(m => {
+                if (!atlasMap[m.atlas]) atlasMap[m.atlas] = {};
+                if (m.celltype_r !== null) atlasMap[m.atlas][m.signature] = m.celltype_r;
+            });
+
+            const traces = [];
+            const annotations = [];
+
+            pairs.forEach((pair, idx) => {
+                const mapA = atlasMap[pair.a] || {};
+                const mapB = atlasMap[pair.b] || {};
+                const commonSigs = Object.keys(mapA).filter(s => s in mapB);
+                const xVals = commonSigs.map(s => mapA[s]);
+                const yVals = commonSigs.map(s => mapB[s]);
+
+                // Compute inter-atlas Pearson r
+                let corrR = null;
+                if (xVals.length > 2) {
+                    const n = xVals.length;
+                    const mx = xVals.reduce((a, b) => a + b, 0) / n;
+                    const my = yVals.reduce((a, b) => a + b, 0) / n;
+                    let num = 0, dx = 0, dy = 0;
+                    for (let i = 0; i < n; i++) {
+                        num += (xVals[i] - mx) * (yVals[i] - my);
+                        dx += (xVals[i] - mx) ** 2;
+                        dy += (yVals[i] - my) ** 2;
+                    }
+                    corrR = dx > 0 && dy > 0 ? num / Math.sqrt(dx * dy) : null;
+                }
+
+                traces.push({
+                    x: xVals,
+                    y: yVals,
+                    mode: 'markers',
+                    type: 'scatter',
+                    name: pair.label + (corrR !== null ? ` (r=${corrR.toFixed(2)})` : ''),
+                    text: commonSigs,
+                    hovertemplate: '%{text}<br>' + pair.a + ': %{x:.3f}<br>' + pair.b + ': %{y:.3f}<extra></extra>',
+                    marker: { color: pairColors[idx], size: 6, opacity: 0.7 }
+                });
+            });
+
+            if (traces.length === 0 || traces.every(t => t.x.length === 0)) {
+                div.innerHTML = '<p style="text-align:center;color:#666;padding:2rem;">No cross-atlas data available.</p>';
+                return;
+            }
+
+            // Find global range
+            const allVals = traces.flatMap(t => [...t.x, ...t.y]).filter(v => v !== null);
+            const minV = Math.min(...allVals, 0);
+            const maxV = Math.max(...allVals, 1);
+
+            const layout = {
+                xaxis: { title: 'CellType r (Atlas A)', range: [minV - 0.05, maxV + 0.05] },
+                yaxis: { title: 'CellType r (Atlas B)', range: [minV - 0.05, maxV + 0.05] },
+                shapes: [{
+                    type: 'line', x0: minV, y0: minV, x1: maxV, y1: maxV,
+                    line: { dash: 'dash', color: '#999', width: 1 }
+                }],
+                margin: { l: 60, r: 20, t: 20, b: 60 },
+                legend: { orientation: 'h', y: 1.12, font: { size: 10 } },
+                paper_bgcolor: 'transparent',
+                plot_bgcolor: 'transparent'
+            };
+
+            Plotly.newPlot(div, traces, layout, { responsive: true, displayModeBar: false });
+        }
+
+        // Panel 4: Biological Concordance
+        function renderSummaryBioConcordance(sigType) {
+            const div = document.getElementById('val-sum-bio');
+            if (!div) return;
+
+            const atlases = ['cima', 'inflammation', 'scatlas'];
+            const atlasLabels = { cima: 'CIMA', inflammation: 'Inflammation', scatlas: 'scAtlas' };
+
+            // Collect biological association results across atlases
+            const bioMap = {}; // signature → { expected_cell_type, atlasResults }
+            for (const atlas of atlases) {
+                const data = validationState.fullData[atlas];
+                if (!data?.biological_associations?.results) continue;
+                for (const r of data.biological_associations.results) {
+                    const key = r.signature + '|' + r.expected_cell_type;
+                    if (!bioMap[key]) {
+                        bioMap[key] = { signature: r.signature, expected_cell_type: r.expected_cell_type, atlases: {} };
+                    }
+                    bioMap[key].atlases[atlas] = { rank: r.observed_rank, validated: r.is_validated };
+                }
+            }
+
+            const rows = Object.values(bioMap);
+            if (rows.length === 0) {
+                div.innerHTML = '<p style="text-align:center;color:#666;padding:2rem;">No biological association data available.</p>';
+                return;
+            }
+
+            // Sort by number of validations (descending)
+            rows.sort((a, b) => {
+                const av = atlases.filter(at => a.atlases[at]?.validated).length;
+                const bv = atlases.filter(at => b.atlases[at]?.validated).length;
+                return bv - av || a.signature.localeCompare(b.signature);
+            });
+
+            let html = '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
+            html += '<thead><tr style="border-bottom:2px solid #ddd;"><th style="padding:6px;text-align:left;">Signature</th><th style="padding:6px;text-align:left;">Expected Cell Type</th>';
+            for (const atlas of atlases) {
+                html += `<th style="padding:6px;text-align:center;">${atlasLabels[atlas]}</th>`;
+            }
+            html += '</tr></thead><tbody>';
+
+            let totalPerAtlas = {};
+            let validatedPerAtlas = {};
+            atlases.forEach(a => { totalPerAtlas[a] = 0; validatedPerAtlas[a] = 0; });
+
+            for (const row of rows) {
+                html += `<tr style="border-bottom:1px solid #eee;"><td style="padding:4px 6px;">${row.signature}</td><td style="padding:4px 6px;">${row.expected_cell_type}</td>`;
+                for (const atlas of atlases) {
+                    const r = row.atlases[atlas];
+                    if (!r) {
+                        html += '<td style="padding:4px 6px;text-align:center;color:#ccc;">—</td>';
+                    } else {
+                        totalPerAtlas[atlas]++;
+                        if (r.validated) validatedPerAtlas[atlas]++;
+                        const rank = r.rank;
+                        let icon, color;
+                        if (rank <= 3) { icon = '&#10003;'; color = '#2ca02c'; }
+                        else if (rank <= 5) { icon = '~'; color = '#ff7f0e'; }
+                        else { icon = '&#10007;'; color = '#d62728'; }
+                        html += `<td style="padding:4px 6px;text-align:center;color:${color};font-weight:bold;" title="Rank ${rank}">${icon} (${rank})</td>`;
+                    }
+                }
+                html += '</tr>';
+            }
+
+            // Summary row
+            html += '<tr style="border-top:2px solid #ddd;font-weight:bold;"><td colspan="2" style="padding:6px;">Validation Rate</td>';
+            for (const atlas of atlases) {
+                const total = totalPerAtlas[atlas];
+                const validated = validatedPerAtlas[atlas];
+                const pct = total > 0 ? ((validated / total) * 100).toFixed(0) : '—';
+                html += `<td style="padding:6px;text-align:center;">${validated}/${total} (${pct}%)</td>`;
+            }
+            html += '</tr></tbody></table>';
+
+            div.innerHTML = html;
+        }
+
+        // Panel 5: Quality Overview (stacked bars)
+        function renderSummaryQuality(sigType) {
+            const div = document.getElementById('val-sum-quality');
+            if (!div) return;
+
+            const atlases = ['cima', 'inflammation', 'scatlas'];
+            const atlasLabels = { cima: 'CIMA', inflammation: 'Inflammation', scatlas: 'scAtlas' };
+            const grades = ['excellent', 'good', 'moderate', 'poor'];
+            const gradeAlt = { excellent: 'excellent', good: 'good', fair: 'moderate', moderate: 'moderate', poor: 'poor' };
+            const gradeColors = { excellent: '#2ca02c', good: '#1f77b4', moderate: '#ff7f0e', poor: '#d62728' };
+
+            // Count coverage quality per atlas
+            const covCounts = {};
+            const stabCounts = {};
+            for (const atlas of atlases) {
+                covCounts[atlas] = { excellent: 0, good: 0, moderate: 0, poor: 0 };
+                stabCounts[atlas] = { excellent: 0, good: 0, moderate: 0, poor: 0 };
+                const data = validationState.fullData[atlas];
+                if (!data) continue;
+                (data.gene_coverage || []).forEach(g => {
+                    if (g.signature_type !== sigType) return;
+                    const q = gradeAlt[g.coverage_quality] || 'poor';
+                    covCounts[atlas][q] = (covCounts[atlas][q] || 0) + 1;
+                });
+                (data.cv_stability || []).forEach(g => {
+                    if (g.signature_type !== sigType) return;
+                    const q = gradeAlt[g.stability_grade] || 'poor';
+                    stabCounts[atlas][q] = (stabCounts[atlas][q] || 0) + 1;
+                });
+            }
+
+            const xLabels = atlases.map(a => atlasLabels[a]);
+            const hasData = atlases.some(a => Object.values(covCounts[a]).some(v => v > 0) || Object.values(stabCounts[a]).some(v => v > 0));
+
+            if (!hasData) {
+                div.innerHTML = '<p style="text-align:center;color:#666;padding:2rem;">No quality data available.</p>';
+                return;
+            }
+
+            // Coverage stacked bars
+            const covTraces = grades.map(g => ({
+                x: xLabels,
+                y: atlases.map(a => covCounts[a][g]),
+                name: g.charAt(0).toUpperCase() + g.slice(1),
+                type: 'bar',
+                marker: { color: gradeColors[g] },
+                legendgroup: g,
+                xaxis: 'x',
+                yaxis: 'y'
+            }));
+
+            // Stability stacked bars
+            const stabTraces = grades.map(g => ({
+                x: xLabels,
+                y: atlases.map(a => stabCounts[a][g]),
+                name: g.charAt(0).toUpperCase() + g.slice(1),
+                type: 'bar',
+                marker: { color: gradeColors[g] },
+                legendgroup: g,
+                showlegend: false,
+                xaxis: 'x2',
+                yaxis: 'y2'
+            }));
+
+            const layout = {
+                barmode: 'stack',
+                grid: { rows: 1, columns: 2, pattern: 'independent' },
+                xaxis: { domain: [0, 0.45], title: 'Gene Coverage' },
+                yaxis: { title: 'Count' },
+                xaxis2: { domain: [0.55, 1], title: 'CV Stability' },
+                yaxis2: { title: '' },
+                margin: { l: 50, r: 20, t: 20, b: 60 },
+                legend: { orientation: 'h', y: 1.1 },
+                paper_bgcolor: 'transparent',
+                plot_bgcolor: 'transparent'
+            };
+
+            Plotly.newPlot(div, [...covTraces, ...stabTraces], layout, { responsive: true, displayModeBar: false });
+        }
+
+        // Panel 6: Signature Ranking Table
+        function renderSummaryTable(allMetrics, sigType) {
+            const div = document.getElementById('val-sum-table');
+            if (!div) return;
+
+            const atlasFilter = document.getElementById('val-sum-table-atlas')?.value || 'all';
+            const searchTerm = (document.getElementById('val-sum-table-search')?.value || '').toLowerCase();
+
+            let filtered = allMetrics;
+            if (atlasFilter !== 'all') filtered = filtered.filter(m => m.atlas === atlasFilter);
+            if (searchTerm) filtered = filtered.filter(m => m.signature.toLowerCase().includes(searchTerm));
+
+            // Add grade
+            const rows = filtered.map(m => ({ ...m, grade: computeGrade(m) }));
+
+            if (rows.length === 0) {
+                div.innerHTML = '<p style="text-align:center;color:#666;padding:1rem;">No matching signatures.</p>';
+                return;
+            }
+
+            // Sort state (stored on div)
+            if (!div._sortCol) div._sortCol = 'grade';
+            if (!div._sortDir) div._sortDir = 1;
+            const sortCol = div._sortCol;
+            const sortDir = div._sortDir;
+
+            const gradeOrder = { A: 1, B: 2, C: 3, D: 4, F: 5 };
+            rows.sort((a, b) => {
+                let va = a[sortCol], vb = b[sortCol];
+                if (sortCol === 'grade') { va = gradeOrder[va] || 9; vb = gradeOrder[vb] || 9; }
+                if (sortCol === 'signature' || sortCol === 'atlas') return sortDir * String(va || '').localeCompare(String(vb || ''));
+                if (va === null) return 1;
+                if (vb === null) return -1;
+                return sortDir * (va - vb);
+            });
+
+            const cols = [
+                { key: 'signature', label: 'Signature' },
+                { key: 'atlas', label: 'Atlas' },
+                { key: 'sample_r', label: 'Sample r', fmt: v => v !== null ? v.toFixed(3) : '—' },
+                { key: 'celltype_r', label: 'CellType r', fmt: v => v !== null ? v.toFixed(3) : '—' },
+                { key: 'pb_vs_sc_r', label: 'PB vs SC r', fmt: v => v !== null ? v.toFixed(3) : '—' },
+                { key: 'sc_fold_change', label: 'SC FC', fmt: v => v !== null ? v.toFixed(3) : '—' },
+                { key: 'sc_pvalue', label: 'SC p-val', fmt: v => v !== null ? v.toExponential(1) : '—' },
+                { key: 'coverage_pct', label: 'Coverage %', fmt: v => v !== null ? v.toFixed(1) : '—' },
+                { key: 'stability_score', label: 'Stability', fmt: v => v !== null ? v.toFixed(3) : '—' },
+                { key: 'grade', label: 'Grade' }
+            ];
+
+            function cellColor(key, val) {
+                if (val === null || val === undefined || val === '—') return '';
+                if (key === 'grade') {
+                    const c = { A: '#2ca02c', B: '#1f77b4', C: '#ff7f0e', D: '#d62728', F: '#999' };
+                    return `color:${c[val] || '#333'};font-weight:bold;`;
+                }
+                if (['sample_r', 'celltype_r', 'pb_vs_sc_r'].includes(key)) {
+                    if (val >= 0.7) return 'color:#2ca02c;';
+                    if (val >= 0.4) return 'color:#ff7f0e;';
+                    if (val < 0.2) return 'color:#d62728;';
+                }
+                if (key === 'coverage_pct') {
+                    if (val >= 90) return 'color:#2ca02c;';
+                    if (val >= 70) return 'color:#ff7f0e;';
+                    return 'color:#d62728;';
+                }
+                return '';
+            }
+
+            let html = '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
+            html += '<thead><tr>';
+            for (const col of cols) {
+                const arrow = sortCol === col.key ? (sortDir === 1 ? ' &#9650;' : ' &#9660;') : '';
+                html += `<th data-sort="${col.key}" style="padding:6px 4px;text-align:${col.key === 'signature' || col.key === 'atlas' ? 'left' : 'right'};cursor:pointer;white-space:nowrap;border-bottom:2px solid #ddd;user-select:none;">${col.label}${arrow}</th>`;
+            }
+            html += '</tr></thead><tbody>';
+
+            for (const row of rows) {
+                html += '<tr style="border-bottom:1px solid #eee;">';
+                for (const col of cols) {
+                    const raw = row[col.key];
+                    const display = col.fmt ? col.fmt(raw) : (raw ?? '—');
+                    const style = cellColor(col.key, raw);
+                    const align = col.key === 'signature' || col.key === 'atlas' ? 'left' : 'right';
+                    html += `<td style="padding:4px;text-align:${align};${style}">${display}</td>`;
+                }
+                html += '</tr>';
+            }
+            html += '</tbody></table>';
+
+            div.innerHTML = html;
+
+            // Attach sort listeners
+            div.querySelectorAll('th[data-sort]').forEach(th => {
+                th.addEventListener('click', () => {
+                    const col = th.getAttribute('data-sort');
+                    if (div._sortCol === col) {
+                        div._sortDir = -div._sortDir;
+                    } else {
+                        div._sortCol = col;
+                        div._sortDir = 1;
+                    }
+                    renderSummaryTable(allMetrics, sigType);
+                });
+            });
+        }
+
+        // Main update function for validation summary
+        async function updateValidationSummary() {
+            await loadAllValidationData();
+            const sigType = document.getElementById('val-sum-sigtype')?.value || 'CytoSig';
+            const allMetrics = collectValidationMetrics(sigType);
+
+            renderSummaryHeatmap(allMetrics, sigType);
+            renderSummaryDistribution(allMetrics, sigType);
+            renderSummaryCrossAtlas(allMetrics, sigType);
+            renderSummaryBioConcordance(sigType);
+            renderSummaryQuality(sigType);
+            renderSummaryTable(allMetrics, sigType);
         }
 
         // ---- Per-sample scatter for bulk RNA-seq (uses shared renderer) ----
@@ -13404,6 +14094,22 @@
 
         // ---- Initialization ----
         function initValidationSection() {
+            // Summary tab listeners
+            document.getElementById('val-sum-sigtype')?.addEventListener('change', updateValidationSummary);
+            document.getElementById('val-sum-table-atlas')?.addEventListener('change', () => {
+                const sigType = document.getElementById('val-sum-sigtype')?.value || 'CytoSig';
+                const allMetrics = collectValidationMetrics(sigType);
+                renderSummaryTable(allMetrics, sigType);
+            });
+            const sumSearch = document.getElementById('val-sum-table-search');
+            if (sumSearch) {
+                sumSearch.addEventListener('input', debounce(() => {
+                    const sigType = document.getElementById('val-sum-sigtype')?.value || 'CytoSig';
+                    const allMetrics = collectValidationMetrics(sigType);
+                    renderSummaryTable(allMetrics, sigType);
+                }, 300));
+            }
+
             // Bulk RNA-seq tab listeners
             document.getElementById('val-bulk-dataset')?.addEventListener('change', updateValidationBulk);
             document.getElementById('val-bulk-sigtype')?.addEventListener('change', updateValidationBulk);
