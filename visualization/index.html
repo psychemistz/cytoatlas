@@ -2548,6 +2548,16 @@
                         <div class="viz-subtitle">Per-sample: gene expression vs predicted activity (bulk RNA-seq)</div>
                         <div id="val-bulk-expr-scatter" class="loading" style="height: 400px;">Loading...</div>
                     </div>
+                    <div class="panel">
+                        <div class="viz-title">Per-Tissue Pearson r</div>
+                        <div class="viz-subtitle">Expression–activity correlation per tissue/cancer type</div>
+                        <div id="val-bulk-corr-bar" style="height: 400px;"></div>
+                    </div>
+                    <div class="panel">
+                        <div class="viz-title">Per-Tissue Activity Distribution</div>
+                        <div class="viz-subtitle">Activity z-score distribution per tissue/cancer type</div>
+                        <div id="val-bulk-activity-box" style="height: 400px;"></div>
+                    </div>
                 </div>
             </div>
 
@@ -11866,6 +11876,212 @@
                 unitLabel: `${datasetLabel} samples`,
                 titleSuffix: ` (${datasetLabel}${tissueSuffix})`,
             });
+
+            renderBulkCorrBoxplot(data, dataset, sigType);
+        }
+
+        // ---- Helper: get per-tissue grouped & filtered points for selected target ----
+        function getBulkTissuePoints(data, dataset, sigType) {
+            const target = document.getElementById('val-bulk-target')?.value;
+            const hideNonExpr = document.getElementById('val-bulk-hide-nonexpr')?.checked || false;
+
+            const stratKey = dataset === 'gtex' ? 'by_tissue' : 'by_cancer';
+            const stratData = data?.[dataset]?.stratified_scatter?.[stratKey]?.[sigType];
+            const donorData = data?.[dataset]?.donor_scatter?.[sigType];
+            const scatterData = (stratData && Object.keys(stratData).length > 0) ? stratData : donorData;
+
+            if (!scatterData || !target || !scatterData[target]) return null;
+
+            const tdata = scatterData[target];
+            const points = tdata.points || [];
+            const groups = tdata.groups || [];
+            if (groups.length === 0 || points.length === 0 || points[0].length < 3) return null;
+
+            // Group points by tissue
+            const tissuePoints = {};
+            groups.forEach((g, i) => { tissuePoints[i] = { name: g, x: [], y: [] }; });
+            points.forEach(p => {
+                const gIdx = p[2];
+                if (tissuePoints[gIdx]) {
+                    tissuePoints[gIdx].x.push(p[0]);
+                    tissuePoints[gIdx].y.push(p[1]);
+                }
+            });
+
+            // Apply hide-non-expressing filter per tissue
+            if (hideNonExpr) {
+                Object.values(tissuePoints).forEach(tp => {
+                    if (tp.x.length === 0) return;
+                    const xRounded = tp.x.map(v => Math.round(v * 100) / 100);
+                    const freq = {};
+                    xRounded.forEach(v => { freq[v] = (freq[v] || 0) + 1; });
+                    const modeVal = Object.entries(freq).sort((a, b) => b[1] - a[1])[0];
+                    if (modeVal && modeVal[1] > tp.x.length * 0.1 && parseFloat(modeVal[0]) < 0) {
+                        const spikeVal = parseFloat(modeVal[0]);
+                        const keep = [];
+                        for (let i = 0; i < tp.x.length; i++) {
+                            if (Math.round(tp.x[i] * 100) / 100 !== spikeVal) keep.push(i);
+                        }
+                        tp.x = keep.map(i => tp.x[i]);
+                        tp.y = keep.map(i => tp.y[i]);
+                    }
+                });
+            }
+
+            return { target, tissuePoints };
+        }
+
+        // ---- Panel 1: Per-tissue Pearson r bar chart ----
+        function renderBulkCorrBar(data, dataset, sigType) {
+            const div = document.getElementById('val-bulk-corr-bar');
+            if (!div) return;
+
+            const result = getBulkTissuePoints(data, dataset, sigType);
+            if (!result) {
+                div.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No data available.</p>';
+                return;
+            }
+
+            const { target, tissuePoints } = result;
+            const tissueFilter = document.getElementById('val-bulk-tissue')?.value || '';
+
+            // Compute Pearson r per tissue (require >= 10 points)
+            const tissueCorrs = [];
+            Object.values(tissuePoints).forEach(tp => {
+                if (tp.x.length >= 10) {
+                    tissueCorrs.push({ name: tp.name, r: computePearsonR(tp.x, tp.y), n: tp.x.length });
+                }
+            });
+
+            if (tissueCorrs.length === 0) {
+                div.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No tissues with ≥10 samples.</p>';
+                return;
+            }
+
+            // Sort by r descending
+            tissueCorrs.sort((a, b) => b.r - a.r);
+
+            const names = tissueCorrs.map(t => t.name);
+            const rValues = tissueCorrs.map(t => t.r);
+            const nValues = tissueCorrs.map(t => t.n);
+            const sortedR = rValues.slice().sort((a, b) => a - b);
+            const medianR = sortedR[Math.floor(sortedR.length / 2)];
+
+            const datasetLabel = dataset === 'gtex' ? 'GTEx' : 'TCGA';
+            const groupLabel = dataset === 'gtex' ? 'tissues' : 'cancer types';
+
+            // Color gradient: green for high r, red for low/negative
+            const colors = rValues.map(r => {
+                const norm = Math.max(0, Math.min(1, (r + 1) / 2));
+                const red = Math.round(220 * (1 - norm) + 44 * norm);
+                const green = Math.round(44 * (1 - norm) + 160 * norm);
+                const blue = Math.round(40 * (1 - norm) + 44 * norm);
+                return `rgba(${red}, ${green}, ${blue}, 0.7)`;
+            });
+
+            const borderColors = names.map(name =>
+                (tissueFilter && name === tissueFilter) ? 'rgba(0, 0, 0, 0.9)' : 'rgba(0, 0, 0, 0.1)'
+            );
+            const borderWidths = names.map(name =>
+                (tissueFilter && name === tissueFilter) ? 3 : 1
+            );
+
+            const trace = {
+                x: names, y: rValues, type: 'bar',
+                marker: { color: colors, line: { color: borderColors, width: borderWidths } },
+                text: nValues.map(n => `n=${n}`),
+                hovertemplate: '<b>%{x}</b><br>Pearson r = %{y:.3f}<br>%{text}<extra></extra>',
+            };
+
+            const layout = {
+                title: { text: `${target} — Pearson r (${datasetLabel})`, font: { size: 13 } },
+                xaxis: { tickangle: -45, tickfont: { size: 9 }, automargin: true },
+                yaxis: { title: 'Pearson r', range: [-1, 1] },
+                shapes: [{
+                    type: 'line', x0: -0.5, x1: names.length - 0.5,
+                    y0: medianR, y1: medianR,
+                    line: { color: 'rgba(0,0,0,0.4)', width: 1.5, dash: 'dash' },
+                }],
+                annotations: [{
+                    x: 1, y: 1, xref: 'paper', yref: 'paper', xanchor: 'right', yanchor: 'top',
+                    text: `${tissueCorrs.length} ${groupLabel} | median r = ${medianR.toFixed(3)}`,
+                    showarrow: false, font: { size: 11, color: '#555' },
+                    bgcolor: 'rgba(255,255,255,0.8)', borderpad: 4,
+                }],
+                margin: { t: 40, b: 120, l: 60, r: 20 },
+                plot_bgcolor: '#fafafa',
+            };
+
+            Plotly.newPlot(div, [trace], layout, { responsive: true, displayModeBar: false });
+        }
+
+        // ---- Panel 2: Per-tissue activity distribution boxplot ----
+        function renderBulkActivityBox(data, dataset, sigType) {
+            const div = document.getElementById('val-bulk-activity-box');
+            if (!div) return;
+
+            const result = getBulkTissuePoints(data, dataset, sigType);
+            if (!result) {
+                div.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No data available.</p>';
+                return;
+            }
+
+            const { target, tissuePoints } = result;
+            const tissueFilter = document.getElementById('val-bulk-tissue')?.value || '';
+            const datasetLabel = dataset === 'gtex' ? 'GTEx' : 'TCGA';
+
+            // Build list of tissues with enough samples, sorted by median activity
+            const tissues = Object.values(tissuePoints)
+                .filter(tp => tp.y.length >= 10)
+                .map(tp => {
+                    const sorted = tp.y.slice().sort((a, b) => a - b);
+                    return { name: tp.name, y: tp.y, median: sorted[Math.floor(sorted.length / 2)], n: tp.y.length };
+                })
+                .sort((a, b) => b.median - a.median);
+
+            if (tissues.length === 0) {
+                div.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No tissues with ≥10 samples.</p>';
+                return;
+            }
+
+            const traces = tissues.map(ts => {
+                const isSelected = tissueFilter && ts.name === tissueFilter;
+                const baseColor = isSelected ? 'rgba(255, 127, 14, ' : 'rgba(31, 119, 180, ';
+                return {
+                    y: ts.y,
+                    type: 'box',
+                    name: ts.name,
+                    boxpoints: 'outliers',
+                    marker: { color: baseColor + '0.5)', size: 3 },
+                    line: { color: baseColor + '0.9)', width: isSelected ? 2.5 : 1.5 },
+                    fillcolor: baseColor + (isSelected ? '0.3)' : '0.15)'),
+                    whiskerwidth: 0.5,
+                    hoverinfo: 'y+name',
+                };
+            });
+
+            const layout = {
+                title: { text: `${target} — Activity Distribution (${datasetLabel})`, font: { size: 13 } },
+                yaxis: { title: 'Activity (z-score)' },
+                xaxis: { tickangle: -45, tickfont: { size: 9 }, automargin: true },
+                annotations: [{
+                    x: 1, y: 1, xref: 'paper', yref: 'paper', xanchor: 'right', yanchor: 'top',
+                    text: `${tissues.length} ${dataset === 'gtex' ? 'tissues' : 'cancer types'}`,
+                    showarrow: false, font: { size: 11, color: '#555' },
+                    bgcolor: 'rgba(255,255,255,0.8)', borderpad: 4,
+                }],
+                margin: { t: 40, b: 120, l: 60, r: 20 },
+                plot_bgcolor: '#fafafa',
+                showlegend: false,
+            };
+
+            Plotly.newPlot(div, traces, layout, { responsive: true, displayModeBar: false });
+        }
+
+        // ---- Combined caller for both per-tissue panels ----
+        function renderBulkCorrBoxplot(data, dataset, sigType) {
+            renderBulkCorrBar(data, dataset, sigType);
+            renderBulkActivityBox(data, dataset, sigType);
         }
 
         // ---- Tab 0: Bulk RNA-seq ----
