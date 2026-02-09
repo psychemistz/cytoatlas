@@ -819,6 +819,76 @@ def build_resampled_scatter() -> dict:
     return result
 
 
+def write_split_files(output: dict, bulk_rnaseq: dict | None = None):
+    """Write per-atlas-sigtype split files for efficient API consumption.
+
+    Splits the monolithic bulk_donor_correlations.json into:
+      - validation/donor_scatter/{atlas}_{sigtype}.json
+      - validation/celltype_scatter/{atlas}_{level}_{sigtype}.json
+      - validation/bulk_donor_meta.json (summary + donor_level + celltype_level)
+      - validation/bulk_rnaseq/{dataset}.json (GTEx/TCGA split)
+    """
+    split_dir = OUTPUT_PATH.parent / "validation"
+    split_dir.mkdir(parents=True, exist_ok=True)
+
+    # --- Donor scatter: validation/donor_scatter/{atlas}_{sigtype}.json ---
+    donor_dir = split_dir / "donor_scatter"
+    donor_dir.mkdir(parents=True, exist_ok=True)
+    n_donor = 0
+    for atlas, sigtypes in output.get("donor_scatter", {}).items():
+        for sigtype, targets in sigtypes.items():
+            if not targets:
+                continue
+            path = donor_dir / f"{atlas}_{sigtype}.json"
+            with open(path, "w") as f:
+                json.dump(targets, f, separators=(",", ":"))
+            size_kb = path.stat().st_size / 1024
+            print(f"    Split: {path.name} ({size_kb:.0f} KB, {len(targets)} targets)")
+            n_donor += 1
+
+    # --- Celltype scatter: validation/celltype_scatter/{atlas}_{level}_{sigtype}.json ---
+    ct_dir = split_dir / "celltype_scatter"
+    ct_dir.mkdir(parents=True, exist_ok=True)
+    n_ct = 0
+    for atlas, levels in output.get("celltype_scatter", {}).items():
+        for level, sigtypes in levels.items():
+            for sigtype, targets in sigtypes.items():
+                if not targets:
+                    continue
+                path = ct_dir / f"{atlas}_{level}_{sigtype}.json"
+                with open(path, "w") as f:
+                    json.dump(targets, f, separators=(",", ":"))
+                size_kb = path.stat().st_size / 1024
+                print(f"    Split: {path.name} ({size_kb:.0f} KB, {len(targets)} targets)")
+                n_ct += 1
+
+    # --- Metadata without scatter points ---
+    meta = {
+        "summary": output.get("summary", []),
+        "donor_level": output.get("donor_level", {}),
+        "celltype_level": output.get("celltype_level", {}),
+    }
+    meta_path = split_dir / "bulk_donor_meta.json"
+    with open(meta_path, "w") as f:
+        json.dump(meta, f, separators=(",", ":"))
+    meta_kb = meta_path.stat().st_size / 1024
+    print(f"    Split: bulk_donor_meta.json ({meta_kb:.0f} KB)")
+
+    # --- Bulk RNA-seq split: validation/bulk_rnaseq/{dataset}.json ---
+    if bulk_rnaseq:
+        bulk_dir = split_dir / "bulk_rnaseq"
+        bulk_dir.mkdir(parents=True, exist_ok=True)
+        for dataset, data in bulk_rnaseq.items():
+            path = bulk_dir / f"{dataset}.json"
+            with open(path, "w") as f:
+                json.dump(data, f, separators=(",", ":"))
+            size_kb = path.stat().st_size / 1024
+            print(f"    Split: bulk_rnaseq/{dataset}.json ({size_kb:.0f} KB)")
+
+    print(f"\n  Split files written: {n_donor} donor, {n_ct} celltype, 1 meta"
+          f"{f', {len(bulk_rnaseq)} bulk_rnaseq' if bulk_rnaseq else ''}")
+
+
 BULK_ATLASES = {"gtex", "tcga"}
 
 
@@ -1176,6 +1246,10 @@ def main():
         ct_pq_path = parquet_dir / "celltype_scatter_meta.parquet"
         pd.DataFrame(celltype_scatter_meta).to_parquet(ct_pq_path, index=False)
         print(f"  Parquet: {ct_pq_path} ({len(celltype_scatter_meta)} rows)")
+
+    # 8. Write split files for API consumption
+    print("\n  Writing split files for API ...")
+    write_split_files(output, bulk_rnaseq if bulk_rnaseq else None)
 
     print("\nDone!")
 

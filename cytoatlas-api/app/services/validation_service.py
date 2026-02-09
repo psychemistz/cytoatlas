@@ -31,6 +31,7 @@ from app.schemas.validation import (
     SampleLevelPoint,
     SampleLevelValidation,
     ScatterPoint,
+    SingleCellDirectPoint,
     SingleCellDirectValidation,
     SingleCellDistributionData,
     ValidationSummary,
@@ -318,6 +319,19 @@ class ValidationService(BaseService):
         if not validation:
             return None
 
+        # Build sampled_points from data
+        sampled = validation.get("sampled_points", [])
+        points = [
+            SingleCellDirectPoint(
+                cell_id=p.get("cell_id"),
+                expression=p.get("expression", 0),
+                activity=p.get("activity", 0),
+                is_expressing=p.get("is_expressing", False),
+                cell_type=p.get("cell_type"),
+            )
+            for p in sampled
+        ]
+
         return SingleCellDirectValidation(
             atlas=atlas,
             signature=signature,
@@ -332,7 +346,7 @@ class ValidationService(BaseService):
             mean_activity_non_expressing=validation.get("mean_activity_non_expressing", 0),
             activity_fold_change=validation.get("activity_fold_change", 0),
             activity_p_value=validation.get("activity_p_value"),
-            sampled_points=[],  # Large, skip for now
+            sampled_points=points,
             interpretation=validation.get("interpretation"),
         )
 
@@ -373,6 +387,121 @@ class ValidationService(BaseService):
             median_non_expressing=validation.get("mean_activity_non_expressing", 0),
             p_value=validation.get("activity_p_value"),
         )
+
+    # ==================== Tab 3 Single-Cell (enhanced) ====================
+
+    async def get_singlecell_signatures(
+        self,
+        atlas: str,
+        signature_type: str = "CytoSig",
+    ) -> List[Dict[str, Any]]:
+        """List all single-cell validated signatures with basic stats (no points)."""
+        data = self._load_validation_data(atlas)
+        if not data:
+            return []
+
+        result = []
+        for v in data.get("singlecell_validations", []):
+            vtype = v.get("signature_type", "CytoSig")
+            if vtype != signature_type:
+                continue
+            n_total = v.get("n_total_cells", 0)
+            n_expr = v.get("n_expressing", 0)
+            result.append({
+                "signature": v.get("signature", ""),
+                "gene": v.get("gene"),
+                "signature_type": vtype,
+                "n_total_cells": n_total,
+                "n_expressing": n_expr,
+                "expressing_fraction": v.get("expressing_fraction", 0),
+            })
+        return result
+
+    async def get_singlecell_scatter(
+        self,
+        atlas: str,
+        signature: str,
+        signature_type: str = "CytoSig",
+    ) -> Optional[Dict[str, Any]]:
+        """Get full sampled_points for a single-cell signature."""
+        data = self._load_validation_data(atlas)
+        if not data:
+            return None
+
+        for v in data.get("singlecell_validations", []):
+            if v.get("signature") == signature and v.get("signature_type", "CytoSig") == signature_type:
+                return {
+                    "atlas": atlas,
+                    "signature": signature,
+                    "gene": v.get("gene"),
+                    "signature_type": signature_type,
+                    "n_total_cells": v.get("n_total_cells", 0),
+                    "n_expressing": v.get("n_expressing", 0),
+                    "expressing_fraction": v.get("expressing_fraction", 0),
+                    "sampled_points": v.get("sampled_points", []),
+                    "activity_fold_change": v.get("activity_fold_change"),
+                    "activity_p_value": v.get("activity_p_value"),
+                    "mean_activity_expressing": v.get("mean_activity_expressing"),
+                    "mean_activity_non_expressing": v.get("mean_activity_non_expressing"),
+                }
+        return None
+
+    async def get_singlecell_celltypes(
+        self,
+        atlas: str,
+        signature: str,
+        signature_type: str = "CytoSig",
+    ) -> List[Dict[str, Any]]:
+        """Compute per-celltype stats from sampled_points for a signature."""
+        data = self._load_validation_data(atlas)
+        if not data:
+            return []
+
+        validation = None
+        for v in data.get("singlecell_validations", []):
+            if v.get("signature") == signature and v.get("signature_type", "CytoSig") == signature_type:
+                validation = v
+                break
+        if not validation:
+            return []
+
+        sampled = validation.get("sampled_points", [])
+        if not sampled:
+            return []
+
+        # Group by cell_type
+        ct_groups: Dict[str, List[Dict]] = {}
+        for p in sampled:
+            ct = p.get("cell_type", "Unknown")
+            ct_groups.setdefault(ct, []).append(p)
+
+        results = []
+        for ct, points in sorted(ct_groups.items()):
+            expressing = [p for p in points if p.get("is_expressing", False)]
+            non_expressing = [p for p in points if not p.get("is_expressing", False)]
+
+            mean_act_expr = None
+            if expressing:
+                acts = [p.get("activity", 0) for p in expressing]
+                mean_act_expr = sum(acts) / len(acts)
+
+            mean_act_non = None
+            if non_expressing:
+                acts = [p.get("activity", 0) for p in non_expressing]
+                mean_act_non = sum(acts) / len(acts)
+
+            n_total = len(points)
+            n_expr = len(expressing)
+            results.append({
+                "cell_type": ct,
+                "n_cells": n_total,
+                "n_expressing": n_expr,
+                "expressing_fraction": n_expr / n_total if n_total > 0 else 0,
+                "mean_activity_expressing": mean_act_expr,
+                "mean_activity_non_expressing": mean_act_non,
+            })
+
+        return results
 
     # ==================== Type 5: Biological Associations ====================
 

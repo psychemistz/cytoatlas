@@ -1,12 +1,18 @@
 """
 Validation/credibility panel API endpoints.
 
-Provides 5 types of validation for CytoSig/SecAct inference credibility:
+Original 5-type credibility endpoints (preserved for backward compatibility):
 1. Sample-level: Pseudobulk expression vs sample-level activity
 2. Cell type-level: Cell type pseudobulk expression vs activity
 3. Pseudobulk vs single-cell: Compare aggregation methods
 4. Single-cell direct: Expression vs activity at cell level
 5. Biological associations: Known marker validation
+
+New 4-tab structure (matching frontend):
+Tab 0: Bulk RNA-seq (GTEx/TCGA)
+Tab 1: Donor Level (cross-sample correlations)
+Tab 2: Cell Type Level (celltype-stratified correlations)
+Tab 3: Single-Cell (direct expression vs activity)
 """
 
 from typing import List, Optional
@@ -24,6 +30,7 @@ from app.schemas.validation import (
     SingleCellDistributionData,
     ValidationSummary,
 )
+from app.services.bulk_validation_service import BulkValidationService
 from app.services.validation_service import ValidationService
 
 router = APIRouter(prefix="/validation", tags=["Validation & Credibility"])
@@ -32,6 +39,11 @@ router = APIRouter(prefix="/validation", tags=["Validation & Credibility"])
 def get_validation_service() -> ValidationService:
     """Get validation service instance."""
     return ValidationService()
+
+
+def get_bulk_validation_service() -> BulkValidationService:
+    """Get bulk validation service instance."""
+    return BulkValidationService()
 
 
 # ==================== Discovery Endpoints ====================
@@ -394,3 +406,189 @@ async def compare_atlas_validation(
         "signature_type": signature_type,
         "best_atlas": best_atlas,
     }
+
+
+# ========================================================================== #
+#  NEW: 4-Tab Frontend Structure                                              #
+# ========================================================================== #
+
+
+# ==================== Tab 0: Bulk RNA-seq ====================
+
+
+@router.get("/bulk-rnaseq/datasets", response_model=List[str])
+async def list_bulk_rnaseq_datasets(
+    service: BulkValidationService = Depends(get_bulk_validation_service),
+) -> List[str]:
+    """List available bulk RNA-seq datasets (e.g., gtex, tcga)."""
+    return await service.get_bulk_rnaseq_datasets()
+
+
+@router.get("/bulk-rnaseq/{dataset}/summary")
+async def get_bulk_rnaseq_summary(
+    dataset: str = Path(..., description="Dataset name (gtex or tcga)"),
+    sigtype: str = Query("cytosig", description="Signature type"),
+    service: BulkValidationService = Depends(get_bulk_validation_service),
+) -> dict:
+    """Get summary statistics for a bulk RNA-seq dataset."""
+    result = await service.get_bulk_rnaseq_summary(dataset, sigtype)
+    if not result:
+        raise HTTPException(status_code=404, detail=f"Dataset '{dataset}' not found")
+    return result
+
+
+@router.get("/bulk-rnaseq/{dataset}/targets")
+async def list_bulk_rnaseq_targets(
+    dataset: str = Path(..., description="Dataset name"),
+    sigtype: str = Query("cytosig", description="Signature type"),
+    service: BulkValidationService = Depends(get_bulk_validation_service),
+) -> List[dict]:
+    """List targets with correlation metadata for a bulk RNA-seq dataset."""
+    return await service.get_bulk_rnaseq_targets(dataset, sigtype)
+
+
+@router.get("/bulk-rnaseq/{dataset}/scatter/{target}")
+async def get_bulk_rnaseq_scatter(
+    dataset: str = Path(..., description="Dataset name"),
+    target: str = Path(..., description="Target/signature name"),
+    sigtype: str = Query("cytosig", description="Signature type"),
+    service: BulkValidationService = Depends(get_bulk_validation_service),
+) -> dict:
+    """Get full scatter plot data for a single target in a bulk RNA-seq dataset."""
+    result = await service.get_bulk_rnaseq_scatter(dataset, target, sigtype)
+    if not result:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No scatter data for {dataset}/{target}/{sigtype}",
+        )
+    return result
+
+
+@router.get("/bulk-rnaseq/{dataset}/donor-level")
+async def get_bulk_rnaseq_donor_level(
+    dataset: str = Path(..., description="Dataset name"),
+    sigtype: str = Query("cytosig", description="Signature type"),
+    service: BulkValidationService = Depends(get_bulk_validation_service),
+) -> List[dict]:
+    """Get donor-level correlation records for a bulk RNA-seq dataset."""
+    return await service.get_bulk_rnaseq_donor_level(dataset, sigtype)
+
+
+# ==================== Tab 1: Donor Level ====================
+
+
+@router.get("/donor/atlases", response_model=List[str])
+async def list_donor_atlases(
+    service: BulkValidationService = Depends(get_bulk_validation_service),
+) -> List[str]:
+    """List atlases with donor-level scatter data."""
+    return await service.get_donor_atlases()
+
+
+@router.get("/donor/{atlas}/targets")
+async def list_donor_targets(
+    atlas: str = Path(..., description="Atlas name"),
+    sigtype: str = Query("cytosig", description="Signature type"),
+    service: BulkValidationService = Depends(get_bulk_validation_service),
+) -> List[dict]:
+    """List targets with donor-level correlation metadata (no scatter points)."""
+    return await service.get_donor_targets(atlas, sigtype)
+
+
+@router.get("/donor/{atlas}/scatter/{target}")
+async def get_donor_scatter(
+    atlas: str = Path(..., description="Atlas name"),
+    target: str = Path(..., description="Target/signature name"),
+    sigtype: str = Query("cytosig", description="Signature type"),
+    service: BulkValidationService = Depends(get_bulk_validation_service),
+) -> dict:
+    """Get full scatter plot data for a single target at donor level."""
+    result = await service.get_donor_scatter(atlas, target, sigtype)
+    if not result:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No donor scatter data for {atlas}/{target}/{sigtype}",
+        )
+    return result
+
+
+# ==================== Tab 2: Cell Type Level ====================
+
+
+@router.get("/celltype/{atlas}/levels", response_model=List[str])
+async def list_celltype_levels(
+    atlas: str = Path(..., description="Atlas name"),
+    service: BulkValidationService = Depends(get_bulk_validation_service),
+) -> List[str]:
+    """List available celltype aggregation levels for an atlas."""
+    return await service.get_celltype_levels(atlas)
+
+
+@router.get("/celltype/{atlas}/targets")
+async def list_celltype_targets(
+    atlas: str = Path(..., description="Atlas name"),
+    sigtype: str = Query("cytosig", description="Signature type"),
+    level: str = Query("donor_l1", description="Aggregation level"),
+    service: BulkValidationService = Depends(get_bulk_validation_service),
+) -> List[dict]:
+    """List targets with celltype-level correlation metadata."""
+    return await service.get_celltype_targets(atlas, level, sigtype)
+
+
+@router.get("/celltype/{atlas}/scatter/{target}")
+async def get_celltype_scatter(
+    atlas: str = Path(..., description="Atlas name"),
+    target: str = Path(..., description="Target/signature name"),
+    sigtype: str = Query("cytosig", description="Signature type"),
+    level: str = Query("donor_l1", description="Aggregation level"),
+    service: BulkValidationService = Depends(get_bulk_validation_service),
+) -> dict:
+    """Get full scatter plot data for a single target at celltype level."""
+    result = await service.get_celltype_scatter(atlas, level, target, sigtype)
+    if not result:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No celltype scatter data for {atlas}/{level}/{target}/{sigtype}",
+        )
+    return result
+
+
+# ==================== Tab 3: Single-Cell (enhanced) ====================
+
+
+@router.get("/singlecell/{atlas}/signatures")
+async def list_singlecell_signatures(
+    atlas: str = Path(..., description="Atlas name"),
+    sigtype: str = Query("CytoSig", description="Signature type (CytoSig or SecAct)"),
+    service: ValidationService = Depends(get_validation_service),
+) -> List[dict]:
+    """List single-cell validated signatures with basic stats (no sampled points)."""
+    return await service.get_singlecell_signatures(atlas, sigtype)
+
+
+@router.get("/singlecell/{atlas}/scatter/{signature}")
+async def get_singlecell_scatter(
+    atlas: str = Path(..., description="Atlas name"),
+    signature: str = Path(..., description="Signature/cytokine name"),
+    sigtype: str = Query("CytoSig", description="Signature type (CytoSig or SecAct)"),
+    service: ValidationService = Depends(get_validation_service),
+) -> dict:
+    """Get full sampled_points for a single-cell signature (all 500 points)."""
+    result = await service.get_singlecell_scatter(atlas, signature, sigtype)
+    if not result:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No single-cell scatter data for {atlas}/{signature}/{sigtype}",
+        )
+    return result
+
+
+@router.get("/singlecell/{atlas}/celltypes/{signature}")
+async def get_singlecell_celltypes(
+    atlas: str = Path(..., description="Atlas name"),
+    signature: str = Path(..., description="Signature/cytokine name"),
+    sigtype: str = Query("CytoSig", description="Signature type (CytoSig or SecAct)"),
+    service: ValidationService = Depends(get_validation_service),
+) -> List[dict]:
+    """Get per-celltype stats computed from single-cell sampled points."""
+    return await service.get_singlecell_celltypes(atlas, signature, sigtype)
