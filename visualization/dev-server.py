@@ -47,6 +47,13 @@ class CytoAtlasRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.server_start_time = datetime.now().isoformat()
         super().__init__(*args, directory=directory, **kwargs)
 
+    def handle(self):
+        """Override to suppress broken-pipe / connection-reset errors."""
+        try:
+            super().handle()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
     def log_message(self, format, *args):
         """Custom log format with timestamps."""
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
