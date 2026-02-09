@@ -179,12 +179,41 @@ class ChatService:
                     "type": "function",
                     "function": {
                         "name": tc["name"],
-                        "arguments": tc["arguments"],
+                        "arguments": self._ensure_json_string(tc["arguments"]),
                     },
                 }
                 for tc in tool_calls_raw
             ]
         return msg
+
+    @staticmethod
+    def _ensure_json_string(args: str | dict) -> str:
+        """Ensure tool call arguments are a valid JSON string.
+
+        Mistral may produce duplicated/garbled JSON during streaming.
+        Strategy: try as-is, then try extracting valid JSON substrings.
+        """
+        if isinstance(args, dict):
+            return json.dumps(args)
+        try:
+            json.loads(args)
+            return args
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        # Mistral often duplicates the JSON — try each '{' as a start
+        for i in range(len(args) - 1, -1, -1):
+            if args[i] == '{':
+                candidate = args[i:]
+                try:
+                    json.loads(candidate)
+                    logger.info("Repaired tool args from pos %d: %s (original: %s)", i, candidate, args)
+                    return candidate
+                except (json.JSONDecodeError, TypeError):
+                    continue
+
+        logger.warning("Could not repair tool args: %s", args)
+        return "{}"
 
     async def _chat_vllm(
         self,
@@ -347,7 +376,10 @@ class ChatService:
 
                 for idx in sorted(collected_tool_calls.keys()):
                     tc_data = collected_tool_calls[idx]
-                    args = json.loads(tc_data["arguments"])
+                    raw_args = tc_data["arguments"]
+                    repaired = self._ensure_json_string(raw_args)
+                    args = json.loads(repaired)
+                    tc_data["arguments"] = repaired
 
                     tool_call = ToolCall(
                         id=tc_data["id"],

@@ -37,6 +37,15 @@ class VisualizationConfig(BaseModel):
     container_id: str | None = None
 
 
+class Citation(BaseModel):
+    """Citation from RAG search result."""
+
+    source_id: str
+    source_type: str  # docs, column, atlas, biology, data
+    text: str
+    relevance_score: float
+
+
 class DownloadableData(BaseModel):
     """Reference to downloadable data from a message."""
 
@@ -85,6 +94,7 @@ class ChatMessageResponse(BaseModel):
     tool_results: list[ToolResult] | None = None
     visualizations: list[VisualizationConfig] | None = None
     downloadable_data: DownloadableData | None = None
+    citations: list[Citation] | None = None
 
     # Token usage
     input_tokens: int | None = None
@@ -104,6 +114,7 @@ class ChatMessage(BaseModel):
     tool_results: list[ToolResult] | None = None
     visualizations: list[VisualizationConfig] | None = None
     downloadable_data: DownloadableData | None = None
+    citations: list[Citation] | None = None
     created_at: datetime
 
 

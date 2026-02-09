@@ -198,6 +198,12 @@ class Settings(BaseSettings):
     anon_chat_limit_per_day: int = Field(default=5)
     auth_chat_limit_per_day: int = Field(default=1000)
 
+    # RAG (Retrieval Augmented Generation)
+    rag_enabled: bool = Field(default=True)
+    rag_db_path: Path = Field(default=Path("rag_db"))
+    rag_embedding_model: str = Field(default="all-MiniLM-L6-v2")
+    rag_top_k: int = Field(default=5)
+
     @property
     def cima_results_dir(self) -> Path:
         return self.results_base_path / "cima"
