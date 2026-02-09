@@ -13,9 +13,11 @@ from app.config import get_settings
 
 # Static files directory
 STATIC_DIR = Path(__file__).parent.parent / "static"
+from app.core.audit import AuditMiddleware, get_audit_logger
 from app.core.cache import CacheService
 from app.core.logging import MetricsMiddleware, RequestLoggingMiddleware, logger
 from app.core.database import close_db, init_db
+from app.core.security_headers import SecurityHeadersMiddleware
 from app.routers import (
     atlases_router,
     auth_router,
@@ -44,6 +46,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     logger.info(f"Environment: {settings.environment}")
     logger.info(f"Data path: {settings.viz_data_path}")
 
+    # Security warnings
+    if settings.secret_key is None and settings.environment != "production":
+        import secrets
+        runtime_secret = secrets.token_hex(32)
+        # Monkey-patch the settings instance
+        object.__setattr__(settings, "secret_key", runtime_secret)
+        logger.warning("SECRET_KEY not set - generated random key for this session (will change on restart)")
+
+    if settings.allowed_origins == "*":
+        logger.warning("CORS: Allowing all origins (*) - this is insecure in production")
+
     # Initialize database (if configured)
     if settings.use_database:
         try:
@@ -62,10 +75,25 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     except Exception as e:
         logger.warning(f"Cache: Error ({e})")
 
+    # Initialize audit logger
+    if settings.audit_enabled:
+        audit_logger = get_audit_logger()
+        await audit_logger.start()
+        logger.info("Audit: Enabled")
+
     yield
 
     # Shutdown
     logger.info("Shutting down...")
+
+    # Stop audit logger
+    if settings.audit_enabled:
+        try:
+            audit_logger = get_audit_logger()
+            await audit_logger.stop()
+        except Exception:
+            pass
+
     try:
         cache = CacheService()
         await cache.disconnect()
@@ -95,29 +123,34 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # CORS middleware
+    # Middleware (NOTE: FastAPI processes in REVERSE order of add_middleware calls)
+    # Execution order: SecurityHeaders -> CORS -> Audit -> RequestLogging -> Metrics
+    # So add in reverse: Metrics first, SecurityHeaders last
+    app.add_middleware(MetricsMiddleware)
+    app.add_middleware(RequestLoggingMiddleware)
+    app.add_middleware(AuditMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-API-Key", "X-Request-ID"],
     )
-
-    # Request logging and metrics middleware
-    app.add_middleware(RequestLoggingMiddleware)
-    app.add_middleware(MetricsMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
 
     # Global exception handler
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         """Handle uncaught exceptions."""
+        # Log the actual error (but don't expose to client)
+        logger.error(f"Unhandled exception: {exc}", exc_info=True)
+
         return JSONResponse(
             status_code=500,
             content={
                 "success": False,
                 "error": "Internal server error",
-                "detail": str(exc) if settings.debug else None,
+                "detail": "An unexpected error occurred" if not settings.debug else str(exc),
             },
         )
 

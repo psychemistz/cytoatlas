@@ -1,5 +1,6 @@
 """Authentication and security utilities."""
 
+import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
@@ -17,8 +18,11 @@ from app.core.database import get_db, get_db_optional
 
 settings = get_settings()
 
-# Password hashing
+# Password hashing (for user passwords)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# API key hashing (PBKDF2 to avoid bcrypt's 72-byte limit)
+api_key_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 # OAuth2 scheme
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.api_v1_prefix}/auth/token")
@@ -53,19 +57,28 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def generate_api_key() -> str:
-    """Generate a secure API key."""
-    return secrets.token_urlsafe(32)
+def generate_api_key() -> tuple[str, str]:
+    """Generate a secure API key and return both the key and its prefix.
+
+    Returns:
+        Tuple of (api_key, api_key_prefix)
+    """
+    api_key = secrets.token_urlsafe(32)
+    api_key_prefix = api_key[:8]
+    return api_key, api_key_prefix
 
 
 def hash_api_key(api_key: str) -> str:
-    """Hash an API key for storage."""
-    return pwd_context.hash(api_key)
+    """Hash an API key for storage.
+
+    Uses PBKDF2-SHA256 which doesn't have length limitations like bcrypt.
+    """
+    return api_key_context.hash(api_key)
 
 
 def verify_api_key_hash(api_key: str, hashed_key: str) -> bool:
     """Verify an API key against its hash."""
-    return pwd_context.verify(api_key, hashed_key)
+    return api_key_context.verify(api_key, hashed_key)
 
 
 def create_access_token(
@@ -116,6 +129,7 @@ async def get_current_user(
 ) -> "User":  # type: ignore[name-defined]
     """Get current user from JWT token."""
     from app.models.user import User
+    from app.core.permissions import get_user_permissions
 
     payload = decode_token(token)
 
@@ -135,6 +149,9 @@ async def get_current_user(
             detail="Inactive user",
         )
 
+    # Attach permissions to user object (for convenience)
+    user.permissions = get_user_permissions(user.role)  # type: ignore[attr-defined]
+
     return user
 
 
@@ -142,19 +159,29 @@ async def verify_api_key(
     api_key: Annotated[str | None, Depends(api_key_header)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> "User | None":  # type: ignore[name-defined]
-    """Verify API key and return associated user."""
+    """Verify API key and return associated user (O(1) lookup via prefix index)."""
     if api_key is None:
         return None
 
     from app.models.user import User
 
-    # Get all users with API keys and check
-    result = await db.execute(select(User).where(User.api_key_hash.isnot(None)))
+    # Extract prefix for O(1) index lookup
+    api_key_prefix = api_key[:8]
+
+    # Query only users with matching prefix (indexed lookup)
+    result = await db.execute(
+        select(User).where(User.api_key_prefix == api_key_prefix)
+    )
     users = result.scalars().all()
 
+    # Verify hash only for matching users (typically 0-1 users)
     for user in users:
         if user.api_key_hash and verify_api_key_hash(api_key, user.api_key_hash):
             if user.is_active:
+                # Update last used timestamp
+                from datetime import datetime, timezone
+                user.api_key_last_used = datetime.now(timezone.utc)
+                await db.commit()
                 return user
 
     return None
@@ -212,6 +239,8 @@ async def get_current_user_optional(
     This dependency allows endpoints to work for both authenticated
     and anonymous users. Also works when database is not configured.
     """
+    from app.core.permissions import get_user_permissions
+
     # If database is not configured, return None (anonymous user)
     if db is None:
         return None
@@ -222,6 +251,8 @@ async def get_current_user_optional(
     if api_key:
         user = await verify_api_key(api_key, db)
         if user:
+            # Attach permissions
+            user.permissions = get_user_permissions(user.role)  # type: ignore[attr-defined]
             return user
 
     # Try JWT token
@@ -231,6 +262,8 @@ async def get_current_user_optional(
             result = await db.execute(select(User).where(User.email == payload.sub))
             user = result.scalar_one_or_none()
             if user and user.is_active:
+                # Attach permissions
+                user.permissions = get_user_permissions(user.role)  # type: ignore[attr-defined]
                 return user
         except HTTPException:
             pass  # Invalid token, treat as anonymous

@@ -1,16 +1,20 @@
 """Base service class with common functionality."""
 
-import json
+import sys
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
+import orjson
 import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.cache import CacheService, cached
+from app.core.streaming import StreamingJSONResponse, create_streaming_response
 from app.models.atlas import Atlas
+from app.repositories.json_repository import JSONRepository
 
 settings = get_settings()
 
@@ -22,6 +26,12 @@ class BaseService:
         """Initialize service with optional database session."""
         self.db = db
         self._cache = CacheService()
+        self._repository = JSONRepository()
+
+    @property
+    def repository(self) -> JSONRepository:
+        """Get repository instance."""
+        return self._repository
 
     @property
     def viz_data_path(self) -> Path:
@@ -35,7 +45,7 @@ class BaseService:
 
     async def load_json(self, filename: str, subdir: str | None = None) -> Any:
         """
-        Load JSON data from visualization directory.
+        Load JSON data from visualization directory using orjson (2-3x faster).
 
         Args:
             filename: JSON filename
@@ -43,17 +53,28 @@ class BaseService:
 
         Returns:
             Parsed JSON data
+
+        Raises:
+            FileNotFoundError: If file doesn't exist
+            ValueError: If path traversal is detected
         """
         if subdir:
             path = self.viz_data_path / subdir / filename
         else:
             path = self.viz_data_path / filename
 
+        # Security check: prevent path traversal
+        resolved_path = path.resolve()
+        resolved_base = self.viz_data_path.resolve()
+
+        if not resolved_path.is_relative_to(resolved_base):
+            raise ValueError(f"Path traversal detected: {filename}")
+
         if not path.exists():
             raise FileNotFoundError(f"JSON file not found: {path}")
 
-        with open(path) as f:
-            return json.load(f)
+        with open(path, "rb") as f:
+            return orjson.loads(f.read())
 
     async def load_csv(
         self,
@@ -142,34 +163,70 @@ class BaseService:
             result.append(rounded)
         return result
 
+    def stream_json(
+        self,
+        data: list[dict],
+        format: str = "array",
+        etag: str | None = None,
+        last_modified: int | None = None,
+    ) -> StreamingJSONResponse:
+        """
+        Create streaming JSON response for large datasets.
+
+        Args:
+            data: List of items to stream
+            format: "array" (JSON array) or "jsonl" (line-delimited JSON)
+            etag: Optional ETag header value
+            last_modified: Optional Last-Modified timestamp
+
+        Returns:
+            StreamingJSONResponse
+        """
+        return create_streaming_response(
+            items=data,
+            format=format,
+            etag=etag,
+            last_modified=last_modified,
+        )
+
 
 class CachedDataLoader:
-    """Utility for loading and caching data files."""
+    """Utility for loading and caching data files with LRU eviction."""
 
     _instance: "CachedDataLoader | None" = None
-    _data_cache: dict[str, Any] = {}
+    _data_cache: OrderedDict[str, Any] = OrderedDict()
+    _max_cache_entries: int = 50
 
     def __new__(cls) -> "CachedDataLoader":
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._data_cache = {}
+            cls._data_cache = OrderedDict()
         return cls._instance
 
     @cached(prefix="json", ttl=3600)
     async def load_json_cached(self, path: str) -> Any:
-        """Load and cache JSON file."""
-        with open(path) as f:
-            return json.load(f)
+        """Load and cache JSON file using orjson."""
+        with open(path, "rb") as f:
+            return orjson.loads(f.read())
 
     def load_json_sync(self, path: str) -> Any:
-        """Load JSON file synchronously with in-memory cache."""
+        """Load JSON file synchronously with LRU cache."""
+        # Check cache and update LRU order
         if path in self._data_cache:
+            self._data_cache.move_to_end(path)
             return self._data_cache[path]
 
-        with open(path) as f:
-            data = json.load(f)
-            self._data_cache[path] = data
-            return data
+        # Load from disk
+        with open(path, "rb") as f:
+            data = orjson.loads(f.read())
+
+        # Evict oldest if at capacity
+        if len(self._data_cache) >= self._max_cache_entries:
+            self._data_cache.popitem(last=False)
+
+        # Add to cache
+        self._data_cache[path] = data
+        return data
 
     def clear_cache(self) -> None:
         """Clear in-memory cache."""

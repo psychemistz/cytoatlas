@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -55,9 +55,21 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return v.strip().strip('"').strip("'")
 
+    @model_validator(mode="after")
+    def validate_production_security(self) -> "Settings":
+        """Validate security settings in production."""
+        if self.environment == "production":
+            if self.secret_key is None or self.secret_key == "change-me-in-production-use-openssl-rand-hex-32":
+                raise ValueError(
+                    "SECRET_KEY must be set to a secure value in production. "
+                    "Generate one with: openssl rand -hex 32"
+                )
+        return self
+
     # API
     api_v1_prefix: str = "/api/v1"
-    allowed_origins: str = Field(default="*")  # Comma-separated or "*" for all
+    allowed_origins: str = Field(default="http://localhost:8000,http://localhost:3000")
+    max_request_body_mb: int = 100
 
     @property
     def cors_origins(self) -> list[str]:
@@ -87,10 +99,13 @@ class Settings(BaseSettings):
         return bool(self.redis_url)
 
     # Authentication
-    secret_key: str = Field(default="change-me-in-production-use-openssl-rand-hex-32")
+    secret_key: str | None = Field(default=None)
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     api_key_header: str = "X-API-Key"
+    require_auth: bool = False
+    audit_enabled: bool = True
+    audit_log_path: Path = Field(default=Path("logs/audit.jsonl"))
 
     # Rate Limiting
     rate_limit_requests: int = 100
