@@ -28,11 +28,9 @@ class ParquetRepository(BaseRepository):
 
         Args:
             parquet_base_path: Base path for parquet files
-                              (default: {viz_data_path}/parquet_data)
+                              (default: settings.parquet_data_path)
         """
-        self._parquet_base_path = (
-            parquet_base_path or settings.viz_data_path / "parquet_data"
-        )
+        self._parquet_base_path = parquet_base_path or settings.parquet_data_path
         self._json_fallback = JSONRepository()
 
     async def get_activity(
@@ -101,16 +99,9 @@ class ParquetRepository(BaseRepository):
         """
         Get path to Parquet file for data type.
 
-        Partition scheme: parquet_data/{atlas}/{data_type}/data.parquet
+        Flat layout: parquet/{data_type}.parquet
         """
-        # Extract atlas from data_type if present
-        parts = data_type.split("_", 1)
-        if len(parts) > 1 and parts[0] in ("cima", "inflammation", "scatlas"):
-            atlas = parts[0]
-            return self._parquet_base_path / atlas / data_type / "data.parquet"
-        else:
-            # Generic data type
-            return self._parquet_base_path / data_type / "data.parquet"
+        return self._parquet_base_path / f"{data_type}.parquet"
 
     async def _load_parquet(
         self,

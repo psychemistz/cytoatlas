@@ -120,6 +120,9 @@ class Settings(BaseSettings):
     viz_data_path: Path = Field(
         default=Path("/vf/users/parks34/projects/2secactpy/visualization/data")
     )
+    parquet_data_path: Path = Field(
+        default=Path("/vf/users/parks34/projects/2secactpy/visualization/data/parquet")
+    )
 
     # CIMA paths
     cima_h5ad: Path = Field(

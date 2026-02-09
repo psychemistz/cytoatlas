@@ -46,6 +46,15 @@ def round_val(v, decimals=4):
     return round(float(v), decimals)
 
 
+def _fisher_z_ci(rho, n, z_crit=1.96):
+    """Compute 95% CI for Spearman rho using Fisher z-transform."""
+    if n < 6 or rho is None or not np.isfinite(rho) or abs(rho) >= 1.0:
+        return None
+    z = np.arctanh(rho)
+    se = 1.0 / np.sqrt(n - 3)
+    return [round_val(np.tanh(z - z_crit * se)), round_val(np.tanh(z + z_crit * se))]
+
+
 # H5AD file patterns for donor-level aggregation (celltype=="all")
 # Format: (atlas_prefix, level_name, expr_suffix)
 # expr_suffix defaults to "pseudobulk" for single-cell, "expression" for bulk
@@ -223,17 +232,20 @@ def _load_matched_lookup(atlas_key: str) -> dict:
     return lookup
 
 
-def build_donor_scatter() -> dict:
+def build_donor_scatter() -> tuple[dict, list[dict]]:
     """Build per-donor scatter data from H5AD files.
 
     For each atlas and signature type, reads donor-level pseudobulk (expression)
     and activity H5AD files, then extracts per-donor (expression, activity) pairs.
 
-    Returns dict: {atlas: {sig_type: {target: {gene, rho, pval, n, points}}}}
+    Returns:
+        - dict: {atlas: {sig_type: {target: {gene, rho, pval, n, points}}}}
+        - list[dict]: flat metadata rows for Parquet output
     All targets included for each signature type.
     """
     cytosig_map = load_target_to_gene_mapping()
     result = {}
+    scatter_meta = []
 
     for atlas_key, (atlas_prefix, level_name, expr_suffix) in ATLAS_H5AD_PATTERNS.items():
         atlas_dir = VALIDATION_DIR / atlas_key
@@ -313,11 +325,14 @@ def build_donor_scatter() -> dict:
                 # All points included — use 2-decimal precision for compactness
                 points = [[round_val(float(e), 2), round_val(float(a), 2)] for e, a in zip(expr_vals, act_vals)]
 
+                rho_ci = _fisher_z_ci(rho, n_total)
+
                 entry = {
                     "gene": gene,
                     "rho": round_val(rho),
                     "pval": float(f"{pval:.2e}") if pval is not None and np.isfinite(pval) else None,
                     "n": n_total,
+                    "rho_ci": rho_ci,
                     "points": points,
                 }
 
@@ -328,12 +343,25 @@ def build_donor_scatter() -> dict:
 
                 targets_data[target] = entry
 
+                # Collect metadata for Parquet output
+                scatter_meta.append({
+                    "atlas": atlas_key,
+                    "sig_type": sig_type,
+                    "target": target,
+                    "gene": gene,
+                    "rho": round_val(rho),
+                    "pval": float(f"{pval:.2e}") if pval is not None and np.isfinite(pval) else None,
+                    "n": n_total,
+                    "rho_ci_lo": rho_ci[0] if rho_ci else None,
+                    "rho_ci_hi": rho_ci[1] if rho_ci else None,
+                })
+
             atlas_result[sig_type] = targets_data
             print(f"    donor_scatter/{atlas_key}/{sig_type}: {len(targets_data)} targets")
 
         result[atlas_key] = atlas_result
 
-    return result
+    return result, scatter_meta
 
 
 def build_summary(summary_csv: Path) -> list:
@@ -480,14 +508,17 @@ def build_celltype_level(atlas_key: str, csv_path: Path) -> dict:
     return result
 
 
-def build_celltype_scatter() -> dict:
+def build_celltype_scatter() -> tuple[dict, list[dict]]:
     """Build per-donor×celltype scatter data from celltype-level H5AD files.
 
-    Returns dict: {atlas: {level: {sig_type: {target: {gene, rho, pval, n, celltypes, points}}}}}
+    Returns:
+        - dict: {atlas: {level: {sig_type: {target: {gene, rho, pval, n, celltypes, points}}}}}
+        - list[dict]: flat metadata rows for Parquet output
     Each target's points include a celltype label for filtering in the UI.
     """
     cytosig_map = load_target_to_gene_mapping()
     result = {}
+    scatter_meta = []
 
     for atlas_key, levels in CELLTYPE_H5AD_PATTERNS.items():
         atlas_dir = VALIDATION_DIR / atlas_key
@@ -589,15 +620,32 @@ def build_celltype_scatter() -> dict:
                             pt.append(ct_to_idx.get(str(ct_labels[i]), -1))
                         points.append(pt)
 
+                    rho_ci = _fisher_z_ci(rho, n_total)
+
                     targets_data[target] = {
                         "gene": gene,
                         "rho": round_val(rho),
                         "pval": float(f"{pval:.2e}") if pval is not None and np.isfinite(pval) else None,
                         "n": n_total,
+                        "rho_ci": rho_ci,
                         "celltypes": celltypes_available,
                         "groups": celltypes_available,
                         "points": points,
                     }
+
+                    # Collect metadata for Parquet output
+                    scatter_meta.append({
+                        "atlas": atlas_key,
+                        "level": level_name,
+                        "sig_type": sig_type,
+                        "target": target,
+                        "gene": gene,
+                        "rho": round_val(rho),
+                        "pval": float(f"{pval:.2e}") if pval is not None and np.isfinite(pval) else None,
+                        "n": n_total,
+                        "rho_ci_lo": rho_ci[0] if rho_ci else None,
+                        "rho_ci_hi": rho_ci[1] if rho_ci else None,
+                    })
 
                 level_result[sig_type] = targets_data
                 print(f"    celltype_scatter/{atlas_key}/{level_name}/{sig_type}: {len(targets_data)} targets")
@@ -609,7 +657,7 @@ def build_celltype_scatter() -> dict:
 
         result[atlas_key] = atlas_result
 
-    return result
+    return result, scatter_meta
 
 
 def build_resampled_scatter() -> dict:
@@ -1078,24 +1126,19 @@ def main():
 
     # 3. Build per-donor scatter data from H5AD files
     print("\n  Building donor scatter data ...")
-    donor_scatter = build_donor_scatter()
+    donor_scatter, donor_scatter_meta = build_donor_scatter()
 
     # 3b. Build celltype-level scatter data from donor×celltype H5AD files
     print("\n  Building celltype scatter data ...")
-    celltype_scatter = build_celltype_scatter()
+    celltype_scatter, celltype_scatter_meta = build_celltype_scatter()
 
-    # 3c. Build resampled scatter data (requires 16_resampled_validation.py to have run)
-    print("\n  Building resampled scatter data ...")
-    resampled_scatter = build_resampled_scatter()
-
-    # 4. Assemble output
+    # 4. Assemble output (resampled_scatter removed — rho CI now in donor/celltype scatter)
     output = {
         "summary": summary,
         "donor_level": donor_level,
         "celltype_level": celltype_level,
         "donor_scatter": donor_scatter,
         "celltype_scatter": celltype_scatter,
-        "resampled_scatter": resampled_scatter,
     }
 
     # 5. Write JSON
@@ -1120,7 +1163,21 @@ def main():
     else:
         print("  No GTEx/TCGA data available, skipping bulk_rnaseq_validation.json")
 
-    print("Done!")
+    # 7. Write scatter metadata as Parquet for fast API queries
+    parquet_dir = OUTPUT_PATH.parent / "parquet"
+    parquet_dir.mkdir(exist_ok=True)
+
+    if donor_scatter_meta:
+        donor_pq_path = parquet_dir / "donor_scatter_meta.parquet"
+        pd.DataFrame(donor_scatter_meta).to_parquet(donor_pq_path, index=False)
+        print(f"\n  Parquet: {donor_pq_path} ({len(donor_scatter_meta)} rows)")
+
+    if celltype_scatter_meta:
+        ct_pq_path = parquet_dir / "celltype_scatter_meta.parquet"
+        pd.DataFrame(celltype_scatter_meta).to_parquet(ct_pq_path, index=False)
+        print(f"  Parquet: {ct_pq_path} ({len(celltype_scatter_meta)} rows)")
+
+    print("\nDone!")
 
 
 if __name__ == "__main__":

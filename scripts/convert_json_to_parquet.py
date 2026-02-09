@@ -2,13 +2,18 @@
 """
 Convert large JSON files to Parquet format for improved performance.
 
-This script targets the largest JSON files in the visualization data directory:
-- bulk_donor_correlations.json
-- activity_boxplot.json
-- inflammation_disease.json
-- age_bmi_boxplots.json
-- singlecell_activity.json
-- scatlas_celltypes.json
+Targets the largest JSON files in visualization/data/:
+- activity_boxplot.json          (392 MB, flat array)
+- inflammation_disease.json      (275 MB, flat array)
+- inflammation_disease_filtered.json (56 MB, flat array)
+- singlecell_activity.json       (155 MB, flat array)
+- scatlas_celltypes.json         (126 MB, dict with "data" key)
+- age_bmi_boxplots.json          (234 MB, nested {atlas: {section: [records]}})
+- age_bmi_boxplots_filtered.json (115 MB, same structure)
+
+Note: bulk_donor_correlations.json (5.5 GB) has deeply nested point arrays
+and is handled separately by 14_preprocess_bulk_validation.py which outputs
+scatter metadata as Parquet during preprocessing.
 
 Parquet benefits:
 - 2-10x smaller file size (columnar compression)
@@ -16,7 +21,7 @@ Parquet benefits:
 - Memory-mapped reads
 - Schema enforcement
 
-Partition scheme: parquet_data/{atlas}/{data_type}/data.parquet
+Output: visualization/data/parquet/{name}.parquet
 """
 
 import argparse
@@ -30,43 +35,102 @@ import pyarrow.parquet as pq
 
 
 # Target files for conversion (largest files first)
+# All paths are relative to the base visualization/data/ directory
 TARGET_FILES = {
-    "bulk_donor_correlations": {
-        "json_path": "cima/bulk_donor_correlations.json",
-        "parquet_path": "parquet_data/cima/bulk_donor_correlations/data.parquet",
-        "atlas": "cima",
-    },
     "activity_boxplot": {
-        "json_path": "cima/activity_boxplot.json",
-        "parquet_path": "parquet_data/cima/activity_boxplot/data.parquet",
-        "atlas": "cima",
+        "json_path": "activity_boxplot.json",
     },
     "inflammation_disease": {
-        "json_path": "inflammation/inflammation_disease.json",
-        "parquet_path": "parquet_data/inflammation/inflammation_disease/data.parquet",
-        "atlas": "inflammation",
+        "json_path": "inflammation_disease.json",
     },
-    "age_bmi_boxplots": {
-        "json_path": "cima/age_bmi_boxplots.json",
-        "parquet_path": "parquet_data/cima/age_bmi_boxplots/data.parquet",
-        "atlas": "cima",
+    "inflammation_disease_filtered": {
+        "json_path": "inflammation_disease_filtered.json",
     },
     "singlecell_activity": {
-        "json_path": "cima/singlecell_activity.json",
-        "parquet_path": "parquet_data/cima/singlecell_activity/data.parquet",
-        "atlas": "cima",
+        "json_path": "singlecell_activity.json",
     },
     "scatlas_celltypes": {
-        "json_path": "scatlas/scatlas_celltypes.json",
-        "parquet_path": "parquet_data/scatlas/scatlas_celltypes/data.parquet",
-        "atlas": "scatlas",
+        "json_path": "scatlas_celltypes.json",
+        "extract_key": "data",
+    },
+    "age_bmi_boxplots": {
+        "json_path": "age_bmi_boxplots.json",
+        "flatten_func": "flatten_age_bmi",
+    },
+    "age_bmi_boxplots_filtered": {
+        "json_path": "age_bmi_boxplots_filtered.json",
+        "flatten_func": "flatten_age_bmi",
     },
 }
+
+
+def flatten_age_bmi(data: dict) -> list[dict]:
+    """Flatten nested age_bmi_boxplots structure.
+
+    Input: {atlas: {section: [records], ...}, ...}
+    where section is "age", "bmi", etc.
+    Only flatten sections whose values are lists of dicts (skip metadata lists).
+
+    Output: flat list of records with 'atlas' and 'section' columns added.
+    """
+    rows = []
+    for atlas, sections in data.items():
+        if not isinstance(sections, dict):
+            continue
+        for section, records in sections.items():
+            if not isinstance(records, list) or len(records) == 0:
+                continue
+            # Only flatten sections that contain dicts (not metadata string lists)
+            if not isinstance(records[0], dict):
+                continue
+            for rec in records:
+                row = {"atlas": atlas, "section": section}
+                row.update(rec)
+                rows.append(row)
+    return rows
+
+
+FLATTEN_FUNCS = {
+    "flatten_age_bmi": flatten_age_bmi,
+}
+
+
+def load_and_extract(json_path: Path, file_info: dict) -> list[dict]:
+    """Load JSON and extract/flatten to a flat list of dicts.
+
+    Handles three cases:
+    1. Flat array: JSON is already a list of dicts
+    2. extract_key: JSON is a dict, pull out a specific key that holds a list
+    3. flatten_func: JSON is nested, apply a custom flatten function
+    """
+    print(f"  Loading JSON... ", end="", flush=True)
+    with open(json_path) as f:
+        data = json.load(f)
+
+    extract_key = file_info.get("extract_key")
+    flatten_func_name = file_info.get("flatten_func")
+
+    if extract_key:
+        print(f"extracting key '{extract_key}'... ", end="", flush=True)
+        data = data[extract_key]
+    elif flatten_func_name:
+        print(f"flattening with {flatten_func_name}... ", end="", flush=True)
+        func = FLATTEN_FUNCS[flatten_func_name]
+        data = func(data)
+    elif isinstance(data, dict):
+        raise ValueError(
+            f"JSON is a dict but no extract_key or flatten_func specified. "
+            f"Top-level keys: {list(data.keys())[:10]}"
+        )
+
+    print(f"done ({len(data)} records)")
+    return data
 
 
 def convert_json_to_parquet(
     json_path: Path,
     parquet_path: Path,
+    file_info: dict,
     compression: str = "snappy",
 ) -> dict:
     """
@@ -75,28 +139,29 @@ def convert_json_to_parquet(
     Args:
         json_path: Path to input JSON file
         parquet_path: Path to output Parquet file
+        file_info: File metadata (extract_key, flatten_func, etc.)
         compression: Compression codec (snappy, gzip, zstd, lz4)
 
     Returns:
         Dictionary with conversion statistics
     """
-    print(f"Converting {json_path} -> {parquet_path}")
+    print(f"Converting {json_path.name} -> {parquet_path.name}")
 
-    # Load JSON
-    print(f"  Loading JSON... ", end="", flush=True)
-    with open(json_path) as f:
-        data = json.load(f)
-    print(f"✓ ({len(data)} records)")
+    # Load and extract/flatten JSON
+    data = load_and_extract(json_path, file_info)
 
     # Convert to DataFrame
     print(f"  Converting to DataFrame... ", end="", flush=True)
     df = pd.DataFrame(data)
-    print(f"✓ ({df.shape[0]} rows, {df.shape[1]} cols)")
+    print(f"done ({df.shape[0]} rows, {df.shape[1]} cols)")
+
+    # Free raw data
+    del data
 
     # Optimize dtypes to reduce size
     print(f"  Optimizing dtypes... ", end="", flush=True)
     df = optimize_dtypes(df)
-    print("✓")
+    print("done")
 
     # Create parent directory
     parquet_path.parent.mkdir(parents=True, exist_ok=True)
@@ -111,7 +176,7 @@ def convert_json_to_parquet(
         use_dictionary=True,  # Dictionary encoding for low-cardinality columns
         write_statistics=True,  # Enable statistics for predicate pushdown
     )
-    print("✓")
+    print("done")
 
     # Get file sizes
     json_size = json_path.stat().st_size
@@ -175,10 +240,10 @@ Available files:
 
 Examples:
   # Convert single file
-  python scripts/convert_json_to_parquet.py bulk_donor_correlations
+  python scripts/convert_json_to_parquet.py activity_boxplot
 
   # Convert multiple files
-  python scripts/convert_json_to_parquet.py bulk_donor_correlations activity_boxplot
+  python scripts/convert_json_to_parquet.py activity_boxplot inflammation_disease
 
   # Convert all files
   python scripts/convert_json_to_parquet.py --all
@@ -228,29 +293,31 @@ Examples:
 
     # Convert files
     print(f"Converting {len(files_to_convert)} files to Parquet\n")
-    print(f"Base path: {args.base_path}\n")
+    print(f"Base path: {args.base_path}")
+    print(f"Output dir: {args.base_path / 'parquet'}\n")
 
     all_stats = []
     for file_key in files_to_convert:
         file_info = TARGET_FILES[file_key]
 
         json_path = args.base_path / file_info["json_path"]
-        parquet_path = args.base_path / file_info["parquet_path"]
+        parquet_path = args.base_path / "parquet" / f"{file_key}.parquet"
 
         if not json_path.exists():
-            print(f"⚠️  Skipping {file_key}: JSON file not found at {json_path}\n")
+            print(f"Skipping {file_key}: JSON file not found at {json_path}\n")
             continue
 
         try:
             stats = convert_json_to_parquet(
                 json_path,
                 parquet_path,
+                file_info,
                 compression=args.compression,
             )
             stats["file"] = file_key
             all_stats.append(stats)
         except Exception as e:
-            print(f"❌ Error converting {file_key}: {e}\n")
+            print(f"Error converting {file_key}: {e}\n")
             continue
 
     # Print summary
@@ -270,7 +337,7 @@ Examples:
         print("Individual files:")
         for stats in all_stats:
             print(
-                f"  {stats['file']:30s} "
+                f"  {stats['file']:35s} "
                 f"{stats['json_size_mb']:8.2f} MB -> {stats['parquet_size_mb']:8.2f} MB "
                 f"({stats['compression_ratio']:5.1f}%)"
             )

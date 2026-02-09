@@ -2498,7 +2498,6 @@
                 <button class="tab active" data-tab="val-bulk">Bulk RNA-seq</button>
                 <button class="tab" data-tab="val-donor">Donor Level</button>
                 <button class="tab" data-tab="val-celltype">Cell Type Level</button>
-                <button class="tab" data-tab="val-celltype-resamp">Cell Type Level (Resampled)</button>
                 <button class="tab" data-tab="val-singlecell">Single-Cell Level</button>
             </div>
 
@@ -2687,69 +2686,6 @@
                 </div>
             </div>
 
-            <!-- Cell Type Level (Resampled) Validation -->
-            <div class="tab-content" id="tab-val-celltype-resamp">
-                <h3>Cell Type Level Validation (Resampled)</h3>
-                <p>Expression-activity correlations using bootstrap-resampled pseudobulk profiles (100 iterations). Error bars show 95% confidence intervals from resampling.</p>
-
-                <div class="filter-bar">
-                    <label>Atlas:
-                        <select id="val-ctr-atlas">
-                            <option value="cima">CIMA</option>
-                            <option value="inflammation_main">Inflammation Main</option>
-                            <option value="inflammation_val">Inflammation Val</option>
-                            <option value="inflammation_ext">Inflammation Ext</option>
-                            <option value="scatlas_normal">scAtlas Normal</option>
-                            <option value="scatlas_cancer">scAtlas Cancer</option>
-                        </select>
-                    </label>
-                    <label>Signature Type:
-                        <select id="val-ctr-sigtype">
-                            <option value="cytosig">CytoSig</option>
-                            <option value="lincytosig">LinCytoSig</option>
-                            <option value="secact">SecAct</option>
-                        </select>
-                    </label>
-                    <label id="val-ctr-level-label">Level:
-                        <select id="val-ctr-level"></select>
-                    </label>
-                    <label id="val-ctr-group-label">Cell Type:
-                        <select id="val-ctr-group">
-                            <option value="">All</option>
-                        </select>
-                    </label>
-                    <label>Target:
-                        <select id="val-ctr-target">
-                            <option value="">Loading...</option>
-                        </select>
-                    </label>
-                    <label style="position: relative;">
-                        <input type="text" id="val-ctr-search" placeholder="Search target or gene..." style="width: 150px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;">
-                    </label>
-                    <label style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
-                        <input type="checkbox" id="val-ctr-hide-nonexpr"> Hide non-expressing
-                    </label>
-                </div>
-
-                <div class="panel-grid">
-                    <div class="panel" style="grid-column: span 2;">
-                        <div class="viz-title">Expression vs Activity (Resampled)</div>
-                        <div class="viz-subtitle">Per celltype: mean expression vs mean activity with 95% CI from 100 bootstrap resamples</div>
-                        <div id="val-ctr-expr-scatter" class="loading" style="height: 400px;">Loading...</div>
-                    </div>
-                    <div class="panel">
-                        <div class="viz-title">Per-Group Pearson r</div>
-                        <div class="viz-subtitle">Expression–activity correlation per group (resampled)</div>
-                        <div id="val-ctr-corr-bar" style="height: 400px;"></div>
-                    </div>
-                    <div class="panel">
-                        <div class="viz-title">Per-Group Activity Distribution</div>
-                        <div class="viz-subtitle">Activity z-score distribution per group (resampled)</div>
-                        <div id="val-ctr-activity-box" style="height: 400px;"></div>
-                    </div>
-                </div>
-            </div>
-
             <!-- Single-Cell Level Validation -->
             <div class="tab-content" id="tab-val-singlecell">
                 <h3>Single-Cell Level Validation</h3>
@@ -2785,12 +2721,8 @@
                             <option value="">All Cell Types</option>
                         </select>
                     </label>
-                    <label>Cell Filter:
-                        <select id="val-sc-cellfilter">
-                            <option value="all">All Cells</option>
-                            <option value="expressing">Expressing Only (counts > 0)</option>
-                            <option value="non_expressing">Non-Expressing Only</option>
-                        </select>
+                    <label style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
+                        <input type="checkbox" id="val-sc-hide-nonexpr"> Hide non-expressing
                     </label>
                     <label style="position: relative;">
                         <input type="text" id="val-sc-search" placeholder="Search target or gene..." style="width: 150px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;">
@@ -3210,7 +3142,6 @@
                 updateValidationDonor();
                 updateValidationCelltype();
                 updateValidationSingleCell();
-                updateValidationCelltypeResampled();
             }
         }
 
@@ -12992,268 +12923,7 @@
             renderCTActivityBox(bulk, atlas, sigType);
         }
 
-        // ========================================
-        // RESAMPLED TAB: Level/Group config + functions
-        // ========================================
-
-        const RESAMPLED_LEVEL_CONFIG = {
-            cima: {
-                levels: { l1: 'L1', l2: 'L2' },
-                groupLabel: 'Cell Type',
-            },
-            inflammation_main: {
-                levels: { l1: 'L1', l2: 'L2' },
-                groupLabel: 'Cell Type',
-            },
-            inflammation_val: {
-                levels: { l1: 'L1', l2: 'L2' },
-                groupLabel: 'Cell Type',
-            },
-            inflammation_ext: {
-                levels: { l1: 'L1', l2: 'L2' },
-                groupLabel: 'Cell Type',
-            },
-            scatlas_normal: {
-                levels: { celltype: 'Cell Type', donor_celltype: 'Donor \u00d7 Cell Type' },
-                groupLabel: { celltype: 'Cell Type', donor_celltype: 'Cell Type' },
-            },
-            scatlas_cancer: {
-                levels: { celltype: 'Cell Type', donor_celltype: 'Donor \u00d7 Cell Type' },
-                groupLabel: { celltype: 'Cell Type', donor_celltype: 'Cell Type' },
-            },
-        };
-
-        // ---- Resampled: get scatter data for current level selection ----
-        function getCTRScatterData(bulk, atlas, sigType) {
-            const level = document.getElementById('val-ctr-level')?.value || '';
-            return bulk.resampled_scatter?.[atlas]?.[level]?.[sigType] || {};
-        }
-
-        // ---- Resampled: get grouped points for bar chart / boxplot ----
-        function getCTRGroupPoints(bulk, atlas, sigType) {
-            const target = document.getElementById('val-ctr-target')?.value;
-            const hideNonExpr = document.getElementById('val-ctr-hide-nonexpr')?.checked || false;
-            const level = document.getElementById('val-ctr-level')?.value || '';
-
-            const scatterData = bulk.resampled_scatter?.[atlas]?.[level]?.[sigType];
-            if (!scatterData || !target || !scatterData[target]) return null;
-
-            const tdata = scatterData[target];
-            const points = tdata.points || [];
-            if (points.length === 0 || points[0].length < 3) return null;
-
-            // Resolve integer-encoded group indices
-            const groups = tdata.groups || tdata.celltypes || [];
-            const groupMap = {};
-            points.forEach(p => {
-                const label = (typeof p[2] === 'number') ? (groups[p[2]] || String(p[2])) : String(p[2]);
-                if (!groupMap[label]) groupMap[label] = { name: label, x: [], y: [] };
-                groupMap[label].x.push(p[0]);
-                groupMap[label].y.push(p[1]);
-            });
-
-            if (hideNonExpr) {
-                Object.values(groupMap).forEach(gp => {
-                    if (gp.x.length === 0) return;
-                    const xRounded = gp.x.map(v => Math.round(v * 100) / 100);
-                    const freq = {};
-                    xRounded.forEach(v => { freq[v] = (freq[v] || 0) + 1; });
-                    const modeVal = Object.entries(freq).sort((a, b) => b[1] - a[1])[0];
-                    if (modeVal && modeVal[1] > gp.x.length * 0.1 && parseFloat(modeVal[0]) < 0) {
-                        const spikeVal = parseFloat(modeVal[0]);
-                        const keep = [];
-                        for (let i = 0; i < gp.x.length; i++) {
-                            if (Math.round(gp.x[i] * 100) / 100 !== spikeVal) keep.push(i);
-                        }
-                        gp.x = keep.map(i => gp.x[i]);
-                        gp.y = keep.map(i => gp.y[i]);
-                    }
-                });
-            }
-
-            return { target, groupPoints: groupMap };
-        }
-
-        // ---- Resampled: Per-group Pearson r bar chart ----
-        function renderCTRCorrBar(bulk, atlas, sigType) {
-            const div = document.getElementById('val-ctr-corr-bar');
-            if (!div) return;
-
-            const result = getCTRGroupPoints(bulk, atlas, sigType);
-            if (!result) {
-                div.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No grouped data available.</p>';
-                return;
-            }
-
-            const { target, groupPoints } = result;
-            const groupFilter = document.getElementById('val-ctr-group')?.value || '';
-            const config = RESAMPLED_LEVEL_CONFIG[atlas] || {};
-            const level = document.getElementById('val-ctr-level')?.value || '';
-            const groupLabel = typeof config.groupLabel === 'object' ? (config.groupLabel[level] || 'Group') : (config.groupLabel || 'Group');
-
-            const groupCorrs = [];
-            Object.values(groupPoints).forEach(gp => {
-                if (gp.x.length >= 10) {
-                    groupCorrs.push({ name: gp.name, r: computePearsonR(gp.x, gp.y), n: gp.x.length });
-                }
-            });
-
-            if (groupCorrs.length === 0) {
-                div.innerHTML = `<p style="text-align:center; padding:2rem; color:#666;">No ${groupLabel.toLowerCase()}s with \u226510 samples.</p>`;
-                return;
-            }
-
-            groupCorrs.sort((a, b) => b.r - a.r);
-
-            const names = groupCorrs.map(g => g.name);
-            const rValues = groupCorrs.map(g => g.r);
-            const nValues = groupCorrs.map(g => g.n);
-            const sortedR = rValues.slice().sort((a, b) => a - b);
-            const medianR = sortedR[Math.floor(sortedR.length / 2)];
-
-            const colors = rValues.map(r => {
-                const norm = Math.max(0, Math.min(1, (r + 1) / 2));
-                const red = Math.round(220 * (1 - norm) + 44 * norm);
-                const green = Math.round(44 * (1 - norm) + 160 * norm);
-                const blue = Math.round(40 * (1 - norm) + 44 * norm);
-                return `rgba(${red}, ${green}, ${blue}, 0.7)`;
-            });
-
-            const borderColors = names.map(name =>
-                (groupFilter && name === groupFilter) ? 'rgba(0, 0, 0, 0.9)' : 'rgba(0, 0, 0, 0.1)'
-            );
-            const borderWidths = names.map(name =>
-                (groupFilter && name === groupFilter) ? 3 : 1
-            );
-
-            const trace = {
-                x: names, y: rValues, type: 'bar',
-                marker: { color: colors, line: { color: borderColors, width: borderWidths } },
-                text: nValues.map(n => `n=${n}`),
-                hovertemplate: '<b>%{x}</b><br>Pearson r = %{y:.3f}<br>%{text}<extra></extra>',
-            };
-
-            Plotly.newPlot(div, [trace], {
-                title: { text: `${target} \u2014 Pearson r per ${groupLabel} (resampled)`, font: { size: 13 } },
-                xaxis: { tickangle: -45, tickfont: { size: 9 }, automargin: true },
-                yaxis: { title: 'Pearson r', range: [-1, 1] },
-                shapes: [{
-                    type: 'line', x0: -0.5, x1: names.length - 0.5,
-                    y0: medianR, y1: medianR,
-                    line: { color: 'rgba(0,0,0,0.4)', width: 1.5, dash: 'dash' },
-                }],
-                annotations: [{
-                    x: 1, y: 1, xref: 'paper', yref: 'paper', xanchor: 'right', yanchor: 'top',
-                    text: `${groupCorrs.length} ${groupLabel.toLowerCase()}s | median r = ${medianR.toFixed(3)}`,
-                    showarrow: false, font: { size: 11, color: '#555' },
-                    bgcolor: 'rgba(255,255,255,0.8)', borderpad: 4,
-                }],
-                margin: { t: 40, b: 120, l: 60, r: 20 },
-                plot_bgcolor: '#fafafa',
-            }, { responsive: true, displayModeBar: false });
-        }
-
-        // ---- Resampled: Per-group activity distribution boxplot ----
-        function renderCTRActivityBox(bulk, atlas, sigType) {
-            const div = document.getElementById('val-ctr-activity-box');
-            if (!div) return;
-
-            const result = getCTRGroupPoints(bulk, atlas, sigType);
-            if (!result) {
-                div.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No grouped data available.</p>';
-                return;
-            }
-
-            const { target, groupPoints } = result;
-            const groupFilter = document.getElementById('val-ctr-group')?.value || '';
-            const config = RESAMPLED_LEVEL_CONFIG[atlas] || {};
-            const level = document.getElementById('val-ctr-level')?.value || '';
-            const groupLabel = typeof config.groupLabel === 'object' ? (config.groupLabel[level] || 'Group') : (config.groupLabel || 'Group');
-
-            const groups = Object.values(groupPoints)
-                .filter(gp => gp.y.length >= 10)
-                .map(gp => {
-                    const sorted = gp.y.slice().sort((a, b) => a - b);
-                    return { name: gp.name, y: gp.y, median: sorted[Math.floor(sorted.length / 2)], n: gp.y.length };
-                })
-                .sort((a, b) => b.median - a.median);
-
-            if (groups.length === 0) {
-                div.innerHTML = `<p style="text-align:center; padding:2rem; color:#666;">No ${groupLabel.toLowerCase()}s with \u226510 samples.</p>`;
-                return;
-            }
-
-            const traces = groups.map(g => {
-                const isSelected = groupFilter && g.name === groupFilter;
-                const baseColor = isSelected ? 'rgba(255, 127, 14, ' : 'rgba(255, 165, 0, ';
-                return {
-                    y: g.y,
-                    type: 'box',
-                    name: g.name,
-                    boxpoints: 'outliers',
-                    marker: { color: baseColor + '0.5)', size: 3 },
-                    line: { color: baseColor + '0.9)', width: isSelected ? 2.5 : 1.5 },
-                    fillcolor: baseColor + (isSelected ? '0.3)' : '0.15)'),
-                    whiskerwidth: 0.5,
-                    hoverinfo: 'y+name',
-                };
-            });
-
-            Plotly.newPlot(div, traces, {
-                title: { text: `${target} \u2014 Activity Distribution per ${groupLabel} (resampled)`, font: { size: 13 } },
-                yaxis: { title: 'Activity (z-score)' },
-                xaxis: { tickangle: -45, tickfont: { size: 9 }, automargin: true },
-                annotations: [{
-                    x: 1, y: 1, xref: 'paper', yref: 'paper', xanchor: 'right', yanchor: 'top',
-                    text: `${groups.length} ${groupLabel.toLowerCase()}s`,
-                    showarrow: false, font: { size: 11, color: '#555' },
-                    bgcolor: 'rgba(255,255,255,0.8)', borderpad: 4,
-                }],
-                margin: { t: 40, b: 120, l: 60, r: 20 },
-                plot_bgcolor: '#fafafa',
-                showlegend: false,
-            }, { responsive: true, displayModeBar: false });
-        }
-
-        // ---- Resampled: render both group panels ----
-        function renderCTRGroupPanels(bulk, atlas, sigType) {
-            renderCTRCorrBar(bulk, atlas, sigType);
-            renderCTRActivityBox(bulk, atlas, sigType);
-        }
-
-        // ---- Resampled scatter renderer ----
-        function renderResampledExprScatter(bulk, atlas, sigType) {
-            const div = document.getElementById('val-ctr-expr-scatter');
-            if (!div) return;
-            div.classList.remove('loading');
-
-            const target = document.getElementById('val-ctr-target')?.value;
-            const groupFilter = document.getElementById('val-ctr-group')?.value || '';
-            const hideNonExpr = document.getElementById('val-ctr-hide-nonexpr')?.checked || false;
-            const scatterData = getCTRScatterData(bulk, atlas, sigType);
-            if (!scatterData || !target || !scatterData[target]) {
-                div.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No scatter data available for this target.</p>';
-                renderCTRGroupPanels(bulk, atlas, sigType);
-                return;
-            }
-
-            const config = RESAMPLED_LEVEL_CONFIG[atlas] || {};
-            const level = document.getElementById('val-ctr-level')?.value || '';
-            const groupLabel = typeof config.groupLabel === 'object' ? (config.groupLabel[level] || 'Group') : (config.groupLabel || 'Group');
-            const filterSuffix = groupFilter ? ` - ${groupFilter}` : '';
-
-            renderValidationScatter('val-ctr-expr-scatter', scatterData[target], target, {
-                color: 'rgba(255, 127, 14, 0.5)',
-                colorLine: 'rgba(255, 127, 14, 0.8)',
-                celltypeFilter: groupFilter,
-                hideNonExpr,
-                filterLabel: groupLabel,
-                unitLabel: 'resampled',
-                titleSuffix: filterSuffix ? ` (${filterSuffix.trim()}, resampled)` : ' (resampled)',
-            });
-
-            renderCTRGroupPanels(bulk, atlas, sigType);
-        }
+        // (Resampled tab removed — rho CI now shown on donor/celltype tabs)
 
         // ---- Per-donor×celltype scatter renderer (celltype-level) ----
         function renderCelltypeExprScatter(bulk, atlas, sigType) {
@@ -13367,88 +13037,6 @@
             renderCelltypeExprScatter(bulk, atlas, sigType);
         }
 
-        // ---- Cell Type Level (Resampled) Tab ----
-        async function updateValidationCelltypeResampled() {
-            const bulk = await loadBulkValidationData();
-            if (!bulk) return;
-
-            const atlas = document.getElementById('val-ctr-atlas')?.value || 'cima';
-            const sigType = document.getElementById('val-ctr-sigtype')?.value || 'cytosig';
-
-            const exprScatterDiv = document.getElementById('val-ctr-expr-scatter');
-            exprScatterDiv?.classList.remove('loading');
-
-            const config = RESAMPLED_LEVEL_CONFIG[atlas] || {};
-            const levels = config.levels || {};
-
-            // Populate Level dropdown
-            const levelSel = document.getElementById('val-ctr-level');
-            if (levelSel) {
-                const curLevel = levelSel.value;
-                levelSel.innerHTML = '';
-                const rsAtlas = bulk.resampled_scatter?.[atlas] || {};
-                const availLevels = Object.keys(levels);
-                availLevels.forEach(lv => {
-                    if (rsAtlas[lv]) {
-                        const opt = document.createElement('option');
-                        opt.value = lv;
-                        opt.textContent = levels[lv];
-                        levelSel.appendChild(opt);
-                    }
-                });
-                const opts = Array.from(levelSel.options).map(o => o.value);
-                if (opts.includes(curLevel)) levelSel.value = curLevel;
-                else if (opts.length > 0) levelSel.value = opts[0];
-            }
-
-            const level = levelSel?.value || '';
-
-            // Get scatter data from resampled_scatter for selected level
-            const scatterData = getCTRScatterData(bulk, atlas, sigType);
-
-            if (!scatterData || Object.keys(scatterData).length === 0) {
-                if (exprScatterDiv) exprScatterDiv.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">' +
-                    'Resampled validation data not available for this combination.<br><br>' +
-                    'Run <code>python scripts/16_resampled_validation.py --atlas ' + atlas + '</code> then<br>' +
-                    '<code>python scripts/14_preprocess_bulk_validation.py</code> to generate this data.' +
-                    '</p>';
-                return;
-            }
-
-            // Update group label
-            const groupLabelEl = document.getElementById('val-ctr-group-label');
-            if (groupLabelEl) {
-                const labelText = typeof config.groupLabel === 'object' ? (config.groupLabel[level] || 'Group') : (config.groupLabel || 'Group');
-                groupLabelEl.childNodes[0].textContent = labelText + ': ';
-            }
-
-            // Populate Group dropdown from celltypes of first target
-            const groupSel = document.getElementById('val-ctr-group');
-            if (groupSel) {
-                const curGroup = groupSel.value;
-                const glText = typeof config.groupLabel === 'object' ? (config.groupLabel[level] || 'Group') : (config.groupLabel || 'Group');
-                groupSel.innerHTML = `<option value="">All ${glText}s</option>`;
-                let celltypes = [];
-                for (const t of Object.keys(scatterData)) {
-                    if (scatterData[t]?.celltypes?.length > 0) {
-                        celltypes = scatterData[t].celltypes;
-                        break;
-                    }
-                }
-                celltypes.forEach(ct => {
-                    const opt = document.createElement('option');
-                    opt.value = ct;
-                    opt.textContent = ct.replace(/_/g, ' ');
-                    groupSel.appendChild(opt);
-                });
-                if (celltypes.includes(curGroup)) groupSel.value = curGroup;
-            }
-
-            // Populate target dropdown
-            populateTargetDropdown('val-ctr-target', scatterData, 'IFNG', 'val-ctr-search');
-
-            renderResampledExprScatter(bulk, atlas, sigType);
-        }
 
         // ========================================
         // SINGLE-CELL TAB: Per-celltype bar chart + boxplot
@@ -13608,7 +13196,7 @@
             const atlas = document.getElementById('val-sc-atlas')?.value || 'cima';
             const sigType = document.getElementById('val-sc-sigtype')?.value || 'CytoSig';
             const selectedSig = document.getElementById('val-sc-signature')?.value || '';
-            const cellFilter = document.getElementById('val-sc-cellfilter')?.value || 'all';
+            const hideNonExpr = document.getElementById('val-sc-hide-nonexpr')?.checked || false;
             const donorFilter = document.getElementById('val-sc-donor')?.value || '';
             const celltypeFilter = document.getElementById('val-sc-celltype')?.value || '';
             const searchTerm = document.getElementById('val-sc-search')?.value?.toLowerCase() || '';
@@ -13704,12 +13292,10 @@
                 if (sampledPoints.length === 0) {
                     scatterDiv.innerHTML = '<p style="text-align:center; padding:2rem; color:#666;">No sampled points available for this signature.</p>';
                 } else {
-                    // Apply filters: cell filter, donor, celltype
+                    // Apply filters: hide non-expressing, donor, celltype
                     let visiblePoints = sampledPoints;
-                    if (cellFilter === 'expressing') {
+                    if (hideNonExpr) {
                         visiblePoints = visiblePoints.filter(p => p.is_expressing === true);
-                    } else if (cellFilter === 'non_expressing') {
-                        visiblePoints = visiblePoints.filter(p => p.is_expressing === false);
                     }
                     if (donorFilter) {
                         visiblePoints = visiblePoints.filter(p => p.donor === donorFilter);
@@ -13729,7 +13315,7 @@
                         const geneName = scVal.gene || scVal.signature;
 
                         const traces = [];
-                        if (cellFilter === 'all') {
+                        if (!hideNonExpr) {
                             const expressing = visiblePoints.filter(p => p.is_expressing);
                             const nonExpressing = visiblePoints.filter(p => !p.is_expressing);
                             if (nonExpressing.length > 0) {
@@ -13751,14 +13337,11 @@
                                 });
                             }
                         } else {
-                            const clr = cellFilter === 'expressing' ? 'rgba(31, 119, 180, 0.5)' : 'rgba(180, 180, 180, 0.4)';
-                            const clrLine = cellFilter === 'expressing' ? 'rgba(31, 119, 180, 0.8)' : 'rgba(150, 150, 150, 0.6)';
                             traces.push({
-                                type: 'scatter', mode: 'markers',
-                                name: cellFilter === 'expressing' ? 'Expressing' : 'Non-expressing',
+                                type: 'scatter', mode: 'markers', name: 'Expressing',
                                 x: xArr, y: yArr,
-                                marker: { size: 4, color: clr, line: { color: clrLine, width: 0.3 } },
-                                hovertemplate: `${geneName} Expr: %{x:.3f}<br>${scVal.signature} Activity: %{y:.3f}<extra></extra>`
+                                marker: { size: 4, color: 'rgba(31, 119, 180, 0.5)', line: { color: 'rgba(31, 119, 180, 0.8)', width: 0.3 } },
+                                hovertemplate: `${geneName} Expr: %{x:.3f}<br>${scVal.signature} Activity: %{y:.3f}<extra>Expressing</extra>`
                             });
                         }
 
@@ -13784,6 +13367,7 @@
                         let annoText = `Pearson r = ${r.toFixed(3)}<br>n = ${visiblePoints.length.toLocaleString()} cells`;
                         if (donorFilter) annoText += `<br>Donor: ${donorFilter}`;
                         if (celltypeFilter) annoText += `<br>Cell type: ${celltypeFilter}`;
+                        if (hideNonExpr) annoText += '<br>(non-expressing hidden)';
 
                         Plotly.newPlot(scatterDiv, traces, {
                             xaxis: { title: `${geneName} Expression (z-score)` },
@@ -13806,10 +13390,8 @@
             // Render per-celltype bar chart and boxplot (uses all visible points with cell_type info)
             if (scVal) {
                 let allVisiblePoints = scVal.sampled_points || [];
-                if (cellFilter === 'expressing') {
+                if (hideNonExpr) {
                     allVisiblePoints = allVisiblePoints.filter(p => p.is_expressing === true);
-                } else if (cellFilter === 'non_expressing') {
-                    allVisiblePoints = allVisiblePoints.filter(p => p.is_expressing === false);
                 }
                 if (donorFilter) {
                     allVisiblePoints = allVisiblePoints.filter(p => p.donor === donorFilter);
@@ -13914,37 +13496,6 @@
                 ctSearch.addEventListener('keydown', (e) => { if (e.key === 'Enter') updateValidationCelltype(); });
             }
 
-            // Cell Type Level (Resampled) tab listeners
-            document.getElementById('val-ctr-atlas')?.addEventListener('change', updateValidationCelltypeResampled);
-            document.getElementById('val-ctr-sigtype')?.addEventListener('change', updateValidationCelltypeResampled);
-            document.getElementById('val-ctr-level')?.addEventListener('change', updateValidationCelltypeResampled);
-            document.getElementById('val-ctr-group')?.addEventListener('change', async () => {
-                const bulk = await loadBulkValidationData();
-                if (!bulk) return;
-                const atlas = document.getElementById('val-ctr-atlas')?.value || 'cima';
-                const sigType = document.getElementById('val-ctr-sigtype')?.value || 'cytosig';
-                renderResampledExprScatter(bulk, atlas, sigType);
-            });
-            document.getElementById('val-ctr-hide-nonexpr')?.addEventListener('change', async () => {
-                const bulk = await loadBulkValidationData();
-                if (!bulk) return;
-                const atlas = document.getElementById('val-ctr-atlas')?.value || 'cima';
-                const sigType = document.getElementById('val-ctr-sigtype')?.value || 'cytosig';
-                renderResampledExprScatter(bulk, atlas, sigType);
-            });
-            document.getElementById('val-ctr-target')?.addEventListener('change', async () => {
-                const bulk = await loadBulkValidationData();
-                if (!bulk) return;
-                const atlas = document.getElementById('val-ctr-atlas')?.value || 'cima';
-                const sigType = document.getElementById('val-ctr-sigtype')?.value || 'cytosig';
-                renderResampledExprScatter(bulk, atlas, sigType);
-            });
-            const ctrSearch = document.getElementById('val-ctr-search');
-            if (ctrSearch) {
-                ctrSearch.addEventListener('input', debounce(updateValidationCelltypeResampled, 300));
-                ctrSearch.addEventListener('keydown', (e) => { if (e.key === 'Enter') updateValidationCelltypeResampled(); });
-            }
-
             // Single-Cell tab listeners
             document.getElementById('val-sc-atlas')?.addEventListener('change', () => {
                 const sigDropdown = document.getElementById('val-sc-signature');
@@ -13959,7 +13510,7 @@
             document.getElementById('val-sc-signature')?.addEventListener('change', updateValidationSingleCell);
             document.getElementById('val-sc-donor')?.addEventListener('change', updateValidationSingleCell);
             document.getElementById('val-sc-celltype')?.addEventListener('change', updateValidationSingleCell);
-            document.getElementById('val-sc-cellfilter')?.addEventListener('change', updateValidationSingleCell);
+            document.getElementById('val-sc-hide-nonexpr')?.addEventListener('change', updateValidationSingleCell);
             const scSearch = document.getElementById('val-sc-search');
             if (scSearch) {
                 scSearch.addEventListener('input', debounce(updateValidationSingleCell, 300));
