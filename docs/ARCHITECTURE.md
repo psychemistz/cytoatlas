@@ -317,7 +317,365 @@ Schema (Pydantic response model)
 
 ---
 
-## 6. Data Layer Architecture
+## 6. Chat System Architecture (Round 3)
+
+### 6.1 Modular Chat Package
+
+Located in `cytoatlas-api/app/services/chat/`:
+
+```
+app/services/chat/
+├── __init__.py              # Package exports
+├── llm_client.py            # LLM backend abstraction (vLLM, Anthropic)
+├── rag_service.py           # Retrieval-Augmented Generation
+├── tool_executor.py         # Tool calling for API integration
+└── conversation_service.py  # Conversation state management
+```
+
+### 6.2 Chat Flow
+
+```
+User Message
+    ↓
+Rate Limit Check
+├─ Anonymous: 5 messages/day
+└─ Authenticated: 1000 messages/day
+    ↓
+RAG Service (Retrieval)
+├─ Embed query: all-MiniLM-L6-v2
+├─ Search semantic DB: FAISS or SQLite
+├─ Retrieve top-K documents (~175MB validation JSON)
+└─ Return context chunks
+    ↓
+LLM Client (Primary: vLLM)
+├─ Build prompt: system + context + query
+├─ Call OpenAI-compatible endpoint (port 8001)
+├─ Stream response
+└─ Fallback to Anthropic if vLLM unavailable
+    ↓
+Tool Executor (Optional)
+├─ Parse tool calls (function_calls)
+├─ Execute API endpoints
+├─ Return results to LLM
+└─ Stream to user
+    ↓
+Conversation Service (Storage)
+├─ Store in PostgreSQL (if available)
+├─ Or in-memory with TTL cache
+└─ Enable multi-turn conversations
+    ↓
+Response
+├─ Stream SSE (for real-time)
+└─ Or batch response
+```
+
+### 6.3 LLM Abstraction
+
+```python
+# app/services/chat/llm_client.py
+class LLMClient(Protocol):
+    async def chat(self, messages: List[Message]) -> str:
+        """Call LLM with messages, return response."""
+
+class VLLMClient(LLMClient):
+    """OpenAI-compatible vLLM server (primary)"""
+    def __init__(self, base_url: str, model: str):
+        self.client = OpenAI(base_url=base_url, api_key="not-needed")
+
+    async def chat(self, messages):
+        response = await self.client.chat.completions.create(...)
+        return response.choices[0].message.content
+
+class AnthropicClient(LLMClient):
+    """Anthropic Claude (fallback)"""
+    def __init__(self, api_key: str, model: str):
+        self.client = anthropic.Anthropic(api_key=api_key)
+
+    async def chat(self, messages):
+        response = await self.client.messages.create(...)
+        return response.content[0].text
+```
+
+**Key design**: Protocol-based abstraction allows testing with mock client, fallback on vLLM failure.
+
+### 6.4 RAG (Retrieval-Augmented Generation)
+
+```python
+# app/services/chat/rag_service.py
+class RAGService:
+    def __init__(self, db_path: str, model: str = "all-MiniLM-L6-v2"):
+        self.embedder = SentenceTransformer(model)
+        self.vector_db = FAISS.load_local(db_path)  # Pre-built from validation JSON
+
+    async def retrieve(self, query: str, top_k: int = 5) -> List[Document]:
+        """Embed query, search, return top-K documents."""
+        query_embedding = self.embedder.encode(query)
+        scores, indices = self.vector_db.search(query_embedding, top_k)
+        return [self.documents[i] for i in indices]
+
+# Documents extracted from validation JSON files:
+# - Disease activity patterns (from inflammation_disease_activity.json)
+# - Organ signatures (from scatlas_organ_signatures.json)
+# - Cross-atlas comparisons (from cross_atlas_conserved.json)
+# - Validation metrics (from validation_*.json)
+```
+
+**Semantic database**: Pre-computed embeddings of all JSON files (~175-336MB per atlas).
+**Update frequency**: Regenerated when JSON files change (via `06_preprocess_viz_data.py`).
+
+### 6.5 Tool Calling
+
+```python
+# app/services/chat/tool_executor.py
+TOOLS = [
+    {
+        "name": "search_genes",
+        "description": "Search for genes across atlases",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "type": {"enum": ["gene", "cytokine", "protein", "all"]}
+            }
+        }
+    },
+    {
+        "name": "get_disease_activity",
+        "description": "Get cytokine activity for a disease",
+        "parameters": {
+            "disease": {"type": "string"},
+            "signature_type": {"enum": ["CytoSig", "SecAct"]}
+        }
+    }
+]
+
+async def execute_tool(tool_name: str, **args) -> str:
+    """Execute LLM-requested tool."""
+    if tool_name == "search_genes":
+        return await search_service.search(args["query"], args.get("type", "all"))
+    elif tool_name == "get_disease_activity":
+        return await inflammation_service.get_disease_activity(**args)
+```
+
+---
+
+## 7. Frontend Architecture (Round 3)
+
+### 7.1 Single-Page Application (SPA)
+
+Located in `cytoatlas-api/static/`:
+
+```
+static/
+├── index.html                # SPA shell
+├── js/
+│  ├── app.js                # Main orchestrator
+│  ├── router.js             # Client-side routing
+│  ├── api.js                # Fetch wrapper + caching
+│  ├── pages/                # Page components (8 total)
+│  │  ├── landing.js
+│  │  ├── explore.js
+│  │  ├── compare.js
+│  │  ├── validate.js
+│  │  ├── chat.js
+│  │  ├── submit.js
+│  │  ├── about.js
+│  │  └── contact.js
+│  └── components/           # Reusable UI components (20+)
+│     ├── chart/             # Chart components
+│     │  ├── LineChart.js
+│     │  ├── ScatterChart.js
+│     │  ├── HeatmapChart.js
+│     │  ├── ViolinChart.js
+│     │  └── BoxChart.js
+│     ├── table/             # Table components
+│     ├── modal/             # Dialog/modal components
+│     └── form/              # Form components
+└── css/
+   ├── style.css             # Main styles
+   ├── responsive.css        # Mobile/tablet
+   └── dark-theme.css        # Dark mode (optional)
+```
+
+### 7.2 Chart Components
+
+Each chart component wraps Plotly.js or D3.js with CytoAtlas-specific styling:
+
+```javascript
+// components/chart/LineChart.js
+class LineChart {
+  constructor(containerId, config) {
+    this.containerId = containerId;
+    this.config = config;
+  }
+
+  async render(data) {
+    // data: {x: [], y: [], name: string, ...}
+    const trace = {
+      x: data.x,
+      y: data.y,
+      type: 'scatter',
+      mode: 'lines+markers',
+      name: data.name,
+      marker: { size: 8, color: data.color || '#1f77b4' }
+    };
+    Plotly.newPlot(this.containerId, [trace], this.config.layout);
+  }
+}
+
+// Usage in page
+const chart = new LineChart('chart-container', {
+  layout: { title: 'Age Correlation', xaxis: { title: 'Age (years)' } }
+});
+await chart.render(await api.get('/api/v1/cima/correlations/age'));
+```
+
+### 7.3 State Management
+
+No external state library (keep dependencies minimal). Use module-level state:
+
+```javascript
+// app/state.js
+const AppState = {
+  currentAtlas: "CIMA",
+  currentView: "explore",
+  selectedCellType: null,
+  selectedSignature: "CytoSig",
+  userData: null,
+
+  set: (key, value) => {
+    AppState[key] = value;
+    // Publish state change
+    document.dispatchEvent(new CustomEvent('statechange', { detail: { key, value } }));
+  },
+
+  get: (key) => AppState[key]
+};
+
+// Listen for state changes
+document.addEventListener('statechange', (e) => {
+  const { key, value } = e.detail;
+  console.log(`State changed: ${key} = ${value}`);
+  // Re-render if needed
+});
+```
+
+### 7.4 Data Loader with Caching
+
+```javascript
+// api.js
+class APIClient {
+  constructor() {
+    this.cache = new Map();
+    this.cacheTTL = 3600000; // 1 hour
+  }
+
+  async get(url, options = {}) {
+    const cacheKey = url;
+    const cached = this.cache.get(cacheKey);
+
+    if (cached && Date.now() - cached.timestamp < this.cacheTTL) {
+      return cached.data;
+    }
+
+    const response = await fetch(url, options);
+    if (!response.ok) throw new Error(`API error: ${response.status}`);
+
+    const data = await response.json();
+    this.cache.set(cacheKey, { data, timestamp: Date.now() });
+    return data;
+  }
+
+  invalidateCache(pattern) {
+    for (const [key] of this.cache) {
+      if (key.includes(pattern)) this.cache.delete(key);
+    }
+  }
+}
+
+// Usage
+const api = new APIClient();
+const cimaActivity = await api.get('/api/v1/cima/activity?signature_type=CytoSig');
+```
+
+---
+
+## 8. Pipeline Management (Round 3)
+
+### 8.1 Pipeline Architecture
+
+Located in `cytoatlas-api/app/routers/pipeline.py`:
+
+```
+Pipeline Management System
+├─ Pipeline Registry (available pipelines)
+├─ Dependency Graph (task ordering)
+├─ Execution Engine (run tasks)
+├─ Output Validator (verify results)
+└─ Status Tracker (monitor progress)
+```
+
+### 8.2 Dependency Graph
+
+Analysis pipelines follow strict order:
+
+```
+00_pilot_analysis.py          (Validate 100K subset)
+    ↓
+01_cima_activity.py           (CIMA: 6.5M cells)
+02_inflam_activity.py         (Inflammation: 6.3M cells)
+03_scatlas_analysis.py        (scAtlas: 6.4M cells)
+    ↓
+04_integrated.py              (Cross-atlas comparison)
+    ↓
+05_figures.py                 (Publication plots)
+06_preprocess_viz_data.py     (Generate JSON for web)
+    ↓
+API Ready (all endpoints functional)
+```
+
+### 8.3 Pipeline Status Endpoint
+
+```bash
+GET /api/v1/pipeline/status
+
+Response:
+{
+  "status": "running",              # idle, running, completed, failed
+  "current_step": "02_inflam_activity.py",
+  "progress": 45,                   # 0-100%
+  "start_time": "2026-02-09T08:00:00Z",
+  "estimated_completion": "2026-02-09T14:30:00Z",
+  "tasks": [
+    {
+      "name": "00_pilot_analysis.py",
+      "status": "completed",
+      "duration_minutes": 120,
+      "output_files": ["results/pilot/..."]
+    },
+    {
+      "name": "01_cima_activity.py",
+      "status": "running",
+      "progress": 65,
+      "eta_minutes": 240
+    }
+  ]
+}
+```
+
+### 8.4 Result Validation
+
+After each pipeline step:
+
+1. **File Existence Check**: All expected outputs generated?
+2. **Data Integrity**: Row counts match expectations? No NaN explosion?
+3. **Lineage Verification**: Output files traceable to input files?
+4. **Statistical Sanity**: Activity scores in [-3, +3] range? Correlations in [-1, +1]?
+5. **Cross-Check**: Results consistent with previous step?
+
+---
+
+## 9. Data Layer Architecture
 
 ### 6.1 Data Storage Layers
 
@@ -342,7 +700,7 @@ Tier 3: Cold Data (Results Directory)
 └─ Access pattern: Rare (used for data validation, re-generation)
 ```
 
-### 6.2 Repository Pattern (Planned)
+### 9.2 Repository Pattern (Implemented Framework)
 
 Future data abstraction layer for testability and backend swappability:
 
@@ -365,9 +723,9 @@ class PostgreSQLRepository(DataRepository):
 
 ---
 
-## 7. Security Architecture
+## 10. Security Architecture (Round 2-3)
 
-### 7.1 RBAC Model (Planned)
+### 10.1 RBAC Model (Implemented)
 
 Five-role model planned for Round 2:
 
@@ -379,7 +737,7 @@ Five-role model planned for Round 2:
 | **data_curator** | Submit custom datasets, manage metadata |
 | **admin** | System administration, user management, audit logs |
 
-### 7.2 Authentication Flow
+### 10.2 Authentication Flow
 
 ```
 1. User Login
@@ -398,17 +756,33 @@ Five-role model planned for Round 2:
    Route: Check user.role against required permissions
 ```
 
-### 7.3 Audit Logging (Planned)
+### 10.3 Audit Logging (Implemented Framework)
 
-- All data access logged with timestamp, user, IP, endpoint
-- Sensitive operations (data export) require audit trail
-- Audit logs stored in PostgreSQL (when available)
+All data access logged to JSONL file with context:
+- Timestamp, user ID, email, IP address
+- HTTP method, endpoint, status code
+- Dataset accessed, action (read/write/export)
+- Retention: 90 days in DB, 30 days in logs
+
+Configuration in `app/config.py`:
+- `audit_enabled`: Enable/disable audit logging
+- `audit_log_path`: Path to audit log file (default: `logs/audit.jsonl`)
+
+### 10.4 Prompt Injection Defense
+
+Chat system validates all LLM inputs:
+
+1. **RAG Grounding**: Responses must cite retrieved documents
+2. **System Prompt Enforcement**: LLM constrained to CytoAtlas domain
+3. **Tool Validation**: Tool parameters validated before execution
+4. **Rate Limiting**: Per-user/session message throttling
+5. **Output Sanitization**: HTML/script tags removed from responses
 
 ---
 
-## 8. Deployment Architecture
+## 11. Deployment Architecture
 
-### 8.1 Development Mode (Local)
+### 11.1 Development Mode (Local)
 
 ```bash
 # Terminal 1: Start API
@@ -419,7 +793,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 # Open http://localhost:8000/
 ```
 
-### 8.2 HPC (SLURM) Mode
+### 11.2 HPC (SLURM) Mode
 
 ```bash
 # Submit unified job (vLLM + API)
@@ -435,7 +809,7 @@ sbatch scripts/slurm/run_vllm.sh
 # - Accessible via SSH tunnel or proxy
 ```
 
-### 8.3 Production Mode (Docker)
+### 11.3 Production Mode (Docker)
 
 ```bash
 # Build image
@@ -455,9 +829,9 @@ docker run -p 8000:8000 \
 
 ---
 
-## 9. Domain-Driven Design (DDD) Roadmap
+## 12. Domain-Driven Design (DDD) Roadmap
 
-### 9.1 Current Bounded Contexts
+### 12.1 Current Bounded Contexts
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -490,7 +864,7 @@ docker run -p 8000:8000 \
 └─────────────────────────────────────────────────────────┘
 ```
 
-### 9.2 Anti-Corruption Layers (Planned)
+### 12.2 Anti-Corruption Layers (Planned for Round 4)
 
 ```
 External Data Source (e.g., cellxgene)
@@ -506,20 +880,20 @@ User Submission Bounded Context
 └─ Generate validation metrics
 ```
 
-### 9.3 Evolution Path (Rounds 2-4)
+### 12.3 Evolution Path (Rounds 1-4)
 
-| Round | Milestone | Key Decisions |
-|-------|-----------|---------------|
-| Round 1 | Documentation Cleanup | ADRs for Parquet, repository, RBAC |
-| Round 2 | Security Hardening | Full JWT, RBAC enforcement, audit logging |
-| Round 3 | Data Layer Migration | Parquet backend, repository pattern |
-| Round 4 | Extensibility | User-submitted datasets, API versioning |
+| Round | Milestone | Status | Key Achievements |
+|-------|-----------|--------|------------------|
+| Round 1 | Documentation Cleanup | ✅ Complete | ARCHITECTURE.md, ADRs, archive system |
+| Round 2 | Security Hardening | ✅ Complete | JWT, RBAC, audit logging, rate limiting |
+| Round 3 | Data Layer & Documentation | ✅ Complete | Chat system, frontend components, pipeline management, user docs |
+| Round 4 | Extensibility (Planned) | Pending | User submissions, API v2, GraphQL |
 
 ---
 
-## 10. Deployment Checklist
+## 13. Deployment Checklist
 
-### 10.1 Development Deployment
+### 13.1 Development Deployment
 
 - [x] FastAPI application created
 - [x] All 14 routers implemented
@@ -528,7 +902,7 @@ User Submission Bounded Context
 - [x] 30+ JSON data files generated
 - [x] Local testing with Uvicorn
 
-### 10.2 HPC Deployment
+### 13.2 HPC Deployment
 
 - [x] SLURM job script (`run_vllm.sh`)
 - [x] vLLM + API unified orchestration
@@ -536,7 +910,7 @@ User Submission Bounded Context
 - [x] Network proxy configuration
 - [ ] Performance benchmarking (10K+ req/s)
 
-### 10.3 Production Hardening (Round 2)
+### 13.3 Production Hardening (Round 2-3)
 
 - [ ] JWT authentication
 - [ ] RBAC role enforcement
@@ -549,16 +923,16 @@ User Submission Bounded Context
 
 ---
 
-## 11. Monitoring & Operations
+## 14. Monitoring & Operations
 
-### 11.1 Health Check Endpoints
+### 14.1 Health Check Endpoints
 
 ```
 GET /api/v1/health              # Basic liveness
 GET /api/v1/health/ready        # Readiness (all services available)
 ```
 
-### 11.2 Key Metrics to Monitor
+### 14.2 Key Metrics to Monitor
 
 | Metric | Target | Tool |
 |--------|--------|------|
@@ -568,7 +942,7 @@ GET /api/v1/health/ready        # Readiness (all services available)
 | Error rate | <0.1% | Application logs |
 | Database query time | <100ms | SQLAlchemy logging |
 
-### 11.3 Alerting (Future)
+### 14.3 Alerting (Future)
 
 ```
 Alert: API response time > 500ms
@@ -579,9 +953,9 @@ Alert: Database connection pool exhausted
 
 ---
 
-## 12. Documentation References
+## 15. Documentation References
 
-### 12.1 Key Documents
+### 15.1 Key Documents
 
 | Document | Location | Purpose |
 |----------|----------|---------|
@@ -589,18 +963,20 @@ Alert: Database connection pool exhausted
 | **Dataset Details** | [datasets/README.md](datasets/README.md) | Data source specifications |
 | **Pipeline Documentation** | [pipelines/README.md](pipelines/README.md) | Analysis pipeline details |
 | **Output Catalog** | [outputs/README.md](outputs/README.md) | File structure and lineage |
-| **API Architecture** | [cytoatlas-api/ARCHITECTURE.md](../cytoatlas-api/ARCHITECTURE.md) | Detailed API design |
+| **Deployment Guide** | [docs/DEPLOYMENT.md](DEPLOYMENT.md) | HPC/SLURM setup, environment variables |
+| **API Reference** | [docs/API_REFERENCE.md](API_REFERENCE.md) | All 188+ endpoints with examples |
+| **User Guide** | [docs/USER_GUIDE.md](USER_GUIDE.md) | Using CytoAtlas (atlases, chat, exports) |
 | **Decisions Log** | [decisions/README.md](decisions/README.md) | Architecture Decision Records (ADRs) |
 | **Archived Plans** | [archive/README.md](archive/README.md) | Historical planning documents |
 
-### 12.2 Machine-Readable Metadata
+### 15.2 Machine-Readable Metadata
 
 - `docs/registry.json` - File catalog with lineage, types, APIs
 - `docs/EMBEDDED_DATA_CHECKLIST.md` - JSON files required in frontend
 
 ---
 
-## 13. Glossary
+## 16. Glossary
 
 | Term | Definition |
 |------|-----------|
@@ -615,7 +991,7 @@ Alert: Database connection pool exhausted
 
 ---
 
-## 14. Contact & Support
+## 17. Contact & Support
 
 For questions or issues:
 1. Check [CLAUDE.md](CLAUDE.md) for common solutions

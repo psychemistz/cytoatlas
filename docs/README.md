@@ -2,9 +2,21 @@
 
 Comprehensive documentation for the Pan-Disease Single-Cell Cytokine Activity Atlas project.
 
+**Start here**: [DEPLOYMENT.md](DEPLOYMENT.md) (setup) → [USER_GUIDE.md](USER_GUIDE.md) (usage) → [API_REFERENCE.md](API_REFERENCE.md) (endpoints) → [ARCHITECTURE.md](ARCHITECTURE.md) (details)
+
+## Quick Links
+
+| Document | Purpose |
+|----------|---------|
+| **[DEPLOYMENT.md](DEPLOYMENT.md)** | **START HERE** - Setup guide for development, HPC, production |
+| **[USER_GUIDE.md](USER_GUIDE.md)** | How to explore CIMA, Inflammation, scAtlas data |
+| **[API_REFERENCE.md](API_REFERENCE.md)** | All 188+ REST API endpoints with curl examples |
+| **[ARCHITECTURE.md](ARCHITECTURE.md)** | System design: components, data flow, technology stack |
+| **[CLAUDE.md](../CLAUDE.md)** | Project context for Claude Code |
+
 ## Overview
 
-This project computes cytokine and secreted protein activity signatures across 12+ million human immune cells from three major single-cell atlases:
+This project computes cytokine and secreted protein activity signatures across 17+ million human immune cells from three major single-cell atlases:
 
 | Atlas | Cells | Samples | Focus |
 |-------|-------|---------|-------|
@@ -12,7 +24,7 @@ This project computes cytokine and secreted protein activity signatures across 1
 | [Inflammation](datasets/inflammation.md) | 6.3M | 1,047 | Disease activity, treatment response |
 | [scAtlas](datasets/scatlas.md) | 6.4M | 35+ organs | Organ signatures, cancer comparison |
 
-## Documentation Structure
+## Full Documentation Structure
 
 ```
 docs/
@@ -46,26 +58,39 @@ docs/
     └── panel.template.md
 ```
 
-## Quick Links
+## All Guides
 
-### Datasets
-- [CIMA Atlas](datasets/cima.md) - 6.5M cells, 428 samples, healthy donors with biochemistry/metabolomics
-- [Inflammation Atlas](datasets/inflammation.md) - 6.3M cells, 20 diseases, treatment response data
-- [scAtlas](datasets/scatlas.md) - 6.4M cells, 35+ organs, normal and cancer tissues
-- [Signature Matrices](datasets/signatures.md) - CytoSig (44 cytokines) + SecAct (1,249 secreted proteins)
+### Getting Started
+- [DEPLOYMENT.md](DEPLOYMENT.md) - **Development, HPC, and production deployment**
+- [USER_GUIDE.md](USER_GUIDE.md) - **How to use CytoAtlas (atlases, chat, exports)**
+- [API_REFERENCE.md](API_REFERENCE.md) - **All 188+ REST API endpoints**
 
-### Pipelines
-- [Pipeline Overview](pipelines/README.md) - Data flow and dependencies
-- [CIMA Pipeline](pipelines/cima/activity.md) - Age/BMI correlations, biochemistry, metabolites
-- [Inflammation Pipeline](pipelines/inflammation/activity.md) - Disease activity, treatment response
-- [scAtlas Pipeline](pipelines/scatlas/analysis.md) - Organ signatures, cancer comparison
-- [Visualization Preprocessing](pipelines/visualization/preprocess.md) - JSON generation for web dashboard
+### Technical Documentation
+- [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture (14 sections)
+  - Chat system (RAG, LLM abstraction, tool calling)
+  - Frontend architecture (SPA, chart components, state management)
+  - Pipeline management (dependency graph, execution, validation)
+  - Data layer (repository pattern, tiered caching)
+  - Security (RBAC, audit logging, prompt injection defense)
 
-### Outputs
-- [Output Overview](outputs/README.md) - File structure and lineage
-- [JSON Catalog](outputs/visualization/index.md) - Complete list of visualization files
-- [API Mapping](outputs/visualization/api_mapping.md) - JSON to API endpoint mapping
-- [UI Panel Mapping](outputs/visualization/panel_mapping.md) - JSON to UI component mapping
+### Datasets & Pipelines
+- [datasets/README.md](datasets/README.md) - Dataset index
+  - [CIMA Atlas](datasets/cima.md) - 6.5M cells, 428 samples, healthy donors with biochemistry/metabolomics
+  - [Inflammation Atlas](datasets/inflammation.md) - 6.3M cells, 20 diseases, treatment response data
+  - [scAtlas](datasets/scatlas.md) - 6.4M cells, 35+ organs, normal and cancer tissues
+  - [Signature Matrices](datasets/signatures.md) - CytoSig (44 cytokines) + SecAct (1,249 secreted proteins)
+
+- [pipelines/README.md](pipelines/README.md) - Pipeline overview and dependency graph
+  - [CIMA Pipeline](pipelines/cima/activity.md) - Age/BMI correlations, biochemistry, metabolites
+  - [Inflammation Pipeline](pipelines/inflammation/activity.md) - Disease activity, treatment response
+  - [scAtlas Pipeline](pipelines/scatlas/analysis.md) - Organ signatures, cancer comparison
+  - [Visualization Preprocessing](pipelines/visualization/preprocess.md) - JSON generation for web dashboard
+
+### Outputs & Analysis
+- [outputs/README.md](outputs/README.md) - File structure and lineage
+  - [JSON Catalog](outputs/visualization/index.md) - Complete list of visualization files
+  - [API Mapping](outputs/visualization/api_mapping.md) - JSON to API endpoint mapping
+  - [UI Panel Mapping](outputs/visualization/panel_mapping.md) - JSON to UI component mapping
 
 ## Key Concepts
 
@@ -122,8 +147,34 @@ Documentation is accessible via MCP tools in the CytoAtlas API:
 - `find_source_script(output)` - Find which script generates a file
 - `list_panel_outputs(panel)` - List all outputs for an analysis panel
 
+### Architecture & Decisions
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Complete system architecture
+- [DECISIONS.md](DECISIONS.md) - Architecture Decision Records summary
+  - [ADR-001: Parquet over JSON](decisions/ADR-001-parquet-over-json.md)
+  - [ADR-002: Repository Pattern](decisions/ADR-002-repository-pattern.md)
+  - [ADR-003: RBAC Model](decisions/ADR-003-rbac-model.md)
+
+### Validation & Credibility
+- [ATLAS_VALIDATION.md](ATLAS_VALIDATION.md) - 5-type validation framework
+- [CELL_TYPE_MAPPING.md](CELL_TYPE_MAPPING.md) - Cell type harmonization across atlases
+- [EMBEDDED_DATA_CHECKLIST.md](EMBEDDED_DATA_CHECKLIST.md) - **IMPORTANT**: JSON files required in frontend
+
+### Legacy & Archive
+- [archive/](archive/) - Historical planning documents
+- [archive/plans/](archive/plans/) - Old session plans (preserved for reference)
+
+## How to Use This Documentation
+
+1. **First time?** Start with [DEPLOYMENT.md](DEPLOYMENT.md)
+2. **Want to explore data?** Read [USER_GUIDE.md](USER_GUIDE.md)
+3. **Building on the API?** Check [API_REFERENCE.md](API_REFERENCE.md)
+4. **Need to understand architecture?** Read [ARCHITECTURE.md](ARCHITECTURE.md)
+5. **Claude Code session?** See [../CLAUDE.md](../CLAUDE.md)
+
 ## Contributing
 
 1. Use templates in `templates/` for new documentation
 2. Update `registry.json` when adding new outputs
 3. Keep pipeline docs in sync with code changes
+4. Update relevant sections in [ARCHITECTURE.md](ARCHITECTURE.md) for system changes
+5. Add new documentation links to this README.md
