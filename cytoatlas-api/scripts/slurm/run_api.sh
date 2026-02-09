@@ -59,6 +59,7 @@ export ENVIRONMENT=production
 export VIZ_DATA_PATH=/vf/users/parks34/projects/2secactpy/visualization/data
 export RESULTS_BASE_PATH=/vf/users/parks34/projects/2secactpy/results
 export H5AD_BASE_PATH=/data/Jiang_Lab/Data/Seongyong
+export LLM_BASE_URL=http://cn0084:8001/v1
 
 # Start the server
 exec python -m uvicorn app.main:app \
