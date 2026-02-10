@@ -2495,14 +2495,42 @@
             <p>Validation of activity predictions by correlating inferred activity scores with actual gene expression of signature genes. This demonstrates that predicted activities reflect underlying biology.</p>
 
             <div class="tabs">
-                <button class="tab active" data-tab="val-bulk">Bulk RNA-seq</button>
+                <button class="tab active" data-tab="val-summary">Summary</button>
+                <button class="tab" data-tab="val-bulk">Bulk RNA-seq</button>
                 <button class="tab" data-tab="val-donor">Donor Level</button>
                 <button class="tab" data-tab="val-celltype">Cell Type Level</button>
                 <button class="tab" data-tab="val-singlecell">Single-Cell Level</button>
             </div>
 
+            <!-- Validation Summary (Expression vs Activity Correlation Boxplot) -->
+            <div class="tab-content active" id="tab-val-summary">
+                <h3>Validation Summary</h3>
+                <p>Per-entity Spearman correlation between gene expression and predicted activity across all atlases and aggregation levels. Each box summarizes the distribution of per-entity &rho; values across all targets (or a selected target).</p>
+
+                <div class="filter-bar">
+                    <label>Target:
+                        <select id="val-summary-target">
+                            <option value="_all">All Targets</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="panel-grid" style="grid-template-columns: 1fr 1fr;">
+                    <div class="panel">
+                        <div class="viz-title">CytoSig</div>
+                        <div class="viz-subtitle">44 cytokine signatures</div>
+                        <div id="val-summary-cytosig-box" style="height: 500px;">Loading...</div>
+                    </div>
+                    <div class="panel">
+                        <div class="viz-title">SecAct</div>
+                        <div class="viz-subtitle">1,170+ secreted protein signatures</div>
+                        <div id="val-summary-secact-box" style="height: 500px;">Loading...</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Bulk RNA-seq Validation (GTEx + TCGA) -->
-            <div class="tab-content active" id="tab-val-bulk">
+            <div class="tab-content" id="tab-val-bulk">
                 <h3>Bulk RNA-seq Validation (GTEx + TCGA)</h3>
                 <p>External validation against independent bulk RNA-seq datasets: GTEx (~17K normal tissue samples) and TCGA (~11K tumor samples). Demonstrates that single-cell-derived cytokine signatures generalize to bulk data.</p>
 
@@ -11765,11 +11793,105 @@
             bulkRnaseqData: null, // bulk_rnaseq_validation.json (GTEx + TCGA)
             scData: {},           // validation/{atlas}_validation.json → singlecell_validations
             fullData: {},         // validation/{atlas}_validation.json → full raw JSON
+            summaryData: null,    // validation_corr_boxplot.json
             bulkLoaded: false,
             bulkRnaseqLoaded: false,
+            summaryLoaded: false,
             scLoaded: {},
             fullLoaded: {}
         };
+
+        // --- Validation Summary (boxplot) ---
+
+        async function loadValidationSummary() {
+            if (validationState.summaryLoaded) return validationState.summaryData;
+            try {
+                const response = await fetch('data/validation_corr_boxplot.json');
+                if (response.ok) {
+                    validationState.summaryData = await response.json();
+                    validationState.summaryLoaded = true;
+                    console.log('Loaded validation summary data');
+                }
+            } catch (e) {
+                console.log('Validation summary data not available:', e);
+            }
+            return validationState.summaryData;
+        }
+
+        const SUMMARY_PALETTE = [
+            '#2ca02c', '#d62728', '#1f77b4', '#ff7f0e',
+            '#9467bd', '#8c564b', '#e377c2', '#17becf'
+        ];
+
+        function renderSummaryBoxplot(divId, data, sigType, target) {
+            const div = document.getElementById(divId);
+            if (!div) return;
+            const cats = data.categories;
+            const sigData = data[sigType];
+            if (!sigData || !sigData.rhos) {
+                div.innerHTML = '<p style="color:#888;text-align:center;margin-top:40px;">No data available</p>';
+                return;
+            }
+
+            const traces = cats.map((cat, i) => {
+                let values;
+                if (target === '_all') {
+                    values = sigData.targets.flatMap(t => sigData.rhos[t]?.[cat.key] || []);
+                } else {
+                    values = sigData.rhos[target]?.[cat.key] || [];
+                }
+                return {
+                    y: values,
+                    type: 'box',
+                    name: cat.label,
+                    boxpoints: false,
+                    marker: { color: SUMMARY_PALETTE[i % SUMMARY_PALETTE.length] },
+                    line: { width: 1.5 },
+                };
+            });
+
+            const layout = {
+                yaxis: {
+                    title: 'Spearman \u03C1',
+                    zeroline: true,
+                    zerolinecolor: '#ccc',
+                    zerolinewidth: 1,
+                },
+                showlegend: false,
+                margin: { t: 30, b: 140, l: 60, r: 20 },
+                xaxis: { tickangle: -30 },
+                plot_bgcolor: '#fafafa',
+            };
+
+            Plotly.newPlot(divId, traces, layout, { responsive: true, displayModeBar: false });
+        }
+
+        async function updateValidationSummary() {
+            const data = await loadValidationSummary();
+            if (!data) {
+                const cytoDiv = document.getElementById('val-summary-cytosig-box');
+                const secDiv = document.getElementById('val-summary-secact-box');
+                if (cytoDiv) cytoDiv.innerHTML = '<p style="color:#888;text-align:center;margin-top:40px;">Run <code>python scripts/17_preprocess_validation_summary.py</code> to generate data.</p>';
+                if (secDiv) secDiv.innerHTML = '';
+                return;
+            }
+
+            const targetSelect = document.getElementById('val-summary-target');
+            const target = targetSelect?.value || '_all';
+
+            // Populate dropdown on first load (use CytoSig targets)
+            if (targetSelect && targetSelect.options.length <= 1 && data.cytosig?.targets) {
+                data.cytosig.targets.forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t;
+                    opt.textContent = t;
+                    targetSelect.appendChild(opt);
+                });
+            }
+
+            renderSummaryBoxplot('val-summary-cytosig-box', data, 'cytosig', target);
+            renderSummaryBoxplot('val-summary-secact-box', data, 'secact', target);
+        }
 
         // Load bulk donor correlation data
         async function loadBulkValidationData() {
@@ -13430,6 +13552,12 @@
 
         // ---- Initialization ----
         function initValidationSection() {
+            // Summary tab listeners
+            document.getElementById('val-summary-target')?.addEventListener('change', updateValidationSummary);
+
+            // Load summary on init (it's the default active tab)
+            updateValidationSummary();
+
             // Bulk RNA-seq tab listeners
             document.getElementById('val-bulk-dataset')?.addEventListener('change', updateValidationBulk);
             document.getElementById('val-bulk-sigtype')?.addEventListener('change', updateValidationBulk);
