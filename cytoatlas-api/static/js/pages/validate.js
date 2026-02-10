@@ -209,6 +209,9 @@ const ValidatePage = {
                             <option value="_all">All Targets</option>
                         </select>
                     </label>
+                    <label>
+                        <input type="text" id="val-summary-search" placeholder="Search target...">
+                    </label>
                 </div>
 
                 <div class="panel-grid">
@@ -243,6 +246,13 @@ const ValidatePage = {
 
             targetSelect.addEventListener('change', () => {
                 this._renderSummaryCombinedBox(cytosigData, secactData, targetSelect.value);
+            });
+        }
+
+        const searchInput = document.getElementById('val-summary-search');
+        if (searchInput && targetSelect) {
+            searchInput.addEventListener('input', () => {
+                this._filterSelect(targetSelect, searchInput.value);
             });
         }
 
