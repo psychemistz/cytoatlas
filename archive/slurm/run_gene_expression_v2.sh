@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=gene_expr_v2
-#SBATCH --output=/vf/users/parks34/projects/2secactpy/logs/gene_expr_v2_%j.out
-#SBATCH --error=/vf/users/parks34/projects/2secactpy/logs/gene_expr_v2_%j.err
+#SBATCH --output=/vf/users/parks34/projects/2cytoatlas/logs/gene_expr_v2_%j.out
+#SBATCH --error=/vf/users/parks34/projects/2cytoatlas/logs/gene_expr_v2_%j.err
 #SBATCH --time=2-00:00:00
 #SBATCH --mem=240G
 #SBATCH --cpus-per-task=4
@@ -10,7 +10,7 @@
 source ~/bin/myconda
 conda activate secactpy
 
-cd /vf/users/parks34/projects/2secactpy
+cd /vf/users/parks34/projects/2cytoatlas
 
 echo "Starting gene expression extraction v2 (with normalization fixes)"
 echo "Start time: $(date)"

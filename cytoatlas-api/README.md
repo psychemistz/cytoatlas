@@ -15,7 +15,7 @@ This API provides REST endpoints for accessing computed cytokine and secreted pr
 ### Option 1: Direct Python (Recommended for HPC)
 
 ```bash
-cd /vf/users/parks34/projects/2secactpy/cytoatlas-api
+cd /data/parks34/projects/2cytoatlas/cytoatlas-api
 
 # Activate conda environment
 source ~/bin/myconda
@@ -37,7 +37,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ### Option 2: SLURM Job (Production)
 
 ```bash
-cd /vf/users/parks34/projects/2secactpy/cytoatlas-api
+cd /data/parks34/projects/2cytoatlas/cytoatlas-api
 
 # Submit as batch job (runs for 7 days)
 sbatch scripts/slurm/run_api.sh
@@ -61,7 +61,7 @@ ssh -L 8000:<node>:8000 biowulf
 sinteractive --mem=32g --cpus-per-task=4 --time=8:00:00 --tunnel
 
 # Then run the server
-cd /vf/users/parks34/projects/2secactpy/cytoatlas-api
+cd /data/parks34/projects/2cytoatlas/cytoatlas-api
 source ~/bin/myconda && conda activate secactpy
 pip install -e .
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -70,7 +70,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ### Option 4: Singularity Container
 
 ```bash
-cd /vf/users/parks34/projects/2secactpy/cytoatlas-api/singularity
+cd /data/parks34/projects/2cytoatlas/cytoatlas-api/singularity
 
 # Build container (one time)
 singularity build --fakeroot cytoatlas-api.sif cytoatlas-api.def
@@ -78,8 +78,8 @@ singularity build --fakeroot cytoatlas-api.sif cytoatlas-api.def
 # Run with data mounts
 singularity run \
     --bind /data/Jiang_Lab/Data/Seongyong:/data/Jiang_Lab/Data/Seongyong:ro \
-    --bind /vf/users/parks34/projects/2secactpy/results:/vf/users/parks34/projects/2secactpy/results:ro \
-    --bind /vf/users/parks34/projects/2secactpy/visualization/data:/vf/users/parks34/projects/2secactpy/visualization/data:ro \
+    --bind /data/parks34/projects/2cytoatlas/results:/data/parks34/projects/2cytoatlas/results:ro \
+    --bind /data/parks34/projects/2cytoatlas/visualization/data:/data/parks34/projects/2cytoatlas/visualization/data:ro \
     cytoatlas-api.sif
 ```
 

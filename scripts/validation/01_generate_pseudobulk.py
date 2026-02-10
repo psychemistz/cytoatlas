@@ -76,7 +76,7 @@ SAMPLE_COLUMNS = {
     'scatlas_cancer': 'sample',
 }
 
-OUTPUT_ROOT = Path('/vf/users/parks34/projects/2secactpy/results/validation/pseudobulk')
+OUTPUT_ROOT = Path('/vf/users/parks34/projects/2cytoatlas/results/validation/pseudobulk')
 
 # ==============================================================================
 # Logging

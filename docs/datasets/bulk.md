@@ -60,7 +60,7 @@ Mapping strategy:
 
 ## Data Files
 
-All stored in `/data/parks34/projects/2secactpy/data/bulk/`:
+All stored in `/data/parks34/projects/2cytoatlas/data/bulk/`:
 
 | File | Size | Description |
 |------|------|-------------|

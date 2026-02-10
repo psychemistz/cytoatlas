@@ -3,7 +3,7 @@
 #
 # Usage:
 #   cytoatlas-pipeline run --config pipeline.yaml
-#   cytoatlas-pipeline run --config pipeline.yaml --output /data/parks34/projects/2secactpy/results
+#   cytoatlas-pipeline run --config pipeline.yaml --output /data/parks34/projects/2cytoatlas/results
 #
 # Stages map to the numbered scripts in scripts/:
 #   pilot       → 00_pilot_analysis.py
@@ -21,7 +21,7 @@ config:
   batch_size: 10000
   n_rand: 1000
   seed: 42
-  output_dir: /data/parks34/projects/2secactpy/results
+  output_dir: /data/parks34/projects/2cytoatlas/results
   output_format: csv
   verbose: false
 

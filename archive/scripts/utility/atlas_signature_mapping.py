@@ -22,8 +22,8 @@ from typing import Dict, List, Optional
 # Configuration
 # ==============================================================================
 
-SIGNATURE_DIR = Path('/data/parks34/projects/2secactpy/results/celltype_signatures')
-OUTPUT_DIR = Path('/data/parks34/projects/2secactpy/results/celltype_signatures')
+SIGNATURE_DIR = Path('/data/parks34/projects/2cytoatlas/results/celltype_signatures')
+OUTPUT_DIR = Path('/data/parks34/projects/2cytoatlas/results/celltype_signatures')
 
 # ==============================================================================
 # Atlas Cell Type to Signature Mapping

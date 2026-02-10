@@ -13,7 +13,7 @@
 set -e
 
 # Configuration
-PROJECT_DIR="/vf/users/parks34/projects/2secactpy"
+PROJECT_DIR="/vf/users/parks34/projects/2cytoatlas"
 LOG_DIR="${LOG_DIR:-$PROJECT_DIR/logs/agent_sessions}"
 MAX_TURNS="${MAX_TURNS:-200}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)

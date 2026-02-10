@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=regen_bulk_rnaseq
-#SBATCH --output=/data/parks34/projects/2secactpy/logs/regen_bulk_rnaseq_%j.out
-#SBATCH --error=/data/parks34/projects/2secactpy/logs/regen_bulk_rnaseq_%j.err
+#SBATCH --output=/data/parks34/projects/2cytoatlas/logs/regen_bulk_rnaseq_%j.out
+#SBATCH --error=/data/parks34/projects/2cytoatlas/logs/regen_bulk_rnaseq_%j.err
 #SBATCH --time=02:00:00
 #SBATCH --mem=128G
 #SBATCH --cpus-per-task=4
@@ -10,13 +10,13 @@
 source ~/bin/myconda
 conda activate secactpy
 
-cd /data/parks34/projects/2secactpy
+cd /data/parks34/projects/2cytoatlas
 
 python3 -c "
 import sys
-sys.path.insert(0, '/vf/users/parks34/projects/2secactpy/scripts')
+sys.path.insert(0, '/vf/users/parks34/projects/2cytoatlas/scripts')
 from importlib.machinery import SourceFileLoader
-mod = SourceFileLoader('preprocess', '/vf/users/parks34/projects/2secactpy/scripts/14_preprocess_bulk_validation.py').load_module()
+mod = SourceFileLoader('preprocess', '/vf/users/parks34/projects/2cytoatlas/scripts/14_preprocess_bulk_validation.py').load_module()
 
 import json
 

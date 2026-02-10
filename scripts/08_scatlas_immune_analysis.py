@@ -26,8 +26,8 @@ warnings.filterwarnings('ignore')
 # Configuration
 # ==============================================================================
 
-RESULTS_DIR = Path('/vf/users/parks34/projects/2secactpy/results/scatlas')
-VIZ_DATA_DIR = Path('/vf/users/parks34/projects/2secactpy/visualization/data')
+RESULTS_DIR = Path('/data/parks34/projects/2cytoatlas/results/scatlas')
+VIZ_DATA_DIR = Path('/data/parks34/projects/2cytoatlas/visualization/data')
 
 # Cell type classification patterns
 # Updated to support both cellType1 (original) and subCluster (standardized) naming

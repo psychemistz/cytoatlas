@@ -548,11 +548,11 @@ secactpy = {path = "/vf/users/parks34/projects/1ridgesig/SecActpy"}
 |------|---------|
 | `/vf/users/parks34/projects/1ridgesig/SecActpy/secactpy/ridge.py` | GPU ridge regression |
 | `/vf/users/parks34/projects/1ridgesig/SecActpy/secactpy/batch.py` | Batch processing |
-| `/vf/users/parks34/projects/2secactpy/scripts/01_cima_activity.py` | CIMA pipeline reference |
-| `/vf/users/parks34/projects/2secactpy/scripts/02_inflam_activity.py` | Inflammation reference |
-| `/vf/users/parks34/projects/2secactpy/scripts/03_scatlas_analysis.py` | scAtlas reference |
-| `/vf/users/parks34/projects/2secactpy/scripts/08_atlas_validation.py` | Validation reference |
-| `/vf/users/parks34/projects/2secactpy/cytoatlas-api/app/services/` | All service implementations |
+| `/vf/users/parks34/projects/2cytoatlas/scripts/01_cima_activity.py` | CIMA pipeline reference |
+| `/vf/users/parks34/projects/2cytoatlas/scripts/02_inflam_activity.py` | Inflammation reference |
+| `/vf/users/parks34/projects/2cytoatlas/scripts/03_scatlas_analysis.py` | scAtlas reference |
+| `/vf/users/parks34/projects/2cytoatlas/scripts/08_atlas_validation.py` | Validation reference |
+| `/vf/users/parks34/projects/2cytoatlas/cytoatlas-api/app/services/` | All service implementations |
 
 ---
 

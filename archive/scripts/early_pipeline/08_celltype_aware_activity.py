@@ -43,11 +43,11 @@ SCATLAS_NORMAL = Path('/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/igt_s9_fine_c
 SCATLAS_CANCER = Path('/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/PanCancer_igt_s9_fine_counts.h5ad')
 
 # Signature paths
-SIGNATURE_DIR = Path('/data/parks34/projects/2secactpy/results/celltype_signatures')
+SIGNATURE_DIR = Path('/data/parks34/projects/2cytoatlas/results/celltype_signatures')
 MAPPING_FILE = SIGNATURE_DIR / 'atlas_signature_mapping.json'
 
 # Output paths
-OUTPUT_DIR = Path('/data/parks34/projects/2secactpy/results/celltype_aware_activity')
+OUTPUT_DIR = Path('/data/parks34/projects/2cytoatlas/results/celltype_aware_activity')
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Processing parameters

@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 # Data paths
 INFLAMMATION_PATH = '/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_ATLAS_main_afterQC.h5ad'
-OUTPUT_DIR = Path('/vf/users/parks34/projects/2secactpy/visualization/data')
+OUTPUT_DIR = Path('/vf/users/parks34/projects/2cytoatlas/visualization/data')
 
 # Cell type column to use
 CELLTYPE_COL = 'Level1'

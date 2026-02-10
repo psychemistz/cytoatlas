@@ -24,7 +24,7 @@ import pytest
 # Paths -- skip if data not available
 # ---------------------------------------------------------------------------
 
-_DATA_ROOT = Path("/data/parks34/projects/2secactpy")
+_DATA_ROOT = Path("/data/parks34/projects/2cytoatlas")
 _VIZ_DATA = _DATA_ROOT / "visualization" / "data"
 _DUCKDB_PATH = _DATA_ROOT / "perturbation_data.duckdb"
 

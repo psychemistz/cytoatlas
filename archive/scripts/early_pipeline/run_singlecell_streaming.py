@@ -58,7 +58,7 @@ BATCH_SIZES = {
     'secact': 10000,
 }
 
-OUTPUT_DIR = Path('/vf/users/parks34/projects/2secactpy/results/atlas_validation')
+OUTPUT_DIR = Path('/vf/users/parks34/projects/2cytoatlas/results/atlas_validation')
 
 
 def log(msg):

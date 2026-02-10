@@ -210,7 +210,7 @@ sbatch scripts/slurm/run_inflam.sh
 ### Direct
 
 ```bash
-cd /data/parks34/projects/2secactpy
+cd /data/parks34/projects/2cytoatlas
 source ~/bin/myconda && conda activate secactpy
 python scripts/02_inflam_activity.py --mode both
 ```

@@ -3,7 +3,7 @@
 
 set -e
 
-cd /vf/users/parks34/projects/2secactpy
+cd /vf/users/parks34/projects/2cytoatlas
 source ~/bin/myconda
 conda activate secactpy
 

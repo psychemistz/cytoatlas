@@ -5,8 +5,8 @@
 #SBATCH --mem=128G
 #SBATCH --cpus-per-task=4
 #SBATCH --time=02:00:00
-#SBATCH --output=/vf/users/parks34/projects/2secactpy/logs/validation_test_%j.out
-#SBATCH --error=/vf/users/parks34/projects/2secactpy/logs/validation_test_%j.err
+#SBATCH --output=/vf/users/parks34/projects/2cytoatlas/logs/validation_test_%j.out
+#SBATCH --error=/vf/users/parks34/projects/2cytoatlas/logs/validation_test_%j.err
 
 # Single test to verify pipeline works
 # Usage: sbatch run_test_single.sh
@@ -24,7 +24,7 @@ export PYTHONUNBUFFERED=1
 source ~/bin/myconda
 conda activate secactpy
 
-cd /vf/users/parks34/projects/2secactpy
+cd /vf/users/parks34/projects/2cytoatlas
 mkdir -p logs
 
 echo "========================================"

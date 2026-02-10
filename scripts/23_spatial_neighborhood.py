@@ -17,6 +17,8 @@ Input:
 Output:
     - spatial_neighborhood_activity.csv        (niche-level activity patterns)
     - spatial_technology_comparison.csv        (extended cross-technology comparison)
+    - spatial_nhood_enrichment.csv             (cell type neighborhood enrichment z-scores)
+    - spatial_co_occurrence.csv                (cell type spatial co-occurrence across distances)
 
 Usage:
     # Full analysis
@@ -46,25 +48,37 @@ import pandas as pd
 import anndata as ad
 from scipy import stats
 from scipy.spatial import cKDTree
+from scipy.sparse import csr_matrix
 from statsmodels.stats.multitest import multipletests
 
 warnings.filterwarnings('ignore')
 
 # Add SecActpy to path
-sys.path.insert(0, '/vf/users/parks34/projects/1ridgesig/SecActpy')
+sys.path.insert(0, '/data/parks34/projects/1ridgesig/SecActpy')
 from secactpy import (
     load_cytosig, load_secact,
     ridge_batch, estimate_batch_size,
     CUPY_AVAILABLE
 )
 
+# GPU-accelerated spatial analysis via spatial-gpu package
+sys.path.insert(0, '/data/parks34/projects/0sigdiscov/pkg_dev/spatial-gpu')
+try:
+    import spatialgpu as spgpu
+    from spatialgpu.graph.neighbors import knn_graph
+    from spatialgpu.graph.analysis import nhood_enrichment, co_occurrence
+    SPATIALGPU_AVAILABLE = True
+except ImportError:
+    SPATIALGPU_AVAILABLE = False
+    spgpu = None
+
 # ==============================================================================
 # Configuration
 # ==============================================================================
 
 SPATIAL_DATA_DIR = Path('/data/Jiang_Lab/Data/Seongyong/SpatialCorpus-110M')
-SPATIAL_RESULTS_DIR = Path('/vf/users/parks34/projects/2secactpy/results/spatial')
-OUTPUT_DIR = Path('/vf/users/parks34/projects/2secactpy/results/spatial')
+SPATIAL_RESULTS_DIR = Path('/data/parks34/projects/2cytoatlas/results/spatial')
+OUTPUT_DIR = Path('/data/parks34/projects/2cytoatlas/results/spatial')
 
 # Neighborhood analysis parameters
 N_NEIGHBORS = 20         # Number of nearest neighbors for niche definition
@@ -74,6 +88,11 @@ LAMBDA = 5e5
 N_RAND = 1000
 CHUNK_SIZE = 50000        # Cells per chunk for backed-mode reading
 MAX_CELLS_SINGLE_CELL = 500000  # Max cells for per-cell ridge (above → pseudobulk only)
+
+# Neighborhood enrichment / co-occurrence parameters
+NHOOD_N_PERMS = 1000     # Number of permutations for enrichment test
+CO_OCC_N_BINS = 50       # Number of distance bins for co-occurrence
+GPU_KNN_CHUNK = 10000    # Chunk size for GPU kNN pairwise distances
 
 # Mouse file keywords (to skip)
 MOUSE_KEYWORDS = ['mouse', '_mouse_']
@@ -174,43 +193,117 @@ def detect_tissue_column(obs: pd.DataFrame) -> Optional[str]:
 
 
 # ==============================================================================
-# Neighborhood Construction
+# Neighborhood Construction (GPU-accelerated via spatial-gpu)
 # ==============================================================================
 
 def build_neighborhoods(
     coords: np.ndarray,
     n_neighbors: int = N_NEIGHBORS,
     radius: Optional[float] = None,
-) -> np.ndarray:
-    """Build spatial neighborhoods using KD-tree.
+) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+    """Build spatial neighborhoods using spatial-gpu (GPU kNN) or cKDTree (CPU).
+
+    When spatial-gpu is available and the GPU backend is active, uses cuML
+    brute-force kNN for 10-50x speedup over CPU. Falls back to scipy cKDTree
+    on CPU when spatial-gpu is unavailable or the GPU path fails.
 
     Args:
         coords: (n_cells, 2) spatial coordinates.
         n_neighbors: Number of nearest neighbors per cell.
-        radius: If provided, use radius-based neighborhoods instead.
+        radius: If provided, use radius-based neighborhoods (CPU only).
 
     Returns:
-        (n_cells, n_neighbors) array of neighbor indices.
-        If radius-based, returns a list of variable-length arrays.
+        Tuple of (neighbor_indices, valid_mask), or None if insufficient cells.
+        Also stores connectivity CSR matrix on the returned tuple as .connectivity
+        attribute for downstream nhood_enrichment / co_occurrence.
     """
     # Remove NaN coordinates
     valid_mask = np.all(np.isfinite(coords), axis=1)
-    valid_coords = coords[valid_mask]
+    valid_coords = coords[valid_mask].astype(np.float64)
 
     if len(valid_coords) < n_neighbors + 1:
         return None
 
-    tree = cKDTree(valid_coords)
-
     if radius is not None:
-        # Radius-based neighborhoods
+        # Radius-based — cKDTree only
+        tree = cKDTree(valid_coords)
         neighbors = tree.query_ball_point(valid_coords, r=radius)
         return neighbors, valid_mask
-    else:
-        # KNN neighborhoods
+
+    # KNN neighborhoods — try spatial-gpu first, then cKDTree fallback
+    connectivity = None
+    indices = None
+    if SPATIALGPU_AVAILABLE:
+        try:
+            t0 = time.time()
+            conn, dist = knn_graph(valid_coords, n_neighbors=n_neighbors)
+            elapsed = time.time() - t0
+            backend_name = ("GPU/cuML" if spgpu.get_backend().is_gpu_active
+                            else "CPU/sklearn")
+            log(f"    kNN ({backend_name}): {len(valid_coords):,} cells, "
+                f"k={n_neighbors} in {elapsed:.2f}s")
+
+            # Extract dense (n, k) index array from CSR connectivity
+            indices = _csr_to_knn_indices(conn, n_neighbors)
+            connectivity = conn
+        except Exception as e:
+            log(f"    spatial-gpu kNN failed ({e}), falling back to cKDTree")
+
+    if indices is None:
+        # CPU fallback via cKDTree
+        t0 = time.time()
+        tree = cKDTree(valid_coords)
         _, indices = tree.query(valid_coords, k=n_neighbors + 1)
-        # Exclude self (first neighbor)
-        return indices[:, 1:], valid_mask
+        elapsed = time.time() - t0
+        log(f"    kNN (CPU/cKDTree): {len(valid_coords):,} cells, "
+            f"k={n_neighbors} in {elapsed:.2f}s")
+        indices = indices[:, 1:]  # exclude self
+
+    # Attach connectivity matrix for nhood_enrichment / co_occurrence
+    result = _NeighborResult(indices, valid_mask, connectivity)
+    return result
+
+
+class _NeighborResult:
+    """Wrapper to carry kNN indices + valid_mask + optional CSR connectivity."""
+    __slots__ = ('indices', 'valid_mask', 'connectivity')
+
+    def __init__(self, indices, valid_mask, connectivity=None):
+        self.indices = indices
+        self.valid_mask = valid_mask
+        self.connectivity = connectivity
+
+    def __iter__(self):
+        """Unpack as (indices, valid_mask) for backward compat."""
+        return iter((self.indices, self.valid_mask))
+
+    def __bool__(self):
+        return self.indices is not None
+
+
+def _csr_to_knn_indices(conn: csr_matrix, k: int) -> np.ndarray:
+    """Extract dense (n, k) neighbor index array from CSR connectivity.
+
+    The CSR matrix from spatial-gpu's knn_graph is symmetric, so each row
+    may have more than k nonzero entries. We take the first k per row.
+    """
+    n = conn.shape[0]
+    indices = np.full((n, k), -1, dtype=np.int64)
+    for i in range(n):
+        row_start = conn.indptr[i]
+        row_end = conn.indptr[i + 1]
+        nbrs = conn.indices[row_start:row_end]
+        # Exclude self if present
+        nbrs = nbrs[nbrs != i]
+        m = min(len(nbrs), k)
+        indices[i, :m] = nbrs[:m]
+    # Replace any remaining -1 with nearest valid neighbor
+    for i in range(n):
+        if indices[i, -1] == -1:
+            valid = indices[i][indices[i] >= 0]
+            if len(valid) > 0:
+                indices[i][indices[i] < 0] = valid[-1]
+    return indices
 
 
 def compute_niche_activity(
@@ -312,6 +405,168 @@ def compute_spatial_coregulation(
             df.loc[valid_pvals.index, 'fdr'] = fdr
 
     return df
+
+
+# ==============================================================================
+# Neighborhood Enrichment & Co-occurrence (via spatial-gpu)
+# ==============================================================================
+
+def compute_nhood_enrichment_for_file(
+    coords: np.ndarray,
+    cell_types: np.ndarray,
+    valid_mask: np.ndarray,
+    connectivity: Optional[csr_matrix] = None,
+    n_neighbors: int = N_NEIGHBORS,
+    n_perms: int = NHOOD_N_PERMS,
+    filename: str = '',
+) -> Optional[pd.DataFrame]:
+    """Compute neighborhood enrichment z-scores for cell type pairs.
+
+    Uses spatial-gpu's permutation-based enrichment test (GPU CUDA kernel
+    when available) to identify cell type pairs that are spatially enriched
+    or depleted relative to random expectation.
+
+    Args:
+        coords: (n_cells, 2) spatial coordinates.
+        cell_types: (n_cells,) cell type labels.
+        valid_mask: Boolean mask for cells with valid coordinates.
+        connectivity: Optional precomputed CSR connectivity matrix.
+        n_neighbors: Number of neighbors (used if connectivity is None).
+        n_perms: Number of permutations for statistical test.
+        filename: Source file name for output labeling.
+
+    Returns:
+        DataFrame with columns: cell_type_1, cell_type_2, zscore, count, file.
+    """
+    if not SPATIALGPU_AVAILABLE:
+        return None
+
+    valid_coords = coords[valid_mask]
+    valid_ct = cell_types[valid_mask]
+
+    # Need at least 2 cell types and enough cells
+    unique_ct = np.unique(valid_ct)
+    if len(unique_ct) < 2 or len(valid_coords) < 50:
+        return None
+
+    try:
+        # Build a lightweight AnnData for spatial-gpu
+        adata_tmp = ad.AnnData(
+            X=csr_matrix((len(valid_coords), 1)),  # dummy expression
+            obs=pd.DataFrame({'cell_type': pd.Categorical(valid_ct)}),
+            obsm={'spatial': valid_coords},
+        )
+
+        # Use precomputed connectivity if available
+        if connectivity is not None:
+            adata_tmp.obsp['spatial_connectivities'] = connectivity
+        else:
+            spgpu.graph.spatial_neighbors(adata_tmp, n_neighbors=n_neighbors)
+
+        t0 = time.time()
+        zscore, count = nhood_enrichment(
+            adata_tmp, cluster_key='cell_type',
+            n_perms=n_perms, seed=42, copy=True, show_progress=False,
+        )
+        elapsed = time.time() - t0
+        log(f"    Nhood enrichment: {len(unique_ct)} types, "
+            f"{n_perms} perms in {elapsed:.2f}s")
+
+        # Convert to tidy DataFrame
+        categories = adata_tmp.obs['cell_type'].cat.categories.tolist()
+        rows = []
+        for i, ct1 in enumerate(categories):
+            for j, ct2 in enumerate(categories):
+                rows.append({
+                    'cell_type_1': ct1,
+                    'cell_type_2': ct2,
+                    'zscore': round(float(zscore[i, j]), 4),
+                    'count': int(count[i, j]),
+                    'file': filename,
+                })
+
+        del adata_tmp
+        return pd.DataFrame(rows)
+
+    except Exception as e:
+        log(f"    Nhood enrichment failed: {e}")
+        return None
+
+
+def compute_co_occurrence_for_file(
+    coords: np.ndarray,
+    cell_types: np.ndarray,
+    valid_mask: np.ndarray,
+    n_bins: int = CO_OCC_N_BINS,
+    filename: str = '',
+) -> Optional[pd.DataFrame]:
+    """Compute spatial co-occurrence of cell type pairs across distance bins.
+
+    Uses spatial-gpu's co_occurrence function (GPU-accelerated pairwise
+    distance computation with chunked memory management).
+
+    Args:
+        coords: (n_cells, 2) spatial coordinates.
+        cell_types: (n_cells,) cell type labels.
+        valid_mask: Boolean mask for cells with valid coordinates.
+        n_bins: Number of distance bins.
+        filename: Source file name for output labeling.
+
+    Returns:
+        DataFrame with columns: cell_type_1, cell_type_2, distance_bin,
+        co_occurrence, file.
+    """
+    if not SPATIALGPU_AVAILABLE:
+        return None
+
+    valid_coords = coords[valid_mask]
+    valid_ct = cell_types[valid_mask]
+
+    unique_ct = np.unique(valid_ct)
+    if len(unique_ct) < 2 or len(valid_coords) < 50:
+        return None
+
+    # Skip for large datasets (co_occurrence has quadratic memory)
+    if len(valid_coords) > 50000:
+        log(f"    Co-occurrence: skipping ({len(valid_coords):,} cells > 50K)")
+        return None
+
+    try:
+        adata_tmp = ad.AnnData(
+            X=csr_matrix((len(valid_coords), 1)),
+            obs=pd.DataFrame({'cell_type': pd.Categorical(valid_ct)}),
+            obsm={'spatial': valid_coords},
+        )
+
+        t0 = time.time()
+        occurrence, intervals = co_occurrence(
+            adata_tmp, cluster_key='cell_type',
+            n_splits=n_bins, copy=True, show_progress=False,
+        )
+        elapsed = time.time() - t0
+        log(f"    Co-occurrence: {len(unique_ct)} types, "
+            f"{n_bins} bins in {elapsed:.2f}s")
+
+        # Convert to tidy DataFrame
+        categories = adata_tmp.obs['cell_type'].cat.categories.tolist()
+        rows = []
+        for i, ct1 in enumerate(categories):
+            for j, ct2 in enumerate(categories):
+                for b, dist in enumerate(intervals):
+                    rows.append({
+                        'cell_type_1': ct1,
+                        'cell_type_2': ct2,
+                        'distance_bin': round(float(dist), 2),
+                        'co_occurrence': round(float(occurrence[i, j, b]), 6),
+                        'file': filename,
+                    })
+
+        del adata_tmp
+        return pd.DataFrame(rows)
+
+    except Exception as e:
+        log(f"    Co-occurrence failed: {e}")
+        return None
 
 
 # ==============================================================================
@@ -418,7 +673,24 @@ def analyze_file_neighborhoods(
         'niche_activities': {},
         'coregulation': {},
         'niche_stats': [],
+        'nhood_enrichment': None,
+        'co_occurrence': None,
     }
+
+    # Neighborhood enrichment & co-occurrence (spatial-gpu, needs cell types)
+    if ct_col is not None and SPATIALGPU_AVAILABLE:
+        cell_types = obs_copy[ct_col].values
+        connectivity = (nbr_result.connectivity
+                        if isinstance(nbr_result, _NeighborResult) else None)
+        file_results['nhood_enrichment'] = compute_nhood_enrichment_for_file(
+            coords, cell_types, valid_mask,
+            connectivity=connectivity, n_neighbors=n_neighbors,
+            filename=filename,
+        )
+        file_results['co_occurrence'] = compute_co_occurrence_for_file(
+            coords, cell_types, valid_mask,
+            filename=filename,
+        )
 
     # Check if file is too large for per-cell ridge regression
     if n_cells > MAX_CELLS_SINGLE_CELL:
@@ -679,6 +951,15 @@ def run_pipeline(
     t_start = time.time()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
+    # Report spatial-gpu status
+    if SPATIALGPU_AVAILABLE:
+        backend_info = spgpu.get_backend()
+        log(f"spatial-gpu {spgpu.__version__} loaded "
+            f"(GPU={'active' if backend_info.is_gpu_active else 'inactive'})")
+    else:
+        log("spatial-gpu not available — using cKDTree for kNN, "
+            "skipping nhood_enrichment / co_occurrence")
+
     # Load signature matrices
     log("Loading signature matrices...")
     cytosig = load_cytosig()
@@ -709,6 +990,8 @@ def run_pipeline(
     # Process each file
     all_niche_stats = []
     all_coregulation = []
+    all_nhood_enrichment = []
+    all_co_occurrence = []
 
     for i, h5ad_path in enumerate(h5ad_files):
         log(f"\n{'=' * 60}")
@@ -733,6 +1016,11 @@ def run_pipeline(
                     coreg_df['signature_type'] = sig_name
                     all_coregulation.append(coreg_df)
 
+            if result.get('nhood_enrichment') is not None:
+                all_nhood_enrichment.append(result['nhood_enrichment'])
+            if result.get('co_occurrence') is not None:
+                all_co_occurrence.append(result['co_occurrence'])
+
         gc.collect()
 
     # Build output DataFrames
@@ -754,6 +1042,22 @@ def run_pipeline(
         coreg_path = OUTPUT_DIR / 'spatial_coregulation.csv'
         coregulation_df.to_csv(coreg_path, index=False)
         log(f"  Saved: {coreg_path.name} ({len(coregulation_df)} rows)")
+
+    # Save neighborhood enrichment (spatial-gpu)
+    nhood_df = (pd.concat(all_nhood_enrichment, ignore_index=True)
+                if all_nhood_enrichment else pd.DataFrame())
+    if not nhood_df.empty:
+        nhood_path = OUTPUT_DIR / 'spatial_nhood_enrichment.csv'
+        nhood_df.to_csv(nhood_path, index=False)
+        log(f"  Saved: {nhood_path.name} ({len(nhood_df)} rows)")
+
+    # Save co-occurrence (spatial-gpu)
+    coocc_df = (pd.concat(all_co_occurrence, ignore_index=True)
+                if all_co_occurrence else pd.DataFrame())
+    if not coocc_df.empty:
+        coocc_path = OUTPUT_DIR / 'spatial_co_occurrence.csv'
+        coocc_df.to_csv(coocc_path, index=False)
+        log(f"  Saved: {coocc_path.name} ({len(coocc_df)} rows)")
 
     # Cross-technology comparison
     if not niche_stats_df.empty:
@@ -793,6 +1097,22 @@ def run_pipeline(
             for _, row in top.iterrows():
                 log(f"    {row['sig1']} <-> {row['sig2']}: "
                     f"rho={row['spearman_rho']:.3f}")
+
+    if not nhood_df.empty:
+        n_files = nhood_df['file'].nunique()
+        top_enriched = nhood_df.nlargest(3, 'zscore')
+        log(f"\nNeighborhood enrichment (spatial-gpu):")
+        log(f"  Files analyzed: {n_files}")
+        log(f"  Top enriched pairs:")
+        for _, row in top_enriched.iterrows():
+            log(f"    {row['cell_type_1']} <-> {row['cell_type_2']}: "
+                f"z={row['zscore']:.2f}")
+
+    if not coocc_df.empty:
+        log(f"\nSpatial co-occurrence (spatial-gpu):")
+        log(f"  Files analyzed: {coocc_df['file'].nunique()}")
+        log(f"  Distance bins: {coocc_df['distance_bin'].nunique()}")
+        log(f"  Total entries: {len(coocc_df)}")
 
     # List output files
     out_files = sorted(OUTPUT_DIR.glob('spatial_*'))

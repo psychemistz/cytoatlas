@@ -8,8 +8,8 @@ import pandas as pd
 from pathlib import Path
 
 # Paths
-RESULTS_DIR = Path("/data/parks34/projects/2secactpy/results/scatlas")
-OUTPUT_DIR = Path("/vf/users/parks34/projects/2secactpy/visualization/data")
+RESULTS_DIR = Path("/data/parks34/projects/2cytoatlas/results/scatlas")
+OUTPUT_DIR = Path("/vf/users/parks34/projects/2cytoatlas/visualization/data")
 
 def main():
     print("Loading cancer type signatures...")

@@ -173,7 +173,7 @@ sbatch scripts/slurm/run_scatlas.sh
 ### Direct
 
 ```bash
-cd /data/parks34/projects/2secactpy
+cd /data/parks34/projects/2cytoatlas
 source ~/bin/myconda && conda activate secactpy
 python scripts/03_scatlas_analysis.py
 ```

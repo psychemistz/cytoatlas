@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=scatlas_norm_sc
-#SBATCH --output=/data/parks34/projects/2secactpy/logs/scatlas_normal_singlecell_%j.out
-#SBATCH --error=/data/parks34/projects/2secactpy/logs/scatlas_normal_singlecell_%j.err
+#SBATCH --output=/data/parks34/projects/2cytoatlas/logs/scatlas_normal_singlecell_%j.out
+#SBATCH --error=/data/parks34/projects/2cytoatlas/logs/scatlas_normal_singlecell_%j.err
 #SBATCH --time=12:00:00
 #SBATCH --mem=128g
 #SBATCH --cpus-per-task=8
@@ -25,7 +25,7 @@ source ~/bin/myconda
 conda activate secactpy
 
 # Run analysis
-cd /data/parks34/projects/2secactpy
+cd /data/parks34/projects/2cytoatlas
 
 python scripts/04_singlecell_batch.py \
     --dataset scatlas_normal \

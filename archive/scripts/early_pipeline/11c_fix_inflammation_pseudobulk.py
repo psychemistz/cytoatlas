@@ -72,7 +72,7 @@ def fix_pseudobulk_file(pb_path: Path, gene_mapping: pd.DataFrame) -> None:
 
 
 def main():
-    donor_level_dir = Path('/vf/users/parks34/projects/2secactpy/results/donor_level')
+    donor_level_dir = Path('/vf/users/parks34/projects/2cytoatlas/results/donor_level')
 
     # Atlas-specific H5AD paths for gene mapping
     atlas_h5ad = {

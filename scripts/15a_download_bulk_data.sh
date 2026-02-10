@@ -8,11 +8,11 @@
 #   bash scripts/15a_download_bulk_data.sh
 #   sbatch scripts/15a_download_bulk_data.sh  # via SLURM
 #
-# Output: /data/parks34/projects/2secactpy/data/bulk/
+# Output: /data/parks34/projects/2cytoatlas/data/bulk/
 
 set -uo pipefail
 
-BULK_DIR="/data/parks34/projects/2secactpy/data/bulk"
+BULK_DIR="/data/parks34/projects/2cytoatlas/data/bulk"
 mkdir -p "$BULK_DIR"
 cd "$BULK_DIR"
 

@@ -10,9 +10,9 @@ data_paths:
   scatlas_cancer: "/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/PanCancer_igt_s9_fine_counts.h5ad"
 
 output_paths:
-  results: "/vf/users/parks34/projects/2secactpy/results"
-  visualization: "/vf/users/parks34/projects/2secactpy/visualization/data"
-  figures: "/vf/users/parks34/projects/2secactpy/results/figures"
+  results: "/data/parks34/projects/2cytoatlas/results"
+  visualization: "/data/parks34/projects/2cytoatlas/visualization/data"
+  figures: "/data/parks34/projects/2cytoatlas/results/figures"
 
 pipeline:
   seed: 42

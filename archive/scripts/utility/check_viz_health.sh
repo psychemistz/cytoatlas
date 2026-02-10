@@ -8,7 +8,7 @@
 
 set -e
 
-PROJECT_DIR="/vf/users/parks34/projects/2secactpy"
+PROJECT_DIR="/vf/users/parks34/projects/2cytoatlas"
 VIZ_DIR="$PROJECT_DIR/visualization"
 
 echo "=============================================="
@@ -73,7 +73,7 @@ class ValidationParser(HTMLParser):
             self.errors.append(f"Mismatched tag: </{tag}>")
 
 try:
-    with open('/vf/users/parks34/projects/2secactpy/visualization/index.html') as f:
+    with open('/vf/users/parks34/projects/2cytoatlas/visualization/index.html') as f:
         parser = ValidationParser()
         parser.feed(f.read())
         if parser.errors:
@@ -94,7 +94,7 @@ echo "4. Checking data files..."
 if [ -f "$VIZ_DIR/data/embedded_data.js" ]; then
     python3 << 'EOF'
 try:
-    with open('/vf/users/parks34/projects/2secactpy/visualization/data/embedded_data.js') as f:
+    with open('/vf/users/parks34/projects/2cytoatlas/visualization/data/embedded_data.js') as f:
         content = f.read()
         if 'EMBEDDED_DATA' in content or 'const ' in content:
             print("  [PASS] Embedded data file has expected structure")

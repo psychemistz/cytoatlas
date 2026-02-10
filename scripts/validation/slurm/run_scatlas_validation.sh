@@ -5,8 +5,8 @@
 #SBATCH --mem=128G
 #SBATCH --cpus-per-task=8
 #SBATCH --time=12:00:00
-#SBATCH --output=/vf/users/parks34/projects/2secactpy/logs/scatlas_validation_%j.out
-#SBATCH --error=/vf/users/parks34/projects/2secactpy/logs/scatlas_validation_%j.err
+#SBATCH --output=/vf/users/parks34/projects/2cytoatlas/logs/scatlas_validation_%j.out
+#SBATCH --error=/vf/users/parks34/projects/2cytoatlas/logs/scatlas_validation_%j.err
 #SBATCH --array=0-35
 
 # scAtlas Validation - 36 tests (2 datasets × 3 signatures × 3 aggregations × 2 levels)
@@ -25,7 +25,7 @@ export PYTHONUNBUFFERED=1
 source ~/bin/myconda
 conda activate secactpy
 
-cd /vf/users/parks34/projects/2secactpy
+cd /vf/users/parks34/projects/2cytoatlas
 mkdir -p logs
 
 echo "========================================"

@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=regen_pb
-#SBATCH --output=/vf/users/parks34/projects/2secactpy/logs/regen_pseudobulk_%j.out
-#SBATCH --error=/vf/users/parks34/projects/2secactpy/logs/regen_pseudobulk_%j.err
+#SBATCH --output=/vf/users/parks34/projects/2cytoatlas/logs/regen_pseudobulk_%j.out
+#SBATCH --error=/vf/users/parks34/projects/2cytoatlas/logs/regen_pseudobulk_%j.err
 #SBATCH --time=2:00:00
 #SBATCH --mem=128G
 #SBATCH --cpus-per-task=8
@@ -10,7 +10,7 @@
 source ~/bin/myconda
 conda activate secactpy
 
-cd /vf/users/parks34/projects/2secactpy
+cd /vf/users/parks34/projects/2cytoatlas
 
 echo "Starting pseudobulk regeneration..."
 python scripts/regen_scatlas_pseudobulk.py

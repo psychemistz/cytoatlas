@@ -22,7 +22,7 @@ from collections import defaultdict
 import re
 
 # Paths
-PROJECT_ROOT = Path("/vf/users/parks34/projects/2secactpy")
+PROJECT_ROOT = Path("/data/parks34/projects/2cytoatlas")
 DOCS_DIR = PROJECT_ROOT / "docs"
 SCRIPTS_DIR = PROJECT_ROOT / "scripts"
 VIZ_DATA_DIR = PROJECT_ROOT / "visualization" / "data"

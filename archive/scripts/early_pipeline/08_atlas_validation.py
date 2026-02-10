@@ -465,7 +465,7 @@ def main():
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("/vf/users/parks34/projects/2secactpy/visualization/data"),
+        default=Path("/vf/users/parks34/projects/2cytoatlas/visualization/data"),
         help="Output directory",
     )
 

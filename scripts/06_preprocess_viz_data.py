@@ -11,11 +11,11 @@ from pathlib import Path
 from scipy import stats
 
 # Paths
-RESULTS_DIR = Path("/vf/users/parks34/projects/2secactpy/results")
+RESULTS_DIR = Path("/data/parks34/projects/2cytoatlas/results")
 CIMA_DIR = RESULTS_DIR / "cima"
 SCATLAS_DIR = RESULTS_DIR / "scatlas"
 INFLAM_DIR = RESULTS_DIR / "inflammation"
-OUTPUT_DIR = Path("/vf/users/parks34/projects/2secactpy/visualization/data")
+OUTPUT_DIR = Path("/data/parks34/projects/2cytoatlas/visualization/data")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 

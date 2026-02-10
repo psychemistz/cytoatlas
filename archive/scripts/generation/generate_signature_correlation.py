@@ -20,8 +20,8 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # Paths
-RESULTS_DIR = Path('/data/parks34/projects/2secactpy/results')
-VIZ_OUTPUT_DIR = Path('/data/parks34/projects/2secactpy/visualization/data')
+RESULTS_DIR = Path('/data/parks34/projects/2cytoatlas/results')
+VIZ_OUTPUT_DIR = Path('/data/parks34/projects/2cytoatlas/visualization/data')
 
 def load_atlas_activity(atlas: str, sig_type: str) -> pd.DataFrame:
     """Load pseudobulk activity data for an atlas.

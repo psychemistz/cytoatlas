@@ -5,8 +5,8 @@
 #SBATCH --mem=128G
 #SBATCH --cpus-per-task=8
 #SBATCH --time=24:00:00
-#SBATCH --output=/vf/users/parks34/projects/2secactpy/logs/pseudobulk_batch_%j.out
-#SBATCH --error=/vf/users/parks34/projects/2secactpy/logs/pseudobulk_batch_%j.err
+#SBATCH --output=/vf/users/parks34/projects/2cytoatlas/logs/pseudobulk_batch_%j.out
+#SBATCH --error=/vf/users/parks34/projects/2cytoatlas/logs/pseudobulk_batch_%j.err
 
 # Stage 1: Generate ALL Pseudobulk Expression Data in a single job
 # Runs all 11 configs sequentially
@@ -24,7 +24,7 @@ export PYTHONUNBUFFERED=1
 source ~/bin/myconda
 conda activate secactpy
 
-cd /vf/users/parks34/projects/2secactpy
+cd /vf/users/parks34/projects/2cytoatlas
 mkdir -p logs results/validation/pseudobulk
 
 echo "========================================"

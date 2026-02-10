@@ -13,7 +13,7 @@
 
 set -e
 
-PROJECT_DIR="/vf/users/parks34/projects/2secactpy"
+PROJECT_DIR="/vf/users/parks34/projects/2cytoatlas"
 SCRIPT_DIR="${PROJECT_DIR}/scripts"
 LOG_DIR="${PROJECT_DIR}/logs/validation"
 OUTPUT_DIR="${PROJECT_DIR}/results/atlas_validation/scatlas_cancer/pseudobulk"

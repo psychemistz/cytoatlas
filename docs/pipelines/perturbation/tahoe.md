@@ -127,7 +127,7 @@ python scripts/slurm/submit_jobs.py --job tahoe_drug_sigs
 
 ### Direct
 ```bash
-cd /data/parks34/projects/2secactpy
+cd /data/parks34/projects/2cytoatlas
 python scripts/19_tahoe_activity.py --mode all
 python scripts/22_tahoe_drug_signatures.py
 ```

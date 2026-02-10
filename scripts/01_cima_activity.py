@@ -34,7 +34,7 @@ import scipy.sparse as sp
 from scipy import stats
 
 # Add SecActpy to path
-sys.path.insert(0, '/vf/users/parks34/projects/1ridgesig/SecActpy')
+sys.path.insert(0, '/data/parks34/projects/1ridgesig/SecActpy')
 from secactpy import (
     load_cytosig, load_secact,
     ridge_batch, estimate_batch_size,
@@ -53,7 +53,7 @@ METABOLITES_PATH = DATA_DIR / 'Cell_Atlas/CIMA_Sample_Plasma_Metabolites_and_Lip
 SAMPLE_META_PATH = DATA_DIR / 'Metadata/CIMA_Sample_Information_Metadata.csv'
 
 # Output paths
-OUTPUT_DIR = Path('/vf/users/parks34/projects/2secactpy/results/cima')
+OUTPUT_DIR = Path('/data/parks34/projects/2cytoatlas/results/cima')
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Analysis parameters

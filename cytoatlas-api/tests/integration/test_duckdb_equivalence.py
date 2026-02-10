@@ -23,8 +23,8 @@ import pytest
 # Paths — skip if data not available
 # ---------------------------------------------------------------------------
 
-_VIZ_DATA = Path("/data/parks34/projects/2secactpy/visualization/data")
-_DUCKDB_PATH = Path("/data/parks34/projects/2secactpy/atlas_data.duckdb")
+_VIZ_DATA = Path("/data/parks34/projects/2cytoatlas/visualization/data")
+_DUCKDB_PATH = Path("/data/parks34/projects/2cytoatlas/atlas_data.duckdb")
 
 _HAS_DATA = _VIZ_DATA.exists() and _DUCKDB_PATH.exists()
 pytestmark = pytest.mark.skipif(

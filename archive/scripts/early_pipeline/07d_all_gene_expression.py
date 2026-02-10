@@ -30,7 +30,7 @@ DATA_PATHS = {
     'scatlas_cancer': '/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/PanCancer_igt_s9_fine_counts.h5ad',
 }
 
-OUTPUT_DIR = Path('/vf/users/parks34/projects/2secactpy/visualization/data')
+OUTPUT_DIR = Path('/vf/users/parks34/projects/2cytoatlas/visualization/data')
 
 # Sample size per cell type (reduced for memory efficiency)
 SAMPLE_SIZE = 500

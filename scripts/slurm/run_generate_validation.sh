@@ -30,7 +30,7 @@ echo "========================================"
 source ~/bin/myconda
 conda activate secactpy
 
-cd /data/parks34/projects/2secactpy
+cd /data/parks34/projects/2cytoatlas
 mkdir -p logs
 
 echo "Memory available: $(free -h | grep Mem | awk '{print $7}')"
@@ -38,8 +38,8 @@ echo "Memory available: $(free -h | grep Mem | awk '{print $7}')"
 python -u cytoatlas-api/scripts/generate_validation_data.py \
     --atlas "$ATLAS" \
     --signature-type all \
-    --viz-data-path /vf/users/parks34/projects/2secactpy/visualization/data \
-    --results-path /data/parks34/projects/2secactpy/results
+    --viz-data-path /vf/users/parks34/projects/2cytoatlas/visualization/data \
+    --results-path /data/parks34/projects/2cytoatlas/results
 
 echo "========================================"
 echo "Atlas: $ATLAS"

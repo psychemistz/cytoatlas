@@ -24,7 +24,7 @@ import numpy as np
 import pandas as pd
 
 
-OUTPUT_ROOT = Path("/vf/users/parks34/projects/2secactpy/results/atlas_validation")
+OUTPUT_ROOT = Path("/vf/users/parks34/projects/2cytoatlas/results/atlas_validation")
 LINCYTOSIG_PATH = Path("/vf/users/parks34/projects/1ridgesig/SecActpy-dev/secactpy/data/LinCytoSig.tsv.gz")
 
 

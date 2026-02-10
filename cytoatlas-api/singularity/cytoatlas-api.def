@@ -56,8 +56,8 @@ From: python:3.11-slim
     Run with bind mounts:
         singularity run \
             --bind /data/Jiang_Lab/Data/Seongyong:/data/Jiang_Lab/Data/Seongyong:ro \
-            --bind /vf/users/parks34/projects/2secactpy/results:/app/results:ro \
-            --bind /vf/users/parks34/projects/2secactpy/visualization/data:/app/visualization/data:ro \
+            --bind /data/parks34/projects/2cytoatlas/results:/app/results:ro \
+            --bind /data/parks34/projects/2cytoatlas/visualization/data:/app/visualization/data:ro \
             cytoatlas-api.sif
 
     Interactive shell:

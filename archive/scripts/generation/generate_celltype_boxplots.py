@@ -207,9 +207,9 @@ def generate_celltype_boxplots(
 def main():
     # Paths
     cima_h5_path = '/data/Jiang_Lab/Data/Seongyong/CIMA/Cell_Atlas/CIMA_RNA_6484974cells_36326genes_compressed.h5ad'
-    cytosig_path = '/data/parks34/projects/2secactpy/results/cima/CIMA_CytoSig_pseudobulk.h5ad'
-    secact_path = '/data/parks34/projects/2secactpy/results/cima/CIMA_SecAct_pseudobulk.h5ad'
-    output_path = '/vf/users/parks34/projects/2secactpy/visualization/data/age_bmi_boxplots.json'
+    cytosig_path = '/data/parks34/projects/2cytoatlas/results/cima/CIMA_CytoSig_pseudobulk.h5ad'
+    secact_path = '/data/parks34/projects/2cytoatlas/results/cima/CIMA_SecAct_pseudobulk.h5ad'
+    output_path = '/vf/users/parks34/projects/2cytoatlas/visualization/data/age_bmi_boxplots.json'
 
     # Get sample metadata
     sample_meta = get_sample_metadata(cima_h5_path)

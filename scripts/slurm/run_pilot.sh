@@ -26,7 +26,7 @@ source ~/bin/myconda
 conda activate secactpy
 
 # Set working directory
-cd /data/parks34/projects/2secactpy
+cd /data/parks34/projects/2cytoatlas
 
 # Create logs directory if not exists
 mkdir -p logs

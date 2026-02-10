@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=sig_expr
-#SBATCH --output=/data/parks34/projects/2secactpy/logs/signature_expression_%j.out
-#SBATCH --error=/data/parks34/projects/2secactpy/logs/signature_expression_%j.err
+#SBATCH --output=/data/parks34/projects/2cytoatlas/logs/signature_expression_%j.out
+#SBATCH --error=/data/parks34/projects/2cytoatlas/logs/signature_expression_%j.err
 #SBATCH --time=4:00:00
 #SBATCH --mem=128G
 #SBATCH --cpus-per-task=4
@@ -23,7 +23,7 @@ conda activate secactpy
 # Force unbuffered Python output
 export PYTHONUNBUFFERED=1
 
-cd /data/parks34/projects/2secactpy
+cd /data/parks34/projects/2cytoatlas
 
 # Create logs directory if needed
 mkdir -p logs

@@ -30,7 +30,7 @@ from scipy import stats
 # Paths
 # ---------------------------------------------------------------------------
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-VALIDATION_DIR = Path("/data/parks34/projects/2secactpy/results/cross_sample_validation")
+VALIDATION_DIR = Path("/data/parks34/projects/2cytoatlas/results/cross_sample_validation")
 OUTPUT_PATH = PROJECT_ROOT / "visualization" / "data" / "validation_corr_boxplot.json"
 MAPPING_PATH = PROJECT_ROOT / "cytoatlas-api" / "static" / "data" / "signature_gene_mapping.json"
 

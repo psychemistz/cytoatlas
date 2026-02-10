@@ -145,7 +145,7 @@ ATLAS_CONFIGS = OrderedDict([
     }),
 ])
 
-BASE_OUTPUT_DIR = Path('/data/parks34/projects/2secactpy/results/cross_sample_validation')
+BASE_OUTPUT_DIR = Path('/data/parks34/projects/2cytoatlas/results/cross_sample_validation')
 
 
 # =============================================================================

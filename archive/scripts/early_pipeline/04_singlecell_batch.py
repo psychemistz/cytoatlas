@@ -57,7 +57,7 @@ SCATLAS_NORMAL_H5AD = Path('/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/igt_s9_f
 SCATLAS_CANCER_H5AD = Path('/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/PanCancer_igt_s9_fine_counts.h5ad')
 
 # Output directory
-OUTPUT_DIR = Path('/vf/users/parks34/projects/2secactpy/results')
+OUTPUT_DIR = Path('/vf/users/parks34/projects/2cytoatlas/results')
 
 # Processing parameters
 CELL_BATCH_SIZE = 50000  # Process 50K cells at a time

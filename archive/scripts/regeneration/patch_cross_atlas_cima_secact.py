@@ -28,9 +28,9 @@ from generate_atlas_comparison import (
 
 # Single-cell activity files (atlas_validation copies)
 SC_FILES = {
-    'cima': '/vf/users/parks34/projects/2secactpy/results/atlas_validation/cima/singlecell/cima_singlecell_secact.h5ad',
-    'inflammation': '/vf/users/parks34/projects/2secactpy/results/atlas_validation/inflammation_main/singlecell/inflammation_main_singlecell_secact.h5ad',
-    'scatlas': '/vf/users/parks34/projects/2secactpy/results/atlas_validation/scatlas_normal/singlecell/scatlas_normal_singlecell_secact.h5ad',
+    'cima': '/vf/users/parks34/projects/2cytoatlas/results/atlas_validation/cima/singlecell/cima_singlecell_secact.h5ad',
+    'inflammation': '/vf/users/parks34/projects/2cytoatlas/results/atlas_validation/inflammation_main/singlecell/inflammation_main_singlecell_secact.h5ad',
+    'scatlas': '/vf/users/parks34/projects/2cytoatlas/results/atlas_validation/scatlas_normal/singlecell/scatlas_normal_singlecell_secact.h5ad',
 }
 
 # Original h5ad files for cell type metadata
@@ -46,7 +46,7 @@ CELLTYPE_COLUMNS = {
     'scatlas': 'cellType1',
 }
 
-VIZ_DATA = Path('/data/parks34/projects/2secactpy/visualization/data')
+VIZ_DATA = Path('/data/parks34/projects/2cytoatlas/visualization/data')
 N_SAMPLE = 50000
 
 

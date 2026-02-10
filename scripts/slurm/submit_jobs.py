@@ -120,7 +120,7 @@ def render_job_script(
         "{{DISPLAY_NAME}}": job.get("name", job_id),
         "{{MODULE_LINES}}": module_lines,
         "{{CONDA_ENV}}": common.get("conda_env", "secactpy"),
-        "{{PROJECT_DIR}}": common.get("project_dir", "/data/parks34/projects/2secactpy"),
+        "{{PROJECT_DIR}}": common.get("project_dir", "/data/parks34/projects/2cytoatlas"),
         "{{SCRIPT}}": job.get("script", ""),
         "{{ARGS}}": args,
         "{{GPU_CHECK}}": gpu_check,

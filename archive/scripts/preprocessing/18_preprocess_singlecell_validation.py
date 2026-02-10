@@ -25,7 +25,7 @@ from scipy import stats
 
 # Paths
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-ATLAS_VALIDATION_DIR = Path("/data/parks34/projects/2secactpy/results/atlas_validation")
+ATLAS_VALIDATION_DIR = Path("/data/parks34/projects/2cytoatlas/results/atlas_validation")
 OUTPUT_DB = PROJECT_ROOT / "visualization" / "data" / "singlecell_scatter.db"
 MAPPING_PATH = PROJECT_ROOT / "cytoatlas-api" / "static" / "data" / "signature_gene_mapping.json"
 

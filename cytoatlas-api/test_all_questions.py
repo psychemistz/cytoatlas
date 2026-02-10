@@ -147,7 +147,7 @@ async def main():
         print(f"  Q{i}: {r['rounds']} rounds | tools: {tc_names} | viz: {r['has_viz_tool_call']}")
 
     # Save full results
-    output_path = "/vf/users/parks34/projects/2secactpy/logs/claude_test_results.json"
+    output_path = "/data/parks34/projects/2cytoatlas/logs/claude_test_results.json"
     with open(output_path, "w") as f:
         json.dump(results, f, indent=2, default=str)
     print(f"\n  Full results saved to: {output_path}")

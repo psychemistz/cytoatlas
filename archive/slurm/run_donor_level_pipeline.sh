@@ -5,7 +5,7 @@
 #SBATCH --mem=180G
 #SBATCH --cpus-per-task=16
 #SBATCH --time=48:00:00
-#SBATCH --output=/data/parks34/projects/2secactpy/logs/donor_level_%A_%a.log
+#SBATCH --output=/data/parks34/projects/2cytoatlas/logs/donor_level_%A_%a.log
 
 # Donor-Level Pseudobulk Pipeline
 # ===============================
@@ -29,7 +29,7 @@ set -euo pipefail
 source ~/bin/myconda
 conda activate secactpy
 
-cd /data/parks34/projects/2secactpy
+cd /data/parks34/projects/2cytoatlas
 
 # Atlas array
 ATLASES=(
@@ -59,7 +59,7 @@ echo "=============================================="
 # Add --run-singlecell for specific atlases if needed
 python scripts/11_donor_level_pipeline.py \
     --atlas "${ATLAS}" \
-    --output-dir /vf/users/parks34/projects/2secactpy/results/donor_level
+    --output-dir /vf/users/parks34/projects/2cytoatlas/results/donor_level
 
 echo ""
 echo "=============================================="

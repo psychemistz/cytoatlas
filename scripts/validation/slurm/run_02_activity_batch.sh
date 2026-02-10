@@ -5,8 +5,8 @@
 #SBATCH --mem=64G
 #SBATCH --cpus-per-task=4
 #SBATCH --time=24:00:00
-#SBATCH --output=/vf/users/parks34/projects/2secactpy/logs/activity_batch_%j.out
-#SBATCH --error=/vf/users/parks34/projects/2secactpy/logs/activity_batch_%j.err
+#SBATCH --output=/vf/users/parks34/projects/2cytoatlas/logs/activity_batch_%j.out
+#SBATCH --error=/vf/users/parks34/projects/2cytoatlas/logs/activity_batch_%j.err
 
 # Stage 2: Run ALL Activity Inference in a single job
 # Runs all 33 configs sequentially (11 pseudobulk × 3 signatures)
@@ -25,7 +25,7 @@ export PYTHONUNBUFFERED=1
 source ~/bin/myconda
 conda activate secactpy
 
-cd /vf/users/parks34/projects/2secactpy
+cd /vf/users/parks34/projects/2cytoatlas
 mkdir -p logs results/validation/activity
 
 echo "========================================"

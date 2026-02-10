@@ -50,7 +50,7 @@ ATLAS="${ATLASES[$SLURM_ARRAY_TASK_ID]}"
 SIGNATURE="${SIGNATURES[$SLURM_ARRAY_TASK_ID]}"
 
 # Paths
-PROJECT_DIR="/vf/users/parks34/projects/2secactpy"
+PROJECT_DIR="/vf/users/parks34/projects/2cytoatlas"
 SCRIPT="${PROJECT_DIR}/scripts/12_singlecell_activity.py"
 LOG_DIR="${PROJECT_DIR}/logs/validation"
 

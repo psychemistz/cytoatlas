@@ -20,7 +20,7 @@ echo "========================================"
 source ~/bin/myconda
 conda activate secactpy
 
-cd /data/parks34/projects/2secactpy
+cd /data/parks34/projects/2cytoatlas
 mkdir -p logs
 
 # Convert all JSON files to Parquet (snappy compression for fast reads)

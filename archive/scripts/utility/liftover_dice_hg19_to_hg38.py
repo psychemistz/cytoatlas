@@ -18,7 +18,7 @@ from pyliftover import LiftOver
 # Configuration
 # ==============================================================================
 
-DICE_DIR = Path('/vf/users/parks34/projects/2secactpy/results/alphagenome/dice_data')
+DICE_DIR = Path('/vf/users/parks34/projects/2cytoatlas/results/alphagenome/dice_data')
 OUTPUT_DIR = DICE_DIR / 'hg38'
 
 # Cell types to process

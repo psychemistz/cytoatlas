@@ -20,7 +20,7 @@ from collections import defaultdict
 
 # Paths
 CIMA_H5AD = "/data/Jiang_Lab/Data/Seongyong/CIMA/Cell_Atlas/CIMA_RNA_6484974cells_36326genes_compressed.h5ad"
-OUTPUT_DIR = Path("/vf/users/parks34/projects/2secactpy/results/cima/pseudobulk")
+OUTPUT_DIR = Path("/vf/users/parks34/projects/2cytoatlas/results/cima/pseudobulk")
 
 # Parameters
 BATCH_SIZE = 50000  # Process 50K cells at a time

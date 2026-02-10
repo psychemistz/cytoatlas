@@ -5,7 +5,7 @@ This allows more cell types to have boxplot data.
 """
 
 import sys
-sys.path.insert(0, '/vf/users/parks34/projects/2secactpy/scripts')
+sys.path.insert(0, '/vf/users/parks34/projects/2cytoatlas/scripts')
 
 import numpy as np
 import pandas as pd
@@ -19,7 +19,7 @@ from secactpy import load_cytosig, load_secact
 
 # Paths
 COUNTS_FILE = '/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/igt_s9_fine_counts.h5ad'
-OUTPUT_DIR = Path('/data/parks34/projects/2secactpy/results/scatlas')
+OUTPUT_DIR = Path('/data/parks34/projects/2cytoatlas/results/scatlas')
 
 MIN_CELLS = 10  # Lower threshold to include more cell types
 

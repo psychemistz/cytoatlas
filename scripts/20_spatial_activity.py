@@ -55,7 +55,7 @@ from scipy import stats
 warnings.filterwarnings('ignore')
 
 # Add SecActpy to path
-sys.path.insert(0, '/vf/users/parks34/projects/1ridgesig/SecActpy')
+sys.path.insert(0, '/data/parks34/projects/1ridgesig/SecActpy')
 from secactpy import (
     load_cytosig, load_secact,
     ridge_batch, estimate_batch_size,
@@ -67,7 +67,7 @@ from secactpy import (
 # ==============================================================================
 
 DATA_DIR = Path('/data/Jiang_Lab/Data/Seongyong/SpatialCorpus-110M')
-OUTPUT_DIR = Path('/vf/users/parks34/projects/2secactpy/results/spatial')
+OUTPUT_DIR = Path('/data/parks34/projects/2cytoatlas/results/spatial')
 
 # Activity computation parameters
 N_RAND = 1000

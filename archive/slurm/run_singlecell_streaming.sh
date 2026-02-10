@@ -39,7 +39,7 @@ SIGNATURES=(
 ATLAS="${ATLASES[$SLURM_ARRAY_TASK_ID]}"
 SIGNATURE="${SIGNATURES[$SLURM_ARRAY_TASK_ID]}"
 
-PROJECT_DIR="/vf/users/parks34/projects/2secactpy"
+PROJECT_DIR="/vf/users/parks34/projects/2cytoatlas"
 SCRIPT="${PROJECT_DIR}/scripts/run_singlecell_streaming.py"
 
 mkdir -p "${PROJECT_DIR}/logs/validation"

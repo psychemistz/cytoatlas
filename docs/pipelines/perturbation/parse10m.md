@@ -119,7 +119,7 @@ python scripts/slurm/submit_jobs.py --job parse10m_ground_truth
 
 ### Direct
 ```bash
-cd /data/parks34/projects/2secactpy
+cd /data/parks34/projects/2cytoatlas
 python scripts/18_parse10m_activity.py --mode pseudobulk
 python scripts/21_parse10m_ground_truth.py
 ```

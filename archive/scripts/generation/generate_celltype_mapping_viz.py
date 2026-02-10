@@ -25,8 +25,8 @@ from cell_type_mapping import (
 )
 
 # Paths
-RESULTS_DIR = Path('/data/parks34/projects/2secactpy/results')
-VIZ_OUTPUT_DIR = Path('/data/parks34/projects/2secactpy/visualization/data')
+RESULTS_DIR = Path('/data/parks34/projects/2cytoatlas/results')
+VIZ_OUTPUT_DIR = Path('/data/parks34/projects/2cytoatlas/visualization/data')
 
 # Raw data paths
 CIMA_H5AD = Path('/data/Jiang_Lab/Data/Seongyong/CIMA/Cell_Atlas/CIMA_RNA_6484974cells_36326genes_compressed.h5ad')

@@ -83,7 +83,7 @@ cytosig = load_cytosig()  # genes × 44 cytokines
 secact = load_secact()    # genes × 1,249 secreted proteins
 ```
 
-Required external package: `secactpy` from `/vf/users/parks34/projects/1ridgesig/SecActpy/`
+Required external package: `secactpy` from `/data/parks34/projects/1ridgesig/SecActpy/`
 
 ### Statistical Methods
 
@@ -222,7 +222,7 @@ sbatch scripts/slurm/run_all.sh --main    # Main analyses only
 ### Direct Execution
 
 ```bash
-cd /data/parks34/projects/2secactpy
+cd /data/parks34/projects/2cytoatlas
 python scripts/00_pilot_analysis.py --n-cells 100000 --seed 42
 python scripts/01_cima_activity.py --mode pseudobulk
 python scripts/02_inflam_activity.py --mode both

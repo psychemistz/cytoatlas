@@ -86,7 +86,7 @@ sbatch scripts/slurm/run_{ATLAS}.sh
 
 ### Direct
 ```bash
-cd /data/parks34/projects/2secactpy
+cd /data/parks34/projects/2cytoatlas
 python scripts/{SCRIPT_NAME}
 ```
 

@@ -25,7 +25,7 @@ LEVELS=("L1" "L2" "L3" "L4")
 LEVEL="${LEVELS[$SLURM_ARRAY_TASK_ID]}"
 
 # Paths
-PROJECT_DIR="/vf/users/parks34/projects/2secactpy"
+PROJECT_DIR="/vf/users/parks34/projects/2cytoatlas"
 SCRIPT_DIR="${PROJECT_DIR}/scripts"
 LOG_DIR="${PROJECT_DIR}/logs/validation"
 OUTPUT_DIR="${PROJECT_DIR}/results/atlas_validation"

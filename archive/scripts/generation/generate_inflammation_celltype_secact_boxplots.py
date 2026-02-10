@@ -8,8 +8,8 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 
-OUTPUT_DIR = Path("/vf/users/parks34/projects/2secactpy/visualization/data")
-INFLAM_DIR = Path("/vf/users/parks34/projects/2secactpy/results/inflammation")
+OUTPUT_DIR = Path("/vf/users/parks34/projects/2cytoatlas/visualization/data")
+INFLAM_DIR = Path("/vf/users/parks34/projects/2cytoatlas/results/inflammation")
 META_PATH = Path("/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_ATLAS_afterQC_sampleMetadata.csv")
 
 

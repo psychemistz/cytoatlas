@@ -14,7 +14,7 @@
 library(anndata)
 library(Matrix)
 
-base_dir <- "/data/parks34/projects/2secactpy/results/cross_sample_validation/cima"
+base_dir <- "/data/parks34/projects/2cytoatlas/results/cross_sample_validation/cima"
 
 # ---------- helper: read H5AD, return dense matrix + obs ---------
 read_h5 <- function(path) {

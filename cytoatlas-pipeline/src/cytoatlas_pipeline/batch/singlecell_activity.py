@@ -79,7 +79,7 @@ def load_signature_matrix(
     elif signature_type.lower() == "lincytosig":
         # Load LinCytoSig from file
         import gzip
-        lincytosig_path = Path("/vf/users/parks34/projects/1ridgesig/SecActpy-dev/secactpy/data/LinCytoSig.tsv.gz")
+        lincytosig_path = Path("/data/parks34/projects/1ridgesig/SecActpy-dev/secactpy/data/LinCytoSig.tsv.gz")
         with gzip.open(lincytosig_path, 'rt') as f:
             sig_df = pd.read_csv(f, sep='\t', index_col=0)
     else:

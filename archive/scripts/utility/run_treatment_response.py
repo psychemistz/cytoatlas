@@ -16,8 +16,8 @@ from sklearn.preprocessing import StandardScaler
 import anndata as ad
 
 # Paths
-RESULTS_DIR = Path("/vf/users/parks34/projects/2secactpy/results/inflammation")
-OUTPUT_DIR = Path("/vf/users/parks34/projects/2secactpy/visualization/data")
+RESULTS_DIR = Path("/vf/users/parks34/projects/2cytoatlas/results/inflammation")
+OUTPUT_DIR = Path("/vf/users/parks34/projects/2cytoatlas/visualization/data")
 SEED = 42
 
 def log(msg):

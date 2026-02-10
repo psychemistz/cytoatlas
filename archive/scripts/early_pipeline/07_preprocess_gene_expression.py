@@ -36,7 +36,7 @@ DATA_PATHS = {
 }
 
 # Output directory
-OUTPUT_DIR = Path('/vf/users/parks34/projects/2secactpy/visualization/data')
+OUTPUT_DIR = Path('/vf/users/parks34/projects/2cytoatlas/visualization/data')
 
 # Common cytokine/secreted protein genes to always include
 PRIORITY_GENES = [

@@ -18,10 +18,10 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 
 # Paths
-SCRIPTS_DIR = Path('/vf/users/parks34/projects/2secactpy/scripts')
-VIZ_DATA_DIR = Path('/vf/users/parks34/projects/2secactpy/visualization/data')
-RESULTS_DIR = Path('/data/parks34/projects/2secactpy/results')
-LOG_DIR = Path('/vf/users/parks34/projects/2secactpy/logs')
+SCRIPTS_DIR = Path('/vf/users/parks34/projects/2cytoatlas/scripts')
+VIZ_DATA_DIR = Path('/vf/users/parks34/projects/2cytoatlas/visualization/data')
+RESULTS_DIR = Path('/data/parks34/projects/2cytoatlas/results')
+LOG_DIR = Path('/vf/users/parks34/projects/2cytoatlas/logs')
 LOG_DIR.mkdir(exist_ok=True)
 
 
@@ -47,10 +47,10 @@ class CIMAPanelFixer:
             return True
 
         cmd = f'''
-source ~/bin/myconda && conda activate secactpy && cd /data/parks34/projects/2secactpy && python3 << 'EOF'
+source ~/bin/myconda && conda activate secactpy && cd /data/parks34/projects/2cytoatlas && python3 << 'EOF'
 import sys
-sys.path.insert(0, '/vf/users/parks34/projects/2secactpy/scripts')
-exec(open('/vf/users/parks34/projects/2secactpy/scripts/06_preprocess_viz_data.py').read())
+sys.path.insert(0, '/vf/users/parks34/projects/2cytoatlas/scripts')
+exec(open('/vf/users/parks34/projects/2cytoatlas/scripts/06_preprocess_viz_data.py').read())
 {func_name}()
 EOF
 '''
@@ -80,7 +80,7 @@ EOF
 import json
 from pathlib import Path
 
-DATA_DIR = Path('/vf/users/parks34/projects/2secactpy/visualization/data')
+DATA_DIR = Path('/vf/users/parks34/projects/2cytoatlas/visualization/data')
 
 json_files = list(DATA_DIR.glob('*.json'))
 print(f"Found {len(json_files)} JSON files")

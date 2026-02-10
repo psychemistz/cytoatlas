@@ -32,7 +32,7 @@ DATA_PATHS = {
     'inflammation_ext': '/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_ATLAS_external_afterQC.h5ad',
 }
 
-OUTPUT_DIR = Path('/vf/users/parks34/projects/2secactpy/visualization/data')
+OUTPUT_DIR = Path('/vf/users/parks34/projects/2cytoatlas/visualization/data')
 SAMPLE_SIZE = 2000
 
 

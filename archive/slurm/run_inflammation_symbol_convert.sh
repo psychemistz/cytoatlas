@@ -11,7 +11,7 @@
 # The main file is 17GB and expands to ~200GB in memory
 
 set -e
-cd /vf/users/parks34/projects/2secactpy
+cd /vf/users/parks34/projects/2cytoatlas
 mkdir -p logs/validation
 
 source ~/bin/myconda

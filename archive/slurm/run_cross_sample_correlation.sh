@@ -33,7 +33,7 @@ ATLASES=(
 )
 
 ATLAS="${ATLASES[$SLURM_ARRAY_TASK_ID]}"
-PROJECT_DIR="/vf/users/parks34/projects/2secactpy"
+PROJECT_DIR="/vf/users/parks34/projects/2cytoatlas"
 SCRIPT="${PROJECT_DIR}/scripts/12_cross_sample_correlation.py"
 
 mkdir -p "${PROJECT_DIR}/logs/cross_sample"

@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=boxplot_data
-#SBATCH --output=/vf/users/parks34/projects/2secactpy/logs/boxplot_data_%j.out
-#SBATCH --error=/vf/users/parks34/projects/2secactpy/logs/boxplot_data_%j.err
+#SBATCH --output=/vf/users/parks34/projects/2cytoatlas/logs/boxplot_data_%j.out
+#SBATCH --error=/vf/users/parks34/projects/2cytoatlas/logs/boxplot_data_%j.err
 #SBATCH --time=8:00:00
 #SBATCH --mem=64G
 #SBATCH --cpus-per-task=4
@@ -12,7 +12,7 @@
 source ~/bin/myconda
 conda activate secactpy
 
-cd /vf/users/parks34/projects/2secactpy
+cd /vf/users/parks34/projects/2cytoatlas
 
 echo "Starting box plot data generation at $(date)"
 echo "SLURM Job ID: $SLURM_JOB_ID"

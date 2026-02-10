@@ -18,9 +18,9 @@ from typing import Optional, List, Dict, Any, Callable
 from datetime import datetime
 
 # Paths
-VIZ_DATA_DIR = Path('/vf/users/parks34/projects/2secactpy/visualization/data')
+VIZ_DATA_DIR = Path('/vf/users/parks34/projects/2cytoatlas/visualization/data')
 EMBEDDED_DATA_PATH = VIZ_DATA_DIR / 'embedded_data.js'
-LOG_DIR = Path('/vf/users/parks34/projects/2secactpy/logs')
+LOG_DIR = Path('/vf/users/parks34/projects/2cytoatlas/logs')
 LOG_DIR.mkdir(exist_ok=True)
 
 
@@ -834,7 +834,7 @@ def check_json_files_for_nan():
     import re
     from pathlib import Path
     
-    DATA_DIR = Path('/vf/users/parks34/projects/2secactpy/visualization/data')
+    DATA_DIR = Path('/vf/users/parks34/projects/2cytoatlas/visualization/data')
     issues = []
     
     for json_file in DATA_DIR.glob('*.json'):
@@ -857,7 +857,7 @@ def fix_json_nan_values():
     import re
     from pathlib import Path
     
-    DATA_DIR = Path('/vf/users/parks34/projects/2secactpy/visualization/data')
+    DATA_DIR = Path('/vf/users/parks34/projects/2cytoatlas/visualization/data')
     fixed = []
     
     for json_file in DATA_DIR.glob('*.json'):

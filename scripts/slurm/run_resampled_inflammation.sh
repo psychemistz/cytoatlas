@@ -26,7 +26,7 @@ module load cuDNN/9.12.0/CUDA-12
 source ~/bin/myconda
 conda activate secactpy
 
-cd /data/parks34/projects/2secactpy
+cd /data/parks34/projects/2cytoatlas
 mkdir -p logs
 
 # Run resampled validation for all inflammation cohorts

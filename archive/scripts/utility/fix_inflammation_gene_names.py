@@ -20,7 +20,7 @@ INFLAM_MAIN = '/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_AT
 INFLAM_VAL = '/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_ATLAS_validation_afterQC.h5ad'
 INFLAM_EXT = '/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_ATLAS_external_afterQC.h5ad'
 
-PSEUDOBULK_ROOT = Path('/vf/users/parks34/projects/2secactpy/results/atlas_validation')
+PSEUDOBULK_ROOT = Path('/vf/users/parks34/projects/2cytoatlas/results/atlas_validation')
 
 
 def load_gene_mapping(h5ad_path: str) -> dict:

@@ -167,7 +167,7 @@ def run_activity_for_pseudobulk(
 def main():
     parser = argparse.ArgumentParser(description="Run activity on donor-level pseudobulk")
     parser.add_argument('--input-dir', type=Path,
-                        default=Path('/vf/users/parks34/projects/2secactpy/results/donor_level'),
+                        default=Path('/vf/users/parks34/projects/2cytoatlas/results/donor_level'),
                         help='Input directory containing pseudobulk files')
     parser.add_argument('--force', action='store_true',
                         help='Overwrite existing activity files')

@@ -32,7 +32,7 @@ import json
 # ==============================================================================
 
 INPUT_DIR = Path('/data/parks34/projects/0sigdiscov/moran_i/results/cytosig')
-OUTPUT_DIR = Path('/data/parks34/projects/2secactpy/results/celltype_signatures')
+OUTPUT_DIR = Path('/data/parks34/projects/2cytoatlas/results/celltype_signatures')
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Minimum number of experiments required per cell type to include in signatures

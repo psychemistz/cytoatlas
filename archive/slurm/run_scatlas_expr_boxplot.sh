@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=scatlas_expr_bp
-#SBATCH --output=/vf/users/parks34/projects/2secactpy/logs/scatlas_expr_boxplot_%j.out
-#SBATCH --error=/vf/users/parks34/projects/2secactpy/logs/scatlas_expr_boxplot_%j.err
+#SBATCH --output=/vf/users/parks34/projects/2cytoatlas/logs/scatlas_expr_boxplot_%j.out
+#SBATCH --error=/vf/users/parks34/projects/2cytoatlas/logs/scatlas_expr_boxplot_%j.err
 #SBATCH --time=4:00:00
 #SBATCH --mem=128G
 #SBATCH --cpus-per-task=4
@@ -15,7 +15,7 @@ conda activate secactpy
 
 export PYTHONUNBUFFERED=1
 
-cd /vf/users/parks34/projects/2secactpy
+cd /vf/users/parks34/projects/2cytoatlas
 
 echo "Starting scAtlas gene expression extraction at $(date)"
 echo "SLURM Job ID: $SLURM_JOB_ID"

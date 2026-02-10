@@ -58,7 +58,7 @@ profiles:
 
 # Common settings
 common:
-  project_dir: /data/parks34/projects/2secactpy
+  project_dir: /data/parks34/projects/2cytoatlas
   conda_env: secactpy
   mail_user: seongyong.park@nih.gov
 

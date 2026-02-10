@@ -42,7 +42,7 @@ import numpy as np
 import pandas as pd
 
 sys.stdout.reconfigure(line_buffering=True)
-sys.path.insert(0, "/vf/users/parks34/projects/1ridgesig/SecActpy")
+sys.path.insert(0, "/data/parks34/projects/1ridgesig/SecActpy")
 
 from secactpy import load_cytosig, load_secact, ridge
 
@@ -51,8 +51,8 @@ from secactpy import load_cytosig, load_secact, ridge
 # Paths
 # =============================================================================
 
-BULK_DATA_DIR = Path('/data/parks34/projects/2secactpy/data/bulk')
-BASE_OUTPUT_DIR = Path('/data/parks34/projects/2secactpy/results/cross_sample_validation')
+BULK_DATA_DIR = Path('/data/parks34/projects/2cytoatlas/data/bulk')
+BASE_OUTPUT_DIR = Path('/data/parks34/projects/2cytoatlas/results/cross_sample_validation')
 
 # Primary data files (preferred)
 GTEX_V11_TPM = BULK_DATA_DIR / 'GTEx_Analysis_2025-08-22_v11_RNASeQCv2.4.3_gene_tpm.parquet'

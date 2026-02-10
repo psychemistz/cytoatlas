@@ -5,8 +5,8 @@
 #SBATCH --mem=64G
 #SBATCH --cpus-per-task=8
 #SBATCH --time=48:00:00
-#SBATCH --output=/vf/users/parks34/projects/2secactpy/logs/validation_%j.out
-#SBATCH --error=/vf/users/parks34/projects/2secactpy/logs/validation_%j.err
+#SBATCH --output=/vf/users/parks34/projects/2cytoatlas/logs/validation_%j.out
+#SBATCH --error=/vf/users/parks34/projects/2cytoatlas/logs/validation_%j.err
 #SBATCH --array=0-98
 
 # GPU Validation - All 99 tests as job array
@@ -19,7 +19,7 @@ source ~/bin/myconda
 conda activate secactpy
 
 # Working directory
-cd /vf/users/parks34/projects/2secactpy
+cd /vf/users/parks34/projects/2cytoatlas
 
 # Create log directory
 mkdir -p logs

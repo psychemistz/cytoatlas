@@ -50,7 +50,7 @@ from cytoatlas_pipeline.batch import (
 # Configuration
 # =============================================================================
 
-OUTPUT_ROOT = Path("/vf/users/parks34/projects/2secactpy/results/atlas_validation")
+OUTPUT_ROOT = Path("/vf/users/parks34/projects/2cytoatlas/results/atlas_validation")
 
 
 # =============================================================================

@@ -33,10 +33,10 @@ from scipy import stats
 
 sys.stdout.reconfigure(line_buffering=True)
 
-BASE_DIR = Path('/data/parks34/projects/2secactpy/results/cross_sample_validation')
+BASE_DIR = Path('/data/parks34/projects/2cytoatlas/results/cross_sample_validation')
 OUTPUT_DIR = BASE_DIR / 'correlations'
-MAPPING_PATH = Path('/vf/users/parks34/projects/2secactpy/cytoatlas-api/static/data/signature_gene_mapping.json')
-CELLTYPE_MAPPING_PATH = Path('/vf/users/parks34/projects/2secactpy/data/lincytosig_celltype_mapping.json')
+MAPPING_PATH = Path('/vf/users/parks34/projects/2cytoatlas/cytoatlas-api/static/data/signature_gene_mapping.json')
+CELLTYPE_MAPPING_PATH = Path('/vf/users/parks34/projects/2cytoatlas/data/lincytosig_celltype_mapping.json')
 
 
 def log(msg: str) -> None:

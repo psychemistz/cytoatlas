@@ -35,7 +35,7 @@ LEVEL="${LEVELS[$SLURM_ARRAY_TASK_ID]}"
 ATLAS="scatlas_${DATASET}"
 
 # Paths
-PROJECT_DIR="/vf/users/parks34/projects/2secactpy"
+PROJECT_DIR="/vf/users/parks34/projects/2cytoatlas"
 SCRIPT_DIR="${PROJECT_DIR}/scripts"
 LOG_DIR="${PROJECT_DIR}/logs/validation"
 

@@ -38,7 +38,7 @@ import scipy.sparse as sp
 from scipy import stats
 
 # Add SecActpy to path
-sys.path.insert(0, '/vf/users/parks34/projects/1ridgesig/SecActpy')
+sys.path.insert(0, '/data/parks34/projects/1ridgesig/SecActpy')
 from secactpy import (
     load_cytosig, load_secact,
     ridge_batch, estimate_batch_size,
@@ -57,7 +57,7 @@ EXT_H5AD = DATA_DIR / 'INFLAMMATION_ATLAS_external_afterQC.h5ad'
 SAMPLE_META_PATH = DATA_DIR / 'INFLAMMATION_ATLAS_afterQC_sampleMetadata.csv'
 
 # Output paths
-OUTPUT_DIR = Path('/vf/users/parks34/projects/2secactpy/results/inflammation')
+OUTPUT_DIR = Path('/data/parks34/projects/2cytoatlas/results/inflammation')
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Analysis parameters

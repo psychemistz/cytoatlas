@@ -45,7 +45,7 @@ INFLAMMATION_MAIN = Path('/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFL
 SCATLAS_NORMAL = Path('/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/igt_s9_fine_counts.h5ad')
 
 # Activity results
-RESULTS_DIR = Path('/data/parks34/projects/2secactpy/results')
+RESULTS_DIR = Path('/data/parks34/projects/2cytoatlas/results')
 CYTOSIG_DIR = RESULTS_DIR / 'cima'  # CytoSig/SecAct results
 LINCYTOSIG_DIR = RESULTS_DIR / 'celltype_aware_activity'
 
@@ -54,7 +54,7 @@ from secactpy import load_cytosig, load_secact
 SIGNATURE_DIR = RESULTS_DIR / 'celltype_signatures'
 
 # Output
-OUTPUT_DIR = Path('/data/parks34/projects/2secactpy/visualization/data/atlas_validation')
+OUTPUT_DIR = Path('/data/parks34/projects/2cytoatlas/visualization/data/atlas_validation')
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Processing

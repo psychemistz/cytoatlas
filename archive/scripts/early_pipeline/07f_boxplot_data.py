@@ -26,18 +26,18 @@ logger = logging.getLogger(__name__)
 
 # Pseudobulk activity files
 ACTIVITY_FILES = {
-    'CIMA_CytoSig': '/vf/users/parks34/projects/2secactpy/results/cima/CIMA_CytoSig_pseudobulk.h5ad',
-    'CIMA_SecAct': '/vf/users/parks34/projects/2secactpy/results/cima/CIMA_SecAct_pseudobulk.h5ad',
-    'Inflammation_main_CytoSig': '/vf/users/parks34/projects/2secactpy/results/inflammation/main_CytoSig_pseudobulk.h5ad',
-    'Inflammation_main_SecAct': '/vf/users/parks34/projects/2secactpy/results/inflammation/main_SecAct_pseudobulk.h5ad',
-    'Inflammation_val_CytoSig': '/vf/users/parks34/projects/2secactpy/results/inflammation/validation_CytoSig_pseudobulk.h5ad',
-    'Inflammation_val_SecAct': '/vf/users/parks34/projects/2secactpy/results/inflammation/validation_SecAct_pseudobulk.h5ad',
-    'Inflammation_ext_CytoSig': '/vf/users/parks34/projects/2secactpy/results/inflammation/external_CytoSig_pseudobulk.h5ad',
-    'Inflammation_ext_SecAct': '/vf/users/parks34/projects/2secactpy/results/inflammation/external_SecAct_pseudobulk.h5ad',
-    'scAtlas_normal_CytoSig': '/vf/users/parks34/projects/2secactpy/results/scatlas/scatlas_normal_CytoSig_pseudobulk.h5ad',
-    'scAtlas_normal_SecAct': '/vf/users/parks34/projects/2secactpy/results/scatlas/scatlas_normal_SecAct_pseudobulk.h5ad',
-    'scAtlas_cancer_CytoSig': '/vf/users/parks34/projects/2secactpy/results/scatlas/scatlas_cancer_CytoSig_pseudobulk.h5ad',
-    'scAtlas_cancer_SecAct': '/vf/users/parks34/projects/2secactpy/results/scatlas/scatlas_cancer_SecAct_pseudobulk.h5ad',
+    'CIMA_CytoSig': '/vf/users/parks34/projects/2cytoatlas/results/cima/CIMA_CytoSig_pseudobulk.h5ad',
+    'CIMA_SecAct': '/vf/users/parks34/projects/2cytoatlas/results/cima/CIMA_SecAct_pseudobulk.h5ad',
+    'Inflammation_main_CytoSig': '/vf/users/parks34/projects/2cytoatlas/results/inflammation/main_CytoSig_pseudobulk.h5ad',
+    'Inflammation_main_SecAct': '/vf/users/parks34/projects/2cytoatlas/results/inflammation/main_SecAct_pseudobulk.h5ad',
+    'Inflammation_val_CytoSig': '/vf/users/parks34/projects/2cytoatlas/results/inflammation/validation_CytoSig_pseudobulk.h5ad',
+    'Inflammation_val_SecAct': '/vf/users/parks34/projects/2cytoatlas/results/inflammation/validation_SecAct_pseudobulk.h5ad',
+    'Inflammation_ext_CytoSig': '/vf/users/parks34/projects/2cytoatlas/results/inflammation/external_CytoSig_pseudobulk.h5ad',
+    'Inflammation_ext_SecAct': '/vf/users/parks34/projects/2cytoatlas/results/inflammation/external_SecAct_pseudobulk.h5ad',
+    'scAtlas_normal_CytoSig': '/vf/users/parks34/projects/2cytoatlas/results/scatlas/scatlas_normal_CytoSig_pseudobulk.h5ad',
+    'scAtlas_normal_SecAct': '/vf/users/parks34/projects/2cytoatlas/results/scatlas/scatlas_normal_SecAct_pseudobulk.h5ad',
+    'scAtlas_cancer_CytoSig': '/vf/users/parks34/projects/2cytoatlas/results/scatlas/scatlas_cancer_CytoSig_pseudobulk.h5ad',
+    'scAtlas_cancer_SecAct': '/vf/users/parks34/projects/2cytoatlas/results/scatlas/scatlas_cancer_SecAct_pseudobulk.h5ad',
 }
 
 # Gene expression source files
@@ -60,7 +60,7 @@ CELLTYPE_COLS = {
     'scAtlas_cancer': 'cellType1',
 }
 
-OUTPUT_DIR = Path('/vf/users/parks34/projects/2secactpy/visualization/data')
+OUTPUT_DIR = Path('/vf/users/parks34/projects/2cytoatlas/visualization/data')
 
 # Sample size per cell type for expression
 SAMPLE_SIZE = 500

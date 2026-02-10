@@ -151,7 +151,7 @@ python scripts/slurm/submit_jobs.py --job spatial_neighborhood
 
 ### Direct
 ```bash
-cd /data/parks34/projects/2secactpy
+cd /data/parks34/projects/2cytoatlas
 python scripts/20_spatial_activity.py --technology visium
 python scripts/20_spatial_activity.py --technology targeted
 python scripts/23_spatial_neighborhood.py

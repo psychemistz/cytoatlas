@@ -200,7 +200,7 @@ Each file should contain:
 ## How to Run
 
 ```bash
-cd /vf/users/parks34/projects/2secactpy/cytoatlas-api
+cd /data/parks34/projects/2cytoatlas/cytoatlas-api
 
 # Activate environment
 source ~/bin/myconda

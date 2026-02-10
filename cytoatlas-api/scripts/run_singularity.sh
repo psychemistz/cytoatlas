@@ -40,9 +40,9 @@ echo ""
 # Run with bind mounts for data access
 exec singularity run \
     --bind /data/Jiang_Lab/Data/Seongyong:/data/Jiang_Lab/Data/Seongyong:ro \
-    --bind /vf/users/parks34/projects/2secactpy/results:/vf/users/parks34/projects/2secactpy/results:ro \
-    --bind /vf/users/parks34/projects/2secactpy/visualization/data:/vf/users/parks34/projects/2secactpy/visualization/data:ro \
+    --bind /data/parks34/projects/2cytoatlas/results:/data/parks34/projects/2cytoatlas/results:ro \
+    --bind /data/parks34/projects/2cytoatlas/visualization/data:/data/parks34/projects/2cytoatlas/visualization/data:ro \
     --env PORT="$PORT" \
-    --env VIZ_DATA_PATH=/vf/users/parks34/projects/2secactpy/visualization/data \
-    --env RESULTS_BASE_PATH=/vf/users/parks34/projects/2secactpy/results \
+    --env VIZ_DATA_PATH=/data/parks34/projects/2cytoatlas/visualization/data \
+    --env RESULTS_BASE_PATH=/data/parks34/projects/2cytoatlas/results \
     "$SIF_FILE"

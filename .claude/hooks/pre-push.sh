@@ -5,7 +5,7 @@
 #
 # Usage: ./pre-push.sh
 
-PROJECT_DIR="/vf/users/parks34/projects/2secactpy"
+PROJECT_DIR="/data/parks34/projects/2cytoatlas"
 API_DIR="$PROJECT_DIR/cytoatlas-api"
 
 echo "Running pre-push QA checks..."

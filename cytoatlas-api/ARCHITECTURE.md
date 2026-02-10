@@ -249,8 +249,8 @@ DATABASE_URL=postgresql+asyncpg://...
 REDIS_URL=redis://localhost:6379
 
 # Data Paths
-VIZ_DATA_PATH=/vf/users/parks34/projects/2secactpy/visualization/data
-RESULTS_BASE_PATH=/vf/users/parks34/projects/2secactpy/results
+VIZ_DATA_PATH=/data/parks34/projects/2cytoatlas/visualization/data
+RESULTS_BASE_PATH=/data/parks34/projects/2cytoatlas/results
 
 # Claude API (for chat)
 ANTHROPIC_API_KEY=sk-ant-...
@@ -312,7 +312,7 @@ source ~/bin/myconda
 conda activate secactpy
 
 # Navigate to API
-cd /vf/users/parks34/projects/2secactpy/cytoatlas-api
+cd /data/parks34/projects/2cytoatlas/cytoatlas-api
 
 # Install dependencies
 pip install -e .
@@ -352,5 +352,5 @@ curl http://localhost:8000/api/v1/scatlas/organs
 ## References
 
 - **Master Plan**: `/home/parks34/.claude/plans/cytoatlas-master-plan.md`
-- **Project Instructions**: `/vf/users/parks34/projects/2secactpy/CLAUDE.md`
-- **Session Log**: `/vf/users/parks34/projects/2secactpy/cytoatlas-api/SESSION_LOG.md`
+- **Project Instructions**: `/data/parks34/projects/2cytoatlas/CLAUDE.md`
+- **Session Log**: `/data/parks34/projects/2cytoatlas/cytoatlas-api/SESSION_LOG.md`

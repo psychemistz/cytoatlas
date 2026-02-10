@@ -175,7 +175,7 @@ sbatch scripts/slurm/run_cima.sh
 ### Direct
 
 ```bash
-cd /data/parks34/projects/2secactpy
+cd /data/parks34/projects/2cytoatlas
 source ~/bin/myconda && conda activate secactpy
 python scripts/01_cima_activity.py --mode pseudobulk
 ```

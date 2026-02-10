@@ -8,7 +8,7 @@ When the user invokes /maintenance, perform the following:
 
 1. **Run the audit script**:
    ```bash
-   cd /vf/users/parks34/projects/2secactpy
+   cd /data/parks34/projects/2cytoatlas
    python scripts/maintenance/audit_clutter.py --report
    ```
 

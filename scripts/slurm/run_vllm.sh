@@ -22,7 +22,7 @@ conda activate secactpy
 VLLM_PORT=8001
 API_PORT="${PORT:-8000}"
 API_WORKERS="${WORKERS:-4}"
-API_DIR="/vf/users/parks34/projects/2secactpy/cytoatlas-api"
+API_DIR="/vf/users/parks34/projects/2cytoatlas/cytoatlas-api"
 
 echo "=========================================="
 echo "  CytoAtlas: vLLM + API Server (SLURM)   "
@@ -72,8 +72,8 @@ echo "[$(date)] Starting CytoAtlas API on port $API_PORT ..."
 
 export DEBUG=false
 export ENVIRONMENT=production
-export VIZ_DATA_PATH=/vf/users/parks34/projects/2secactpy/visualization/data
-export RESULTS_BASE_PATH=/vf/users/parks34/projects/2secactpy/results
+export VIZ_DATA_PATH=/vf/users/parks34/projects/2cytoatlas/visualization/data
+export RESULTS_BASE_PATH=/vf/users/parks34/projects/2cytoatlas/results
 export H5AD_BASE_PATH=/data/Jiang_Lab/Data/Seongyong
 export LLM_BASE_URL=http://localhost:$VLLM_PORT/v1
 

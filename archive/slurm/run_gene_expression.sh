@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=gene_expr
-#SBATCH --output=/vf/users/parks34/projects/2secactpy/logs/gene_expr_%j.out
-#SBATCH --error=/vf/users/parks34/projects/2secactpy/logs/gene_expr_%j.err
+#SBATCH --output=/vf/users/parks34/projects/2cytoatlas/logs/gene_expr_%j.out
+#SBATCH --error=/vf/users/parks34/projects/2cytoatlas/logs/gene_expr_%j.err
 #SBATCH --time=2-00:00:00
 #SBATCH --mem=240G
 #SBATCH --cpus-per-task=8
@@ -12,7 +12,7 @@ source ~/bin/myconda
 conda activate secactpy
 
 # Change to project directory
-cd /vf/users/parks34/projects/2secactpy
+cd /vf/users/parks34/projects/2cytoatlas
 
 # Run preprocessing (sampled version for memory efficiency)
 python scripts/07c_sampled_gene_expression.py

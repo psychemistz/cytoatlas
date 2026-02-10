@@ -21,7 +21,7 @@ from scipy import sparse
 
 # Paths
 CIMA_H5AD = "/data/Jiang_Lab/Data/Seongyong/CIMA/Cell_Atlas/CIMA_RNA_6484974cells_36326genes_compressed.h5ad"
-OUTPUT_DIR = Path("/vf/users/parks34/projects/2secactpy/results/cima/pseudobulk")
+OUTPUT_DIR = Path("/vf/users/parks34/projects/2cytoatlas/results/cima/pseudobulk")
 
 # Cell type levels
 CELLTYPE_LEVELS = ["cell_type_l1", "cell_type_l2", "cell_type_l3", "cell_type_l4"]

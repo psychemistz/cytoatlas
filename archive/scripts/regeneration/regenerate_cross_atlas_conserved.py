@@ -21,12 +21,12 @@ from pathlib import Path
 import json
 
 # Paths
-RESULTS_DIR = Path('/data/parks34/projects/2secactpy/results')
+RESULTS_DIR = Path('/data/parks34/projects/2cytoatlas/results')
 CIMA_DIR = RESULTS_DIR / 'cima'
 INFLAM_DIR = RESULTS_DIR / 'inflammation'
 SCATLAS_DIR = RESULTS_DIR / 'scatlas'
 OUTPUT_DIR = RESULTS_DIR / 'integrated'
-VIZ_OUTPUT_DIR = Path('/data/parks34/projects/2secactpy/visualization/data')
+VIZ_OUTPUT_DIR = Path('/data/parks34/projects/2cytoatlas/visualization/data')
 
 # Activity threshold: consider a signature "active" if |mean| > this value
 ACTIVITY_THRESHOLD = 0.3

@@ -14,8 +14,8 @@ from scipy import stats
 import anndata as ad
 
 # Paths
-RESULTS_DIR = Path("/vf/users/parks34/projects/2secactpy/results/inflammation")
-OUTPUT_DIR = Path("/vf/users/parks34/projects/2secactpy/visualization/data")
+RESULTS_DIR = Path("/vf/users/parks34/projects/2cytoatlas/results/inflammation")
+OUTPUT_DIR = Path("/vf/users/parks34/projects/2cytoatlas/visualization/data")
 SAMPLE_META_PATH = Path('/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_ATLAS_afterQC_sampleMetadata.csv')
 
 def log(msg):

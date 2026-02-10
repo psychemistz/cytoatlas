@@ -5,8 +5,8 @@
 #SBATCH --mem=128G
 #SBATCH --cpus-per-task=8
 #SBATCH --time=12:00:00
-#SBATCH --output=/vf/users/parks34/projects/2secactpy/logs/cima_validation_%j.out
-#SBATCH --error=/vf/users/parks34/projects/2secactpy/logs/cima_validation_%j.err
+#SBATCH --output=/vf/users/parks34/projects/2cytoatlas/logs/cima_validation_%j.out
+#SBATCH --error=/vf/users/parks34/projects/2cytoatlas/logs/cima_validation_%j.err
 #SBATCH --array=0-26
 
 # CIMA Validation - 27 tests (3 signatures × 3 aggregations × 3 levels)
@@ -25,7 +25,7 @@ export PYTHONUNBUFFERED=1
 source ~/bin/myconda
 conda activate secactpy
 
-cd /vf/users/parks34/projects/2secactpy
+cd /vf/users/parks34/projects/2cytoatlas
 mkdir -p logs
 
 echo "========================================"

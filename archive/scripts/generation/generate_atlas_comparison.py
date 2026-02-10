@@ -201,8 +201,8 @@ SCATLAS_CELLTYPE1_TO_COARSE = {
 }
 
 # Paths
-RESULTS_DIR = Path('/data/parks34/projects/2secactpy/results')
-VIZ_OUTPUT_DIR = Path('/data/parks34/projects/2secactpy/visualization/data')
+RESULTS_DIR = Path('/data/parks34/projects/2cytoatlas/results')
+VIZ_OUTPUT_DIR = Path('/data/parks34/projects/2cytoatlas/visualization/data')
 
 # Data files
 DATA_FILES = {

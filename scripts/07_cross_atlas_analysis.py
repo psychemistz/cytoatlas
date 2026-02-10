@@ -38,14 +38,14 @@ from scipy.cluster.hierarchy import linkage, fcluster
 warnings.filterwarnings('ignore')
 
 # Add SecActpy to path
-sys.path.insert(0, '/vf/users/parks34/projects/1ridgesig/SecActpy')
+sys.path.insert(0, '/data/parks34/projects/1ridgesig/SecActpy')
 from secactpy import load_cytosig
 
 # ==============================================================================
 # Configuration
 # ==============================================================================
 
-RESULTS_DIR = Path('/vf/users/parks34/projects/2secactpy/results')
+RESULTS_DIR = Path('/data/parks34/projects/2cytoatlas/results')
 OUTPUT_DIR = RESULTS_DIR / 'integrated'
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 

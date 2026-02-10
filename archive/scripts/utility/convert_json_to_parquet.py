@@ -273,7 +273,7 @@ Examples:
     parser.add_argument(
         "--base-path",
         type=Path,
-        default=Path("/vf/users/parks34/projects/2secactpy/visualization/data"),
+        default=Path("/vf/users/parks34/projects/2cytoatlas/visualization/data"),
         help="Base path for visualization data",
     )
 

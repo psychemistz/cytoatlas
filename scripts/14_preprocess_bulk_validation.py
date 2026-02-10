@@ -23,7 +23,7 @@ from scipy import stats
 # Paths
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CORR_DIR = PROJECT_ROOT / "results" / "cross_sample_validation" / "correlations"
-VALIDATION_DIR = Path("/data/parks34/projects/2secactpy/results/cross_sample_validation")
+VALIDATION_DIR = Path("/data/parks34/projects/2cytoatlas/results/cross_sample_validation")
 OUTPUT_PATH = PROJECT_ROOT / "visualization" / "data" / "bulk_donor_correlations.json"
 BULK_RNASEQ_OUTPUT_PATH = PROJECT_ROOT / "visualization" / "data" / "bulk_rnaseq_validation.json"
 MAPPING_PATH = PROJECT_ROOT / "cytoatlas-api" / "static" / "data" / "signature_gene_mapping.json"
@@ -180,7 +180,7 @@ RESAMPLED_H5AD_PATTERNS = {
         ("donor_celltype", "scatlas_cancer_pseudobulk_donor_celltype_resampled.h5ad"),
     ],
 }
-ATLAS_VALIDATION_DIR = Path("/data/parks34/projects/2secactpy/results/atlas_validation")
+ATLAS_VALIDATION_DIR = Path("/data/parks34/projects/2cytoatlas/results/atlas_validation")
 
 
 def load_target_to_gene_mapping() -> Dict[str, str]:

@@ -700,7 +700,7 @@ def main():
                         choices=list(ATLAS_CONFIGS.keys()),
                         help='Atlas to process')
     parser.add_argument('--output-dir', type=Path,
-                        default=Path('/vf/users/parks34/projects/2secactpy/results/donor_level'),
+                        default=Path('/data/parks34/projects/2cytoatlas/results/donor_level'),
                         help='Output directory')
     parser.add_argument('--levels', nargs='+',
                         help='Specific levels to process (default: all)')

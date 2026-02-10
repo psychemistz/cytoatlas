@@ -63,7 +63,7 @@ This checklist tracks all JSON data files that should be embedded into `visualiz
 ## Regeneration Command
 
 ```bash
-cd /data/parks34/projects/2secactpy
+cd /data/parks34/projects/2cytoatlas
 python scripts/06_preprocess_viz_data.py
 ```
 

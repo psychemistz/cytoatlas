@@ -14,7 +14,7 @@ from typing import Optional, Union
 import pandas as pd
 
 # Add SecActpy to path
-SECACTPY_PATH = Path("/vf/users/parks34/projects/1ridgesig/SecActpy")
+SECACTPY_PATH = Path("/data/parks34/projects/1ridgesig/SecActpy")
 if str(SECACTPY_PATH) not in sys.path:
     sys.path.insert(0, str(SECACTPY_PATH))
 

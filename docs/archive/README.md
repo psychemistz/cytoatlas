@@ -29,9 +29,9 @@ Archived plans are useful for:
 - Reviewing lessons learned from earlier phases
 
 For current project direction, consult:
-- `/vf/users/parks34/projects/2secactpy/CLAUDE.md` - Current status and TODOs
-- `/vf/users/parks34/projects/2secactpy/docs/ARCHITECTURE.md` - System architecture
-- `/vf/users/parks34/projects/2secactpy/docs/decisions/` - Architecture Decision Records (ADRs)
+- `/vf/users/parks34/projects/2cytoatlas/CLAUDE.md` - Current status and TODOs
+- `/vf/users/parks34/projects/2cytoatlas/docs/ARCHITECTURE.md` - System architecture
+- `/vf/users/parks34/projects/2cytoatlas/docs/decisions/` - Architecture Decision Records (ADRs)
 
 ## Archive Structure
 

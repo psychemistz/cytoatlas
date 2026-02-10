@@ -32,7 +32,7 @@ from scripts.maintenance.equivalence_test import (
 # Paths
 # ---------------------------------------------------------------------------
 
-_DATA_ROOT = Path("/data/parks34/projects/2secactpy")
+_DATA_ROOT = Path("/data/parks34/projects/2cytoatlas")
 _RESULTS = _DATA_ROOT / "results"
 _VIZ_DATA = _DATA_ROOT / "visualization" / "data"
 

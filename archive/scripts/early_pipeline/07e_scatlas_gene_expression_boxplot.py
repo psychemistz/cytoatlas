@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 # Data paths
 SCATLAS_PATH = '/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/igt_s9_fine_counts.h5ad'
-OUTPUT_DIR = Path('/vf/users/parks34/projects/2secactpy/visualization/data')
+OUTPUT_DIR = Path('/vf/users/parks34/projects/2cytoatlas/visualization/data')
 
 # Column names
 CELLTYPE_COL = 'cellType1'  # 468 cell types

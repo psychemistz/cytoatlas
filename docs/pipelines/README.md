@@ -176,7 +176,7 @@ sbatch scripts/slurm/run_scatlas.sh
 ### Direct Execution
 
 ```bash
-cd /data/parks34/projects/2secactpy
+cd /data/parks34/projects/2cytoatlas
 
 # Activate environment
 source ~/bin/myconda

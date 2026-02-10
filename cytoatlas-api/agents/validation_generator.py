@@ -595,7 +595,7 @@ def main():
         config = ValidationConfig(
             atlas=atlas,
             h5ad_path=Path(f"/data/Jiang_Lab/Data/Seongyong/{atlas}.h5ad"),
-            activity_path=Path(f"/vf/users/parks34/projects/2secactpy/results/{atlas}"),
+            activity_path=Path(f"/data/parks34/projects/2cytoatlas/results/{atlas}"),
             output_dir=args.output,
             signature_type=args.signature_type,
         )

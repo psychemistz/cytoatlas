@@ -58,8 +58,8 @@ from cytoatlas_pipeline.batch import ATLAS_REGISTRY, get_atlas_config
 # Configuration
 # =============================================================================
 
-PSEUDOBULK_ROOT = Path("/vf/users/parks34/projects/2secactpy/results/atlas_validation")
-OUTPUT_ROOT = Path("/vf/users/parks34/projects/2secactpy/results/atlas_validation")
+PSEUDOBULK_ROOT = Path("/vf/users/parks34/projects/2cytoatlas/results/atlas_validation")
+OUTPUT_ROOT = Path("/vf/users/parks34/projects/2cytoatlas/results/atlas_validation")
 
 SIGNATURES = ['cytosig', 'lincytosig', 'secact']
 

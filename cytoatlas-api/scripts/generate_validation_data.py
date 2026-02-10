@@ -1247,13 +1247,13 @@ def main():
     parser.add_argument(
         "--viz-data-path",
         type=Path,
-        default=Path("/vf/users/parks34/projects/2secactpy/visualization/data"),
+        default=Path("/data/parks34/projects/2cytoatlas/visualization/data"),
         help="Path to visualization data directory",
     )
     parser.add_argument(
         "--results-path",
         type=Path,
-        default=Path("/data/parks34/projects/2secactpy/results"),
+        default=Path("/data/parks34/projects/2cytoatlas/results"),
         help="Path to results directory",
     )
     parser.add_argument(

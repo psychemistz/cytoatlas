@@ -27,8 +27,8 @@ import scipy.sparse as sp
 from scipy import stats
 
 # Add paths
-sys.path.insert(0, '/vf/users/parks34/projects/1ridgesig/SecActpy')
-sys.path.insert(0, '/vf/users/parks34/projects/2secactpy/cytoatlas-pipeline/src')
+sys.path.insert(0, '/data/parks34/projects/1ridgesig/SecActpy')
+sys.path.insert(0, '/data/parks34/projects/2cytoatlas/cytoatlas-pipeline/src')
 
 from secactpy import (
     load_cytosig, load_secact, load_lincytosig,

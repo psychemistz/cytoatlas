@@ -15,7 +15,7 @@ set -e
 # Configuration
 PORT="${PORT:-8000}"
 WORKERS="${WORKERS:-4}"
-PROJECT_DIR="/vf/users/parks34/projects/2secactpy/cytoatlas-api"
+PROJECT_DIR="/data/parks34/projects/2cytoatlas/cytoatlas-api"
 
 echo "=========================================="
 echo "  CytoAtlas API Server (SLURM)           "
@@ -56,8 +56,8 @@ echo ""
 # Export environment variables
 export DEBUG=false
 export ENVIRONMENT=production
-export VIZ_DATA_PATH=/vf/users/parks34/projects/2secactpy/visualization/data
-export RESULTS_BASE_PATH=/vf/users/parks34/projects/2secactpy/results
+export VIZ_DATA_PATH=/data/parks34/projects/2cytoatlas/visualization/data
+export RESULTS_BASE_PATH=/data/parks34/projects/2cytoatlas/results
 export H5AD_BASE_PATH=/data/Jiang_Lab/Data/Seongyong
 export LLM_BASE_URL=http://cn0084:8001/v1
 

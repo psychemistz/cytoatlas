@@ -7,8 +7,8 @@ from pathlib import Path
 import anndata as ad
 import pandas as pd
 
-OUTPUT_DIR = Path("/vf/users/parks34/projects/2secactpy/visualization/data")
-CIMA_DIR = Path("/vf/users/parks34/projects/2secactpy/results/cima")
+OUTPUT_DIR = Path("/vf/users/parks34/projects/2cytoatlas/visualization/data")
+CIMA_DIR = Path("/vf/users/parks34/projects/2cytoatlas/results/cima")
 CIMA_META_PATH = Path("/data/Jiang_Lab/Data/Seongyong/CIMA/Metadata/CIMA_Sample_Information_Metadata.csv")
 
 

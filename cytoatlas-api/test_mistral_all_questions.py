@@ -149,7 +149,7 @@ def main():
         print(f"  Q{qnum}: {status} | {r['elapsed_seconds']}s | {n_tc} tools | {n_viz} viz | errors: {r['errors'] or 'none'}")
 
     # Save
-    output_path = "/vf/users/parks34/projects/2secactpy/logs/mistral_test_results.json"
+    output_path = "/data/parks34/projects/2cytoatlas/logs/mistral_test_results.json"
     with open(output_path, "w") as f:
         json.dump(results, f, indent=2, default=str)
     print(f"\n  Full results saved to: {output_path}")

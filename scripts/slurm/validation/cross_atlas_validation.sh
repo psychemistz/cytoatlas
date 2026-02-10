@@ -22,7 +22,7 @@
 set -e
 
 # Paths
-PROJECT_DIR="/vf/users/parks34/projects/2secactpy"
+PROJECT_DIR="/vf/users/parks34/projects/2cytoatlas"
 SCRIPT_DIR="${PROJECT_DIR}/scripts"
 LOG_DIR="${PROJECT_DIR}/logs/validation"
 OUTPUT_DIR="${PROJECT_DIR}/results/atlas_validation"
@@ -56,7 +56,7 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 
-OUTPUT_DIR = Path("/vf/users/parks34/projects/2secactpy/results/atlas_validation")
+OUTPUT_DIR = Path("/vf/users/parks34/projects/2cytoatlas/results/atlas_validation")
 VALIDATION_DIR = OUTPUT_DIR / "validation"
 VALIDATION_DIR.mkdir(exist_ok=True)
 

@@ -12,7 +12,7 @@ Complete guide for deploying CytoAtlas in development, HPC, and production envir
 
 ```bash
 # Clone and setup
-cd /vf/users/parks34/projects/2secactpy/cytoatlas-api
+cd /data/parks34/projects/2cytoatlas/cytoatlas-api
 pip install -e .
 
 # Run API server
@@ -26,7 +26,7 @@ open http://localhost:8000/
 
 ```bash
 # Submit unified vLLM + API job
-cd /vf/users/parks34/projects/2secactpy
+cd /data/parks34/projects/2cytoatlas
 sbatch scripts/slurm/run_vllm.sh
 
 # Check job status
@@ -54,7 +54,7 @@ python --version  # Should be 3.10+
 ### Installation (No Database Mode)
 
 ```bash
-cd /vf/users/parks34/projects/2secactpy/cytoatlas-api
+cd /data/parks34/projects/2cytoatlas/cytoatlas-api
 
 # Install in editable mode with dev dependencies
 pip install -e ".[dev]"
@@ -70,8 +70,8 @@ Set environment to skip data file validation:
 ```bash
 export ENVIRONMENT=development
 export DEBUG=true
-export VIZ_DATA_PATH=/vf/users/parks34/projects/2secactpy/visualization/data
-export RESULTS_BASE_PATH=/vf/users/parks34/projects/2secactpy/results
+export VIZ_DATA_PATH=/data/parks34/projects/2cytoatlas/visualization/data
+export RESULTS_BASE_PATH=/data/parks34/projects/2cytoatlas/results
 
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
@@ -102,7 +102,7 @@ The `scripts/slurm/run_vllm.sh` script orchestrates:
 
 ### Configuration
 
-Edit `/vf/users/parks34/projects/2secactpy/scripts/slurm/run_vllm.sh`:
+Edit `/data/parks34/projects/2cytoatlas/scripts/slurm/run_vllm.sh`:
 
 ```bash
 # GPU allocation
@@ -237,8 +237,8 @@ MAX_REQUEST_BODY_MB=100
 ```bash
 # Base paths (auto-configured in HPC scripts)
 H5AD_BASE_PATH="/data/Jiang_Lab/Data/Seongyong"
-RESULTS_BASE_PATH="/vf/users/parks34/projects/2secactpy/results"
-VIZ_DATA_PATH="/vf/users/parks34/projects/2secactpy/visualization/data"
+RESULTS_BASE_PATH="/data/parks34/projects/2cytoatlas/results"
+VIZ_DATA_PATH="/data/parks34/projects/2cytoatlas/visualization/data"
 
 # CIMA paths
 CIMA_H5AD="/data/Jiang_Lab/Data/Seongyong/CIMA/Cell_Atlas/CIMA_RNA_6484974cells_36326genes_compressed.h5ad"
@@ -413,8 +413,8 @@ services:
       - redis
       - postgres
     volumes:
-      - /vf/users/parks34/projects/2secactpy/visualization/data:/data/viz:ro
-      - /vf/users/parks34/projects/2secactpy/results:/data/results:ro
+      - /data/parks34/projects/2cytoatlas/visualization/data:/data/viz:ro
+      - /data/parks34/projects/2cytoatlas/results:/data/results:ro
 
 volumes:
   redis_data:
@@ -542,10 +542,10 @@ export REDIS_URL=
 
 ```bash
 # Verify paths exist
-ls -la /vf/users/parks34/projects/2secactpy/visualization/data/
+ls -la /data/parks34/projects/2cytoatlas/visualization/data/
 
 # Set correct path
-export VIZ_DATA_PATH=/vf/users/parks34/projects/2secactpy/visualization/data
+export VIZ_DATA_PATH=/data/parks34/projects/2cytoatlas/visualization/data
 
 # Check if data files were generated
 python scripts/06_preprocess_viz_data.py

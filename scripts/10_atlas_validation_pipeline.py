@@ -73,7 +73,7 @@ from cytoatlas_pipeline.batch import (
 # Configuration
 # =============================================================================
 
-OUTPUT_ROOT = Path("/vf/users/parks34/projects/2secactpy/results/atlas_validation")
+OUTPUT_ROOT = Path("/data/parks34/projects/2cytoatlas/results/atlas_validation")
 SIGNATURES = ["cytosig", "secact", "lincytosig"]  # Available signatures
 
 # Activity inference parameters
@@ -144,7 +144,7 @@ def run_atlas_level_activity(
             sig_df = load_secact()
         elif sig_type == "lincytosig":
             import gzip
-            lincytosig_path = Path("/vf/users/parks34/projects/1ridgesig/SecActpy-dev/secactpy/data/LinCytoSig.tsv.gz")
+            lincytosig_path = Path("/data/parks34/projects/1ridgesig/SecActpy-dev/secactpy/data/LinCytoSig.tsv.gz")
             with gzip.open(lincytosig_path, 'rt') as f:
                 sig_df = pd.read_csv(f, sep='\t', index_col=0)
         else:
@@ -259,7 +259,7 @@ def run_pseudobulk_level_activity(
             sig_df = load_secact()
         elif sig_type == "lincytosig":
             import gzip
-            lincytosig_path = Path("/vf/users/parks34/projects/1ridgesig/SecActpy-dev/secactpy/data/LinCytoSig.tsv.gz")
+            lincytosig_path = Path("/data/parks34/projects/1ridgesig/SecActpy-dev/secactpy/data/LinCytoSig.tsv.gz")
             with gzip.open(lincytosig_path, 'rt') as f:
                 sig_df = pd.read_csv(f, sep='\t', index_col=0)
         else:

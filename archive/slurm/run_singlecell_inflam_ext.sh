@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=inflam_ext_sc
-#SBATCH --output=/data/parks34/projects/2secactpy/logs/inflam_ext_singlecell_%j.out
-#SBATCH --error=/data/parks34/projects/2secactpy/logs/inflam_ext_singlecell_%j.err
+#SBATCH --output=/data/parks34/projects/2cytoatlas/logs/inflam_ext_singlecell_%j.out
+#SBATCH --error=/data/parks34/projects/2cytoatlas/logs/inflam_ext_singlecell_%j.err
 #SBATCH --time=8:00:00
 #SBATCH --mem=64g
 #SBATCH --cpus-per-task=8
@@ -25,7 +25,7 @@ source ~/bin/myconda
 conda activate secactpy
 
 # Run analysis
-cd /data/parks34/projects/2secactpy
+cd /data/parks34/projects/2cytoatlas
 
 python scripts/04_singlecell_batch.py \
     --dataset inflam_external \

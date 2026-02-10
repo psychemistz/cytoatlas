@@ -9,7 +9,7 @@
 
 DECISION="$1"
 PRIORITY="${2:-medium}"
-PROJECT_DIR="/vf/users/parks34/projects/2secactpy"
+PROJECT_DIR="/vf/users/parks34/projects/2cytoatlas"
 DECISIONS_FILE="$PROJECT_DIR/DECISIONS.md"
 REPO="psychemistz/cytoatlas"
 

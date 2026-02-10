@@ -21,7 +21,7 @@ echo "========================================"
 source ~/bin/myconda
 conda activate secactpy
 
-cd /data/parks34/projects/2secactpy
+cd /data/parks34/projects/2cytoatlas
 mkdir -p logs
 
 # Regenerate bulk_donor_correlations.json with inflammation resampled data

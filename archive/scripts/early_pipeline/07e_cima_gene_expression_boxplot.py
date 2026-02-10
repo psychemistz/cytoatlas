@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 # Data paths
 CIMA_PATH = '/data/Jiang_Lab/Data/Seongyong/CIMA/Cell_Atlas/CIMA_RNA_6484974cells_36326genes_compressed.h5ad'
-OUTPUT_DIR = Path('/vf/users/parks34/projects/2secactpy/visualization/data')
+OUTPUT_DIR = Path('/vf/users/parks34/projects/2cytoatlas/visualization/data')
 
 # Cell type column to use (27 cell types)
 CELLTYPE_COL = 'cell_type_l2'

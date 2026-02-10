@@ -1654,7 +1654,7 @@ class ToolExecutor:
         """Load the documentation registry."""
         from pathlib import Path
 
-        registry_path = Path("/vf/users/parks34/projects/2secactpy/docs/registry.json")
+        registry_path = Path("/data/parks34/projects/2cytoatlas/docs/registry.json")
         if not registry_path.exists():
             return {}
 

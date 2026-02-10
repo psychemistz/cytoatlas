@@ -5,8 +5,8 @@
 #SBATCH --mem=64G
 #SBATCH --cpus-per-task=4
 #SBATCH --time=02:00:00
-#SBATCH --output=/vf/users/parks34/projects/2secactpy/logs/activity_%A_%a.out
-#SBATCH --error=/vf/users/parks34/projects/2secactpy/logs/activity_%A_%a.err
+#SBATCH --output=/vf/users/parks34/projects/2cytoatlas/logs/activity_%A_%a.out
+#SBATCH --error=/vf/users/parks34/projects/2cytoatlas/logs/activity_%A_%a.err
 #SBATCH --array=0-32
 
 # Stage 2: Activity Inference on Pseudobulk Data
@@ -27,7 +27,7 @@ export PYTHONUNBUFFERED=1
 source ~/bin/myconda
 conda activate secactpy
 
-cd /vf/users/parks34/projects/2secactpy
+cd /vf/users/parks34/projects/2cytoatlas
 mkdir -p logs results/validation/activity
 
 echo "========================================"

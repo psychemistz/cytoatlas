@@ -143,7 +143,7 @@ VALIDATION_CONFIG = {
 # Output Configuration
 # ==============================================================================
 
-OUTPUT_ROOT = Path('/vf/users/parks34/projects/2secactpy/results/validation')
+OUTPUT_ROOT = Path('/vf/users/parks34/projects/2cytoatlas/results/validation')
 OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
 
 # ==============================================================================

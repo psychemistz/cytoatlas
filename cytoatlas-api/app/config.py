@@ -115,21 +115,21 @@ class Settings(BaseSettings):
     # Data Paths
     h5ad_base_path: Path = Field(default=Path("/data/Jiang_Lab/Data/Seongyong"))
     results_base_path: Path = Field(
-        default=Path("/vf/users/parks34/projects/2secactpy/results")
+        default=Path("/data/parks34/projects/2cytoatlas/results")
     )
     viz_data_path: Path = Field(
-        default=Path("/vf/users/parks34/projects/2secactpy/visualization/data")
+        default=Path("/data/parks34/projects/2cytoatlas/visualization/data")
     )
 
     # DuckDB (primary data backend — replaces JSON/Parquet/SQLite scatter)
     duckdb_atlas_path: Path = Field(
-        default=Path("/vf/users/parks34/projects/2secactpy/atlas_data.duckdb"),
+        default=Path("/data/parks34/projects/2cytoatlas/atlas_data.duckdb"),
         description="Path to DuckDB file containing all science data",
     )
 
     # SQLite for app state (users, conversations, jobs)
     sqlite_app_path: Path = Field(
-        default=Path("/vf/users/parks34/projects/2secactpy/app.db"),
+        default=Path("/data/parks34/projects/2cytoatlas/app.db"),
         description="Path to SQLite file for app state (users, chat, jobs)",
     )
 

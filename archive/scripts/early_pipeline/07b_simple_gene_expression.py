@@ -26,7 +26,7 @@ KEY_GENES = [
     'GZMB', 'PRF1', 'CD274', 'PDCD1', 'SPP1', 'MMP9'
 ]
 
-OUTPUT_DIR = Path('/vf/users/parks34/projects/2secactpy/visualization/data')
+OUTPUT_DIR = Path('/vf/users/parks34/projects/2cytoatlas/visualization/data')
 
 
 def extract_cima_expression():

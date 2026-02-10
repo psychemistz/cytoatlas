@@ -26,7 +26,7 @@
 
 set -e
 
-PROJECT_DIR="/vf/users/parks34/projects/2secactpy"
+PROJECT_DIR="/vf/users/parks34/projects/2cytoatlas"
 
 mkdir -p "${PROJECT_DIR}/logs/regen_scatlas_cancer"
 

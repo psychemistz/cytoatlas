@@ -4,8 +4,8 @@
 #SBATCH --mem=32G
 #SBATCH --cpus-per-task=4
 #SBATCH --time=24:00:00
-#SBATCH --output=/vf/users/parks34/projects/2secactpy/logs/hf_download_%j.out
-#SBATCH --error=/vf/users/parks34/projects/2secactpy/logs/hf_download_%j.err
+#SBATCH --output=/vf/users/parks34/projects/2cytoatlas/logs/hf_download_%j.out
+#SBATCH --error=/vf/users/parks34/projects/2cytoatlas/logs/hf_download_%j.err
 
 # Download HuggingFace datasets: Genecorpus-30M and SpatialCorpus-110M
 # Usage: sbatch run_download_hf_datasets.sh
@@ -15,7 +15,7 @@ set -e
 source ~/bin/myconda
 conda activate secactpy
 
-cd /vf/users/parks34/projects/2secactpy
+cd /vf/users/parks34/projects/2cytoatlas
 mkdir -p logs
 
 OUTPUT_DIR="/data/Jiang_Lab/Data/Seongyong"

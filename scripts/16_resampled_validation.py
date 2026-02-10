@@ -38,7 +38,7 @@ import pandas as pd
 from scipy import stats
 
 sys.stdout.reconfigure(line_buffering=True)
-sys.path.insert(0, "/vf/users/parks34/projects/1ridgesig/SecActpy")
+sys.path.insert(0, "/data/parks34/projects/1ridgesig/SecActpy")
 
 from secactpy import load_cytosig, load_secact, ridge
 
@@ -47,9 +47,9 @@ from secactpy import load_cytosig, load_secact, ridge
 # Paths
 # =============================================================================
 
-ATLAS_VALIDATION_DIR = Path("/data/parks34/projects/2secactpy/results/atlas_validation")
-OUTPUT_DIR = Path("/data/parks34/projects/2secactpy/results/cross_sample_validation")
-MAPPING_PATH = Path("/vf/users/parks34/projects/2secactpy/cytoatlas-api/static/data/signature_gene_mapping.json")
+ATLAS_VALIDATION_DIR = Path("/data/parks34/projects/2cytoatlas/results/atlas_validation")
+OUTPUT_DIR = Path("/data/parks34/projects/2cytoatlas/results/cross_sample_validation")
+MAPPING_PATH = Path("/data/parks34/projects/2cytoatlas/cytoatlas-api/static/data/signature_gene_mapping.json")
 
 # Resampled pseudobulk files per atlas (atlas_key -> [(level_name, h5ad_basename)])
 RESAMPLED_FILES = {

@@ -19,7 +19,7 @@
 set -e
 
 # Setup
-cd /data/parks34/projects/2secactpy
+cd /data/parks34/projects/2cytoatlas
 source ~/bin/myconda
 conda activate secactpy
 

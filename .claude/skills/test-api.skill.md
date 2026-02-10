@@ -8,7 +8,7 @@ When the user invokes /test-api, perform the following:
 
 1. **Start the API server** (if not running):
    ```bash
-   cd /vf/users/parks34/projects/2secactpy/cytoatlas-api
+   cd /data/parks34/projects/2cytoatlas/cytoatlas-api
    source ~/bin/myconda && conda activate secactpy
    uvicorn app.main:app --host 0.0.0.0 --port 8000 &
    sleep 3

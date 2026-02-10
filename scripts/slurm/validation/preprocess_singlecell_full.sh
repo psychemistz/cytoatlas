@@ -25,7 +25,7 @@
 
 set -e
 
-PROJECT_DIR="/vf/users/parks34/projects/2secactpy"
+PROJECT_DIR="/vf/users/parks34/projects/2cytoatlas"
 LOG_DIR="${PROJECT_DIR}/logs/validation"
 
 mkdir -p "${LOG_DIR}"
@@ -35,7 +35,7 @@ echo "Setting up environment..."
 source ~/bin/myconda
 conda activate secactpy
 
-cd /data/parks34/projects/2secactpy
+cd /data/parks34/projects/2cytoatlas
 
 echo "=============================================================="
 echo "Preprocess Single-Cell Validation (All Cells)"

@@ -17,7 +17,7 @@ Usage:
   python scripts/convert_data_to_duckdb.py --all
   python scripts/convert_data_to_duckdb.py --table activity
   python scripts/convert_data_to_duckdb.py --table cross_sample_correlations
-  python scripts/convert_data_to_duckdb.py --all --output /data/parks34/projects/2secactpy/atlas_data.duckdb
+  python scripts/convert_data_to_duckdb.py --all --output /data/parks34/projects/2cytoatlas/atlas_data.duckdb
 """
 
 import argparse

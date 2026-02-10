@@ -44,7 +44,7 @@ warnings.filterwarnings('ignore')
 # ==============================================================================
 
 # Input paths
-RESULTS_DIR = Path('/data/parks34/projects/2secactpy/results')
+RESULTS_DIR = Path('/data/parks34/projects/2cytoatlas/results')
 CIMA_DIR = RESULTS_DIR / 'cima'
 INFLAM_DIR = RESULTS_DIR / 'inflammation'
 SCATLAS_DIR = RESULTS_DIR / 'scatlas'

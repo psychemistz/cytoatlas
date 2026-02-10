@@ -257,7 +257,7 @@ significant = df[df['fdr'] < 0.05]
 ## Execution
 
 ```bash
-cd /data/parks34/projects/2secactpy
+cd /data/parks34/projects/2cytoatlas
 source ~/bin/myconda && conda activate secactpy
 python scripts/06_preprocess_viz_data.py
 ```
@@ -266,7 +266,7 @@ python scripts/06_preprocess_viz_data.py
 
 All JSON files are written to:
 ```
-/vf/users/parks34/projects/2secactpy/visualization/data/
+/data/parks34/projects/2cytoatlas/visualization/data/
 ```
 
 ## Related
