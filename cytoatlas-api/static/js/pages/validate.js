@@ -49,28 +49,28 @@ const ValidatePage = {
 
     CELLTYPE_LEVEL_CONFIG: {
         cima: {
-            levels: { donor_l1: 'L1', donor_l2: 'L2', donor_l3: 'L3', donor_l4: 'L4' },
+            levels: { l1: 'L1', l2: 'L2', l3: 'L3', l4: 'L4' },
             groupLabel: 'Cell Type',
         },
         inflammation_main: {
-            levels: { donor_l1: 'L1', donor_l2: 'L2' },
+            levels: { l1: 'L1', l2: 'L2' },
             groupLabel: 'Cell Type',
         },
         inflammation_val: {
-            levels: { donor_l1: 'L1', donor_l2: 'L2' },
+            levels: { l1: 'L1', l2: 'L2' },
             groupLabel: 'Cell Type',
         },
         inflammation_ext: {
-            levels: { donor_l1: 'L1', donor_l2: 'L2' },
+            levels: { l1: 'L1', l2: 'L2' },
             groupLabel: 'Cell Type',
         },
         scatlas_normal: {
-            levels: { donor_organ: 'By Organ', donor_organ_celltype1: 'Organ × Cell Type (broad)', donor_organ_celltype2: 'Organ × Cell Type (fine)' },
-            groupLabel: { donor_organ: 'Organ', donor_organ_celltype1: 'Organ × Cell Type', donor_organ_celltype2: 'Organ × Cell Type' },
+            levels: { celltype: 'Cell Type', organ_celltype: 'Organ × Cell Type' },
+            groupLabel: { celltype: 'Cell Type', organ_celltype: 'Organ × Cell Type' },
         },
         scatlas_cancer: {
-            levels: { donor_organ: 'By Sample Type', donor_organ_celltype1: 'Sample × Cell Type (broad)', donor_organ_celltype2: 'Sample × Cell Type (fine)' },
-            groupLabel: { donor_organ: 'Sample Type', donor_organ_celltype1: 'Sample × Cell Type', donor_organ_celltype2: 'Sample × Cell Type' },
+            levels: { celltype: 'Cell Type', organ_celltype: 'Sample × Cell Type' },
+            groupLabel: { celltype: 'Cell Type', organ_celltype: 'Sample × Cell Type' },
         },
     },
 
@@ -85,8 +85,8 @@ const ValidatePage = {
     ],
     SC_FULL_ATLAS_OPTIONS: [
         { value: 'cima', label: 'CIMA (6.5M cells)' },
-        { value: 'scatlas_normal', label: 'scAtlas Normal (6.4M)' },
-        { value: 'scatlas_cancer', label: 'scAtlas Cancer (6.4M)' },
+        { value: 'scatlas', label: 'scAtlas (12.8M cells)' },
+        { value: 'inflammation', label: 'Inflammation (6.3M cells)' },
     ],
 
     // Per-tab signature type options
@@ -730,7 +730,7 @@ const ValidatePage = {
         content.innerHTML = `
             <div class="tab-panel">
                 <h3>Cell Type Level Validation</h3>
-                <p>Cell-type-stratified validation. Each point represents a donor x cell type pseudobulk sample. Correlating mean expression with predicted activity at this finer granularity tests whether the activity signal is preserved within individual cell types, not just across donors.</p>
+                <p>Cell-type-level validation. Each point represents one cell type with all donors pooled together. Expression and activity are averaged across all cells of each type, testing whether predicted activity tracks gene expression across cell types independent of donor variation.</p>
 
                 <div class="filter-bar">
                     ${this._atlasSelectHTML('val-ct-atlas', this.SC_ATLAS_OPTIONS, atlas)}
@@ -757,7 +757,7 @@ const ValidatePage = {
                 <div class="panel-grid">
                     <div class="panel" style="grid-column: span 2;">
                         <div class="viz-title">Expression vs Activity</div>
-                        <div class="viz-subtitle">Each point = donor x cell type pseudobulk</div>
+                        <div class="viz-subtitle">Each point = one cell type (all donors pooled)</div>
                         <div id="val-ct-scatter" class="plot-container" style="height: 450px;"></div>
                     </div>
                 </div>
@@ -896,7 +896,7 @@ const ValidatePage = {
         this._renderValidationScatter('val-ct-scatter', data, target, {
             hideNonExpr: this.celltypeLevel.hideNonExpr,
             celltypeFilter: this.celltypeLevel.group,
-            unitLabel: 'donor x celltype',
+            unitLabel: 'cell types',
             filterLabel: ctGroupLabel,
             atlasLabel: this.celltypeLevel.atlas,
         });
@@ -916,7 +916,7 @@ const ValidatePage = {
 
                 <div class="filter-bar">
                     ${this._atlasSelectHTML('val-sc-atlas', this.SC_FULL_ATLAS_OPTIONS, this.singleCell.atlas)}
-                    ${this._sigtypeSelectHTML('val-sc-sigtype', this.BULK_SIG_OPTIONS, this.singleCell.sigtype)}
+                    ${this._sigtypeSelectHTML('val-sc-sigtype', this.ALL_SIG_OPTIONS, this.singleCell.sigtype)}
                     <label>Target:
                         <select id="val-sc-target"><option value="">Loading...</option></select>
                     </label>
@@ -1065,7 +1065,7 @@ const ValidatePage = {
         } catch (e) {
             if (this.singleCell.target === target) {
                 document.getElementById('val-sc-scatter').innerHTML =
-                    `<p class="no-data">Single-cell DB not available. Run script 18 first.</p>`;
+                    `<p class="no-data">Single-cell data not available for this atlas/target.</p>`;
             }
             return;
         }

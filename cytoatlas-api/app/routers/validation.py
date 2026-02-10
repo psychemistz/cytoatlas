@@ -635,21 +635,35 @@ async def get_summary_boxplot_target(
 
 
 @router.get("/singlecell-full/atlases", response_model=List[str])
-async def list_singlecell_full_atlases() -> List[str]:
-    """List atlases with all-cell single-cell validation data.
-
-    Note: Requires DuckDB backend with singlecell tables loaded.
-    """
-    return []
+async def list_singlecell_full_atlases(
+    service: ValidationService = Depends(get_validation_service),
+) -> List[str]:
+    """List atlases with single-cell validation data."""
+    return await service.get_available_atlases()
 
 
 @router.get("/singlecell-full/{atlas}/signatures")
 async def list_singlecell_full_signatures(
     atlas: str = Path(..., description="Atlas name"),
     sigtype: str = Query("cytosig", description="Signature type"),
+    service: ValidationService = Depends(get_validation_service),
 ) -> List[dict]:
-    """List single-cell targets with stats computed from ALL cells."""
-    raise HTTPException(status_code=503, detail="Single-cell full backend not yet available")
+    """List single-cell targets with stats."""
+    sig_type_map = {"cytosig": "CytoSig", "lincytosig": "LinCytoSig", "secact": "SecAct"}
+    sig_label = sig_type_map.get(sigtype, sigtype)
+    sigs = await service.get_singlecell_signatures(atlas, sig_label)
+    # Normalize to match frontend expectations
+    return [
+        {
+            "target": s["signature"],
+            "gene": s.get("gene"),
+            "rho": None,
+            "n_total": s.get("n_total_cells", 0),
+            "n_expressing": s.get("n_expressing", 0),
+            "expressing_fraction": s.get("expressing_fraction", 0),
+        }
+        for s in sigs
+    ]
 
 
 @router.get("/singlecell-full/{atlas}/scatter/{target}")
@@ -657,9 +671,57 @@ async def get_singlecell_full_scatter(
     atlas: str = Path(..., description="Atlas name"),
     target: str = Path(..., description="Target/signature name"),
     sigtype: str = Query("cytosig", description="Signature type"),
+    service: ValidationService = Depends(get_validation_service),
 ) -> dict:
-    """Get all-cell scatter data: exact stats + density bins + 50K sampled points."""
-    raise HTTPException(status_code=503, detail="Single-cell full backend not yet available")
+    """Get single-cell scatter data: sampled points from validation JSON."""
+    sig_type_map = {"cytosig": "CytoSig", "lincytosig": "LinCytoSig", "secact": "SecAct"}
+    sig_label = sig_type_map.get(sigtype, sigtype)
+    data = await service.get_singlecell_scatter(atlas, target, sig_label)
+    if not data:
+        raise HTTPException(status_code=404, detail=f"No single-cell data for {atlas}/{target}")
+
+    sampled_raw = data.get("sampled_points", [])
+    n_total = data.get("n_total_cells", len(sampled_raw))
+    n_expressing = data.get("n_expressing", 0)
+    gene = data.get("gene")
+
+    # Convert sampled_points to compact array format: [expr, act, ct_idx, 0, is_expressing]
+    # Existing data doesn't have celltype, so ct_idx=0 for all
+    points = []
+    for p in sampled_raw:
+        expr = p.get("expression", 0)
+        act = p.get("activity", 0)
+        is_expr = 1 if p.get("is_expressing", False) else 0
+        points.append([round(expr, 3), round(act, 3), 0, 0, is_expr])
+
+    # Compute Spearman rho from sampled points
+    rho, pval = None, None
+    if len(points) >= 10:
+        from scipy import stats as sp_stats
+        xs = [p[0] for p in points]
+        ys = [p[1] for p in points]
+        rho, pval = sp_stats.spearmanr(xs, ys)
+        rho = round(float(rho), 4) if rho is not None else None
+        pval = float(f"{pval:.2e}") if pval is not None else None
+
+    return {
+        "target": target,
+        "gene": gene,
+        "atlas": atlas,
+        "rho": rho,
+        "pval": pval,
+        "n_total": n_total,
+        "n_expressing": n_expressing,
+        "expressing_fraction": data.get("expressing_fraction", 0),
+        "mean_activity_expressing": data.get("mean_activity_expressing"),
+        "mean_activity_non_expressing": data.get("mean_activity_non_expressing"),
+        "activity_fold_change": data.get("activity_fold_change"),
+        "sampled": {
+            "celltypes": ["all"],
+            "points": points,
+        },
+        # No density data from pre-sampled points
+    }
 
 
 @router.get("/singlecell-full/{atlas}/celltypes/{target}")
@@ -667,6 +729,9 @@ async def get_singlecell_full_celltypes(
     atlas: str = Path(..., description="Atlas name"),
     target: str = Path(..., description="Target/signature name"),
     sigtype: str = Query("cytosig", description="Signature type"),
+    service: ValidationService = Depends(get_validation_service),
 ) -> List[dict]:
-    """Get per-celltype stats computed from ALL cells."""
-    raise HTTPException(status_code=503, detail="Single-cell full backend not yet available")
+    """Get per-celltype stats from sampled points."""
+    sig_type_map = {"cytosig": "CytoSig", "lincytosig": "LinCytoSig", "secact": "SecAct"}
+    sig_label = sig_type_map.get(sigtype, sigtype)
+    return await service.get_singlecell_celltypes(atlas, target, sig_label)
