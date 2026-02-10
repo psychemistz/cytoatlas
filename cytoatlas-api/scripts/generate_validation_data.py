@@ -385,12 +385,20 @@ class RealValidationGenerator:
                 orig_unsort = np.argsort(orig_sort_order)
 
                 print(f"    Reading {len(gene_col_indices)} signature genes from original H5AD...")
-                # Read sampled rows (fast for CSR), then subset columns
-                X_rows = orig_adata.X[orig_pos_sorted]
-                if hasattr(X_rows, "toarray"):
-                    X_rows = X_rows.toarray()
-                X_rows = np.asarray(X_rows, dtype=np.float64)[orig_unsort]
-                expr_sub = X_rows[:, gene_col_indices]
+                # Read rows in batches, immediately subset to signature gene columns
+                # to avoid materializing the full (n_cells x n_genes) matrix
+                batch_size = 50000
+                n_rows = len(orig_pos_sorted)
+                expr_sub = np.empty((n_rows, len(gene_col_indices)), dtype=np.float64)
+                for start in range(0, n_rows, batch_size):
+                    end = min(start + batch_size, n_rows)
+                    chunk = orig_adata.X[orig_pos_sorted[start:end]]
+                    if hasattr(chunk, "toarray"):
+                        chunk = chunk.toarray()
+                    expr_sub[start:end] = np.asarray(chunk, dtype=np.float64)[:, gene_col_indices]
+                    if start % 200000 == 0 and start > 0:
+                        print(f"      ... read {start:,}/{n_rows:,} rows")
+                expr_sub = expr_sub[orig_unsort]
 
                 for i, gene in enumerate(genes_to_read):
                     expression[gene] = expr_sub[:, i]
