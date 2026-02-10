@@ -1184,6 +1184,13 @@ const ValidatePage = {
                         <div id="val-sc-bar" class="plot-container" style="height: 350px;"></div>
                     </div>
                     <div class="panel">
+                        <div class="viz-title">Activity by Cell Type</div>
+                        <div class="viz-subtitle">Distribution of activity across top cell types</div>
+                        <div id="val-sc-group-box" class="plot-container" style="height: 350px;"></div>
+                    </div>
+                </div>
+                <div class="panel-grid">
+                    <div class="panel" style="grid-column: span 2;">
                         <div class="viz-title">Activity: Expressing vs Non-Expressing</div>
                         <div class="viz-subtitle">Mean activity comparison from ALL cells</div>
                         <div id="val-sc-box" class="plot-container" style="height: 350px;"></div>
@@ -1364,6 +1371,9 @@ const ValidatePage = {
 
         // Render per-celltype bar chart
         this._renderCelltypeBar('val-sc-bar', data);
+
+        // Render activity distribution by cell type
+        this._renderCelltypeGroupBox('val-sc-group-box', data);
 
         // Render expressing vs non-expressing comparison
         this._renderExprVsNonExprBox('val-sc-box', data);
@@ -1603,6 +1613,55 @@ const ValidatePage = {
         } else {
             div.innerHTML = '<p class="no-data">No per-celltype data available</p>';
         }
+    },
+
+    _renderCelltypeGroupBox(divId, data) {
+        const div = document.getElementById(divId);
+        if (!div) return;
+
+        const stats = data.celltype_stats || [];
+        if (!stats.length) {
+            div.innerHTML = '<p class="no-data">No per-celltype data available</p>';
+            return;
+        }
+
+        // Sort by mean_activity descending and take top 15 for readability
+        const sorted = [...stats]
+            .filter(s => s.mean_activity != null && s.n_cells >= 10)
+            .sort((a, b) => (b.mean_activity || 0) - (a.mean_activity || 0));
+        const top15 = sorted.slice(0, 15);
+
+        if (!top15.length) {
+            div.innerHTML = '<p class="no-data">No cell types with sufficient data</p>';
+            return;
+        }
+
+        const colors = [
+            '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+            '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
+            '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5',
+        ];
+
+        // Simulate box-like display: bar at mean, error bars at ±std
+        Plotly.newPlot(div, [{
+            type: 'bar',
+            x: top15.map(s => s.celltype.replace(/_/g, ' ')),
+            y: top15.map(s => s.mean_activity || 0),
+            marker: { color: top15.map((_, i) => colors[i % colors.length]) },
+            error_y: {
+                type: 'data',
+                array: top15.map(s => s.std_activity || 0),
+                visible: true,
+                color: 'rgba(0,0,0,0.4)',
+            },
+            hovertemplate: '%{x}<br>Mean: %{y:.3f}<br>n=%{text}<extra></extra>',
+            text: top15.map(s => (s.n_cells || 0).toLocaleString()),
+        }], {
+            yaxis: { title: 'Activity (z-score)' },
+            margin: { l: 60, r: 20, t: 30, b: 120 },
+            showlegend: false,
+            xaxis: { tickangle: -45 },
+        }, { responsive: true });
     },
 
     _renderExprVsNonExprBox(divId, data) {
