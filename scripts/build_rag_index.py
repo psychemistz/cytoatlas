@@ -182,6 +182,18 @@ def extract_atlas_summaries(data_dir: Path) -> list[dict[str, Any]]:
             "name": "scAtlas (Human Tissue Atlas)",
             "description": "6.4 million cells across 35 organs/tissues. Includes both normal tissues and pan-cancer immune profiling. Provides organ-specific activity and tumor vs adjacent comparisons.",
         },
+        "parse10m": {
+            "name": "parse_10M (Cytokine Perturbation)",
+            "description": "9.7 million PBMCs treated with 90 cytokines across 12 donors and 18 cell types. Ground truth validation for CytoSig: cells treated with known cytokines should show high predicted activity for that cytokine.",
+        },
+        "tahoe": {
+            "name": "Tahoe-100M (Drug Perturbation)",
+            "description": "100.6 million drug-perturbed cancer cells across 50 cell lines and 95 drugs in 14 plates. Drug sensitivity profiling reveals which cytokine/secreted protein pathways each drug activates or suppresses.",
+        },
+        "spatial_corpus": {
+            "name": "SpatialCorpus-110M (Spatial Transcriptomics)",
+            "description": "110 million cells from 251 spatial transcriptomics datasets across 8 technologies (Visium, Xenium, MERFISH, MERSCOPE, CosMx, etc.). Tier A (Visium) supports full CytoSig/SecAct inference; Tier B (targeted panels) uses subset signatures.",
+        },
     }
 
     for atlas_key, atlas_info in atlases.items():
@@ -262,6 +274,39 @@ def extract_biological_context() -> list[dict[str, Any]]:
             "text": desc,
             "atlas": "all",
             "cell_type": ct,
+        })
+
+    # Perturbation context
+    perturbation_context = [
+        "parse_10M ground truth validation: Cells treated with a known cytokine (e.g., IL-17A) should show high CytoSig predicted activity for that cytokine in responsive cell types (e.g., Th17). This is the gold standard test for signature matrix accuracy.",
+        "parse_10M experimental design: 90 cytokine treatments × 12 donors × 18 PBMC cell types. PBS vehicle control. Pseudobulk aggregation per donor × cytokine × cell_type. Treatment effect = treated - control activity.",
+        "Tahoe-100M drug sensitivity: 95 drugs × 50 cancer cell lines × 14 plates. DMSO vehicle control. Plate 13 has 3 dose levels for 25 drugs enabling dose-response analysis.",
+        "Known perturbation associations: IL-17A treatment → high IL-17 activity in Th17 cells; IFN-γ treatment → high IFNγ activity in monocytes; TNF-α treatment → high TNF activity in monocytes.",
+        "Known drug-pathway associations: Bortezomib (proteasome inhibitor) → NF-κB pathway suppression; Trametinib (MEK inhibitor) → MAPK/ERK pathway suppression.",
+    ]
+
+    for i, text in enumerate(perturbation_context):
+        docs.append({
+            "source_id": f"biology:perturbation:{i}",
+            "source_type": "biology",
+            "text": text,
+            "atlas": "all",
+        })
+
+    # Spatial context
+    spatial_context = [
+        "SpatialCorpus-110M technology tiers: Tier A (Visium, 15K+ genes, full CytoSig/SecAct inference), Tier B (Xenium/MERFISH/MERSCOPE/CosMx, 150-1000 genes, targeted scoring with subset signatures), Tier C (ISS/mouse, excluded).",
+        "Spatial gene panel coverage: Only Visium has sufficient genes (>80% overlap) for full ridge regression activity inference. Targeted panels (Xenium, MERFISH) require >50% gene overlap per signature for reliable scoring.",
+        "Spatial neighborhood (niche) analysis: NicheFormer embeddings capture local cellular neighborhoods. Niche-level activity reveals microenvironment-specific cytokine signaling patterns.",
+        "Cross-technology validation: Same tissue profiled by different spatial technologies should show correlated activity patterns. This validates robustness of activity inference across platforms.",
+    ]
+
+    for i, text in enumerate(spatial_context):
+        docs.append({
+            "source_id": f"biology:spatial:{i}",
+            "source_type": "biology",
+            "text": text,
+            "atlas": "all",
         })
 
     logger.info(f"Extracted {len(docs)} biological context documents")

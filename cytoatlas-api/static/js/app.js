@@ -22,6 +22,8 @@
         router.register('/submit', (params, query) => SubmitPage.init(params, query));
         router.register('/chat', (params, query) => ChatPage.init(params, query));
         router.register('/chat/:conversationId', (params, query) => ChatPage.init(params, query));
+        router.register('/perturbation', (params, query) => PerturbationPage.init(params, query));
+        router.register('/spatial', (params, query) => SpatialPage.init(params, query));
 
         // Initialize router
         router.init();

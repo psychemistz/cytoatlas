@@ -10,6 +10,9 @@ flowchart TB
         CIMA_H5AD[CIMA H5AD<br/>6.5M cells]
         INFLAM_H5AD[Inflammation H5AD<br/>6.3M cells]
         SCATLAS_H5AD[scAtlas H5AD<br/>6.4M cells]
+        PARSE_H5AD[parse_10M H5AD<br/>9.7M cells]
+        TAHOE_H5AD[Tahoe 14 plates<br/>100.6M cells]
+        SPATIAL_H5AD[SpatialCorpus<br/>251 files, 110M cells]
         SIGS[Signature Matrices<br/>CytoSig + SecAct]
     end
 
@@ -19,37 +22,51 @@ flowchart TB
         P02[02_inflam_activity.py]
         P03[03_scatlas_analysis.py]
         P08[08_scatlas_immune_analysis.py]
-        P06[06_preprocess_viz_data.py]
+        P18[18_parse10m_activity.py]
+        P19[19_tahoe_activity.py]
+        P20[20_spatial_activity.py]
+        P06[06/24/25_preprocess_*.py]
     end
 
     subgraph Results ["Results"]
-        CIMA_OUT[CIMA Results<br/>Correlations, Differential]
-        INFLAM_OUT[Inflammation Results<br/>Disease, Treatment]
-        SCATLAS_OUT[scAtlas Results<br/>Organs, Cancer]
+        CIMA_OUT[CIMA Results]
+        INFLAM_OUT[Inflammation Results]
+        SCATLAS_OUT[scAtlas Results]
+        PARSE_OUT[parse_10M Results<br/>Ground Truth]
+        TAHOE_OUT[Tahoe Results<br/>Drug Sensitivity]
+        SPATIAL_OUT[Spatial Results<br/>Tech-Stratified]
     end
 
     subgraph Viz ["Visualization"]
-        JSON[JSON Files<br/>30+ files]
-        HTML[index.html<br/>Web Dashboard]
+        JSON[JSON Files<br/>40+ files]
+        DUCKDB[3 DuckDB databases]
+        HTML[10-page SPA]
     end
 
     CIMA_H5AD --> P01
     INFLAM_H5AD --> P02
     SCATLAS_H5AD --> P03
     SCATLAS_H5AD --> P08
-    SIGS --> P01 & P02 & P03
+    PARSE_H5AD --> P18
+    TAHOE_H5AD --> P19
+    SPATIAL_H5AD --> P20
+    SIGS --> P01 & P02 & P03 & P18 & P19 & P20
 
     P01 --> CIMA_OUT
     P02 --> INFLAM_OUT
     P03 --> SCATLAS_OUT
     P08 --> SCATLAS_OUT
+    P18 --> PARSE_OUT
+    P19 --> TAHOE_OUT
+    P20 --> SPATIAL_OUT
 
-    CIMA_OUT --> P06
-    INFLAM_OUT --> P06
-    SCATLAS_OUT --> P06
+    CIMA_OUT & INFLAM_OUT & SCATLAS_OUT --> P06
+    PARSE_OUT & TAHOE_OUT & SPATIAL_OUT --> P06
 
     P06 --> JSON
+    P06 --> DUCKDB
     JSON --> HTML
+    DUCKDB --> HTML
 ```
 
 ## Script Summary
@@ -71,6 +88,14 @@ flowchart TB
 | 15 | `15_bulk_validation.py` | GTEx/TCGA bulk RNA-seq activity | ~1 hr | Yes |
 | 16 | `16_resampled_validation.py` | Bootstrap resampled activity inference | ~2 hr | Yes |
 | 17 | `17_preprocess_validation_summary.py` | Validation summary preprocessing | ~15 min | No |
+| 18 | `18_parse10m_activity.py` | parse_10M cytokine perturbation activity | ~24 hr | Yes |
+| 19 | `19_tahoe_activity.py` | Tahoe drug-response activity (14 plates) | ~48 hr | Yes |
+| 20 | `20_spatial_activity.py` | SpatialCorpus technology-stratified activity | ~48-72 hr | Yes |
+| 21 | `21_parse10m_ground_truth.py` | CytoSig ground-truth validation | ~8 hr | Yes |
+| 22 | `22_tahoe_drug_signatures.py` | Drug sensitivity signature extraction | ~8 hr | Yes |
+| 23 | `23_spatial_neighborhood.py` | Spatial neighborhood activity analysis | ~16 hr | Yes |
+| 24 | `24_preprocess_perturbation_viz.py` | Perturbation JSON/DuckDB preprocessing | ~6 hr | No |
+| 25 | `25_preprocess_spatial_viz.py` | Spatial JSON/DuckDB preprocessing | ~6 hr | No |
 
 ## Common Processing Steps
 
@@ -124,7 +149,14 @@ result = run_activity_inference(expr_diff, signature, sig_name)
 ### Phase 3: scAtlas Analysis
 - [scAtlas Activity Pipeline](scatlas/analysis.md) — organ signatures, cancer comparison, immune infiltration
 
-### Phase 4: Visualization
+### Phase 5: Perturbation Analysis
+- [parse_10M Activity Pipeline](perturbation/parse10m.md) — Cytokine perturbation activity + ground truth validation
+- [Tahoe Drug Response Pipeline](perturbation/tahoe.md) — Drug-response activity + sensitivity + dose-response
+
+### Phase 6: Spatial Analysis
+- [SpatialCorpus Activity Pipeline](spatial/activity.md) — Technology-stratified activity + neighborhood analysis
+
+### Phase 7: Visualization Preprocessing
 - [JSON Preprocessing](visualization/preprocess.md)
 
 ## Execution
@@ -203,4 +235,21 @@ flowchart TB
         S4 & S5 & S6 & S7 --> V3[scAtlas JSON]
         V1 & V2 & V3 --> V4[Web Dashboard]
     end
+
+    subgraph Phase5 ["Phase 5: Perturbation"]
+        PR1[parse_10M H5AD] --> PR2[Pseudobulk + Differential]
+        PR2 --> PR3[Activity + Ground Truth]
+        TH1[Tahoe 14 plates] --> TH2[Plate-by-plate Processing]
+        TH2 --> TH3[Drug Sensitivity + Dose-Response]
+        PR3 & TH3 --> V5[Perturbation JSON + DuckDB]
+    end
+
+    subgraph Phase6 ["Phase 6: Spatial"]
+        SP1[SpatialCorpus 251 files] --> SP2[Tech Stratification<br/>Tier A/B/C]
+        SP2 --> SP3[Activity Inference]
+        SP3 --> SP4[Neighborhood Analysis]
+        SP4 --> V6[Spatial JSON + DuckDB]
+    end
+
+    V5 & V6 --> V4
 ```

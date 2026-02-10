@@ -84,6 +84,18 @@ _JSON_TO_TABLE: dict[str, str] = {
     "gene_expression_inflammation.json": "gene_expression_inflammation",
     "validation_corr_boxplot.json": "validation_corr_boxplot",
     "validation_summary.json": "validation_summary",
+    # Perturbation domain (parse_10M + Tahoe)
+    "parse10m_cytokine_heatmap.json": "parse10m_cytokine_heatmap",
+    "parse10m_ground_truth.json": "parse10m_ground_truth",
+    "parse10m_donor_variability.json": "parse10m_donor_variability",
+    "tahoe_drug_sensitivity.json": "tahoe_drug_sensitivity",
+    "tahoe_dose_response.json": "tahoe_dose_response",
+    "tahoe_pathway_activation.json": "tahoe_pathway_activation",
+    # Spatial domain (SpatialCorpus-110M)
+    "spatial_tissue_activity.json": "spatial_tissue_activity_viz",
+    "spatial_technology_comparison.json": "spatial_technology_comparison_viz",
+    "spatial_gene_coverage.json": "spatial_gene_coverage_viz",
+    "spatial_dataset_catalog.json": "spatial_dataset_metadata",
 }
 
 # Lazy-initialized DuckDB repository singleton

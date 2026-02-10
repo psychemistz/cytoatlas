@@ -54,6 +54,16 @@ Implement 5-role RBAC model (anonymous, viewer, researcher, data_curator, admin)
 - Clear escalation path for different user types
 - Foundation for audit logging
 
+### [ADR-004: Multi-Dataset DuckDB Storage Architecture](ADR-004-multi-dataset-storage.md)
+**Status**: Accepted
+
+Use separate DuckDB files per dataset domain instead of expanding the single `atlas_data.duckdb`:
+- `atlas_data.duckdb` — existing CIMA, Inflammation, scAtlas (590 MB)
+- `perturbation_data.duckdb` — parse_10M + Tahoe-100M (~3-5 GB)
+- `spatial_data.duckdb` — SpatialCorpus-110M (~2-4 GB)
+
+Zero regression risk; independent regeneration; parallelizable processing.
+
 ## Decision Log
 
 | ADR | Title | Status | Date | Round |
@@ -61,6 +71,7 @@ Implement 5-role RBAC model (anonymous, viewer, researcher, data_curator, admin)
 | 001 | Parquet over JSON | Accepted | 2026-02-09 | 3 |
 | 002 | Repository Pattern | Accepted | 2026-02-09 | 3 |
 | 003 | RBAC Model | Accepted | 2026-02-09 | 2 |
+| 004 | Multi-Dataset DuckDB Storage | Accepted | 2026-02-10 | 5 |
 
 ## Guidelines for New ADRs
 

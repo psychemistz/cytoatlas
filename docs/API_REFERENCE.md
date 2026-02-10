@@ -1,6 +1,6 @@
 # CytoAtlas REST API Reference
 
-Complete reference for all 217 endpoints across 15 routers. Organized by domain with curl examples.
+Complete reference for all ~262 endpoints across 17 routers. Organized by domain with curl examples.
 
 **Last Updated**: 2026-02-09
 **Base URL**: `/api/v1`
@@ -924,7 +924,416 @@ Common status codes:
 
 ---
 
-## 14. OpenAPI Documentation
+## 14. Perturbation (parse_10M + Tahoe)
+
+### Perturbation Summary
+
+**GET** `/perturbation/summary`
+
+Overview statistics for both perturbation datasets.
+
+```bash
+curl -s http://localhost:8000/api/v1/perturbation/summary | jq '.'
+
+# Response
+{
+  "parse10m": {"cells": 9697974, "cytokines": 90, "cell_types": 18, "donors": 12},
+  "tahoe": {"cells": 100600000, "drugs": 95, "cell_lines": 50, "plates": 14}
+}
+```
+
+**Response**: `PerturbationSummary` | **Auth**: None
+
+---
+
+### parse_10M — List Cytokines
+
+**GET** `/perturbation/parse10m/cytokines`
+
+List all 90 cytokine treatment conditions with family annotations.
+
+```bash
+curl -s http://localhost:8000/api/v1/perturbation/parse10m/cytokines | jq '.'
+```
+
+**Response**: `list[CytokineInfo]` | **Auth**: None
+
+---
+
+### parse_10M — Activity
+
+**GET** `/perturbation/parse10m/activity`
+
+Get activity by cytokine and cell type.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `cytokine` | string | No | Filter by cytokine |
+| `cell_type` | string | No | Filter by cell type |
+| `signature_type` | string | No | CytoSig or SecAct (default: CytoSig) |
+
+```bash
+curl -s 'http://localhost:8000/api/v1/perturbation/parse10m/activity?cytokine=IL-17A&cell_type=Th17&signature_type=CytoSig' | jq '.'
+```
+
+**Response**: `list[ActivityResult]` | **Auth**: None
+
+---
+
+### parse_10M — Treatment Effect
+
+**GET** `/perturbation/parse10m/treatment-effect`
+
+Treatment vs PBS control differential activity.
+
+```bash
+curl -s 'http://localhost:8000/api/v1/perturbation/parse10m/treatment-effect?cell_type=Monocyte&signature_type=CytoSig' | jq '.'
+```
+
+**Response**: `list[TreatmentEffect]` | **Auth**: None
+
+---
+
+### parse_10M — Ground Truth Validation
+
+**GET** `/perturbation/parse10m/ground-truth`
+
+CytoSig/SecAct predicted activity vs actual cytokine treatment response.
+
+```bash
+curl -s 'http://localhost:8000/api/v1/perturbation/parse10m/ground-truth?signature_type=CytoSig' | jq '.'
+
+# Response
+{
+  "results": [
+    {"cytokine": "IL-17A", "cell_type": "Th17", "self_rank": 1, "auc_roc": 0.95, "self_activity": 2.3},
+    {"cytokine": "IFN-gamma", "cell_type": "CD8+ T", "self_rank": 1, "auc_roc": 0.92, "self_activity": 1.8}
+  ]
+}
+```
+
+**Response**: `GroundTruthResults` | **Auth**: None
+
+---
+
+### parse_10M — Heatmap
+
+**GET** `/perturbation/parse10m/heatmap`
+
+Cytokine × cell type heatmap data.
+
+```bash
+curl -s 'http://localhost:8000/api/v1/perturbation/parse10m/heatmap?signature_type=CytoSig' | jq '.'
+```
+
+**Response**: `HeatmapData` | **Auth**: None
+
+---
+
+### parse_10M — Donor Variability
+
+**GET** `/perturbation/parse10m/donor-variability`
+
+Cross-donor consistency for a given cytokine and cell type.
+
+```bash
+curl -s 'http://localhost:8000/api/v1/perturbation/parse10m/donor-variability?cytokine=IL-17A&cell_type=Th17' | jq '.'
+```
+
+**Response**: `list[DonorVariability]` | **Auth**: None
+
+---
+
+### parse_10M — Cytokine Families
+
+**GET** `/perturbation/parse10m/cytokine-families`
+
+Cytokines grouped by family (Interleukin, Interferon, TNF superfamily, etc.).
+
+```bash
+curl -s http://localhost:8000/api/v1/perturbation/parse10m/cytokine-families | jq '.'
+```
+
+**Response**: `list[CytokineFamily]` | **Auth**: None
+
+---
+
+### Tahoe — List Drugs
+
+**GET** `/perturbation/tahoe/drugs`
+
+List all 95 drugs with categories and mechanisms.
+
+```bash
+curl -s http://localhost:8000/api/v1/perturbation/tahoe/drugs | jq '.'
+```
+
+**Response**: `list[DrugInfo]` | **Auth**: None
+
+---
+
+### Tahoe — List Cell Lines
+
+**GET** `/perturbation/tahoe/cell-lines`
+
+List all 50 cancer cell lines with cancer type annotations.
+
+```bash
+curl -s http://localhost:8000/api/v1/perturbation/tahoe/cell-lines | jq '.'
+```
+
+**Response**: `list[CellLineInfo]` | **Auth**: None
+
+---
+
+### Tahoe — Drug Effect
+
+**GET** `/perturbation/tahoe/drug-effect`
+
+Drug vs DMSO differential activity.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `drug` | string | No | Filter by drug name |
+| `cell_line` | string | No | Filter by cell line |
+| `signature_type` | string | No | CytoSig or SecAct (default: CytoSig) |
+
+```bash
+curl -s 'http://localhost:8000/api/v1/perturbation/tahoe/drug-effect?drug=Trametinib&cell_line=A549&signature_type=CytoSig' | jq '.'
+```
+
+**Response**: `list[DrugEffect]` | **Auth**: None
+
+---
+
+### Tahoe — Sensitivity Matrix
+
+**GET** `/perturbation/tahoe/sensitivity-matrix`
+
+Drug × cell line sensitivity matrix.
+
+```bash
+curl -s 'http://localhost:8000/api/v1/perturbation/tahoe/sensitivity-matrix?signature_type=CytoSig' | jq '.'
+```
+
+**Response**: `SensitivityMatrix` | **Auth**: None
+
+---
+
+### Tahoe — Dose-Response
+
+**GET** `/perturbation/tahoe/dose-response`
+
+Plate 13 dose-response data (3 dose levels × 25 drugs × 50 cell lines).
+
+```bash
+curl -s 'http://localhost:8000/api/v1/perturbation/tahoe/dose-response?drug=Trametinib&cell_line=A549' | jq '.'
+
+# Response
+{
+  "drug": "Trametinib",
+  "cell_line": "A549",
+  "doses": [0.1, 1.0, 10.0],
+  "signatures": [
+    {"name": "IL6", "activities": [-0.5, -1.2, -2.1]},
+    {"name": "TNF", "activities": [-0.3, -0.8, -1.5]}
+  ]
+}
+```
+
+**Response**: `DoseResponse` | **Auth**: None
+
+---
+
+### Tahoe — Pathway Activation
+
+**GET** `/perturbation/tahoe/pathway-activation`
+
+Drug → cytokine pathway mapping.
+
+```bash
+curl -s 'http://localhost:8000/api/v1/perturbation/tahoe/pathway-activation?drug=Bortezomib' | jq '.'
+```
+
+**Response**: `list[PathwayActivation]` | **Auth**: None
+
+---
+
+## 15. Spatial (SpatialCorpus-110M)
+
+### Spatial Summary
+
+**GET** `/spatial/summary`
+
+Overview: 251 datasets, 8 technologies, tissue distribution.
+
+```bash
+curl -s http://localhost:8000/api/v1/spatial/summary | jq '.'
+
+# Response
+{
+  "total_datasets": 251,
+  "human_datasets": 244,
+  "technologies": 8,
+  "total_cells": 110000000,
+  "tier_a_files": 171,
+  "tier_b_files": 51,
+  "tier_c_files": 12
+}
+```
+
+**Response**: `SpatialSummary` | **Auth**: None
+
+---
+
+### Spatial — Technologies
+
+**GET** `/spatial/technologies`
+
+List technologies with dataset counts and gene panel sizes.
+
+```bash
+curl -s http://localhost:8000/api/v1/spatial/technologies | jq '.'
+```
+
+**Response**: `list[TechnologyInfo]` | **Auth**: None
+
+---
+
+### Spatial — Tissues
+
+**GET** `/spatial/tissues`
+
+List tissues with dataset counts.
+
+```bash
+curl -s http://localhost:8000/api/v1/spatial/tissues | jq '.'
+```
+
+**Response**: `list[TissueInfo]` | **Auth**: None
+
+---
+
+### Spatial — Dataset Catalog
+
+**GET** `/spatial/datasets`
+
+Full dataset catalog with metadata.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `technology` | string | No | Filter by technology |
+| `tissue` | string | No | Filter by tissue |
+
+```bash
+curl -s 'http://localhost:8000/api/v1/spatial/datasets?technology=Visium&tissue=Brain' | jq '.'
+```
+
+**Response**: `list[SpatialDataset]` | **Auth**: None
+
+---
+
+### Spatial — Activity
+
+**GET** `/spatial/activity`
+
+Activity by technology and tissue.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `technology` | string | No | Filter by technology |
+| `tissue` | string | No | Filter by tissue |
+| `signature_type` | string | No | CytoSig or SecAct (default: CytoSig) |
+
+```bash
+curl -s 'http://localhost:8000/api/v1/spatial/activity?technology=Visium&tissue=Brain&signature_type=CytoSig' | jq '.'
+```
+
+**Response**: `list[SpatialActivity]` | **Auth**: None
+
+---
+
+### Spatial — Tissue Summary
+
+**GET** `/spatial/tissue-summary`
+
+Tissue-level activity summary across technologies.
+
+```bash
+curl -s 'http://localhost:8000/api/v1/spatial/tissue-summary?signature_type=CytoSig' | jq '.'
+```
+
+**Response**: `list[TissueSummary]` | **Auth**: None
+
+---
+
+### Spatial — Neighborhood Activity
+
+**GET** `/spatial/neighborhood`
+
+Niche-level activity patterns.
+
+```bash
+curl -s 'http://localhost:8000/api/v1/spatial/neighborhood?tissue=Breast&signature_type=CytoSig' | jq '.'
+```
+
+**Response**: `list[NeighborhoodActivity]` | **Auth**: None
+
+---
+
+### Spatial — Technology Comparison
+
+**GET** `/spatial/technology-comparison`
+
+Cross-technology reproducibility for same tissues.
+
+```bash
+curl -s 'http://localhost:8000/api/v1/spatial/technology-comparison?signature_type=CytoSig' | jq '.'
+```
+
+**Response**: `TechnologyComparison` | **Auth**: None
+
+---
+
+### Spatial — Gene Coverage
+
+**GET** `/spatial/gene-coverage`
+
+Gene panel coverage vs CytoSig/SecAct per technology.
+
+```bash
+curl -s 'http://localhost:8000/api/v1/spatial/gene-coverage?technology=Xenium' | jq '.'
+
+# Response
+{
+  "technology": "Xenium",
+  "total_genes": 400,
+  "cytosig_overlap": 18,
+  "cytosig_coverage": 0.12,
+  "secact_overlap": 45,
+  "secact_coverage": 0.036
+}
+```
+
+**Response**: `GeneCoverage` | **Auth**: None
+
+---
+
+### Spatial — Coordinates
+
+**GET** `/spatial/coordinates/{dataset_id}`
+
+Sampled spatial coordinates for visualization (downsampled for API).
+
+```bash
+curl -s http://localhost:8000/api/v1/spatial/coordinates/visium_brain_001 | jq '.'
+```
+
+**Response**: `SpatialCoordinates` | **Auth**: None
+
+---
+
+## 16. OpenAPI Documentation
 
 Full interactive API documentation available at:
 

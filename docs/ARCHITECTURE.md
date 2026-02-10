@@ -20,39 +20,42 @@ The CytoAtlas project computes **cytokine and secreted protein activity signatur
 
 | Metric | Value |
 |--------|-------|
-| **Total cells analyzed** | 17M+ |
-| **Single-cell atlases** | 3 (CIMA, Inflammation, scAtlas) |
+| **Total cells analyzed** | 240M+ |
+| **Datasets** | 6 (CIMA, Inflammation, scAtlas, parse_10M, Tahoe-100M, SpatialCorpus-110M) |
 | **Signature types** | 3 (CytoSig 44, LinCytoSig 178, SecAct 1,249) |
-| **REST API endpoints** | 217 |
-| **API routers** | 15 |
-| **Analysis scripts** | 7 Python pipelines + 5 SLURM batches |
-| **Web UI pages** | 8 (Landing, Explore, Compare, Validate, Submit, Chat, etc.) |
-| **JSON visualization files** | 30+ (~500MB) |
+| **REST API endpoints** | ~262 |
+| **API routers** | 17 |
+| **Analysis scripts** | 15 Python pipelines + SLURM batches |
+| **Web UI pages** | 10 (Landing, Explore, Compare, Validate, Perturbation, Spatial, Submit, Chat, etc.) |
+| **JSON visualization files** | 40+ (~1.5GB) |
+| **DuckDB databases** | 3 (atlas, perturbation, spatial) |
 
 ### 1.3 High-Level Data Flow
 
 ```
-Raw H5AD Files (282GB)
+Raw H5AD Files (~900GB across 6 datasets)
    ↓
-Analysis Pipelines (scripts/00-07_*.py)
+Analysis Pipelines (scripts/00-25_*.py)
    ├─ GPU acceleration (CuPy)
    ├─ Pseudo-bulk aggregation
-   └─ Ridge regression activity inference
+   ├─ Ridge regression activity inference
+   ├─ Perturbation differential (treatment vs control)
+   └─ Spatial technology-stratified inference
    ↓
 Results Directory (CSV, H5AD)
    ↓
-Preprocessing (06_preprocess_viz_data.py)
-   ├─ Filter/transform results
-   └─ Generate JSON files
+DuckDB Conversion + JSON Preprocessing
+   ├─ convert_data_to_duckdb.py → atlas_data.duckdb
+   ├─ convert_perturbation_to_duckdb.py → perturbation_data.duckdb
+   ├─ convert_spatial_to_duckdb.py → spatial_data.duckdb
+   └─ 06/24/25_preprocess_*_viz.py → JSON files
    ↓
-visualization/data/ (30+ JSON files)
-   ↓
-API Layer (FastAPI + Services)
-   ├─ Load JSON with caching
+API Layer (FastAPI + Services + DuckDB Repository)
+   ├─ Multi-database DuckDB routing
    ├─ Filter/transform per request
    └─ Return JSON responses
    ↓
-Frontend SPA (JavaScript)
+Frontend SPA (10 pages, JavaScript)
    └─ Interactive visualization (Plotly, D3.js)
 ```
 
@@ -860,6 +863,26 @@ docker run -p 8000:8000 \
 │  ├─ Service: SubmissionService                          │
 │  └─ Factory: AtlasProcessingFactory                     │
 └─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│  Perturbation Bounded Context (NEW)                      │
+│  ├─ Entity: CytokineResponse (parse_10M, 90 cytokines) │
+│  ├─ Entity: DrugResponse (Tahoe, 95 drugs × 50 lines)  │
+│  ├─ Value Object: TreatmentEffect (treated − control)   │
+│  ├─ Value Object: GroundTruth (predicted vs actual)     │
+│  ├─ Service: PerturbationService                        │
+│  └─ Aggregate: PerturbationAnalysis                     │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│  Spatial Biology Bounded Context (NEW)                   │
+│  ├─ Entity: SpatialDataset (251 files, 8 technologies) │
+│  ├─ Entity: SpatialActivity (technology-stratified)     │
+│  ├─ Value Object: TechnologyTier (A/B/C)               │
+│  ├─ Value Object: GenePanelCoverage                     │
+│  ├─ Service: SpatialService                             │
+│  └─ Aggregate: SpatialAnalysis                          │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ### 12.2 Anti-Corruption Layers (Planned for Round 4)
@@ -886,12 +909,159 @@ User Submission Bounded Context
 | Round 2 | Security Hardening | ✅ Complete | JWT, RBAC, audit logging, rate limiting |
 | Round 3 | Data Layer & Documentation | ✅ Complete | Chat system, frontend components, pipeline management, user docs |
 | Round 4 | Extensibility (Planned) | Pending | User submissions, GraphQL |
+| Round 5 | Multi-Dataset Expansion | In Progress | SpatialCorpus-110M, parse_10M, Tahoe-100M (~220M new cells) |
 
 ---
 
-## 13. Deployment Checklist
+## 13. Perturbation Domain (Round 5)
 
-### 13.1 Development Deployment
+### 13.1 Overview
+
+The Perturbation Domain encompasses two datasets that enable functional/causal inference of cytokine signaling:
+
+| Dataset | Cells | Design | Purpose |
+|---------|-------|--------|---------|
+| **parse_10M** | 9.7M | 90 cytokines × 12 donors × 18 cell types | Ground-truth CytoSig/SecAct validation |
+| **Tahoe-100M** | 100.6M | 95 drugs × 50 cancer cell lines × 14 plates | Drug → cytokine pathway mapping |
+
+### 13.2 parse_10M Processing Flow
+
+```
+Parse_10M_PBMC_cytokines.h5ad (9.7M cells × 40,352 genes)
+  ↓ backed='r', chunked by donor × cytokine (1,092 groups)
+Pseudobulk aggregation: donor × cytokine × cell_type
+  ↓ ~19,656 pseudobulk profiles
+TPM normalize → log1p → differential (subtract PBS control)
+  ↓
+Ridge regression activity (CytoSig + SecAct)
+  ↓
+Ground truth validation: predicted vs actual cytokine response
+  ↓
+Output → perturbation_data.duckdb
+```
+
+**Ground Truth Validation**: For each cytokine treatment, compare the CytoSig-predicted activity of that cytokine against the actual transcriptional response. If CytoSig predicts high IL-17 activity in IL-17A-treated Th17 cells, that validates the signature.
+
+### 13.3 Tahoe Processing Flow
+
+```
+14 plate H5ADs (100.6M cells × 62,710 genes)
+  ↓ Process plate-by-plate, backed='r'
+Pseudobulk aggregation: plate × drug × cell_line
+  ↓ ~66,500 pseudobulk profiles
+TPM normalize → log1p → differential (subtract DMSO_TF control)
+  ↓
+Ridge regression activity (CytoSig + SecAct)
+  ↓
+Drug sensitivity + dose-response (Plate 13) + pathway activation
+  ↓
+Output → perturbation_data.duckdb
+```
+
+### 13.4 Perturbation API (`/perturbation/`)
+
+~25 endpoints organized into:
+- `/perturbation/parse10m/` — Cytokine response, ground truth, donor variability
+- `/perturbation/tahoe/` — Drug response, sensitivity matrix, dose-response, pathway activation
+
+Served by `PerturbationService` → `DuckDBRepository` (perturbation_data.duckdb).
+
+---
+
+## 14. Spatial Domain (Round 5)
+
+### 14.1 Overview
+
+The Spatial Domain processes 251 spatial transcriptomics datasets across 8 technologies from the SpatialCorpus-110M collection.
+
+### 14.2 Technology Stratification
+
+| Tier | Technologies | Files | Genes | Strategy |
+|------|-------------|-------|-------|----------|
+| **A** | Visium | ~171 | 15K-20K | Full CytoSig + SecAct ridge regression |
+| **B** | Xenium, MERFISH, MERSCOPE, CosMx | ~51 | 150-1K | Targeted scoring (subset signatures) |
+| **C** | ISS, mouse Slide-seq | ~12 | Too few / wrong species | Excluded |
+
+### 14.3 Spatial Processing Flow
+
+```
+251 H5AD files (~110M cells, variable genes)
+  ↓ Filter: human only (~244 files, ~274 GB)
+  ↓ Classify by technology tier
+Tier A: Full inference → standard pseudobulk → ridge regression
+Tier B: Gene panel filter → subset signatures → targeted scoring
+  ↓
+Technology-stratified activity + neighborhood analysis
+  ↓
+Output → spatial_data.duckdb
+```
+
+### 14.4 Spatial API (`/spatial/`)
+
+~20 endpoints covering:
+- Dataset catalog and metadata
+- Activity by technology and tissue
+- Neighborhood/niche analysis
+- Cross-technology comparison
+- Gene panel coverage
+- Spatial coordinates (sampled for visualization)
+
+Served by `SpatialService` → `DuckDBRepository` (spatial_data.duckdb).
+
+---
+
+## 15. Multi-Database DuckDB Architecture (Round 5)
+
+See [ADR-004: Multi-Dataset DuckDB Storage](decisions/ADR-004-multi-dataset-storage.md) for full rationale.
+
+### 15.1 Database Layout
+
+| Database | Tables | Rows (est.) | Size (est.) |
+|----------|--------|-------------|-------------|
+| `atlas_data.duckdb` | 51 | 9.6M | 590 MB |
+| `perturbation_data.duckdb` | 10 | ~5-10M | 3-5 GB |
+| `spatial_data.duckdb` | 7 | ~2-5M | 2-4 GB |
+
+### 15.2 Repository Routing
+
+```python
+_DATABASE_REGISTRY = {
+    'atlas': 'atlas_data.duckdb',
+    'perturbation': 'perturbation_data.duckdb',
+    'spatial': 'spatial_data.duckdb',
+}
+
+# Table prefix determines database
+# parse10m_* → perturbation
+# tahoe_*    → perturbation
+# spatial_*  → spatial
+# all others → atlas (default)
+```
+
+Connections are lazily initialized per database. No cross-database ATTACH — cross-domain queries handled at the service layer.
+
+### 15.3 Data Flow
+
+```
+Analysis Scripts (18-25)
+  ↓ CSV/H5AD output
+convert_perturbation_to_duckdb.py → perturbation_data.duckdb
+convert_spatial_to_duckdb.py      → spatial_data.duckdb
+  ↓
+DuckDBRepository (table → database routing)
+  ↓
+PerturbationService / SpatialService
+  ↓
+Perturbation Router / Spatial Router
+  ↓
+Perturbation Page / Spatial Page (SPA)
+```
+
+---
+
+## 16. Deployment Checklist
+
+### 16.1 Development Deployment
 
 - [x] FastAPI application created
 - [x] All 14 routers implemented
@@ -900,7 +1070,7 @@ User Submission Bounded Context
 - [x] 30+ JSON data files generated
 - [x] Local testing with Uvicorn
 
-### 13.2 HPC Deployment
+### 16.2 HPC Deployment
 
 - [x] SLURM job script (`run_vllm.sh`)
 - [x] vLLM + API unified orchestration
@@ -908,7 +1078,7 @@ User Submission Bounded Context
 - [x] Network proxy configuration
 - [ ] Performance benchmarking (10K+ req/s)
 
-### 13.3 Production Hardening (Round 2-3)
+### 16.3 Production Hardening (Round 2-3)
 
 - [ ] JWT authentication
 - [ ] RBAC role enforcement
@@ -921,16 +1091,16 @@ User Submission Bounded Context
 
 ---
 
-## 14. Monitoring & Operations
+## 17. Monitoring & Operations
 
-### 14.1 Health Check Endpoints
+### 17.1 Health Check Endpoints
 
 ```
 GET /api/v1/health              # Basic liveness
 GET /api/v1/health/ready        # Readiness (all services available)
 ```
 
-### 14.2 Key Metrics to Monitor
+### 17.2 Key Metrics to Monitor
 
 | Metric | Target | Tool |
 |--------|--------|------|
@@ -940,7 +1110,7 @@ GET /api/v1/health/ready        # Readiness (all services available)
 | Error rate | <0.1% | Application logs |
 | Database query time | <100ms | SQLAlchemy logging |
 
-### 14.3 Alerting (Future)
+### 17.3 Alerting (Future)
 
 ```
 Alert: API response time > 500ms
@@ -951,9 +1121,9 @@ Alert: Database connection pool exhausted
 
 ---
 
-## 15. Documentation References
+## 18. Documentation References
 
-### 15.1 Key Documents
+### 18.1 Key Documents
 
 | Document | Location | Purpose |
 |----------|----------|---------|
@@ -967,14 +1137,14 @@ Alert: Database connection pool exhausted
 | **Decisions Log** | [decisions/README.md](decisions/README.md) | Architecture Decision Records (ADRs) |
 | **Archived Plans** | [archive/README.md](archive/README.md) | Historical planning documents |
 
-### 15.2 Machine-Readable Metadata
+### 18.2 Machine-Readable Metadata
 
 - `docs/registry.json` - File catalog with lineage, types, APIs
 - `docs/EMBEDDED_DATA_CHECKLIST.md` - JSON files required in frontend
 
 ---
 
-## 16. Glossary
+## 19. Glossary
 
 | Term | Definition |
 |------|-----------|
@@ -986,10 +1156,16 @@ Alert: Database connection pool exhausted
 | **Repository Pattern** | Abstraction layer for data access (planned) |
 | **RBAC** | Role-Based Access Control (5 roles planned for Round 2) |
 | **ADR** | Architecture Decision Record (document rationale for design choices) |
+| **Perturbation** | Exogenous treatment (cytokine or drug) applied to cells in vitro |
+| **Treatment Effect** | Activity difference between treated and control (PBS or DMSO) cells |
+| **Ground Truth** | parse_10M validation: predicted CytoSig activity vs actual cytokine treatment |
+| **Drug Sensitivity** | Activity change in cancer cell lines after drug treatment (Tahoe) |
+| **Technology Tier** | Spatial gene panel classification: A (full, 15K+), B (targeted, 150-1K), C (skip) |
+| **Niche** | Local cellular neighborhood in spatial data |
 
 ---
 
-## 17. Contact & Support
+## 20. Contact & Support
 
 For questions or issues:
 1. Check [CLAUDE.md](CLAUDE.md) for common solutions

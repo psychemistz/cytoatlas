@@ -9,6 +9,9 @@ This directory contains detailed documentation for all datasets used in the Cyto
 | [CIMA](cima.md) | 6,484,974 | 428 | 36,326 | Healthy aging, metabolism, biochemistry |
 | [Inflammation](inflammation.md) | 6,340,934 | 1,047 | 22,826+ | Disease activity, treatment response |
 | [scAtlas](scatlas.md) | 6,440,926 | 35+ organs | 19,000+ | Organ signatures, cancer comparison |
+| [SpatialCorpus](spatial_corpus.md) | ~110,000,000 | 251 files | 150-20K | Spatial transcriptomics (8 technologies) |
+| [parse_10M](parse_10m.md) | 9,697,974 | 1,092 | 40,352 | Cytokine perturbation (ground truth) |
+| [Tahoe-100M](tahoe.md) | ~100,600,000 | 14 plates | 62,710 | Drug perturbation (50 cancer lines) |
 
 ## Signature Matrices
 
@@ -26,7 +29,10 @@ All H5AD files are stored on the Jiang Lab data partition:
 │   ├── Cell_Atlas/
 │   └── Metadata/
 ├── Inflammation_Atlas/
-└── scAtlas_2025/
+├── scAtlas_2025/
+├── SpatialCorpus-110M/     # 251 H5AD files (Visium, Xenium, MERFISH, etc.)
+├── parse_10M/              # Single 212 GB H5AD + metadata CSV
+└── tahoe/                  # 14 plate H5AD files
 ```
 
 ## Common Patterns
@@ -61,9 +67,9 @@ if 'counts' in adata.layers:
 
 ### Sample Columns by Atlas
 
-| Column | CIMA | Inflammation | scAtlas |
-|--------|------|--------------|---------|
-| Sample ID | `sample` | `sampleID` | `donorID` |
-| Cell Type | `cell_type_l2` | `Level2` | `subCluster` |
-| Disease | - | `disease` | `cancerType` |
-| Tissue | - | `tissue` | `tissue` |
+| Column | CIMA | Inflammation | scAtlas | parse_10M | Tahoe | SpatialCorpus |
+|--------|------|--------------|---------|-----------|-------|---------------|
+| Sample ID | `sample` | `sampleID` | `donorID` | `sample_id` | `plate` | varies |
+| Cell Type | `cell_type_l2` | `Level2` | `subCluster` | `cell_type` | `cell_line` | `cell_type` |
+| Condition | - | `disease` | `cancerType` | `cytokine` | `drug` | `tissue` |
+| Control | - | - | - | `PBS` | `DMSO_TF` | - |

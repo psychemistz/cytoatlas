@@ -30,12 +30,21 @@ Consistent terminology used across all bounded contexts:
 | **Signature** | A column in CytoSig or SecAct; represents a cytokine or secreted protein target |
 | **Target** | Synonym for signature in the validation/correlation context |
 | **Hot/Warm/Cold** | Tiered caching: in-memory (1h TTL) / JSON files (persistent) / CSV archives (persistent) |
+| **Perturbation** | Exogenous treatment (cytokine or drug) applied to cells in vitro |
+| **Treatment Effect** | Activity difference between treated and control (PBS or DMSO) cells |
+| **Ground Truth** | parse_10M validation: cells treated with a known cytokine → measure if CytoSig predicts that cytokine's activity |
+| **Drug Sensitivity** | Activity change in cancer cell lines after drug treatment |
+| **Dose-Response** | Activity change as a function of drug concentration (Tahoe Plate 13) |
+| **Spatial Activity** | Cytokine/secreted protein activity inferred from spatial transcriptomics data |
+| **Technology Tier** | A (full inference, Visium 15K+ genes), B (targeted scoring, 150-1000 genes), C (skip) |
+| **Niche** | Local cellular neighborhood in spatial data; captured by NicheFormer embeddings |
+| **Gene Panel Coverage** | Fraction of signature genes present in a spatial technology's gene panel |
 
 ---
 
 ## Domain Overview
 
-Pan-Disease Single-Cell Cytokine Activity Atlas — computes cytokine and secreted protein activity signatures across 12+ million human immune cells from three major single-cell atlases (CIMA, Inflammation Atlas, scAtlas) to identify disease-specific and conserved signaling patterns.
+Pan-Disease Single-Cell Cytokine Activity Atlas — computes cytokine and secreted protein activity signatures across 240+ million human cells from six datasets (CIMA, Inflammation Atlas, scAtlas, parse_10M, Tahoe-100M, SpatialCorpus-110M) to identify disease-specific and conserved signaling patterns, validate signatures with perturbation ground truth, and map drug-induced pathway changes.
 
 ### Bounded Contexts
 
@@ -46,21 +55,17 @@ Pan-Disease Single-Cell Cytokine Activity Atlas — computes cytokine and secret
 │  ┌──────────────┐  ┌──────────────┐  ┌───────────────────────┐ │
 │  │   Science    │  │   Pipeline   │  │      API Gateway       │ │
 │  │   Domain     │──│   Domain     │──│       Domain           │ │
-│  │              │  │              │  │                         │ │
-│  │ • Analysis   │  │ • Ingest     │  │ • REST Endpoints       │ │
-│  │ • Statistics │  │ • Process    │  │ • Repository Layer     │ │
-│  │ • Validation │  │ • Export     │  │ • Service Layer        │ │
-│  │ • Signatures │  │ • Orchestr.  │  │ • Auth/RBAC            │ │
 │  └──────────────┘  └──────────────┘  └───────────────────────┘ │
 │                                                                 │
-│  ┌──────────────┐  ┌──────────────┐                             │
-│  │ Visualization│  │   Data       │                             │
-│  │   Domain     │──│   Domain     │                             │
-│  │              │  │              │                             │
-│  │ • Web Portal │  │ • DuckDB     │                             │
-│  │ • Charts     │  │ • JSON files │                             │
-│  │ • SPA Pages  │  │ • H5AD/CSV   │                             │
-│  └──────────────┘  └──────────────┘                             │
+│  ┌──────────────┐  ┌──────────────┐  ┌───────────────────────┐ │
+│  │ Visualization│  │   Data       │  │  Perturbation Domain  │ │
+│  │   Domain     │──│   Domain     │──│  (parse_10M + Tahoe)  │ │
+│  └──────────────┘  └──────────────┘  └───────────────────────┘ │
+│                                                                 │
+│  ┌───────────────────────┐                                      │
+│  │   Spatial Domain      │                                      │
+│  │  (SpatialCorpus-110M) │                                      │
+│  └───────────────────────┘                                      │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -122,6 +127,18 @@ EXT_H5AD = '/data/Jiang_Lab/Data/Seongyong/Inflammation_Atlas/INFLAMMATION_ATLAS
 # scAtlas
 NORMAL_COUNTS = '/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/igt_s9_fine_counts.h5ad'
 CANCER_COUNTS = '/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/PanCancer_igt_s9_fine_counts.h5ad'
+
+# parse_10M (Cytokine Perturbation)
+PARSE10M_H5AD = '/data/Jiang_Lab/Data/Seongyong/parse_10M/Parse_10M_PBMC_cytokines.h5ad'
+PARSE10M_CYTOKINE_META = '/data/Jiang_Lab/Data/Seongyong/parse_10M/cytokine_origin_parse10M.csv'
+
+# Tahoe-100M (Drug Perturbation)
+TAHOE_DIR = '/data/Jiang_Lab/Data/Seongyong/tahoe/'
+# 14 plate files: plate{1-14}_filt_Vevo_Tahoe100M_WServicesFrom_ParseGigalab.h5ad
+
+# SpatialCorpus-110M
+SPATIAL_DIR = '/data/Jiang_Lab/Data/Seongyong/SpatialCorpus-110M/'
+# 251 H5AD files (Visium, Xenium, MERFISH, MERSCOPE, CosMx, ISS, Slide-seq)
 ```
 
 ---
@@ -149,7 +166,17 @@ GPU-accelerated processing pipeline (`cytoatlas-pipeline/` package).
 | 15 | `15_bulk_validation.py` | GTEx/TCGA bulk RNA-seq activity + correlations |
 | 16 | `16_resampled_validation.py` | Bootstrap resampled activity inference + CIs |
 | 17 | `17_preprocess_validation_summary.py` | Validation summary preprocessing |
+| 18 | `18_parse10m_activity.py` | parse_10M: 9.7M cells, cytokine perturbation activity |
+| 19 | `19_tahoe_activity.py` | Tahoe: 100M cells, drug-response activity (14 plates) |
+| 20 | `20_spatial_activity.py` | SpatialCorpus: 110M cells, technology-stratified activity |
+| 21 | `21_parse10m_ground_truth.py` | CytoSig ground-truth validation (predicted vs actual) |
+| 22 | `22_tahoe_drug_signatures.py` | Drug sensitivity signature extraction |
+| 23 | `23_spatial_neighborhood.py` | Spatial neighborhood activity analysis |
+| 24 | `24_preprocess_perturbation_viz.py` | JSON/DuckDB preprocessing for perturbation viz |
+| 25 | `25_preprocess_spatial_viz.py` | JSON/DuckDB preprocessing for spatial viz |
 | — | `convert_data_to_duckdb.py` | Convert JSON/CSV data to DuckDB |
+| — | `convert_perturbation_to_duckdb.py` | Convert perturbation results to DuckDB |
+| — | `convert_spatial_to_duckdb.py` | Convert spatial results to DuckDB |
 | — | `create_data_lite.py` | Generate lite dataset for development |
 | — | `build_rag_index.py` | Build RAG semantic index |
 
@@ -207,7 +234,7 @@ python scripts/06_preprocess_viz_data.py
 
 ## Context 3: API Gateway Domain
 
-CytoAtlas REST API — 217 endpoints across 15 routers.
+CytoAtlas REST API — 260+ endpoints across 17 routers.
 
 ### Quick Start
 
@@ -269,6 +296,8 @@ class JSONRepository(AtlasRepository):      # Fallback — load visualization/da
 | Health | 4 | Health checks, system status |
 | Pipeline | 4 | Pipeline status and management |
 | WebSocket | 3 | Real-time updates |
+| Perturbation (`/perturbation`) | ~25 | Cytokine response (parse_10M), drug sensitivity (Tahoe) |
+| Spatial (`/spatial`) | ~20 | Spatial activity, neighborhood, technology comparison |
 
 ### RBAC Model
 
@@ -301,7 +330,9 @@ Data storage, flow, and persistence architecture.
 
 | Layer | Medium | Purpose |
 |-------|--------|---------|
-| **DuckDB** | `atlas_data.duckdb` | Primary science data (activity, correlations, differential, scatter, validation) |
+| **DuckDB (atlas)** | `atlas_data.duckdb` | Primary science data — CIMA, Inflammation, scAtlas (590 MB) |
+| **DuckDB (perturbation)** | `perturbation_data.duckdb` | parse_10M + Tahoe aggregated results (~3-5 GB) |
+| **DuckDB (spatial)** | `spatial_data.duckdb` | SpatialCorpus aggregated results (~2-4 GB) |
 | **SQLite** | `app.db` | App state (users, conversations, jobs) |
 | **JSON** | `visualization/data/*.json` | Fallback / web portal data (~1.5GB) |
 | **H5AD/CSV** | `results/` | Raw analysis outputs, archival (~50GB) |
@@ -332,7 +363,10 @@ results/
 ├── integrated/                  # Cross-atlas comparisons
 ├── figures/                     # Publication figures
 ├── cross_sample_validation/     # Validation H5AD files + correlation CSVs
-└── atlas_validation/            # Resampled pseudobulk H5AD (bootstrap inputs)
+├── atlas_validation/            # Resampled pseudobulk H5AD (bootstrap inputs)
+├── parse10m/                    # parse_10M perturbation activity + ground truth
+├── tahoe/                       # Tahoe drug-response activity + sensitivity
+└── spatial/                     # SpatialCorpus technology-stratified activity
 
 visualization/
 ├── data/                        # JSON files for web dashboard
@@ -348,10 +382,10 @@ cytoatlas-pipeline/              # GPU-accelerated pipeline package
 
 ## Context 5: Visualization Domain
 
-Web portal — 8-page SPA with 40+ interactive panels.
+Web portal — 10-page SPA with 50+ interactive panels.
 
 - **Stack:** Vanilla JS, Plotly, D3.js
-- **Pages:** Landing, Explore, Compare, Validate, Submit, Chat, About, Contact
+- **Pages:** Landing, Explore, Compare, Validate, Perturbation, Spatial, Submit, Chat, About, Contact
 - **Charts:** Line, scatter, heatmap, violin, box
 - **Labels:** Use "Δ Activity" (not "Log2FC") for differential displays
 - **Data checklist:** See `docs/EMBEDDED_DATA_CHECKLIST.md` before adding new JSON files
@@ -454,9 +488,14 @@ All data access logged to JSONL: `{timestamp, user_id, email, ip_address, method
 - SLURM consolidation: `scripts/slurm/jobs.yaml` + `submit_jobs.py` replaces 28 individual scripts
 - Resampled bootstrap: All atlases complete (CIMA, Inflammation main/val/ext, scAtlas normal/cancer) — 36 scatter JSONs, 14 correlation CSVs, 18 activity H5ADs
 
+### In Progress
+
+- SpatialCorpus-110M integration (NicheFormer spatial data, ~110M cells)
+- parse_10M cytokine perturbation integration (~9.7M cells, ground-truth validation)
+- Tahoe-100M drug perturbation integration (~100M cells, drug sensitivity profiling)
+
 ### Future Work
 
-- NicheFormer spatial transcriptomics integration (~30M cells)
 - scGPT cohort integration (~35M cells)
 - cellxgene Census cohort integration
 

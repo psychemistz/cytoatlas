@@ -13,6 +13,8 @@ When the user invokes /validate-data, perform the following:
    - Cross-atlas: `cross_atlas.json`, `celltype_mapping.json`, `disease_sankey.json`
    - Validation: `validation_summary.json`, `validation_corr_boxplot.json`, `bulk_rnaseq_validation.json`
    - Gene/Search: `gene_list.json`, `gene_expression.json`, `search_index.json`, `summary_stats.json`
+   - Perturbation: `parse10m_cytokine_heatmap.json`, `parse10m_ground_truth.json`, `parse10m_donor_variability.json`, `tahoe_drug_sensitivity.json`, `tahoe_dose_response.json`, `tahoe_pathway_activation.json`
+   - Spatial: `spatial_tissue_activity.json`, `spatial_technology_comparison.json`, `spatial_gene_coverage.json`, `spatial_dataset_catalog.json`
 
 2. **Validate JSON structure**:
    - Parse each file for valid JSON

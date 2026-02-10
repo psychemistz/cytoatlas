@@ -34,6 +34,8 @@ from app.routers import (
     submit_router,
     validation_router,
     websocket_router,
+    perturbation_router,
+    spatial_router,
 )
 from app.routers.pipeline import router as pipeline_router
 
@@ -271,6 +273,8 @@ def create_app() -> FastAPI:
     app.include_router(chat_router, prefix=api_prefix)
     app.include_router(websocket_router, prefix=api_prefix)
     app.include_router(pipeline_router, prefix=api_prefix)  # Pipeline management
+    app.include_router(perturbation_router, prefix=api_prefix)  # Perturbation (parse_10M + Tahoe)
+    app.include_router(spatial_router, prefix=api_prefix)  # Spatial (SpatialCorpus-110M)
 
     # Mount static files (CSS, JS, assets)
     if STATIC_DIR.exists():

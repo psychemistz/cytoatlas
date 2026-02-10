@@ -89,8 +89,66 @@ _KNOWN_TABLES: frozenset[str] = frozenset(
         "treatment_response",
         "validation_corr_boxplot",
         "validation_summary",
+        # Perturbation domain tables (perturbation_data.duckdb)
+        "parse10m_activity",
+        "parse10m_treatment_effect",
+        "parse10m_ground_truth",
+        "parse10m_cytokine_metadata",
+        "parse10m_cytokine_heatmap",
+        "tahoe_activity",
+        "tahoe_drug_effect",
+        "tahoe_drug_sensitivity",
+        "tahoe_dose_response",
+        "tahoe_pathway_activation",
+        "tahoe_cell_line_metadata",
+        # Spatial domain tables (spatial_data.duckdb)
+        "spatial_activity",
+        "spatial_tissue_summary",
+        "spatial_neighborhood",
+        "spatial_technology_comparison",
+        "spatial_dataset_metadata",
+        "spatial_coordinates",
+        "spatial_gene_coverage",
+        "spatial_tissue_activity_viz",
+        "spatial_technology_comparison_viz",
+        "spatial_gene_coverage_viz",
     }
 )
+
+# Map database domains to file names (relative to project root).
+_DATABASE_REGISTRY: dict[str, str] = {
+    "atlas": "atlas_data.duckdb",
+    "perturbation": "perturbation_data.duckdb",
+    "spatial": "spatial_data.duckdb",
+}
+
+# Map each non-atlas table to its owning database domain.
+# Tables not listed here default to "atlas".
+_TABLE_TO_DATABASE: dict[str, str] = {
+    # perturbation tables
+    "parse10m_activity": "perturbation",
+    "parse10m_treatment_effect": "perturbation",
+    "parse10m_ground_truth": "perturbation",
+    "parse10m_cytokine_metadata": "perturbation",
+    "parse10m_cytokine_heatmap": "perturbation",
+    "tahoe_activity": "perturbation",
+    "tahoe_drug_effect": "perturbation",
+    "tahoe_drug_sensitivity": "perturbation",
+    "tahoe_dose_response": "perturbation",
+    "tahoe_pathway_activation": "perturbation",
+    "tahoe_cell_line_metadata": "perturbation",
+    # spatial tables
+    "spatial_activity": "spatial",
+    "spatial_tissue_summary": "spatial",
+    "spatial_neighborhood": "spatial",
+    "spatial_technology_comparison": "spatial",
+    "spatial_dataset_metadata": "spatial",
+    "spatial_coordinates": "spatial",
+    "spatial_gene_coverage": "spatial",
+    "spatial_tissue_activity_viz": "spatial",
+    "spatial_technology_comparison_viz": "spatial",
+    "spatial_gene_coverage_viz": "spatial",
+}
 
 
 def _validate_identifier(name: str) -> str:
@@ -119,6 +177,10 @@ class DuckDBRepository(BaseRepository):
         self._db_path: Path = db_path or settings.duckdb_atlas_path
         self._conn: Any | None = None  # duckdb.DuckDBPyConnection
         self._available: bool | None = None
+
+        # Multi-database connections: domain -> connection
+        self._domain_conns: dict[str, Any] = {}
+        self._domain_available: dict[str, bool] = {}
 
         # Simple query-level stats (not a full cache -- DuckDB manages its
         # own buffer pool internally).
@@ -163,6 +225,45 @@ class DuckDBRepository(BaseRepository):
             self._conn.execute("SET threads TO 4")
             self._conn.execute("SET memory_limit = '2GB'")
         return self._conn
+
+    def _get_conn_for_table(self, table: str) -> Any:
+        """Return the DuckDB connection that owns *table*.
+
+        Tables listed in ``_TABLE_TO_DATABASE`` are routed to domain-specific
+        databases (perturbation_data.duckdb, spatial_data.duckdb).  All other
+        tables use the default atlas connection.
+        """
+        domain = _TABLE_TO_DATABASE.get(table, "atlas")
+        if domain == "atlas":
+            return self._get_conn()
+
+        if domain in self._domain_conns:
+            return self._domain_conns[domain]
+
+        db_filename = _DATABASE_REGISTRY.get(domain)
+        if db_filename is None:
+            logger.warning("Unknown database domain %r for table %r", domain, table)
+            return self._get_conn()
+
+        db_path = self._db_path.parent / db_filename
+        if not db_path.exists():
+            logger.warning(
+                "Domain database not found: %s (table %s will fall back to atlas)",
+                db_path,
+                table,
+            )
+            self._domain_available[domain] = False
+            return self._get_conn()
+
+        import duckdb
+
+        conn = duckdb.connect(str(db_path), read_only=True)
+        conn.execute("SET threads TO 4")
+        conn.execute("SET memory_limit = '2GB'")
+        self._domain_conns[domain] = conn
+        self._domain_available[domain] = True
+        logger.info("Opened domain database: %s (%s)", domain, db_path)
+        return conn
 
     def _run_sync(self, fn: Any, *args: Any) -> Any:
         """Schedule *fn* on the default executor (non-blocking)."""

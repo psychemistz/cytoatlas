@@ -20,6 +20,8 @@ When the user invokes /test-api, perform the following:
    - `/test-api cima` - Test CIMA router endpoints
    - `/test-api inflam` - Test Inflammation router endpoints
    - `/test-api scatlas` - Test scAtlas router endpoints
+   - `/test-api perturbation` - Test Perturbation router endpoints (parse10m + tahoe)
+   - `/test-api spatial` - Test Spatial router endpoints
    - `/test-api all` - Run all endpoint tests
 
 3. **Report results** with:

@@ -157,22 +157,99 @@ class AtlasRegistry:
             created_at=datetime(2024, 1, 1),
         )
 
-        # ---- NEW ATLASES (Round 4 — planned) ----
+        # ---- NEW ATLASES (Round 4) ----
 
-        # NicheFormer spatial transcriptomics
-        self._atlases["nicheformer"] = AtlasMetadata(
-            name="nicheformer",
-            display_name="NicheFormer (Spatial Transcriptomics)",
-            description="~30 million cells with spatial context from multiple tissues, "
-            "enabling niche-level cytokine activity analysis.",
+        # parse_10M (Cytokine Perturbation)
+        self._atlases["parse10m"] = AtlasMetadata(
+            name="parse10m",
+            display_name="parse_10M (Cytokine Perturbation)",
+            description="9.7 million cytokine-treated PBMCs from 12 donors across "
+            "90 cytokine conditions, providing ground-truth validation for CytoSig.",
+            atlas_type=AtlasType.IMMUNE,
+            data_dir=str(settings.viz_data_path),
+            n_cells=9697974,
+            n_samples=1092,
+            n_cell_types=18,
+            has_cytosig=True,
+            has_secact=True,
+            species="human",
+            version="1.0.0",
+            status=AtlasStatus.READY,
+            features=[
+                "cytokine_response",
+                "ground_truth",
+                "treatment_effect",
+                "donor_variability",
+                "cytokine_families",
+            ],
+            extra={
+                "cytokines": 90,
+                "donors": 12,
+                "control": "PBS",
+            },
+            created_at=datetime(2026, 2, 10),
+        )
+
+        # Tahoe-100M (Drug Perturbation)
+        self._atlases["tahoe"] = AtlasMetadata(
+            name="tahoe",
+            display_name="Tahoe-100M (Drug Perturbation)",
+            description="100.6 million drug-perturbed cancer cells across 50 cell lines "
+            "treated with 95 drugs, enabling drug sensitivity profiling.",
+            atlas_type=AtlasType.DISEASE,
+            data_dir=str(settings.viz_data_path),
+            n_cells=100600000,
+            n_samples=14,
+            n_cell_types=50,
+            has_cytosig=True,
+            has_secact=True,
+            species="human",
+            version="1.0.0",
+            status=AtlasStatus.READY,
+            features=[
+                "drug_response",
+                "sensitivity_matrix",
+                "dose_response",
+                "pathway_activation",
+            ],
+            extra={
+                "drugs": 95,
+                "cell_lines": 50,
+                "plates": 14,
+                "control": "DMSO_TF",
+            },
+            created_at=datetime(2026, 2, 10),
+        )
+
+        # SpatialCorpus-110M
+        self._atlases["spatial_corpus"] = AtlasMetadata(
+            name="spatial_corpus",
+            display_name="SpatialCorpus-110M",
+            description="110 million spatial transcriptomics cells across 251 datasets "
+            "from 8 technologies (Visium, Xenium, MERFISH, etc.).",
             atlas_type=AtlasType.TISSUE,
             data_dir=str(settings.viz_data_path),
-            n_cells=0,  # TBD after processing
+            n_cells=110000000,
+            n_samples=251,
+            n_cell_types=0,  # Variable per dataset
+            has_cytosig=True,
+            has_secact=True,
             species="human",
-            version="0.1.0",
-            status=AtlasStatus.PLANNED,
-            features=["cell_type_activity", "spatial_niche", "organ_signatures"],
-            created_at=datetime(2026, 2, 9),
+            version="1.0.0",
+            status=AtlasStatus.READY,
+            features=[
+                "spatial_activity",
+                "neighborhood",
+                "technology_comparison",
+                "gene_coverage",
+            ],
+            extra={
+                "technologies": [
+                    "Visium", "Xenium", "MERFISH", "MERSCOPE",
+                    "CosMx", "ISS", "Slide-seq",
+                ],
+            },
+            created_at=datetime(2026, 2, 10),
         )
 
         # scGPT cohort

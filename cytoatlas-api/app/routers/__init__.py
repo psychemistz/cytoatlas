@@ -15,6 +15,8 @@ from app.routers.search import router as search_router
 from app.routers.submit import router as submit_router
 from app.routers.validation import router as validation_router
 from app.routers.websocket import router as websocket_router
+from app.routers.perturbation import router as perturbation_router
+from app.routers.spatial import router as spatial_router
 
 __all__ = [
     "atlases_router",
@@ -26,9 +28,11 @@ __all__ = [
     "gene_router",
     "health_router",
     "inflammation_router",
+    "perturbation_router",
     "pipeline_router",
     "scatlas_router",
     "search_router",
+    "spatial_router",
     "submit_router",
     "validation_router",
     "websocket_router",

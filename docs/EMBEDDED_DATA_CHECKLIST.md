@@ -95,6 +95,24 @@ Expected size: 150-300 MB (depending on included data)
 | `validation/inflammation_validation.json` | N/A | Lazy-loaded | Inflammation single-cell validation |
 | `validation/scatlas_validation.json` | N/A | Lazy-loaded | scAtlas single-cell validation |
 
+### Perturbation Data (parse_10M + Tahoe)
+| File | Embedded Key | Status | Notes |
+|------|--------------|--------|-------|
+| `parse10m_cytokine_heatmap.json` | N/A | Lazy-loaded | 90 cytokines × 18 cell types activity |
+| `parse10m_ground_truth.json` | N/A | Lazy-loaded | Predicted vs actual scatter data |
+| `parse10m_donor_variability.json` | N/A | Lazy-loaded | Cross-donor consistency |
+| `tahoe_drug_sensitivity.json` | N/A | Lazy-loaded | 95 drugs × 50 cell lines |
+| `tahoe_dose_response.json` | N/A | Lazy-loaded | Plate 13 dose curves |
+| `tahoe_pathway_activation.json` | N/A | Lazy-loaded | Drug → pathway mapping |
+
+### Spatial Data (SpatialCorpus-110M)
+| File | Embedded Key | Status | Notes |
+|------|--------------|--------|-------|
+| `spatial_tissue_activity.json` | N/A | Lazy-loaded | Tissue-level activity |
+| `spatial_technology_comparison.json` | N/A | Lazy-loaded | Cross-tech reproducibility |
+| `spatial_gene_coverage.json` | N/A | Lazy-loaded | Gene panel coverage per technology |
+| `spatial_dataset_catalog.json` | N/A | Lazy-loaded | 251 dataset metadata |
+
 ## Lazy Loading Fallbacks
 
 The following files have fallback lazy loading if not embedded:

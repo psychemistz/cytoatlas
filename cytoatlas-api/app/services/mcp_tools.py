@@ -29,7 +29,7 @@ CYTOATLAS_TOOLS = [
                 },
                 "entity_type": {
                     "type": "string",
-                    "enum": ["all", "cytokine", "protein", "cell_type", "disease", "organ"],
+                    "enum": ["all", "cytokine", "protein", "cell_type", "disease", "organ", "drug", "perturbation"],
                     "description": "Filter by entity type (default: all)"
                 },
                 "limit": {
@@ -330,11 +330,148 @@ CYTOATLAS_TOOLS = [
             "properties": {
                 "dataset_name": {
                     "type": "string",
-                    "enum": ["cima", "inflammation", "scatlas", "cytosig", "secact"],
+                    "enum": ["cima", "inflammation", "scatlas", "parse10m", "tahoe", "spatial_corpus", "cytosig", "secact"],
                     "description": "Name of the dataset or signature matrix"
                 }
             },
             "required": ["dataset_name"]
+        }
+    },
+    {
+        "name": "query_perturbation_data",
+        "description": "Query cytokine perturbation (parse_10M) or drug perturbation (Tahoe) data. Get activity changes after treatment.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "dataset": {
+                    "type": "string",
+                    "enum": ["parse10m", "tahoe"],
+                    "description": "Which perturbation dataset to query"
+                },
+                "treatment": {
+                    "type": "string",
+                    "description": "Cytokine name (parse_10M) or drug name (Tahoe)"
+                },
+                "cell_type_or_line": {
+                    "type": "string",
+                    "description": "PBMC cell type (parse_10M) or cancer cell line (Tahoe)"
+                },
+                "signature_type": {
+                    "type": "string",
+                    "enum": ["CytoSig", "SecAct"],
+                    "description": "Signature matrix type (default: CytoSig)"
+                }
+            },
+            "required": ["dataset"]
+        }
+    },
+    {
+        "name": "get_ground_truth_validation",
+        "description": "Get ground truth validation results comparing CytoSig/SecAct predicted activity against actual cytokine treatment response in parse_10M data.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "signature_type": {
+                    "type": "string",
+                    "enum": ["CytoSig", "SecAct"],
+                    "description": "Signature matrix type"
+                },
+                "cytokine": {
+                    "type": "string",
+                    "description": "Specific cytokine to validate (optional)"
+                },
+                "cell_type": {
+                    "type": "string",
+                    "description": "PBMC cell type (optional)"
+                }
+            }
+        }
+    },
+    {
+        "name": "get_drug_sensitivity",
+        "description": "Get drug sensitivity data from Tahoe-100M. Returns activity changes across cancer cell lines for specific drugs.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "drug": {
+                    "type": "string",
+                    "description": "Drug name"
+                },
+                "cell_line": {
+                    "type": "string",
+                    "description": "Cancer cell line name (optional)"
+                },
+                "signature_type": {
+                    "type": "string",
+                    "enum": ["CytoSig", "SecAct"],
+                    "description": "Signature matrix type"
+                }
+            },
+            "required": ["drug"]
+        }
+    },
+    {
+        "name": "get_dose_response",
+        "description": "Get dose-response data from Tahoe Plate 13 (3 dose levels for 25 drugs across 50 cell lines).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "drug": {
+                    "type": "string",
+                    "description": "Drug name"
+                },
+                "cell_line": {
+                    "type": "string",
+                    "description": "Cancer cell line (optional)"
+                },
+                "signature": {
+                    "type": "string",
+                    "description": "Specific cytokine/protein signature (optional)"
+                }
+            },
+            "required": ["drug"]
+        }
+    },
+    {
+        "name": "get_spatial_activity",
+        "description": "Get spatial transcriptomics activity data from SpatialCorpus-110M. Query by technology, tissue, or signature.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "technology": {
+                    "type": "string",
+                    "enum": ["Visium", "Xenium", "MERFISH", "MERSCOPE", "CosMx"],
+                    "description": "Spatial technology platform"
+                },
+                "tissue": {
+                    "type": "string",
+                    "description": "Tissue/organ type"
+                },
+                "signature_type": {
+                    "type": "string",
+                    "enum": ["CytoSig", "SecAct"],
+                    "description": "Signature matrix type"
+                }
+            }
+        }
+    },
+    {
+        "name": "compare_technologies",
+        "description": "Compare activity patterns across spatial transcriptomics technologies for the same tissue types.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "tissue": {
+                    "type": "string",
+                    "description": "Tissue to compare across technologies"
+                },
+                "signature_type": {
+                    "type": "string",
+                    "enum": ["CytoSig", "SecAct"],
+                    "description": "Signature matrix type"
+                }
+            },
+            "required": ["tissue"]
         }
     },
 ]
