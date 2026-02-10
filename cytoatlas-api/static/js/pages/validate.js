@@ -22,28 +22,28 @@ const ValidatePage = {
     // Level configs matching index.html
     DONOR_LEVEL_CONFIG: {
         cima: {
-            levels: { donor_l1: 'L1', donor_l2: 'L2', donor_l3: 'L3', donor_l4: 'L4' },
-            groupLabel: 'Cell Type',
+            levels: { donor_only: 'Donor Only', donor_l1: 'L1', donor_l2: 'L2', donor_l3: 'L3', donor_l4: 'L4' },
+            groupLabel: { donor_only: '', donor_l1: 'Cell Type', donor_l2: 'Cell Type', donor_l3: 'Cell Type', donor_l4: 'Cell Type' },
         },
         inflammation_main: {
-            levels: { donor_l1: 'L1', donor_l2: 'L2' },
-            groupLabel: 'Cell Type',
+            levels: { donor_only: 'Donor Only', donor_l1: 'L1', donor_l2: 'L2' },
+            groupLabel: { donor_only: '', donor_l1: 'Cell Type', donor_l2: 'Cell Type' },
         },
         inflammation_val: {
-            levels: { donor_l1: 'L1', donor_l2: 'L2' },
-            groupLabel: 'Cell Type',
+            levels: { donor_only: 'Donor Only', donor_l1: 'L1', donor_l2: 'L2' },
+            groupLabel: { donor_only: '', donor_l1: 'Cell Type', donor_l2: 'Cell Type' },
         },
         inflammation_ext: {
-            levels: { donor_l1: 'L1', donor_l2: 'L2' },
-            groupLabel: 'Cell Type',
+            levels: { donor_only: 'Donor Only', donor_l1: 'L1', donor_l2: 'L2' },
+            groupLabel: { donor_only: '', donor_l1: 'Cell Type', donor_l2: 'Cell Type' },
         },
         scatlas_normal: {
-            levels: { donor_organ: 'By Organ', donor_organ_celltype1: 'Organ × Cell Type (broad)', donor_organ_celltype2: 'Organ × Cell Type (fine)' },
-            groupLabel: { donor_organ: 'Organ', donor_organ_celltype1: 'Organ × Cell Type', donor_organ_celltype2: 'Organ × Cell Type' },
+            levels: { donor_organ: 'By Organ' },
+            groupLabel: 'Organ',
         },
         scatlas_cancer: {
-            levels: { donor_organ: 'By Sample Type', donor_organ_celltype1: 'Sample × Cell Type (broad)', donor_organ_celltype2: 'Sample × Cell Type (fine)' },
-            groupLabel: { donor_organ: 'Sample Type', donor_organ_celltype1: 'Sample × Cell Type', donor_organ_celltype2: 'Sample × Cell Type' },
+            levels: { donor_organ: 'By Sample Type' },
+            groupLabel: 'Sample Type',
         },
     },
 
@@ -65,12 +65,12 @@ const ValidatePage = {
             groupLabel: 'Cell Type',
         },
         scatlas_normal: {
-            levels: { celltype: 'Cell Type', organ_celltype: 'Organ × Cell Type' },
-            groupLabel: { celltype: 'Cell Type', organ_celltype: 'Organ × Cell Type' },
+            levels: { celltype: 'Cell Type', organ_celltype: 'Organ/Cell Type' },
+            groupLabel: { celltype: 'Cell Type', organ_celltype: 'Organ/Cell Type' },
         },
         scatlas_cancer: {
-            levels: { celltype: 'Cell Type', organ_celltype: 'Sample × Cell Type' },
-            groupLabel: { celltype: 'Cell Type', organ_celltype: 'Sample × Cell Type' },
+            levels: { celltype: 'Cell Type', organ_celltype: 'Sample/Cell Type' },
+            groupLabel: { celltype: 'Cell Type', organ_celltype: 'Sample/Cell Type' },
         },
     },
 
@@ -221,13 +221,22 @@ const ValidatePage = {
                         <div id="val-summary-box" class="plot-container" style="height: 500px;"></div>
                     </div>
                 </div>
+
+                <div class="panel-grid">
+                    <div class="panel" style="grid-column: span 2;">
+                        <div class="viz-title">Method Comparison — CytoSig vs LinCytoSig vs SecAct</div>
+                        <div class="viz-subtitle">Cell-type-level Spearman rho (all donors pooled) across single-cell atlases</div>
+                        <div id="val-summary-method-comparison" class="plot-container" style="height: 450px;"></div>
+                    </div>
+                </div>
             </div>
         `;
 
-        // Load boxplot data for both signature types
-        const [cytosigData, secactData] = await Promise.all([
+        // Load boxplot data for both signature types + method comparison
+        const [cytosigData, secactData, methodData] = await Promise.all([
             this.cachedFetch(() => API.getSummaryBoxplot('cytosig'), 'summary-boxplot-cytosig'),
             this.cachedFetch(() => API.getSummaryBoxplot('secact'), 'summary-boxplot-secact'),
+            this.cachedFetch(() => API.getMethodComparison(), 'method-comparison').catch(() => null),
         ]);
 
         // Populate target dropdown
@@ -257,6 +266,9 @@ const ValidatePage = {
         }
 
         this._renderSummaryCombinedBox(cytosigData, secactData, '_all');
+        if (methodData) {
+            this._renderMethodComparison('val-summary-method-comparison', methodData);
+        }
     },
 
     _renderSummaryCombinedBox(cytosigData, secactData, target) {
@@ -353,6 +365,80 @@ const ValidatePage = {
         }, { responsive: true });
     },
 
+    /**
+     * Render method comparison: CytoSig vs LinCytoSig vs SecAct boxplots
+     * across SC atlases at celltype level.
+     */
+    _renderMethodComparison(divId, methodData) {
+        const div = document.getElementById(divId);
+        if (!div) return;
+
+        const categories = methodData.categories || [];
+        if (!categories.length) {
+            div.innerHTML = '<p class="no-data">No method comparison data available</p>';
+            return;
+        }
+
+        const sigColors = {
+            cytosig: '#1f77b4',
+            lincytosig: '#2ca02c',
+            secact: '#ff7f0e',
+        };
+        const sigLabels = {
+            cytosig: 'CytoSig',
+            lincytosig: 'LinCytoSig',
+            secact: 'SecAct',
+        };
+
+        const traces = [];
+        const sigs = ['cytosig', 'lincytosig', 'secact'];
+
+        sigs.forEach((sig, si) => {
+            const sigData = methodData[sig];
+            if (!sigData || !sigData.rhos) return;
+
+            categories.forEach((cat, ci) => {
+                const catKey = cat.key;
+                const catLabel = cat.label;
+
+                // Collect all rho values for this sig × category
+                const rhos = [];
+                for (const [target, targetRhos] of Object.entries(sigData.rhos)) {
+                    const val = targetRhos[catKey];
+                    if (val != null && isFinite(val)) {
+                        rhos.push(val);
+                    }
+                }
+
+                traces.push({
+                    type: 'box',
+                    y: rhos,
+                    name: sigLabels[sig],
+                    x: rhos.map(() => catLabel),
+                    legendgroup: sig,
+                    marker: { color: sigColors[sig] },
+                    boxpoints: rhos.length < 50 ? 'all' : 'outliers',
+                    jitter: 0.3,
+                    offsetgroup: sig,
+                    showlegend: ci === 0,
+                });
+            });
+        });
+
+        if (!traces.length) {
+            div.innerHTML = '<p class="no-data">No comparison data</p>';
+            return;
+        }
+
+        Plotly.newPlot(div, traces, {
+            boxmode: 'group',
+            yaxis: { title: 'Spearman rho', zeroline: true },
+            xaxis: { tickangle: -20 },
+            margin: { l: 60, r: 20, t: 40, b: 130 },
+            legend: { orientation: 'h', x: 0.15, y: 1.05 },
+        }, { responsive: true });
+    },
+
     // ==================== Tab 2: Bulk RNA-seq ====================
 
     async loadBulkRnaseqTab() {
@@ -414,7 +500,7 @@ const ValidatePage = {
         if (sigtypeSel) {
             sigtypeSel.addEventListener('change', () => {
                 this.bulkRnaseq.sigtype = sigtypeSel.value;
-                this.bulkRnaseq.target = null;
+                // Don't reset target — try to keep current selection
                 this._loadBulkTargets();
             });
         }
@@ -422,7 +508,7 @@ const ValidatePage = {
             datasetSel.addEventListener('change', () => {
                 this.bulkRnaseq.dataset = datasetSel.value;
                 this.bulkRnaseq.group = '';
-                this.bulkRnaseq.target = null;
+                // Don't reset target — try to keep current selection
                 this.loadBulkRnaseqTab();
             });
         }
@@ -470,14 +556,31 @@ const ValidatePage = {
         targets.sort((a, b) => Math.abs(b.rho || 0) - Math.abs(a.rho || 0));
 
         targetSel.innerHTML = targets.map(t =>
-            `<option value="${t.target}">${t.target} (${t.gene || ''}, r=${(t.rho || 0).toFixed(2)})</option>`
+            `<option value="${t.target}">${t.target} (${t.gene || ''}, r=${(t.rho || 0).toFixed(3)})</option>`
         ).join('');
 
-        if (!this.bulkRnaseq.target && targets.length) {
+        // Preserve current target: exact match, then fuzzy match (cytokine name)
+        const currentTarget = this.bulkRnaseq.target;
+        let matched = currentTarget && targets.find(t => t.target === currentTarget);
+        if (!matched && currentTarget && targets.length) {
+            const base = currentTarget.includes('__') ? currentTarget.split('__').pop() : currentTarget;
+            matched = targets.find(t => t.target === base)
+                || targets.find(t => t.target.endsWith('__' + base))
+                || targets.find(t => t.target.toLowerCase().includes(base.toLowerCase()));
+        }
+        if (matched) {
+            this.bulkRnaseq.target = matched.target;
+        } else if (targets.length) {
             this.bulkRnaseq.target = targets[0].target;
         }
         if (this.bulkRnaseq.target) {
             targetSel.value = this.bulkRnaseq.target;
+        }
+
+        // Reapply search filter if search text is present
+        const searchInput = document.getElementById('val-bulk-search');
+        if (searchInput && searchInput.value) {
+            this._filterSelect(targetSel, searchInput.value);
         }
 
         await this._renderBulkScatter();
@@ -565,7 +668,7 @@ const ValidatePage = {
                 <div class="panel-grid">
                     <div class="panel" style="grid-column: span 2;">
                         <div class="viz-title">Expression vs Activity</div>
-                        <div class="viz-subtitle">Each point = one donor pseudobulk sample</div>
+                        <div class="viz-subtitle" id="val-donor-subtitle">Each point = one donor pseudobulk sample</div>
                         <div id="val-donor-scatter" class="plot-container" style="height: 450px;"></div>
                     </div>
                 </div>
@@ -601,14 +704,14 @@ const ValidatePage = {
         if (sigtypeSel) {
             sigtypeSel.addEventListener('change', () => {
                 this.donorLevel.sigtype = sigtypeSel.value;
-                this.donorLevel.target = null;
+                // Don't reset target — preserve current selection across sigtype changes
                 this._loadDonorTargets();
             });
         }
         if (levelSel) {
             levelSel.addEventListener('change', () => {
                 this.donorLevel.level = levelSel.value;
-                this.donorLevel.target = null;
+                // Don't reset target — preserve current selection across level changes
                 this._loadDonorTargets();
             });
         }
@@ -647,24 +750,52 @@ const ValidatePage = {
 
         const atlas = this.donorLevel.atlas;
         const sig = this.donorLevel.sigtype;
-        const level = this.donorLevel.level || 'donor_l1';
-        // Use celltype API (has level dimension + groups) instead of donor API (no groups)
-        const targets = await this.cachedFetch(
-            () => API.getCelltypeTargets(atlas, sig, level),
-            `donor-targets-${atlas}-${sig}-${level}`
-        );
+        const level = this.donorLevel.level || 'donor_only';
+
+        let targets;
+        if (level === 'donor_only') {
+            // Use donor API (pure donor-level, no celltype stratification)
+            targets = await this.cachedFetch(
+                () => API.getDonorTargets(atlas, sig),
+                `donor-targets-only-${atlas}-${sig}`
+            );
+        } else {
+            // Use celltype API (has level dimension + groups)
+            targets = await this.cachedFetch(
+                () => API.getCelltypeTargets(atlas, sig, level),
+                `donor-targets-${atlas}-${sig}-${level}`
+            );
+        }
 
         this.donorLevel.targets = targets;
         targets.sort((a, b) => Math.abs(b.rho || 0) - Math.abs(a.rho || 0));
 
         targetSel.innerHTML = targets.map(t =>
-            `<option value="${t.target}">${t.target} (${t.gene || ''}, r=${(t.rho || 0).toFixed(2)})</option>`
+            `<option value="${t.target}">${t.target} (${t.gene || ''}, r=${Number(t.rho || 0).toFixed(3)}, n=${t.n || ''})</option>`
         ).join('');
 
-        if (!this.donorLevel.target && targets.length) {
+        // Preserve current target: exact match, then fuzzy match (cytokine name)
+        const currentTarget = this.donorLevel.target;
+        let matched = currentTarget && targets.find(t => t.target === currentTarget);
+        if (!matched && currentTarget && targets.length) {
+            // Extract base cytokine name (e.g., "IFNG" from "B_Cell__IFNG" or just "IFNG")
+            const base = currentTarget.includes('__') ? currentTarget.split('__').pop() : currentTarget;
+            matched = targets.find(t => t.target === base)
+                || targets.find(t => t.target.endsWith('__' + base))
+                || targets.find(t => t.target.toLowerCase().includes(base.toLowerCase()));
+        }
+        if (matched) {
+            this.donorLevel.target = matched.target;
+        } else if (targets.length) {
             this.donorLevel.target = targets[0].target;
         }
         if (this.donorLevel.target) targetSel.value = this.donorLevel.target;
+
+        // Reapply search filter if search text is present
+        const searchInput = document.getElementById('val-donor-search');
+        if (searchInput && searchInput.value) {
+            this._filterSelect(targetSel, searchInput.value);
+        }
 
         await this._renderDonorScatter();
     },
@@ -674,20 +805,40 @@ const ValidatePage = {
         const atlas = this.donorLevel.atlas;
         const target = this.donorLevel.target;
         const sig = this.donorLevel.sigtype;
-        const level = this.donorLevel.level || 'donor_l1';
+        const level = this.donorLevel.level || 'donor_only';
         const cacheKey = `donor-scatter-${atlas}-${level}-${target}-${sig}`;
 
-        // Use celltype API (has level + groups) for proper group coloring
-        const data = await this.cachedFetch(
-            () => API.getCelltypeScatter(atlas, target, sig, level),
-            cacheKey
-        );
+        let data;
+        if (level === 'donor_only') {
+            // Use donor API (pure donor-level)
+            data = await this.cachedFetch(
+                () => API.getDonorScatter(atlas, target, sig),
+                cacheKey
+            );
+        } else {
+            // Use celltype API (has level + groups) for proper group coloring
+            data = await this.cachedFetch(
+                () => API.getCelltypeScatter(atlas, target, sig, level),
+                cacheKey
+            );
+        }
 
         if (this.donorLevel.target !== target) return;
 
         if (!data || !data.points) {
             document.getElementById('val-donor-scatter').innerHTML = '<p class="no-data">No scatter data</p>';
             return;
+        }
+
+        // Update subtitle
+        const subtitle = document.getElementById('val-donor-subtitle');
+        if (subtitle) {
+            const nPts = data.points ? data.points.length : (data.n || 0);
+            if (level === 'donor_only') {
+                subtitle.textContent = `Each point = one donor (${nPts} donors, all cell types pooled)`;
+            } else {
+                subtitle.textContent = `Each point = one donor \u00D7 cell type (${nPts} observations)`;
+            }
         }
 
         // Populate group selector
@@ -697,6 +848,8 @@ const ValidatePage = {
             groupSel.innerHTML = '<option value="">All</option>' +
                 data.groups.map(g => `<option value="${g}">${g.replace(/_/g, ' ')}</option>`).join('');
             if (currentGroup) groupSel.value = currentGroup;
+        } else if (groupSel) {
+            groupSel.innerHTML = '<option value="">All</option>';
         }
 
         const donorConfig = this.DONOR_LEVEL_CONFIG[atlas];
@@ -743,9 +896,6 @@ const ValidatePage = {
                     <label>Target:
                         <select id="val-ct-target"><option value="">Loading...</option></select>
                     </label>
-                    <label>${config && config.groupLabel ? (typeof config.groupLabel === 'string' ? config.groupLabel : config.groupLabel[this.celltypeLevel.level] || 'Group') : 'Group'}:
-                        <select id="val-ct-group"><option value="">All</option></select>
-                    </label>
                     <label>
                         <input type="checkbox" id="val-ct-hide-nonexpr"> Hide non-expressing
                     </label>
@@ -763,12 +913,14 @@ const ValidatePage = {
                 </div>
                 <div class="panel-grid">
                     <div class="panel">
-                        <div class="viz-title">Per-Group Correlation</div>
-                        <div id="val-ct-bar" class="plot-container" style="height: 350px;"></div>
+                        <div class="viz-title">Top Targets by |rho|</div>
+                        <div class="viz-subtitle">Targets ranked by absolute Spearman correlation</div>
+                        <div id="val-ct-ranking" class="plot-container" style="height: 350px;"></div>
                     </div>
                     <div class="panel">
-                        <div class="viz-title">Activity by Group</div>
-                        <div id="val-ct-box" class="plot-container" style="height: 350px;"></div>
+                        <div class="viz-title">Activity by Cell Type</div>
+                        <div class="viz-subtitle">Predicted activity per cell type for selected target</div>
+                        <div id="val-ct-activity" class="plot-container" style="height: 350px;"></div>
                     </div>
                 </div>
             </div>
@@ -778,7 +930,6 @@ const ValidatePage = {
         const ctSigtypeSel = document.getElementById('val-ct-sigtype');
         const levelSel = document.getElementById('val-ct-level');
         const targetSel = document.getElementById('val-ct-target');
-        const groupSel = document.getElementById('val-ct-group');
         const hideNonExpr = document.getElementById('val-ct-hide-nonexpr');
         const searchInput = document.getElementById('val-ct-search');
 
@@ -786,33 +937,27 @@ const ValidatePage = {
             ctAtlasSel.addEventListener('change', () => {
                 this.celltypeLevel.atlas = ctAtlasSel.value;
                 this.celltypeLevel.level = null;
-                this.celltypeLevel.target = null;
+                // Don't reset target
                 this.loadCelltypeLevelTab();
             });
         }
         if (ctSigtypeSel) {
             ctSigtypeSel.addEventListener('change', () => {
                 this.celltypeLevel.sigtype = ctSigtypeSel.value;
-                this.celltypeLevel.target = null;
+                // Don't reset target — preserve current selection
                 this._loadCelltypeTargets();
             });
         }
         if (levelSel) {
             levelSel.addEventListener('change', () => {
                 this.celltypeLevel.level = levelSel.value;
-                this.celltypeLevel.target = null;
+                // Don't reset target — preserve current selection
                 this._loadCelltypeTargets();
             });
         }
         if (targetSel) {
             targetSel.addEventListener('change', () => {
                 this.celltypeLevel.target = targetSel.value;
-                this._renderCelltypeScatter();
-            });
-        }
-        if (groupSel) {
-            groupSel.addEventListener('change', () => {
-                this.celltypeLevel.group = groupSel.value;
                 this._renderCelltypeScatter();
             });
         }
@@ -839,7 +984,7 @@ const ValidatePage = {
 
         const atlas = this.celltypeLevel.atlas;
         const sig = this.celltypeLevel.sigtype;
-        const level = this.celltypeLevel.level || 'donor_l1';
+        const level = this.celltypeLevel.level || 'l1';
         const targets = await this.cachedFetch(
             () => API.getCelltypeTargets(atlas, sig, level),
             `ct-targets-${atlas}-${sig}-${level}`
@@ -849,13 +994,33 @@ const ValidatePage = {
         targets.sort((a, b) => Math.abs(b.rho || 0) - Math.abs(a.rho || 0));
 
         targetSel.innerHTML = targets.map(t =>
-            `<option value="${t.target}">${t.target} (${t.gene || ''}, r=${(t.rho || 0).toFixed(2)})</option>`
+            `<option value="${t.target}">${t.target} (${t.gene || ''}, r=${(t.rho || 0).toFixed(3)})</option>`
         ).join('');
 
-        if (!this.celltypeLevel.target && targets.length) {
+        // Preserve current target: exact match, then fuzzy match (cytokine name)
+        const currentTarget = this.celltypeLevel.target;
+        let matched = currentTarget && targets.find(t => t.target === currentTarget);
+        if (!matched && currentTarget && targets.length) {
+            const base = currentTarget.includes('__') ? currentTarget.split('__').pop() : currentTarget;
+            matched = targets.find(t => t.target === base)
+                || targets.find(t => t.target.endsWith('__' + base))
+                || targets.find(t => t.target.toLowerCase().includes(base.toLowerCase()));
+        }
+        if (matched) {
+            this.celltypeLevel.target = matched.target;
+        } else if (targets.length) {
             this.celltypeLevel.target = targets[0].target;
         }
         if (this.celltypeLevel.target) targetSel.value = this.celltypeLevel.target;
+
+        // Reapply search filter if search text is present
+        const searchInput = document.getElementById('val-ct-search');
+        if (searchInput && searchInput.value) {
+            this._filterSelect(targetSel, searchInput.value);
+        }
+
+        // Render target ranking bar
+        this._renderTargetRanking('val-ct-ranking', targets);
 
         await this._renderCelltypeScatter();
     },
@@ -865,7 +1030,7 @@ const ValidatePage = {
         const atlas = this.celltypeLevel.atlas;
         const target = this.celltypeLevel.target;
         const sig = this.celltypeLevel.sigtype;
-        const level = this.celltypeLevel.level || 'donor_l1';
+        const level = this.celltypeLevel.level || 'l1';
         const cacheKey = `ct-scatter-${atlas}-${level}-${target}-${sig}`;
 
         const data = await this.cachedFetch(
@@ -880,29 +1045,103 @@ const ValidatePage = {
             return;
         }
 
-        const groupSel = document.getElementById('val-ct-group');
-        if (groupSel && data.groups) {
-            const currentGroup = groupSel.value;
-            groupSel.innerHTML = '<option value="">All</option>' +
-                data.groups.map(g => `<option value="${g}">${g.replace(/_/g, ' ')}</option>`).join('');
-            if (currentGroup) groupSel.value = currentGroup;
-        }
-
-        const ctConfig = this.CELLTYPE_LEVEL_CONFIG[atlas];
-        const ctGroupLabel = ctConfig && ctConfig.groupLabel
-            ? (typeof ctConfig.groupLabel === 'string' ? ctConfig.groupLabel : ctConfig.groupLabel[level] || 'Group')
-            : 'Cell Type';
-
         this._renderValidationScatter('val-ct-scatter', data, target, {
             hideNonExpr: this.celltypeLevel.hideNonExpr,
-            celltypeFilter: this.celltypeLevel.group,
+            celltypeFilter: '',
             unitLabel: 'cell types',
-            filterLabel: ctGroupLabel,
+            filterLabel: 'Cell Type',
             atlasLabel: this.celltypeLevel.atlas,
         });
 
-        this._renderGroupBar('val-ct-bar', data);
-        this._renderGroupBox('val-ct-box', data);
+        // Render per-celltype activity bar
+        this._renderCelltypeActivityBar('val-ct-activity', data);
+    },
+
+    /**
+     * Render top targets ranked by |rho| as horizontal bar chart.
+     */
+    _renderTargetRanking(divId, targets) {
+        const div = document.getElementById(divId);
+        if (!div) return;
+
+        if (!targets || !targets.length) {
+            div.innerHTML = '<p class="no-data">No targets available</p>';
+            return;
+        }
+
+        const top20 = targets.slice(0, 20); // Already sorted by |rho|
+        const getColor = (r) => {
+            const ar = Math.abs(r);
+            if (ar > 0.5) return '#1a9850';
+            if (ar > 0.3) return '#91cf60';
+            if (ar > 0.1) return '#fee08b';
+            return '#d73027';
+        };
+
+        Plotly.newPlot(div, [{
+            type: 'bar',
+            y: top20.map(t => t.target),
+            x: top20.map(t => t.rho || 0),
+            orientation: 'h',
+            marker: { color: top20.map(t => getColor(t.rho || 0)) },
+            text: top20.map(t => `r=${(t.rho || 0).toFixed(3)}`),
+            textposition: 'outside',
+            hovertemplate: '%{y}<br>rho = %{x:.3f}<extra></extra>',
+        }], {
+            xaxis: { title: 'Spearman rho' },
+            yaxis: { automargin: true, autorange: 'reversed' },
+            margin: { l: 120, r: 60, t: 30, b: 50 },
+        }, { responsive: true });
+    },
+
+    /**
+     * Render per-celltype activity as horizontal bar chart for celltype-only data.
+     * Each point in the scatter IS a celltype, so we show activity per celltype.
+     */
+    _renderCelltypeActivityBar(divId, data) {
+        const div = document.getElementById(divId);
+        if (!div) return;
+
+        const points = data.points || [];
+        const groups = data.groups || data.celltypes || [];
+        if (!groups.length || !points.length) {
+            div.innerHTML = '<p class="no-data">No activity data</p>';
+            return;
+        }
+
+        // Build celltype -> activity mapping
+        const ctActivities = [];
+        points.forEach(p => {
+            const gIdx = p[2] !== undefined ? p[2] : 0;
+            const gName = gIdx >= 0 && gIdx < groups.length ? groups[gIdx] : 'Unknown';
+            ctActivities.push({ name: gName, activity: p[1] });
+        });
+
+        // Sort by activity descending
+        ctActivities.sort((a, b) => b.activity - a.activity);
+        const top20 = ctActivities.slice(0, 20);
+
+        const getColor = (a) => {
+            if (a > 1) return '#1a9850';
+            if (a > 0) return '#91cf60';
+            if (a > -1) return '#fee08b';
+            return '#d73027';
+        };
+
+        Plotly.newPlot(div, [{
+            type: 'bar',
+            y: top20.map(c => c.name.length > 30 ? c.name.substring(0, 27) + '...' : c.name),
+            x: top20.map(c => c.activity),
+            orientation: 'h',
+            marker: { color: top20.map(c => getColor(c.activity)) },
+            text: top20.map(c => c.activity.toFixed(2)),
+            textposition: 'outside',
+            hovertemplate: '%{y}<br>Activity: %{x:.3f}<extra></extra>',
+        }], {
+            xaxis: { title: 'Activity (z-score)' },
+            yaxis: { automargin: true, autorange: 'reversed' },
+            margin: { l: 150, r: 60, t: 30, b: 50 },
+        }, { responsive: true });
     },
 
     // ==================== Tab 5: Single-Cell ====================
@@ -963,14 +1202,14 @@ const ValidatePage = {
         if (scAtlasSel) {
             scAtlasSel.addEventListener('change', () => {
                 this.singleCell.atlas = scAtlasSel.value;
-                this.singleCell.target = null;
+                // Don't reset target — preserve current selection
                 this._loadSingleCellTargets();
             });
         }
         if (scSigtypeSel) {
             scSigtypeSel.addEventListener('change', () => {
                 this.singleCell.sigtype = scSigtypeSel.value;
-                this.singleCell.target = null;
+                // Don't reset target — preserve current selection
                 this._loadSingleCellTargets();
             });
         }
@@ -1036,15 +1275,32 @@ const ValidatePage = {
         targets.sort((a, b) => Math.abs(b.rho || 0) - Math.abs(a.rho || 0));
 
         targetSel.innerHTML = targets.map(t => {
-            const rhoStr = t.rho !== null && t.rho !== undefined ? `, r=${t.rho.toFixed(2)}` : '';
+            const rhoStr = t.rho != null ? `, r=${Number(t.rho).toFixed(3)}` : '';
             const nStr = t.n_total ? `, n=${(t.n_total/1e6).toFixed(1)}M` : '';
             return `<option value="${t.target}">${t.target} (${t.gene || ''}${rhoStr}${nStr})</option>`;
         }).join('');
 
-        if (!this.singleCell.target && targets.length) {
+        // Preserve current target: exact match, then fuzzy match (cytokine name)
+        const currentTarget = this.singleCell.target;
+        let matched = currentTarget && targets.find(t => t.target === currentTarget);
+        if (!matched && currentTarget && targets.length) {
+            const base = currentTarget.includes('__') ? currentTarget.split('__').pop() : currentTarget;
+            matched = targets.find(t => t.target === base)
+                || targets.find(t => t.target.endsWith('__' + base))
+                || targets.find(t => t.target.toLowerCase().includes(base.toLowerCase()));
+        }
+        if (matched) {
+            this.singleCell.target = matched.target;
+        } else if (targets.length) {
             this.singleCell.target = targets[0].target;
         }
         if (this.singleCell.target) targetSel.value = this.singleCell.target;
+
+        // Reapply search filter if search text is present
+        const searchInput = document.getElementById('val-sc-search');
+        if (searchInput && searchInput.value) {
+            this._filterSelect(targetSel, searchInput.value);
+        }
 
         await this._renderSingleCellPlots();
     },
@@ -1189,8 +1445,9 @@ const ValidatePage = {
         }
 
         // Stats annotation
-        let annoText = `Spearman rho = ${(data.rho || 0).toFixed(3)}`;
-        if (data.pval !== null && data.pval !== undefined) {
+        const rhoVal = data.rho != null ? Number(data.rho) : 0;
+        let annoText = `Spearman rho = ${rhoVal.toFixed(3)}`;
+        if (data.pval != null) {
             annoText += `<br>p = ${Number(data.pval).toExponential(2)}`;
         }
         annoText += `<br>n = ${(data.n_total || 0).toLocaleString()} cells`;
@@ -1239,7 +1496,7 @@ const ValidatePage = {
             x: top20.map(s => s.rho || 0),
             orientation: 'h',
             marker: { color: top20.map(s => getColor(s.rho || 0)) },
-            text: top20.map(s => `r=${(s.rho || 0).toFixed(2)}, n=${(s.n || 0).toLocaleString()}`),
+            text: top20.map(s => `r=${(s.rho || 0).toFixed(3)}, n=${(s.n || 0).toLocaleString()}`),
             textposition: 'outside',
             hovertemplate: '%{y}<br>rho = %{x:.3f}<extra></extra>',
         }], {
@@ -1253,29 +1510,34 @@ const ValidatePage = {
         const div = document.getElementById(divId);
         if (!div) return;
 
-        const meanExpr = data.mean_act_expressing;
-        const meanNonExpr = data.mean_act_non_expressing;
-        const fc = data.fold_change;
-        const mwP = data.mann_whitney_p;
+        // Support both old field names and new API names
+        const meanExpr = data.mean_activity_expressing ?? data.mean_act_expressing ?? null;
+        const meanNonExpr = data.mean_activity_non_expressing ?? data.mean_act_non_expressing ?? null;
 
-        if (meanExpr === null && meanNonExpr === null) {
+        if (meanExpr == null && meanNonExpr == null) {
             div.innerHTML = '<p class="no-data">No expressing/non-expressing data</p>';
             return;
         }
 
+        const exprVal = meanExpr != null ? Number(meanExpr) : 0;
+        const nonExprVal = meanNonExpr != null ? Number(meanNonExpr) : 0;
+
+        // Compute activity difference (not ratio — z-scores can be negative)
+        const actDiff = data.activity_diff != null ? Number(data.activity_diff) : (exprVal - nonExprVal);
+
         Plotly.newPlot(div, [{
             type: 'bar',
             x: ['Expressing', 'Non-Expressing'],
-            y: [meanExpr || 0, meanNonExpr || 0],
+            y: [exprVal, nonExprVal],
             marker: { color: ['#2ca02c', '#d62728'] },
-            text: [(meanExpr || 0).toFixed(3), (meanNonExpr || 0).toFixed(3)],
+            text: [exprVal.toFixed(3), nonExprVal.toFixed(3)],
             textposition: 'outside',
         }], {
             yaxis: { title: 'Mean Activity (z-score)' },
             margin: { l: 60, r: 30, t: 60, b: 50 },
             annotations: [{
                 x: 0.5, y: 1.1, xref: 'paper', yref: 'paper',
-                text: `FC = ${fc !== null ? fc.toFixed(2) : 'N/A'}, MW p = ${mwP !== null ? Number(mwP).toExponential(2) : 'N/A'}` +
+                text: `\u0394 Activity = ${actDiff.toFixed(3)}` +
                       `<br>n_expr = ${(data.n_expressing || 0).toLocaleString()}, n_total = ${(data.n_total || 0).toLocaleString()}`,
                 showarrow: false, font: { size: 11 },
             }],
@@ -1338,17 +1600,11 @@ const ValidatePage = {
 
         const xArr = points.map(p => p[0]);
         const yArr = points.map(p => p[1]);
-
-        // Compute correlations on visible points
         const n = xArr.length;
-        const spearmanR = this._spearmanRho(xArr, yArr);
-        const sumX = xArr.reduce((a, b) => a + b, 0);
-        const sumY = yArr.reduce((a, b) => a + b, 0);
-        const sumXY = xArr.reduce((a, x, i) => a + x * yArr[i], 0);
-        const sumX2 = xArr.reduce((a, x) => a + x * x, 0);
-        const sumY2 = yArr.reduce((a, y) => a + y * y, 0);
-        const denom = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
-        const pearsonR = denom > 0 ? (n * sumXY - sumX * sumY) / denom : 0;
+
+        // Use pre-computed rho from metadata (exact); fall back to re-computation for filtered views
+        const isFiltered = hideNonExpr || celltypeFilter;
+        const spearmanR = isFiltered ? this._spearmanRho(xArr, yArr) : (data.rho != null ? Number(data.rho) : this._spearmanRho(xArr, yArr));
 
         const traces = [];
         const useWebGL = points.length > 1000;
@@ -1395,9 +1651,15 @@ const ValidatePage = {
         const trendline = this.calculateTrendline(xArr, yArr);
         if (trendline.x) traces.push(trendline);
 
-        // Annotation
+        // Annotation — use pre-computed p-value when unfiltered
+        const pval = isFiltered ? null : (data.pval != null ? Number(data.pval) : null);
         let annoText = `Spearman rho = ${spearmanR.toFixed(3)}`;
-        annoText += `<br>Pearson r = ${pearsonR.toFixed(3)}`;
+        if (pval != null) {
+            annoText += `<br>p = ${pval.toExponential(2)}`;
+        }
+        if (data.rho_ci) {
+            annoText += `<br>95% CI [${data.rho_ci[0]}, ${data.rho_ci[1]}]`;
+        }
         annoText += `<br>n = ${n} ${unitLabel}`;
         if (hideNonExpr) annoText += '<br>(non-expressing hidden)';
         if (celltypeFilter) annoText += `<br>${filterLabel}: ${celltypeFilter}`;

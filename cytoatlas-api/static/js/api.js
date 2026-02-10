@@ -265,6 +265,10 @@ const API = {
         return this.get(`/validation/summary-boxplot/${encodeURIComponent(target)}`, { sigtype });
     },
 
+    async getMethodComparison() {
+        return this.get('/validation/method-comparison');
+    },
+
     // ==================== Validation: Bulk RNA-seq ====================
 
     async getBulkRnaseqDatasets() {

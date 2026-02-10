@@ -613,6 +613,24 @@ async def get_summary_boxplot(
     return await service.get_summary_boxplot(sigtype)
 
 
+@router.get("/method-comparison")
+async def get_method_comparison() -> dict:
+    """Get CytoSig vs LinCytoSig vs SecAct comparison data for summary tab."""
+    import json as _json
+    from pathlib import Path as _Path
+
+    data_path = _Path(__file__).resolve().parent.parent.parent / "static" / "data"
+    # Try validation subdirectory first, then main data dir
+    for candidate in [
+        data_path.parent.parent.parent / "visualization" / "data" / "validation" / "method_comparison.json",
+        data_path / "method_comparison.json",
+    ]:
+        if candidate.exists():
+            with open(candidate) as f:
+                return _json.load(f)
+    raise HTTPException(status_code=404, detail="Method comparison data not found")
+
+
 @router.get("/summary-boxplot/{target}")
 async def get_summary_boxplot_target(
     target: str = Path(..., description="Target/signature name"),
@@ -685,14 +703,24 @@ async def get_singlecell_full_scatter(
     n_expressing = data.get("n_expressing", 0)
     gene = data.get("gene")
 
+    # Build celltype index from sampled_points
+    ct_set = set()
+    for p in sampled_raw:
+        ct = p.get("cell_type")
+        if ct:
+            ct_set.add(ct)
+    celltypes = sorted(ct_set) if ct_set else ["all"]
+    ct_to_idx = {ct: i for i, ct in enumerate(celltypes)}
+
     # Convert sampled_points to compact array format: [expr, act, ct_idx, 0, is_expressing]
-    # Existing data doesn't have celltype, so ct_idx=0 for all
     points = []
     for p in sampled_raw:
         expr = p.get("expression", 0)
         act = p.get("activity", 0)
         is_expr = 1 if p.get("is_expressing", False) else 0
-        points.append([round(expr, 3), round(act, 3), 0, 0, is_expr])
+        ct = p.get("cell_type")
+        ct_idx = ct_to_idx.get(ct, 0) if ct else 0
+        points.append([round(expr, 3), round(act, 3), ct_idx, 0, is_expr])
 
     # Compute Spearman rho from sampled points
     rho, pval = None, None
@@ -704,6 +732,37 @@ async def get_singlecell_full_scatter(
         rho = round(float(rho), 4) if rho is not None else None
         pval = float(f"{pval:.2e}") if pval is not None else None
 
+    # Compute per-celltype stats
+    celltype_stats = []
+    if len(celltypes) > 1 or (len(celltypes) == 1 and celltypes[0] != "all"):
+        ct_groups: dict[str, list] = {}
+        for p in sampled_raw:
+            ct = p.get("cell_type", "Unknown")
+            ct_groups.setdefault(ct, []).append(p)
+        for ct in sorted(ct_groups.keys()):
+            pts = ct_groups[ct]
+            exprs = [p["expression"] for p in pts if p.get("expression") is not None]
+            acts = [p["activity"] for p in pts if p.get("activity") is not None]
+            if len(exprs) >= 5 and len(acts) >= 5:
+                ct_rho, ct_p = sp_stats.spearmanr(exprs, acts)
+                ct_rho = round(float(ct_rho), 4) if ct_rho is not None else None
+            else:
+                ct_rho, ct_p = None, None
+            n_expr = sum(1 for p in pts if p.get("is_expressing", False))
+            celltype_stats.append({
+                "celltype": ct,
+                "n": len(pts),
+                "n_expressing": n_expr,
+                "rho": ct_rho,
+            })
+
+    # Compute activity_diff (difference, not ratio — z-scores)
+    mean_expr = data.get("mean_activity_expressing")
+    mean_non = data.get("mean_activity_non_expressing")
+    activity_diff = None
+    if mean_expr is not None and mean_non is not None:
+        activity_diff = round(float(mean_expr) - float(mean_non), 4)
+
     return {
         "target": target,
         "gene": gene,
@@ -713,14 +772,14 @@ async def get_singlecell_full_scatter(
         "n_total": n_total,
         "n_expressing": n_expressing,
         "expressing_fraction": data.get("expressing_fraction", 0),
-        "mean_activity_expressing": data.get("mean_activity_expressing"),
-        "mean_activity_non_expressing": data.get("mean_activity_non_expressing"),
-        "activity_fold_change": data.get("activity_fold_change"),
+        "mean_activity_expressing": mean_expr,
+        "mean_activity_non_expressing": mean_non,
+        "activity_diff": activity_diff,
         "sampled": {
-            "celltypes": ["all"],
+            "celltypes": celltypes,
             "points": points,
         },
-        # No density data from pre-sampled points
+        "celltype_stats": celltype_stats,
     }
 
 

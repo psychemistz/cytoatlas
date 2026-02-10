@@ -340,7 +340,8 @@ class ValidationDataGenerator:
 
         mean_expressing = float(np.mean(activity_expressing))
         mean_non_expressing = float(np.mean(activity_non_expressing))
-        fold_change = mean_expressing / mean_non_expressing if mean_non_expressing != 0 else 0
+        # Activity difference (not ratio — z-scores can be negative)
+        fold_change = float(mean_expressing - mean_non_expressing)
 
         # Mann-Whitney test
         from scipy import stats
@@ -387,7 +388,7 @@ class ValidationDataGenerator:
             "activity_p_value": float(p_value),
             "sampled_points": sampled_points,
             "interpretation": (
-                f"Expressing cells show {fold_change:.1f}x higher activity "
+                f"Expressing cells show \u0394 Activity = {fold_change:.3f} "
                 f"(p={p_value:.2e})"
             ),
         }

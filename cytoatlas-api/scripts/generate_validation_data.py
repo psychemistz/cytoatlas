@@ -882,9 +882,8 @@ class RealValidationGenerator:
 
         mean_expressing = float(np.mean(act_expr))
         mean_non_expressing = float(np.mean(act_non))
-        fold_change = (
-            mean_expressing / mean_non_expressing if mean_non_expressing != 0 else 1.0
-        )
+        # Activity difference (not ratio — z-scores can be negative)
+        fold_change = float(mean_expressing - mean_non_expressing)
 
         from scipy import stats as scipy_stats
 
@@ -940,7 +939,7 @@ class RealValidationGenerator:
             "activity_p_value": float(p_value),
             "sampled_points": sampled_points,
             "data_source": "real",
-            "interpretation": f"Expressing cells show {fold_change:.1f}x higher activity (p={p_value:.2e})",
+            "interpretation": f"Expressing cells show \u0394 Activity = {fold_change:.3f} (p={p_value:.2e})",
         }
 
     def _generate_singlecell_synthetic(self, signature: str) -> Dict[str, Any]:
@@ -975,9 +974,8 @@ class RealValidationGenerator:
 
         mean_expressing = float(np.mean(activity_expressing))
         mean_non_expressing = float(np.mean(activity_non_expressing))
-        fold_change = (
-            mean_expressing / mean_non_expressing if mean_non_expressing != 0 else 1
-        )
+        # Activity difference (not ratio — z-scores can be negative)
+        fold_change = float(mean_expressing - mean_non_expressing)
 
         from scipy import stats as scipy_stats
 
@@ -1025,7 +1023,7 @@ class RealValidationGenerator:
             "activity_p_value": float(p_value),
             "sampled_points": sampled_points,
             "data_source": "synthetic",
-            "interpretation": f"Expressing cells show {fold_change:.1f}x higher activity (p={p_value:.2e})",
+            "interpretation": f"Expressing cells show \u0394 Activity = {fold_change:.3f} (p={p_value:.2e})",
         }
 
     def generate_biological_associations(self) -> Dict[str, Any]:
