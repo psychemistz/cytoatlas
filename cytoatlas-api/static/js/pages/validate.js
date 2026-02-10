@@ -102,7 +102,7 @@ const ValidatePage = {
 
     // Tab-specific state (each tab tracks its own atlas + sigtype)
     summary: { sigtype: 'cytosig' },
-    bulkRnaseq: { sigtype: 'cytosig', dataset: 'gtex', target: null, targets: [], hideNonExpr: false },
+    bulkRnaseq: { sigtype: 'cytosig', dataset: 'gtex', group: '', target: null, targets: [], hideNonExpr: false },
     donorLevel: { atlas: 'cima', sigtype: 'cytosig', level: null, group: '', target: null, targets: [], hideNonExpr: false },
     celltypeLevel: { atlas: 'cima', sigtype: 'cytosig', level: null, group: '', target: null, targets: [], hideNonExpr: false },
     singleCell: { atlas: 'cima', sigtype: 'cytosig', target: null, targets: [], donor: '', celltype: '', hideNonExpr: false },
@@ -263,23 +263,28 @@ const ValidatePage = {
             return;
         }
 
-        // Collect rho values for a given dataset
-        const collectVals = (cats, rhos, catIdx) => {
+        // Collect rho values for a category key from rhos dict.
+        // rhos structure: { targetName: { catKey: [rho_values] } }
+        const collectVals = (rhos, catKey) => {
             let yVals = [];
             if (target === '_all') {
-                for (const [, tgtRhos] of Object.entries(rhos)) {
-                    if (tgtRhos[catIdx] !== null && tgtRhos[catIdx] !== undefined) {
-                        if (Array.isArray(tgtRhos[catIdx])) {
-                            yVals.push(...tgtRhos[catIdx]);
+                for (const tgtRhos of Object.values(rhos)) {
+                    const vals = tgtRhos[catKey];
+                    if (vals !== null && vals !== undefined) {
+                        if (Array.isArray(vals)) {
+                            yVals.push(...vals);
                         } else {
-                            yVals.push(tgtRhos[catIdx]);
+                            yVals.push(vals);
                         }
                     }
                 }
             } else {
                 const tgtRhos = rhos[target];
-                if (tgtRhos && tgtRhos[catIdx] !== null && tgtRhos[catIdx] !== undefined) {
-                    yVals = Array.isArray(tgtRhos[catIdx]) ? tgtRhos[catIdx] : [tgtRhos[catIdx]];
+                if (tgtRhos) {
+                    const vals = tgtRhos[catKey];
+                    if (vals !== null && vals !== undefined) {
+                        yVals = Array.isArray(vals) ? vals : [vals];
+                    }
                 }
             }
             return yVals;
@@ -291,15 +296,15 @@ const ValidatePage = {
 
         // CytoSig traces (one box per category)
         refCats.forEach((cat, i) => {
-            const catName = typeof cat === 'string' ? cat : (cat.label || cat.key || String(cat));
-            const yVals = collectVals(cytosigCats, cytosigRhos, i);
+            const catKey = typeof cat === 'string' ? cat : (cat.key || String(cat));
+            const catLabel = typeof cat === 'string' ? cat.replace(/_/g, ' ') : (cat.label || cat.key || String(cat));
+            const yVals = collectVals(cytosigRhos, catKey);
             traces.push({
                 type: 'box',
                 y: yVals,
-                name: catName.replace(/_/g, ' '),
-                x: yVals.map(() => catName.replace(/_/g, ' ')),
+                name: 'CytoSig',
+                x: yVals.map(() => catLabel),
                 legendgroup: 'CytoSig',
-                legendgrouptitle: { text: 'CytoSig' },
                 marker: { color: '#1f77b4' },
                 boxpoints: yVals.length < 50 ? 'all' : 'outliers',
                 jitter: 0.3,
@@ -311,15 +316,15 @@ const ValidatePage = {
         // SecAct traces (one box per category, side-by-side)
         const secRefCats = secactCats.length > 0 ? secactCats : refCats;
         secRefCats.forEach((cat, i) => {
-            const catName = typeof cat === 'string' ? cat : (cat.label || cat.key || String(cat));
-            const yVals = collectVals(secactCats, secactRhos, i);
+            const catKey = typeof cat === 'string' ? cat : (cat.key || String(cat));
+            const catLabel = typeof cat === 'string' ? cat.replace(/_/g, ' ') : (cat.label || cat.key || String(cat));
+            const yVals = collectVals(secactRhos, catKey);
             traces.push({
                 type: 'box',
                 y: yVals,
-                name: catName.replace(/_/g, ' '),
-                x: yVals.map(() => catName.replace(/_/g, ' ')),
+                name: 'SecAct',
+                x: yVals.map(() => catLabel),
                 legendgroup: 'SecAct',
-                legendgrouptitle: { text: 'SecAct' },
                 marker: { color: '#ff7f0e' },
                 boxpoints: yVals.length < 50 ? 'all' : 'outliers',
                 jitter: 0.3,
@@ -358,6 +363,9 @@ const ValidatePage = {
                     <label>Target:
                         <select id="val-bulk-target"><option value="">Loading...</option></select>
                     </label>
+                    <label>${this.bulkRnaseq.dataset === 'gtex' ? 'Tissue' : 'Cancer Type'}:
+                        <select id="val-bulk-group"><option value="">All</option></select>
+                    </label>
                     <label>
                         <input type="checkbox" id="val-bulk-hide-nonexpr"> Hide non-expressing
                     </label>
@@ -389,6 +397,7 @@ const ValidatePage = {
         const sigtypeSel = document.getElementById('val-bulk-sigtype');
         const datasetSel = document.getElementById('val-bulk-dataset');
         const targetSel = document.getElementById('val-bulk-target');
+        const groupSel = document.getElementById('val-bulk-group');
         const hideNonExpr = document.getElementById('val-bulk-hide-nonexpr');
         const searchInput = document.getElementById('val-bulk-search');
 
@@ -402,8 +411,15 @@ const ValidatePage = {
         if (datasetSel) {
             datasetSel.addEventListener('change', () => {
                 this.bulkRnaseq.dataset = datasetSel.value;
+                this.bulkRnaseq.group = '';
                 this.bulkRnaseq.target = null;
-                this._loadBulkTargets();
+                this.loadBulkRnaseqTab();
+            });
+        }
+        if (groupSel) {
+            groupSel.addEventListener('change', () => {
+                this.bulkRnaseq.group = groupSel.value;
+                this._renderBulkScatter();
             });
         }
         if (hideNonExpr) {
@@ -474,8 +490,18 @@ const ValidatePage = {
             return;
         }
 
+        // Populate group selector (tissue/cancer type)
+        const groupSel = document.getElementById('val-bulk-group');
+        if (groupSel && data.groups) {
+            const currentGroup = groupSel.value;
+            groupSel.innerHTML = '<option value="">All</option>' +
+                data.groups.map(g => `<option value="${g}">${g.replace(/_/g, ' ')}</option>`).join('');
+            if (currentGroup) groupSel.value = currentGroup;
+        }
+
         this._renderValidationScatter('val-bulk-scatter', data, target, {
             hideNonExpr: this.bulkRnaseq.hideNonExpr,
+            celltypeFilter: this.bulkRnaseq.group,
             unitLabel: 'samples',
             filterLabel: ds === 'gtex' ? 'Tissue' : 'Cancer Type',
             atlasLabel: ds === 'gtex' ? 'GTEx' : 'TCGA',
