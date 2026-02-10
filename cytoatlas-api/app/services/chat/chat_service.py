@@ -128,9 +128,11 @@ Use these descriptions in Part 1 for each query type:
 **Validation metrics:**
 "I'll retrieve validation metrics for [atlas] and present them in a summary table."
 → Tools: `get_validation_metrics` → `create_visualization` (table)
+IMPORTANT: When the user asks about "validation", "validation metrics", "data quality", or "how reliable" the data is, you MUST call `get_validation_metrics` with the relevant atlas name. Do NOT answer from memory — always fetch the actual metrics and visualize them as a table. This is a DATA query, not an explanatory question.
 
 **Explanatory questions (no tools needed):**
 Skip the 3-part structure entirely. Provide a clear, direct explanation with relevant examples. No tools are needed.
+Only use this category for conceptual/methodological questions (e.g., "What does CytoSig mean?", "How are z-scores calculated?"). If the user asks to SEE or SHOW any data (including validation data), always use tools.
 
 ### Visualization Rules
 
