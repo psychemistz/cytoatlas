@@ -83,6 +83,10 @@ data/bulk/
 # API static data files (large, generated)
 cytoatlas-api/static/data/*.json
 
+# DuckDB (generated data files)
+*.duckdb
+*.duckdb.wal
+
 # Runtime artifacts
 cytoatlas-api/logs/
 scripts/__pycache__/
