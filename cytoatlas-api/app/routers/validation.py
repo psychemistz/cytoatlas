@@ -614,21 +614,14 @@ async def get_summary_boxplot(
 
 
 @router.get("/method-comparison")
-async def get_method_comparison() -> dict:
+async def get_method_comparison(
+    service: BulkValidationService = Depends(get_summary_boxplot_service),
+) -> dict:
     """Get CytoSig vs LinCytoSig vs SecAct comparison data for summary tab."""
-    import json as _json
-    from pathlib import Path as _Path
-
-    data_path = _Path(__file__).resolve().parent.parent.parent / "static" / "data"
-    # Try validation subdirectory first, then main data dir
-    for candidate in [
-        data_path.parent.parent.parent / "visualization" / "data" / "validation" / "method_comparison.json",
-        data_path / "method_comparison.json",
-    ]:
-        if candidate.exists():
-            with open(candidate) as f:
-                return _json.load(f)
-    raise HTTPException(status_code=404, detail="Method comparison data not found")
+    result = await service.get_method_comparison()
+    if result is None:
+        raise HTTPException(status_code=404, detail="Method comparison data not found")
+    return result
 
 
 @router.get("/summary-boxplot/{target}")

@@ -420,6 +420,19 @@ class BulkValidationService(BaseService):
         meta = self._get_meta_fallback()
         return meta.get("summary", [])
 
+    async def get_method_comparison(self) -> dict | None:
+        """Get CytoSig vs LinCytoSig vs SecAct method comparison data."""
+        cache_key = "_method_comparison"
+        if cache_key in self._file_cache:
+            return self._file_cache[cache_key]
+
+        try:
+            data = await self.load_json("method_comparison.json", subdir="validation")
+            self._file_cache[cache_key] = data
+            return data
+        except FileNotFoundError:
+            return None
+
     # ================================================================== #
     #  Summary Boxplot (validation_corr_boxplot.json)                      #
     # ================================================================== #

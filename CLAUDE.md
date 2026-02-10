@@ -248,7 +248,7 @@ class JSONRepository(AtlasRepository):      # Fallback — load visualization/da
 
 **DuckDBRepository** queries `atlas_data.duckdb` with parameterized SQL, returning pandas DataFrames. Falls back to JSON if DuckDB unavailable.
 
-**Note:** `atlas_data.duckdb` has NOT been generated yet. Run `python scripts/convert_data_to_duckdb.py --all` on HPC to generate.
+**Note:** `atlas_data.duckdb` has been generated (51 tables, 9.6M rows, 590MB). Regenerate with `python scripts/convert_data_to_duckdb.py --all` after data updates.
 
 ### Key Routers
 
@@ -443,10 +443,14 @@ All data access logged to JSONL: `{timestamp, user_id, email, ip_address, method
 - Validation: standard + resampled + single-cell + bulk RNA-seq
 - Security: JWT, RBAC, audit logging, rate limiting
 - Maintenance infrastructure: `scripts/maintenance/audit_clutter.py`, equivalence test harness
+- DuckDB migration: `atlas_data.duckdb` generated (51 tables, 9.6M rows, 590MB)
+- DuckDB API integration: `_KNOWN_TABLES` / `_JSON_TO_TABLE` synced, services route through `load_json()`
+- Bulk validation split files: `donor_scatter/`, `celltype_scatter/`, `bulk_rnaseq/`, `bulk_donor_meta.json`
+- JSONRepository deprecation warning active (directs to DuckDBRepository)
 
 ### In Progress
 
-- [ ] Generate `atlas_data.duckdb` (run `convert_data_to_duckdb.py --all` on HPC)
+- [ ] DuckDB test coverage: unit tests for DuckDBRepository, JSON→DuckDB equivalence tests
 - [ ] Resampled bootstrap: Inflammation main/val/ext (pseudobulk exists, run `16_resampled_validation.py`)
 - [ ] Pipeline CLI entry point (`cytoatlas-pipeline` command)
 - [ ] Script-to-pipeline equivalence tests (harness ready in `cytoatlas-pipeline/tests/equivalence/`)
