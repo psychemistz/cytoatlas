@@ -553,6 +553,55 @@ async def get_celltype_scatter(
     return result
 
 
+# ==================== Resampled (Bootstrap) Validation ====================
+
+
+@router.get("/resampled/atlases")
+async def list_resampled_atlases(
+    service: BulkValidationService = Depends(get_bulk_validation_service),
+) -> List[str]:
+    """List atlases with resampled (bootstrap) scatter data."""
+    return await service.get_resampled_atlases()
+
+
+@router.get("/resampled/{atlas}/levels")
+async def list_resampled_levels(
+    atlas: str = Path(..., description="Atlas name"),
+    service: BulkValidationService = Depends(get_bulk_validation_service),
+) -> List[str]:
+    """List available aggregation levels for resampled data."""
+    return await service.get_resampled_levels(atlas)
+
+
+@router.get("/resampled/{atlas}/targets")
+async def list_resampled_targets(
+    atlas: str = Path(..., description="Atlas name"),
+    sigtype: str = Query("cytosig", description="Signature type"),
+    level: str = Query("l1", description="Aggregation level"),
+    service: BulkValidationService = Depends(get_bulk_validation_service),
+) -> List[dict]:
+    """List targets with resampled correlation metadata and bootstrap CIs."""
+    return await service.get_resampled_targets(atlas, level, sigtype)
+
+
+@router.get("/resampled/{atlas}/scatter/{target}")
+async def get_resampled_scatter(
+    atlas: str = Path(..., description="Atlas name"),
+    target: str = Path(..., description="Target/signature name"),
+    sigtype: str = Query("cytosig", description="Signature type"),
+    level: str = Query("l1", description="Aggregation level"),
+    service: BulkValidationService = Depends(get_bulk_validation_service),
+) -> dict:
+    """Get full resampled scatter data for a single target with bootstrap CIs."""
+    result = await service.get_resampled_scatter(atlas, level, target, sigtype)
+    if not result:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No resampled scatter data for {atlas}/{level}/{target}/{sigtype}",
+        )
+    return result
+
+
 # ==================== Tab 3: Single-Cell (enhanced) ====================
 
 

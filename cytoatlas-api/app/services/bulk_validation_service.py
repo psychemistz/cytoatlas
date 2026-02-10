@@ -415,6 +415,99 @@ class BulkValidationService(BaseService):
         # Return all levels
         return ct_data
 
+    # ================================================================== #
+    #  Tab 3: Resampled (Bootstrap) Validation                              #
+    # ================================================================== #
+
+    def _load_resampled_scatter(
+        self, atlas: str, level: str, sigtype: str
+    ) -> dict | None:
+        """Load resampled scatter split file from validation/resampled_scatter/."""
+        return self._load_file("resampled_scatter", f"{atlas}_{level}_{sigtype}.json")
+
+    async def get_resampled_atlases(self) -> list[str]:
+        """List atlases with resampled scatter data.
+
+        Uses known sigtypes to strip suffix, then discovers atlas names by
+        cross-referencing with the donor_scatter directory (which has simpler
+        {atlas}_{sigtype}.json naming).
+        """
+        rs_dir = self.validation_dir / "resampled_scatter"
+        if not rs_dir.exists():
+            return []
+
+        # Get known atlas names from donor_scatter (simple {atlas}_{sigtype} naming)
+        known_atlases: set[str] = set()
+        donor_dir = self.validation_dir / "donor_scatter"
+        if donor_dir.exists():
+            for f in donor_dir.glob("*.json"):
+                parts = f.stem.rsplit("_", 1)
+                if len(parts) == 2:
+                    known_atlases.add(parts[0])
+
+        # Find which known atlases have resampled scatter files
+        atlases = set()
+        for atlas in known_atlases:
+            if any(rs_dir.glob(f"{atlas}_*.json")):
+                atlases.add(atlas)
+
+        return sorted(atlases)
+
+    async def get_resampled_levels(self, atlas: str) -> list[str]:
+        """List available resampled levels for an atlas."""
+        rs_dir = self.validation_dir / "resampled_scatter"
+        if not rs_dir.exists():
+            return []
+        levels = set()
+        prefix = f"{atlas}_"
+        for f in rs_dir.glob(f"{prefix}*.json"):
+            remainder = f.stem[len(prefix):]
+            parts = remainder.rsplit("_", 1)
+            if len(parts) == 2:
+                levels.add(parts[0])
+        return sorted(levels)
+
+    async def get_resampled_targets(
+        self,
+        atlas: str,
+        level: str,
+        sigtype: str = "cytosig",
+    ) -> list[dict]:
+        """List targets for resampled scatter (metadata only, no points)."""
+        data = self._load_resampled_scatter(atlas, level, sigtype)
+        if not data:
+            return []
+        return [
+            {
+                "target": target,
+                "gene": info.get("gene"),
+                "rho": info.get("rho"),
+                "pval": info.get("pval"),
+                "n": info.get("n", 0),
+                "rho_ci": info.get("rho_ci"),
+                "significant": (info.get("pval") or 1.0) < 0.05,
+            }
+            for target, info in data.items()
+        ]
+
+    async def get_resampled_scatter(
+        self,
+        atlas: str,
+        level: str,
+        target: str,
+        sigtype: str = "cytosig",
+    ) -> dict | None:
+        """Get full resampled scatter data for one target."""
+        data = self._load_resampled_scatter(atlas, level, sigtype)
+        if not data or target not in data:
+            return None
+        entry = data[target]
+        return {"target": target, **entry}
+
+    # ================================================================== #
+    #  Summary                                                              #
+    # ================================================================== #
+
     async def get_summary(self) -> list[dict]:
         """Get cross-atlas correlation summary rows."""
         meta = self._get_meta_fallback()

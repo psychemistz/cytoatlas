@@ -447,11 +447,12 @@ All data access logged to JSONL: `{timestamp, user_id, email, ip_address, method
 - DuckDB API integration: `_KNOWN_TABLES` / `_JSON_TO_TABLE` synced, services route through `load_json()`
 - Bulk validation split files: `donor_scatter/`, `celltype_scatter/`, `bulk_rnaseq/`, `bulk_donor_meta.json`
 - JSONRepository deprecation warning active (directs to DuckDBRepository)
+- Resampled scatter API: 4 endpoints for bootstrap validation data (CIMA + scAtlas)
 
 ### In Progress
 
-- [ ] DuckDB test coverage: unit tests for DuckDBRepository, JSON→DuckDB equivalence tests
-- [ ] Resampled bootstrap: Inflammation main/val/ext (pseudobulk exists, run `16_resampled_validation.py`)
+- [x] DuckDB test coverage: 50 unit tests + 17 integration/equivalence tests (67 total)
+- [ ] Resampled bootstrap: Inflammation main/val/ext (needs HPC: generate resampled H5ADs, then run `16_resampled_validation.py`)
 - [ ] Pipeline CLI entry point (`cytoatlas-pipeline` command)
 - [ ] Script-to-pipeline equivalence tests (harness ready in `cytoatlas-pipeline/tests/equivalence/`)
 - [ ] SLURM wrapper consolidation (3 layers → 1 parameterized template)
