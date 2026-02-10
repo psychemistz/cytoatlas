@@ -1179,8 +1179,8 @@ const ValidatePage = {
                 </div>
                 <div class="panel-grid">
                     <div class="panel">
-                        <div class="viz-title">Per-Cell-Type Correlation</div>
-                        <div class="viz-subtitle">Spearman rho from ALL cells</div>
+                        <div class="viz-title">Per-Cell-Type Activity</div>
+                        <div class="viz-subtitle" id="val-sc-bar-subtitle">Mean activity by cell type</div>
                         <div id="val-sc-bar" class="plot-container" style="height: 350px;"></div>
                     </div>
                     <div class="panel">
@@ -1344,8 +1344,19 @@ const ValidatePage = {
 
         // Update subtitle with cell count
         const subtitle = document.getElementById('val-sc-subtitle');
-        if (subtitle && data.n_total) {
-            subtitle.textContent = `Density from ${data.n_total.toLocaleString()} cells + 50K scatter overlay`;
+        if (subtitle) {
+            const nSampled = data.sampled ? data.sampled.points.length : 0;
+            subtitle.textContent = `Density heatmap + ${nSampled.toLocaleString()} sampled points (${(data.n_total || 0).toLocaleString()} total cells)`;
+        }
+
+        // Update bar subtitle based on data type
+        const barSubtitle = document.getElementById('val-sc-bar-subtitle');
+        if (barSubtitle) {
+            const stats = data.celltype_stats || [];
+            const hasRho = stats.length && stats[0].rho != null;
+            barSubtitle.textContent = hasRho
+                ? 'Spearman rho per cell type'
+                : `Mean activity across ${stats.length} cell types`;
         }
 
         // Render density + scatter
@@ -1402,13 +1413,14 @@ const ValidatePage = {
             });
         }
 
-        // Layer 2: 50K scatter overlay
+        // Layer 2: Scatter overlay
         if (data.sampled && data.sampled.points) {
             let points = data.sampled.points;
             const celltypes = data.sampled.celltypes || [];
+            const hasCelltypes = celltypes.length > 1 || (celltypes.length === 1 && celltypes[0] !== 'all');
 
             // Filter by celltype
-            if (ctFilter) {
+            if (ctFilter && hasCelltypes) {
                 const ctIdx = celltypes.indexOf(ctFilter);
                 if (ctIdx >= 0) {
                     points = points.filter(p => p[2] === ctIdx);
@@ -1421,26 +1433,42 @@ const ValidatePage = {
             }
 
             if (points.length > 0) {
-                const colors = [
-                    '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-                    '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
-                    '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5',
-                ];
-
-                traces.push({
-                    type: 'scattergl',
-                    mode: 'markers',
-                    x: points.map(p => p[0]),
-                    y: points.map(p => p[1]),
-                    marker: {
-                        size: 2,
-                        opacity: 0.3,
-                        color: points.map(p => colors[p[2] % colors.length]),
-                    },
-                    text: points.map(p => celltypes[p[2]] || 'unknown'),
-                    hovertemplate: '%{text}<br>Expr: %{x:.2f}<br>Activity: %{y:.2f}<extra></extra>',
-                    showlegend: false,
-                });
+                if (hasCelltypes) {
+                    // Color by cell type
+                    const ctColors = [
+                        '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+                        '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
+                        '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5',
+                    ];
+                    traces.push({
+                        type: 'scattergl',
+                        mode: 'markers',
+                        x: points.map(p => p[0]),
+                        y: points.map(p => p[1]),
+                        marker: {
+                            size: 2, opacity: 0.4,
+                            color: points.map(p => ctColors[p[2] % ctColors.length]),
+                        },
+                        text: points.map(p => celltypes[p[2]] || 'unknown'),
+                        hovertemplate: '%{text}<br>Expr: %{x:.2f}<br>Activity: %{y:.2f}<extra></extra>',
+                        showlegend: false,
+                    });
+                } else {
+                    // Color by expressing status (green = expressing, gray = non-expressing)
+                    traces.push({
+                        type: 'scattergl',
+                        mode: 'markers',
+                        x: points.map(p => p[0]),
+                        y: points.map(p => p[1]),
+                        marker: {
+                            size: 2.5, opacity: 0.5,
+                            color: points.map(p => p[4] === 1 ? '#2ca02c' : '#999999'),
+                        },
+                        text: points.map(p => p[4] === 1 ? 'Expressing' : 'Non-expressing'),
+                        hovertemplate: '%{text}<br>Expr: %{x:.2f}<br>Activity: %{y:.2f}<extra></extra>',
+                        showlegend: false,
+                    });
+                }
             }
         }
 
@@ -1476,34 +1504,75 @@ const ValidatePage = {
 
         const stats = data.celltype_stats || [];
         if (!stats.length) {
-            div.innerHTML = '<p class="no-data">No per-celltype data</p>';
+            div.innerHTML = '<p class="no-data">No per-celltype data available</p>';
             return;
         }
 
-        const sorted = [...stats].sort((a, b) => (b.rho || 0) - (a.rho || 0));
-        const top20 = sorted.slice(0, 20);
+        // Detect format: rho-based (from sampled_points) or mean_activity-based (from singlecell_activity)
+        const hasRho = stats[0].rho != null;
+        const hasActivity = stats[0].mean_activity != null;
 
-        const getColor = (r) => {
-            if (r > 0.3) return '#1a9850';
-            if (r > 0.1) return '#91cf60';
-            if (r > 0) return '#fee08b';
-            return '#d73027';
-        };
-
-        Plotly.newPlot(div, [{
-            type: 'bar',
-            y: top20.map(s => s.celltype.replace(/_/g, ' ')),
-            x: top20.map(s => s.rho || 0),
-            orientation: 'h',
-            marker: { color: top20.map(s => getColor(s.rho || 0)) },
-            text: top20.map(s => `r=${(s.rho || 0).toFixed(3)}, n=${(s.n || 0).toLocaleString()}`),
-            textposition: 'outside',
-            hovertemplate: '%{y}<br>rho = %{x:.3f}<extra></extra>',
-        }], {
-            xaxis: { title: 'Spearman rho' },
-            yaxis: { automargin: true, autorange: 'reversed' },
-            margin: { l: 150, r: 80, t: 30, b: 50 },
-        }, { responsive: true });
+        if (hasRho) {
+            // Per-celltype Spearman rho bar chart
+            const sorted = [...stats].sort((a, b) => (b.rho || 0) - (a.rho || 0));
+            const top20 = sorted.slice(0, 20);
+            const getColor = (r) => {
+                if (r > 0.3) return '#1a9850';
+                if (r > 0.1) return '#91cf60';
+                if (r > 0) return '#fee08b';
+                return '#d73027';
+            };
+            Plotly.newPlot(div, [{
+                type: 'bar',
+                y: top20.map(s => s.celltype.replace(/_/g, ' ')),
+                x: top20.map(s => s.rho || 0),
+                orientation: 'h',
+                marker: { color: top20.map(s => getColor(s.rho || 0)) },
+                text: top20.map(s => `r=${(s.rho || 0).toFixed(3)}, n=${(s.n || 0).toLocaleString()}`),
+                textposition: 'outside',
+                hovertemplate: '%{y}<br>rho = %{x:.3f}<extra></extra>',
+            }], {
+                xaxis: { title: 'Spearman rho' },
+                yaxis: { automargin: true, autorange: 'reversed' },
+                margin: { l: 150, r: 80, t: 30, b: 50 },
+            }, { responsive: true });
+        } else if (hasActivity) {
+            // Per-celltype mean activity bar chart (from singlecell_activity.json)
+            const sorted = [...stats].sort((a, b) => (b.mean_activity || 0) - (a.mean_activity || 0));
+            const top20 = sorted.slice(0, 20);
+            const getColor = (v) => {
+                if (v > 0.5) return '#1a9850';
+                if (v > 0) return '#91cf60';
+                if (v > -0.5) return '#fee08b';
+                return '#d73027';
+            };
+            Plotly.newPlot(div, [{
+                type: 'bar',
+                y: top20.map(s => s.celltype.replace(/_/g, ' ')),
+                x: top20.map(s => s.mean_activity || 0),
+                orientation: 'h',
+                marker: { color: top20.map(s => getColor(s.mean_activity || 0)) },
+                text: top20.map(s => {
+                    const act = (s.mean_activity || 0).toFixed(3);
+                    const n = (s.n_cells || 0).toLocaleString();
+                    return `act=${act}, n=${n}`;
+                }),
+                textposition: 'outside',
+                hovertemplate: '%{y}<br>Mean activity = %{x:.3f}<extra></extra>',
+                error_x: {
+                    type: 'data',
+                    array: top20.map(s => s.std_activity || 0),
+                    visible: true,
+                    color: 'rgba(0,0,0,0.3)',
+                },
+            }], {
+                xaxis: { title: 'Mean Activity (z-score)' },
+                yaxis: { automargin: true, autorange: 'reversed' },
+                margin: { l: 150, r: 100, t: 30, b: 50 },
+            }, { responsive: true });
+        } else {
+            div.innerHTML = '<p class="no-data">No per-celltype data available</p>';
+        }
     },
 
     _renderExprVsNonExprBox(divId, data) {

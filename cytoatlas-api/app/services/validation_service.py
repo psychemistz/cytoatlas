@@ -417,6 +417,83 @@ class ValidationService(BaseService):
             })
         return result
 
+    def _load_singlecell_activity(self, atlas: str, signature_type: str) -> List[Dict[str, Any]]:
+        """Load per-celltype activity stats from singlecell JSON files.
+
+        Tries per-atlas files first ({prefix}_singlecell_{sigtype}.json), then
+        falls back to consolidated singlecell_activity.json with atlas name matching.
+        """
+        cache_key = f"sc_activity_{atlas}_{signature_type}"
+        if cache_key in self._cache:
+            return self._cache[cache_key]
+
+        # Map API atlas names to file prefixes
+        atlas_file_map = {
+            "cima": ["cima"],
+            "scatlas": ["scatlas_normal", "scatlas_cancer"],
+            "scatlas_normal": ["scatlas_normal"],
+            "scatlas_cancer": ["scatlas_cancer"],
+        }
+        sig_file_map = {"CytoSig": "cytosig", "SecAct": "secact"}
+
+        prefixes = atlas_file_map.get(atlas, [atlas])
+        sig_suffix = sig_file_map.get(signature_type, signature_type.lower())
+
+        # Try per-atlas files first
+        all_records: List[Dict[str, Any]] = []
+        for prefix in prefixes:
+            path = self.data_dir / f"{prefix}_singlecell_{sig_suffix}.json"
+            if path.exists():
+                try:
+                    with open(path) as f:
+                        records = json.load(f)
+                    if isinstance(records, list):
+                        all_records.extend(records)
+                except (json.JSONDecodeError, IOError):
+                    pass
+
+        # Fallback: filter from consolidated singlecell_activity.json
+        if not all_records:
+            consolidated = self._load_consolidated_singlecell_activity()
+            # Map API atlas names to names used in consolidated file
+            atlas_name_map = {
+                "cima": ["CIMA"],
+                "scatlas": ["scAtlas_Normal", "scAtlas_Cancer"],
+                "scatlas_normal": ["scAtlas_Normal"],
+                "scatlas_cancer": ["scAtlas_Cancer"],
+                "inflammation": ["Inflammation", "inflammation"],
+            }
+            valid_atlas_names = atlas_name_map.get(atlas, [atlas, atlas.title()])
+            for r in consolidated:
+                if r.get("atlas") in valid_atlas_names and r.get("signature_type") == signature_type:
+                    all_records.append(r)
+
+        self._cache[cache_key] = all_records
+        return all_records
+
+    def _load_consolidated_singlecell_activity(self) -> List[Dict[str, Any]]:
+        """Load the consolidated singlecell_activity.json (cached)."""
+        cache_key = "sc_activity_consolidated"
+        if cache_key in self._cache:
+            return self._cache[cache_key]
+
+        path = self.data_dir / "singlecell_activity.json"
+        if not path.exists():
+            self._cache[cache_key] = []
+            return []
+
+        try:
+            with open(path) as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                self._cache[cache_key] = data
+                return data
+        except (json.JSONDecodeError, IOError):
+            pass
+
+        self._cache[cache_key] = []
+        return []
+
     async def get_singlecell_scatter(
         self,
         atlas: str,
@@ -445,6 +522,26 @@ class ValidationService(BaseService):
                     "mean_activity_non_expressing": v.get("mean_activity_non_expressing"),
                 }
         return None
+
+    async def get_singlecell_activity_by_celltype(
+        self,
+        atlas: str,
+        signature: str,
+        signature_type: str = "CytoSig",
+    ) -> List[Dict[str, Any]]:
+        """Get per-celltype mean activity for a signature from singlecell JSON files."""
+        records = self._load_singlecell_activity(atlas, signature_type)
+        results = []
+        for r in records:
+            if r.get("signature") == signature:
+                results.append({
+                    "celltype": r.get("cell_type", "Unknown"),
+                    "mean_activity": float(r.get("mean_activity", 0)),
+                    "std_activity": float(r.get("std_activity", 0)),
+                    "n_cells": int(r.get("n_cells", 0)),
+                })
+        results.sort(key=lambda x: abs(x["mean_activity"]), reverse=True)
+        return results
 
     async def get_singlecell_celltypes(
         self,

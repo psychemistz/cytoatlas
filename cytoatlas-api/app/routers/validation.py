@@ -691,7 +691,10 @@ async def get_singlecell_full_scatter(
     sigtype: str = Query("cytosig", description="Signature type"),
     service: ValidationService = Depends(get_validation_service),
 ) -> dict:
-    """Get single-cell scatter data: sampled points from validation JSON."""
+    """Get single-cell scatter data: sampled points + density + per-celltype activity."""
+    import numpy as np
+    from scipy import stats as sp_stats
+
     sig_type_map = {"cytosig": "CytoSig", "lincytosig": "LinCytoSig", "secact": "SecAct"}
     sig_label = sig_type_map.get(sigtype, sigtype)
     data = await service.get_singlecell_scatter(atlas, target, sig_label)
@@ -701,9 +704,9 @@ async def get_singlecell_full_scatter(
     sampled_raw = data.get("sampled_points", [])
     n_total = data.get("n_total_cells", len(sampled_raw))
     n_expressing = data.get("n_expressing", 0)
-    gene = data.get("gene")
+    gene = data.get("gene") or target  # Fallback to target name
 
-    # Build celltype index from sampled_points
+    # Build celltype index from sampled_points (if cell_type field exists)
     ct_set = set()
     for p in sampled_raw:
         ct = p.get("cell_type")
@@ -712,8 +715,10 @@ async def get_singlecell_full_scatter(
     celltypes = sorted(ct_set) if ct_set else ["all"]
     ct_to_idx = {ct: i for i, ct in enumerate(celltypes)}
 
-    # Convert sampled_points to compact array format: [expr, act, ct_idx, 0, is_expressing]
+    # Convert sampled_points to compact format and collect arrays for density/stats
     points = []
+    expr_vals = []
+    act_vals = []
     for p in sampled_raw:
         expr = p.get("expression", 0)
         act = p.get("activity", 0)
@@ -721,40 +726,43 @@ async def get_singlecell_full_scatter(
         ct = p.get("cell_type")
         ct_idx = ct_to_idx.get(ct, 0) if ct else 0
         points.append([round(expr, 3), round(act, 3), ct_idx, 0, is_expr])
+        expr_vals.append(expr)
+        act_vals.append(act)
 
     # Compute Spearman rho from sampled points
     rho, pval = None, None
     if len(points) >= 10:
-        from scipy import stats as sp_stats
-        xs = [p[0] for p in points]
-        ys = [p[1] for p in points]
-        rho, pval = sp_stats.spearmanr(xs, ys)
+        rho, pval = sp_stats.spearmanr(expr_vals, act_vals)
         rho = round(float(rho), 4) if rho is not None else None
         pval = float(f"{pval:.2e}") if pval is not None else None
 
-    # Compute per-celltype stats
-    celltype_stats = []
-    if len(celltypes) > 1 or (len(celltypes) == 1 and celltypes[0] != "all"):
-        ct_groups: dict[str, list] = {}
-        for p in sampled_raw:
-            ct = p.get("cell_type", "Unknown")
-            ct_groups.setdefault(ct, []).append(p)
-        for ct in sorted(ct_groups.keys()):
-            pts = ct_groups[ct]
-            exprs = [p["expression"] for p in pts if p.get("expression") is not None]
-            acts = [p["activity"] for p in pts if p.get("activity") is not None]
-            if len(exprs) >= 5 and len(acts) >= 5:
-                ct_rho, ct_p = sp_stats.spearmanr(exprs, acts)
-                ct_rho = round(float(ct_rho), 4) if ct_rho is not None else None
-            else:
-                ct_rho, ct_p = None, None
-            n_expr = sum(1 for p in pts if p.get("is_expressing", False))
-            celltype_stats.append({
-                "celltype": ct,
-                "n": len(pts),
-                "n_expressing": n_expr,
-                "rho": ct_rho,
-            })
+    # Compute 2D density histogram from sampled points
+    density = None
+    if len(expr_vals) >= 20:
+        xs = np.array(expr_vals)
+        ys = np.array(act_vals)
+        n_bins = 50
+        x_min, x_max = float(xs.min()), float(xs.max())
+        y_min, y_max = float(ys.min()), float(ys.max())
+        x_pad = max((x_max - x_min) * 0.02, 0.01)
+        y_pad = max((y_max - y_min) * 0.02, 0.01)
+        counts, _xedges, _yedges = np.histogram2d(
+            xs, ys, bins=n_bins,
+            range=[[x_min - x_pad, x_max + x_pad], [y_min - y_pad, y_max + y_pad]],
+        )
+        # Transpose: histogram2d returns (x_bins, y_bins), Plotly heatmap expects (y, x)
+        counts_t = counts.T
+        density = {
+            "n_bins": n_bins,
+            "counts": [int(v) for v in counts_t.ravel()],
+            "expr_range": [round(x_min - x_pad, 4), round(x_max + x_pad, 4)],
+            "act_range": [round(y_min - y_pad, 4), round(y_max + y_pad, 4)],
+        }
+
+    # Load per-celltype activity stats from singlecell_activity JSON files
+    celltype_stats = await service.get_singlecell_activity_by_celltype(
+        atlas, target, sig_label
+    )
 
     # Compute activity_diff (difference, not ratio — z-scores)
     mean_expr = data.get("mean_activity_expressing")
@@ -775,6 +783,7 @@ async def get_singlecell_full_scatter(
         "mean_activity_expressing": mean_expr,
         "mean_activity_non_expressing": mean_non,
         "activity_diff": activity_diff,
+        "density": density,
         "sampled": {
             "celltypes": celltypes,
             "points": points,
