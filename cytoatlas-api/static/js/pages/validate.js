@@ -1883,15 +1883,39 @@ const ValidatePage = {
 
     calculateTrendline(x, y) {
         if (!x.length || !y.length || x.length < 2) return {};
-        const n = x.length;
-        const sumX = x.reduce((a, b) => a + b, 0);
-        const sumY = y.reduce((a, b) => a + b, 0);
-        const sumXY = x.reduce((acc, xi, i) => acc + xi * y[i], 0);
-        const sumX2 = x.reduce((acc, xi) => acc + xi * xi, 0);
-        const denom = n * sumX2 - sumX * sumX;
-        if (Math.abs(denom) < 1e-10) return {};
-        const slope = (n * sumXY - sumX * sumY) / denom;
-        const intercept = (sumY - slope * sumX) / n;
+        // Theil-Sen estimator: median of pairwise slopes (robust to outliers).
+        // For large n, subsample to keep O(n^2) manageable.
+        const maxN = 1000;
+        let sx = x, sy = y;
+        if (x.length > maxN) {
+            const idx = Array.from({ length: x.length }, (_, i) => i);
+            for (let i = idx.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [idx[i], idx[j]] = [idx[j], idx[i]];
+            }
+            const sample = idx.slice(0, maxN);
+            sx = sample.map(i => x[i]);
+            sy = sample.map(i => y[i]);
+        }
+        const n = sx.length;
+        const slopes = [];
+        for (let i = 0; i < n; i++) {
+            for (let j = i + 1; j < n; j++) {
+                const dx = sx[j] - sx[i];
+                if (Math.abs(dx) > 1e-12) {
+                    slopes.push((sy[j] - sy[i]) / dx);
+                }
+            }
+        }
+        if (slopes.length === 0) return {};
+        slopes.sort((a, b) => a - b);
+        const mid = Math.floor(slopes.length / 2);
+        const slope = slopes.length % 2 === 1 ? slopes[mid] : (slopes[mid - 1] + slopes[mid]) / 2;
+        // Intercept: median of (y_i - slope * x_i) using all points
+        const intercepts = x.map((xi, i) => y[i] - slope * xi);
+        intercepts.sort((a, b) => a - b);
+        const midI = Math.floor(intercepts.length / 2);
+        const intercept = intercepts.length % 2 === 1 ? intercepts[midI] : (intercepts[midI - 1] + intercepts[midI]) / 2;
         const minX = Math.min(...x);
         const maxX = Math.max(...x);
         return {
