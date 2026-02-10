@@ -495,6 +495,9 @@ const ValidatePage = {
             cacheKey
         );
 
+        // Stale check: target may have changed during async fetch
+        if (this.bulkRnaseq.target !== target) return;
+
         if (!data || !data.points) {
             document.getElementById('val-bulk-scatter').innerHTML = '<p class="no-data">No scatter data available</p>';
             return;
@@ -662,6 +665,8 @@ const ValidatePage = {
             () => API.getDonorScatter(atlas, target, sig),
             cacheKey
         );
+
+        if (this.donorLevel.target !== target) return;
 
         if (!data || !data.points) {
             document.getElementById('val-donor-scatter').innerHTML = '<p class="no-data">No scatter data</p>';
@@ -846,6 +851,8 @@ const ValidatePage = {
             cacheKey
         );
 
+        if (this.celltypeLevel.target !== target) return;
+
         if (!data || !data.points) {
             document.getElementById('val-ct-scatter').innerHTML = '<p class="no-data">No scatter data</p>';
             return;
@@ -1029,10 +1036,14 @@ const ValidatePage = {
                 cacheKey
             );
         } catch (e) {
-            document.getElementById('val-sc-scatter').innerHTML =
-                `<p class="no-data">Single-cell DB not available. Run script 18 first.</p>`;
+            if (this.singleCell.target === target) {
+                document.getElementById('val-sc-scatter').innerHTML =
+                    `<p class="no-data">Single-cell DB not available. Run script 18 first.</p>`;
+            }
             return;
         }
+
+        if (this.singleCell.target !== target) return;
 
         if (!data) {
             document.getElementById('val-sc-scatter').innerHTML = '<p class="no-data">No data available</p>';
