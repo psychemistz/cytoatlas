@@ -10,8 +10,6 @@
 
 const ValidatePage = {
     // Global state
-    currentAtlas: 'cima',
-    signatureType: 'cytosig',
     activeTab: 'summary',
 
     // Client-side response cache
@@ -76,18 +74,42 @@ const ValidatePage = {
         },
     },
 
-    // Tab-specific state
-    summary: {},
-    bulkRnaseq: { dataset: 'gtex', target: null, targets: [], hideNonExpr: false },
-    donorLevel: { level: null, group: '', target: null, targets: [], hideNonExpr: false },
-    celltypeLevel: { level: null, group: '', target: null, targets: [], hideNonExpr: false },
-    singleCell: { target: null, targets: [], donor: '', celltype: '', hideNonExpr: false },
+    // Per-tab atlas options
+    SC_ATLAS_OPTIONS: [
+        { value: 'cima', label: 'CIMA (6.5M cells)' },
+        { value: 'inflammation_main', label: 'Inflammation Main (4.9M)' },
+        { value: 'inflammation_val', label: 'Inflammation Val' },
+        { value: 'inflammation_ext', label: 'Inflammation Ext' },
+        { value: 'scatlas_normal', label: 'scAtlas Normal (6.4M)' },
+        { value: 'scatlas_cancer', label: 'scAtlas Cancer (6.4M)' },
+    ],
+    SC_FULL_ATLAS_OPTIONS: [
+        { value: 'cima', label: 'CIMA (6.5M cells)' },
+        { value: 'scatlas_normal', label: 'scAtlas Normal (6.4M)' },
+        { value: 'scatlas_cancer', label: 'scAtlas Cancer (6.4M)' },
+    ],
+
+    // Per-tab signature type options
+    ALL_SIG_OPTIONS: [
+        { value: 'cytosig', label: 'CytoSig (43)' },
+        { value: 'lincytosig', label: 'LinCytoSig' },
+        { value: 'secact', label: 'SecAct (1,249)' },
+    ],
+    BULK_SIG_OPTIONS: [
+        { value: 'cytosig', label: 'CytoSig (43)' },
+        { value: 'secact', label: 'SecAct (1,249)' },
+    ],
+
+    // Tab-specific state (each tab tracks its own atlas + sigtype)
+    summary: { sigtype: 'cytosig' },
+    bulkRnaseq: { sigtype: 'cytosig', dataset: 'gtex', target: null, targets: [], hideNonExpr: false },
+    donorLevel: { atlas: 'cima', sigtype: 'cytosig', level: null, group: '', target: null, targets: [], hideNonExpr: false },
+    celltypeLevel: { atlas: 'cima', sigtype: 'cytosig', level: null, group: '', target: null, targets: [], hideNonExpr: false },
+    singleCell: { atlas: 'cima', sigtype: 'cytosig', target: null, targets: [], donor: '', celltype: '', hideNonExpr: false },
 
     // ==================== Initialization ====================
 
     async init(params, query) {
-        if (query.atlas) this.currentAtlas = query.atlas;
-        if (query.type) this.signatureType = query.type;
         if (query.tab) this.activeTab = query.tab;
 
         this.render();
@@ -100,11 +122,6 @@ const ValidatePage = {
         const template = document.getElementById('validate-template');
         if (app && template) app.innerHTML = template.innerHTML;
 
-        const atlasSelect = document.getElementById('val-atlas');
-        const sigtypeSelect = document.getElementById('val-sigtype');
-        if (atlasSelect) atlasSelect.value = this.currentAtlas;
-        if (sigtypeSelect) sigtypeSelect.value = this.signatureType;
-
         // Activate correct tab button
         const tabBtns = document.querySelectorAll('#validation-tabs .tab-btn');
         tabBtns.forEach(btn => {
@@ -113,31 +130,6 @@ const ValidatePage = {
     },
 
     setupEventListeners() {
-        const atlasSelect = document.getElementById('val-atlas');
-        if (atlasSelect) {
-            atlasSelect.addEventListener('change', (e) => {
-                this.currentAtlas = e.target.value;
-                // Reset tab-specific state
-                this.donorLevel.level = null;
-                this.donorLevel.target = null;
-                this.celltypeLevel.level = null;
-                this.celltypeLevel.target = null;
-                this.singleCell.target = null;
-                this.loadTab(this.activeTab);
-            });
-        }
-
-        const sigtypeSelect = document.getElementById('val-sigtype');
-        if (sigtypeSelect) {
-            sigtypeSelect.addEventListener('change', (e) => {
-                this.signatureType = e.target.value;
-                this.donorLevel.target = null;
-                this.celltypeLevel.target = null;
-                this.singleCell.target = null;
-                this.loadTab(this.activeTab);
-            });
-        }
-
         const tabBtns = document.querySelectorAll('#validation-tabs .tab-btn');
         tabBtns.forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -190,6 +182,18 @@ const ValidatePage = {
         this._debounceTimer = setTimeout(fn, delay);
     },
 
+    _atlasSelectHTML(id, options, selected) {
+        return `<label>Atlas: <select id="${id}">` +
+            options.map(o => `<option value="${o.value}"${o.value === selected ? ' selected' : ''}>${o.label}</option>`).join('') +
+            `</select></label>`;
+    },
+
+    _sigtypeSelectHTML(id, options, selected) {
+        return `<label>Signature: <select id="${id}">` +
+            options.map(o => `<option value="${o.value}"${o.value === selected ? ' selected' : ''}>${o.label}</option>`).join('') +
+            `</select></label>`;
+    },
+
     // ==================== Tab 1: Summary ====================
 
     async loadSummaryTab() {
@@ -197,7 +201,7 @@ const ValidatePage = {
         content.innerHTML = `
             <div class="tab-panel">
                 <h3>Validation Summary</h3>
-                <p>Distribution of Spearman correlations between expression and activity across aggregation levels. Each box represents the distribution of per-entity correlations.</p>
+                <p>Distribution of Spearman correlations between expression and activity across aggregation levels. CytoSig and SecAct shown side-by-side for each category.</p>
 
                 <div class="filter-bar">
                     <label>Target:
@@ -208,15 +212,10 @@ const ValidatePage = {
                 </div>
 
                 <div class="panel-grid">
-                    <div class="panel">
-                        <div class="viz-title">CytoSig Correlations</div>
+                    <div class="panel" style="grid-column: span 2;">
+                        <div class="viz-title">Correlation Distributions — CytoSig vs SecAct</div>
                         <div class="viz-subtitle">Per-entity Spearman rho distribution</div>
-                        <div id="val-summary-cytosig-box" class="plot-container" style="height: 450px;"></div>
-                    </div>
-                    <div class="panel">
-                        <div class="viz-title">SecAct Correlations</div>
-                        <div class="viz-subtitle">Per-entity Spearman rho distribution</div>
-                        <div id="val-summary-secact-box" class="plot-container" style="height: 450px;"></div>
+                        <div id="val-summary-box" class="plot-container" style="height: 500px;"></div>
                     </div>
                 </div>
             </div>
@@ -243,71 +242,99 @@ const ValidatePage = {
             });
 
             targetSelect.addEventListener('change', () => {
-                this.renderSummaryBoxplots(cytosigData, secactData, targetSelect.value);
+                this._renderSummaryCombinedBox(cytosigData, secactData, targetSelect.value);
             });
         }
 
-        this.renderSummaryBoxplots(cytosigData, secactData, '_all');
+        this._renderSummaryCombinedBox(cytosigData, secactData, '_all');
     },
 
-    renderSummaryBoxplots(cytosigData, secactData, target) {
-        this._renderSummaryBox('val-summary-cytosig-box', cytosigData, target, 'CytoSig');
-        this._renderSummaryBox('val-summary-secact-box', secactData, target, 'SecAct');
-    },
-
-    _renderSummaryBox(divId, data, target, sigLabel) {
-        const div = document.getElementById(divId);
+    _renderSummaryCombinedBox(cytosigData, secactData, target) {
+        const div = document.getElementById('val-summary-box');
         if (!div) return;
 
-        const cats = data.categories || [];
-        const rhos = data.rhos || {};
+        const cytosigCats = cytosigData.categories || [];
+        const secactCats = secactData.categories || [];
+        const cytosigRhos = cytosigData.rhos || {};
+        const secactRhos = secactData.rhos || {};
 
-        if (!cats.length || !Object.keys(rhos).length) {
+        if (!cytosigCats.length && !secactCats.length) {
             div.innerHTML = '<p style="color:#888;text-align:center;margin-top:40px;">No data available</p>';
             return;
         }
 
-        const colors = [
-            '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-            '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
-        ];
-
-        const traces = cats.map((cat, i) => {
-            const catName = typeof cat === 'string' ? cat : (cat.label || cat.key || String(cat));
+        // Collect rho values for a given dataset
+        const collectVals = (cats, rhos, catIdx) => {
             let yVals = [];
             if (target === '_all') {
-                // All targets: collect rho values for this category from all targets
-                for (const [tgt, tgtRhos] of Object.entries(rhos)) {
-                    if (tgtRhos[i] !== null && tgtRhos[i] !== undefined) {
-                        if (Array.isArray(tgtRhos[i])) {
-                            yVals.push(...tgtRhos[i]);
+                for (const [, tgtRhos] of Object.entries(rhos)) {
+                    if (tgtRhos[catIdx] !== null && tgtRhos[catIdx] !== undefined) {
+                        if (Array.isArray(tgtRhos[catIdx])) {
+                            yVals.push(...tgtRhos[catIdx]);
                         } else {
-                            yVals.push(tgtRhos[i]);
+                            yVals.push(tgtRhos[catIdx]);
                         }
                     }
                 }
             } else {
                 const tgtRhos = rhos[target];
-                if (tgtRhos && tgtRhos[i] !== null && tgtRhos[i] !== undefined) {
-                    yVals = Array.isArray(tgtRhos[i]) ? tgtRhos[i] : [tgtRhos[i]];
+                if (tgtRhos && tgtRhos[catIdx] !== null && tgtRhos[catIdx] !== undefined) {
+                    yVals = Array.isArray(tgtRhos[catIdx]) ? tgtRhos[catIdx] : [tgtRhos[catIdx]];
                 }
             }
+            return yVals;
+        };
 
-            return {
+        // Build unified category list from whichever dataset has more categories
+        const refCats = cytosigCats.length >= secactCats.length ? cytosigCats : secactCats;
+        const traces = [];
+
+        // CytoSig traces (one box per category)
+        refCats.forEach((cat, i) => {
+            const catName = typeof cat === 'string' ? cat : (cat.label || cat.key || String(cat));
+            const yVals = collectVals(cytosigCats, cytosigRhos, i);
+            traces.push({
                 type: 'box',
                 y: yVals,
                 name: catName.replace(/_/g, ' '),
-                marker: { color: colors[i % colors.length] },
+                x: yVals.map(() => catName.replace(/_/g, ' ')),
+                legendgroup: 'CytoSig',
+                legendgrouptitle: { text: 'CytoSig' },
+                marker: { color: '#1f77b4' },
                 boxpoints: yVals.length < 50 ? 'all' : 'outliers',
                 jitter: 0.3,
-            };
+                offsetgroup: 'cytosig',
+                showlegend: i === 0,
+            });
+        });
+
+        // SecAct traces (one box per category, side-by-side)
+        const secRefCats = secactCats.length > 0 ? secactCats : refCats;
+        secRefCats.forEach((cat, i) => {
+            const catName = typeof cat === 'string' ? cat : (cat.label || cat.key || String(cat));
+            const yVals = collectVals(secactCats, secactRhos, i);
+            traces.push({
+                type: 'box',
+                y: yVals,
+                name: catName.replace(/_/g, ' '),
+                x: yVals.map(() => catName.replace(/_/g, ' ')),
+                legendgroup: 'SecAct',
+                legendgrouptitle: { text: 'SecAct' },
+                marker: { color: '#ff7f0e' },
+                boxpoints: yVals.length < 50 ? 'all' : 'outliers',
+                jitter: 0.3,
+                offsetgroup: 'secact',
+                showlegend: i === 0,
+            });
         });
 
         Plotly.newPlot(div, traces, {
+            boxmode: 'group',
             yaxis: { title: 'Spearman rho', zeroline: true },
-            margin: { l: 60, r: 20, t: 40, b: 100 },
-            showlegend: false,
-            title: { text: `${sigLabel} — ${target === '_all' ? 'All Targets' : target}`, font: { size: 14 } },
+            xaxis: { tickangle: -30 },
+            margin: { l: 60, r: 20, t: 40, b: 120 },
+            legend: { orientation: 'h', x: 0.3, y: 1.05 },
+            title: { text: target === '_all' ? 'All Targets' : target, font: { size: 14 } },
         }, { responsive: true });
     },
 
@@ -321,10 +348,11 @@ const ValidatePage = {
                 <p>Correlation between bulk RNA-seq expression and predicted activity across GTEx tissues and TCGA cancer types.</p>
 
                 <div class="filter-bar">
+                    ${this._sigtypeSelectHTML('val-bulk-sigtype', this.BULK_SIG_OPTIONS, this.bulkRnaseq.sigtype)}
                     <label>Dataset:
                         <select id="val-bulk-dataset">
-                            <option value="gtex">GTEx (normal tissues)</option>
-                            <option value="tcga">TCGA (cancer types)</option>
+                            <option value="gtex"${this.bulkRnaseq.dataset === 'gtex' ? ' selected' : ''}>GTEx (normal tissues)</option>
+                            <option value="tcga"${this.bulkRnaseq.dataset === 'tcga' ? ' selected' : ''}>TCGA (cancer types)</option>
                         </select>
                     </label>
                     <label>Target:
@@ -358,13 +386,20 @@ const ValidatePage = {
             </div>
         `;
 
+        const sigtypeSel = document.getElementById('val-bulk-sigtype');
         const datasetSel = document.getElementById('val-bulk-dataset');
         const targetSel = document.getElementById('val-bulk-target');
         const hideNonExpr = document.getElementById('val-bulk-hide-nonexpr');
         const searchInput = document.getElementById('val-bulk-search');
 
+        if (sigtypeSel) {
+            sigtypeSel.addEventListener('change', () => {
+                this.bulkRnaseq.sigtype = sigtypeSel.value;
+                this.bulkRnaseq.target = null;
+                this._loadBulkTargets();
+            });
+        }
         if (datasetSel) {
-            datasetSel.value = this.bulkRnaseq.dataset;
             datasetSel.addEventListener('change', () => {
                 this.bulkRnaseq.dataset = datasetSel.value;
                 this.bulkRnaseq.target = null;
@@ -399,7 +434,7 @@ const ValidatePage = {
         targetSel.innerHTML = '<option value="">Loading...</option>';
 
         const ds = this.bulkRnaseq.dataset;
-        const sig = this.signatureType;
+        const sig = this.bulkRnaseq.sigtype;
         const targets = await this.cachedFetch(
             () => API.getBulkRnaseqTargets(ds, sig),
             `bulk-targets-${ds}-${sig}`
@@ -426,7 +461,7 @@ const ValidatePage = {
         if (!this.bulkRnaseq.target) return;
         const ds = this.bulkRnaseq.dataset;
         const target = this.bulkRnaseq.target;
-        const sig = this.signatureType;
+        const sig = this.bulkRnaseq.sigtype;
         const cacheKey = `bulk-scatter-${ds}-${target}-${sig}`;
 
         const data = await this.cachedFetch(
@@ -443,6 +478,7 @@ const ValidatePage = {
             hideNonExpr: this.bulkRnaseq.hideNonExpr,
             unitLabel: 'samples',
             filterLabel: ds === 'gtex' ? 'Tissue' : 'Cancer Type',
+            atlasLabel: ds === 'gtex' ? 'GTEx' : 'TCGA',
         });
 
         this._renderGroupBar('val-bulk-bar', data);
@@ -452,7 +488,8 @@ const ValidatePage = {
     // ==================== Tab 3: Donor Level ====================
 
     async loadDonorLevelTab() {
-        const config = this.DONOR_LEVEL_CONFIG[this.currentAtlas];
+        const atlas = this.donorLevel.atlas;
+        const config = this.DONOR_LEVEL_CONFIG[atlas];
         const levels = config ? Object.keys(config.levels) : [];
         if (!this.donorLevel.level && levels.length) {
             this.donorLevel.level = levels[0];
@@ -465,6 +502,8 @@ const ValidatePage = {
                 <p>Correlation between pseudobulk expression and predicted activity per donor. Points colored by cell type or group.</p>
 
                 <div class="filter-bar">
+                    ${this._atlasSelectHTML('val-donor-atlas', this.SC_ATLAS_OPTIONS, atlas)}
+                    ${this._sigtypeSelectHTML('val-donor-sigtype', this.ALL_SIG_OPTIONS, this.donorLevel.sigtype)}
                     <label>Target:
                         <select id="val-donor-target"><option value="">Loading...</option></select>
                     </label>
@@ -499,11 +538,28 @@ const ValidatePage = {
             </div>
         `;
 
+        const atlasSel = document.getElementById('val-donor-atlas');
+        const sigtypeSel = document.getElementById('val-donor-sigtype');
         const targetSel = document.getElementById('val-donor-target');
         const groupSel = document.getElementById('val-donor-group');
         const hideNonExpr = document.getElementById('val-donor-hide-nonexpr');
         const searchInput = document.getElementById('val-donor-search');
 
+        if (atlasSel) {
+            atlasSel.addEventListener('change', () => {
+                this.donorLevel.atlas = atlasSel.value;
+                this.donorLevel.level = null;
+                this.donorLevel.target = null;
+                this.loadDonorLevelTab();
+            });
+        }
+        if (sigtypeSel) {
+            sigtypeSel.addEventListener('change', () => {
+                this.donorLevel.sigtype = sigtypeSel.value;
+                this.donorLevel.target = null;
+                this._loadDonorTargets();
+            });
+        }
         if (targetSel) {
             targetSel.addEventListener('change', () => {
                 this.donorLevel.target = targetSel.value;
@@ -537,8 +593,8 @@ const ValidatePage = {
         if (!targetSel) return;
         targetSel.innerHTML = '<option value="">Loading...</option>';
 
-        const atlas = this.currentAtlas;
-        const sig = this.signatureType;
+        const atlas = this.donorLevel.atlas;
+        const sig = this.donorLevel.sigtype;
         const targets = await this.cachedFetch(
             () => API.getDonorTargets(atlas, sig),
             `donor-targets-${atlas}-${sig}`
@@ -561,9 +617,9 @@ const ValidatePage = {
 
     async _renderDonorScatter() {
         if (!this.donorLevel.target) return;
-        const atlas = this.currentAtlas;
+        const atlas = this.donorLevel.atlas;
         const target = this.donorLevel.target;
-        const sig = this.signatureType;
+        const sig = this.donorLevel.sigtype;
         const cacheKey = `donor-scatter-${atlas}-${target}-${sig}`;
 
         const data = await this.cachedFetch(
@@ -590,6 +646,7 @@ const ValidatePage = {
             celltypeFilter: this.donorLevel.group,
             unitLabel: 'donors',
             filterLabel: 'Cell Type',
+            atlasLabel: this.donorLevel.atlas,
         });
 
         this._renderGroupBar('val-donor-bar', data);
@@ -599,7 +656,8 @@ const ValidatePage = {
     // ==================== Tab 4: Cell Type Level ====================
 
     async loadCelltypeLevelTab() {
-        const config = this.CELLTYPE_LEVEL_CONFIG[this.currentAtlas];
+        const atlas = this.celltypeLevel.atlas;
+        const config = this.CELLTYPE_LEVEL_CONFIG[atlas];
         const levels = config ? Object.keys(config.levels) : [];
         if (!this.celltypeLevel.level && levels.length) {
             this.celltypeLevel.level = levels[0];
@@ -612,6 +670,8 @@ const ValidatePage = {
                 <p>Correlation between expression and activity stratified by cell type. Each point represents a donor x cell type combination.</p>
 
                 <div class="filter-bar">
+                    ${this._atlasSelectHTML('val-ct-atlas', this.SC_ATLAS_OPTIONS, atlas)}
+                    ${this._sigtypeSelectHTML('val-ct-sigtype', this.ALL_SIG_OPTIONS, this.celltypeLevel.sigtype)}
                     <label>Level:
                         <select id="val-ct-level">
                             ${levels.map(l => `<option value="${l}" ${l === this.celltypeLevel.level ? 'selected' : ''}>${config ? config.levels[l] : l}</option>`).join('')}
@@ -651,12 +711,29 @@ const ValidatePage = {
             </div>
         `;
 
+        const ctAtlasSel = document.getElementById('val-ct-atlas');
+        const ctSigtypeSel = document.getElementById('val-ct-sigtype');
         const levelSel = document.getElementById('val-ct-level');
         const targetSel = document.getElementById('val-ct-target');
         const groupSel = document.getElementById('val-ct-group');
         const hideNonExpr = document.getElementById('val-ct-hide-nonexpr');
         const searchInput = document.getElementById('val-ct-search');
 
+        if (ctAtlasSel) {
+            ctAtlasSel.addEventListener('change', () => {
+                this.celltypeLevel.atlas = ctAtlasSel.value;
+                this.celltypeLevel.level = null;
+                this.celltypeLevel.target = null;
+                this.loadCelltypeLevelTab();
+            });
+        }
+        if (ctSigtypeSel) {
+            ctSigtypeSel.addEventListener('change', () => {
+                this.celltypeLevel.sigtype = ctSigtypeSel.value;
+                this.celltypeLevel.target = null;
+                this._loadCelltypeTargets();
+            });
+        }
         if (levelSel) {
             levelSel.addEventListener('change', () => {
                 this.celltypeLevel.level = levelSel.value;
@@ -697,8 +774,8 @@ const ValidatePage = {
         if (!targetSel) return;
         targetSel.innerHTML = '<option value="">Loading...</option>';
 
-        const atlas = this.currentAtlas;
-        const sig = this.signatureType;
+        const atlas = this.celltypeLevel.atlas;
+        const sig = this.celltypeLevel.sigtype;
         const level = this.celltypeLevel.level || 'donor_l1';
         const targets = await this.cachedFetch(
             () => API.getCelltypeTargets(atlas, sig, level),
@@ -722,9 +799,9 @@ const ValidatePage = {
 
     async _renderCelltypeScatter() {
         if (!this.celltypeLevel.target) return;
-        const atlas = this.currentAtlas;
+        const atlas = this.celltypeLevel.atlas;
         const target = this.celltypeLevel.target;
-        const sig = this.signatureType;
+        const sig = this.celltypeLevel.sigtype;
         const level = this.celltypeLevel.level || 'donor_l1';
         const cacheKey = `ct-scatter-${atlas}-${level}-${target}-${sig}`;
 
@@ -751,6 +828,7 @@ const ValidatePage = {
             celltypeFilter: this.celltypeLevel.group,
             unitLabel: 'donor x celltype',
             filterLabel: 'Cell Type',
+            atlasLabel: this.celltypeLevel.atlas,
         });
 
         this._renderGroupBar('val-ct-bar', data);
@@ -767,6 +845,8 @@ const ValidatePage = {
                 <p>Correlation between single-cell gene expression and predicted activity. Density heatmap computed from ALL cells; scatter overlay shows 50K stratified sample.</p>
 
                 <div class="filter-bar">
+                    ${this._atlasSelectHTML('val-sc-atlas', this.SC_FULL_ATLAS_OPTIONS, this.singleCell.atlas)}
+                    ${this._sigtypeSelectHTML('val-sc-sigtype', this.BULK_SIG_OPTIONS, this.singleCell.sigtype)}
                     <label>Target:
                         <select id="val-sc-target"><option value="">Loading...</option></select>
                     </label>
@@ -803,11 +883,27 @@ const ValidatePage = {
             </div>
         `;
 
+        const scAtlasSel = document.getElementById('val-sc-atlas');
+        const scSigtypeSel = document.getElementById('val-sc-sigtype');
         const targetSel = document.getElementById('val-sc-target');
         const ctSel = document.getElementById('val-sc-celltype');
         const hideNonExpr = document.getElementById('val-sc-hide-nonexpr');
         const searchInput = document.getElementById('val-sc-search');
 
+        if (scAtlasSel) {
+            scAtlasSel.addEventListener('change', () => {
+                this.singleCell.atlas = scAtlasSel.value;
+                this.singleCell.target = null;
+                this._loadSingleCellTargets();
+            });
+        }
+        if (scSigtypeSel) {
+            scSigtypeSel.addEventListener('change', () => {
+                this.singleCell.sigtype = scSigtypeSel.value;
+                this.singleCell.target = null;
+                this._loadSingleCellTargets();
+            });
+        }
         if (targetSel) {
             targetSel.addEventListener('change', () => {
                 this.singleCell.target = targetSel.value;
@@ -841,8 +937,8 @@ const ValidatePage = {
         if (!targetSel) return;
         targetSel.innerHTML = '<option value="">Loading...</option>';
 
-        const atlas = this.currentAtlas;
-        const sig = this.signatureType;
+        const atlas = this.singleCell.atlas;
+        const sig = this.singleCell.sigtype;
 
         let targets;
         try {
@@ -885,9 +981,9 @@ const ValidatePage = {
 
     async _renderSingleCellPlots() {
         if (!this.singleCell.target) return;
-        const atlas = this.currentAtlas;
+        const atlas = this.singleCell.atlas;
         const target = this.singleCell.target;
-        const sig = this.signatureType;
+        const sig = this.singleCell.sigtype;
         const cacheKey = `sc-scatter-${atlas}-${target}-${sig}`;
 
         let data;
@@ -1037,7 +1133,7 @@ const ValidatePage = {
                 showarrow: false, font: { size: 11 },
                 bgcolor: 'rgba(255,255,255,0.9)', borderpad: 6,
             }],
-            title: { text: `${data.target} — ${this.currentAtlas}`, font: { size: 14 } },
+            title: { text: `${data.target} — ${this.singleCell.atlas}`, font: { size: 14 } },
         };
 
         Plotly.newPlot(div, traces, layout, { responsive: true });
@@ -1129,6 +1225,7 @@ const ValidatePage = {
         const celltypeFilter = opts.celltypeFilter || '';
         const unitLabel = opts.unitLabel || 'samples';
         const filterLabel = opts.filterLabel || 'Group';
+        const atlasLabel = opts.atlasLabel || '';
 
         // Filter by group
         if (celltypeFilter && groups.length) {
@@ -1247,7 +1344,7 @@ const ValidatePage = {
                 showarrow: false, font: { size: 11 },
                 bgcolor: 'rgba(255,255,255,0.9)', borderpad: 6,
             }],
-            title: { text: `${target} — ${this.currentAtlas}`, font: { size: 14 } },
+            title: { text: `${target}${atlasLabel ? ' — ' + atlasLabel : ''}`, font: { size: 14 } },
         };
 
         Plotly.newPlot(div, traces, layout, { responsive: true });

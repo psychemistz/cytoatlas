@@ -1,16 +1,52 @@
+# CytoAtlas Pipeline Configuration
+# Defines the full analysis workflow matching the numbered script pipeline.
+#
+# Usage:
+#   cytoatlas-pipeline run --config pipeline.yaml
+#   cytoatlas-pipeline run --config pipeline.yaml --output /data/parks34/projects/2secactpy/results
+#
+# Stages map to the numbered scripts in scripts/:
+#   pilot       → 00_pilot_analysis.py
+#   cima        → 01_cima_activity.py
+#   inflammation→ 02_inflam_activity.py
+#   scatlas     → 03_scatlas_analysis.py
+#   integrated  → 04_integrated.py
+#   figures     → 05_figures.py (not GPU, run separately)
+#   visualization→ 06_preprocess_viz_data.py (not GPU, run separately)
+#   cross_atlas → 07_cross_atlas_analysis.py
+#   immune      → 08_scatlas_immune_analysis.py
+
+config:
+  gpu_devices: [0]
+  batch_size: 10000
+  n_rand: 1000
+  seed: 42
+  output_dir: /data/parks34/projects/2secactpy/results
+  output_format: csv
+  verbose: false
+
 stages:
   pilot:
     script: "scripts/00_pilot_analysis.py"
     inputs: ["data_paths.cima_h5ad"]
     outputs: ["results/pilot/"]
+    signatures: [CytoSig, SecAct]
+    analyses: [activity, validation]
+    aggregation: pseudobulk
     gpu: false
     time_estimate: "2h"
+    params:
+      n_cells: 100000
+      seed: 42
 
   cima:
     script: "scripts/01_cima_activity.py"
     inputs: ["data_paths.cima_h5ad", "data_paths.cima_biochem", "data_paths.cima_metabolites"]
     outputs: ["results/cima/"]
-    depends_on: ["pilot"]
+    depends_on: [pilot]
+    signatures: [CytoSig, SecAct]
+    analyses: [activity, correlation, differential]
+    aggregation: pseudobulk
     gpu: true
     time_estimate: "12h"
 
@@ -18,7 +54,10 @@ stages:
     script: "scripts/02_inflam_activity.py"
     inputs: ["data_paths.inflammation_main", "data_paths.inflammation_validation", "data_paths.inflammation_external"]
     outputs: ["results/inflammation/"]
-    depends_on: ["pilot"]
+    depends_on: [pilot]
+    signatures: [CytoSig, SecAct]
+    analyses: [activity, differential]
+    aggregation: pseudobulk
     gpu: true
     time_estimate: "8h"
 
@@ -26,7 +65,10 @@ stages:
     script: "scripts/03_scatlas_analysis.py"
     inputs: ["data_paths.scatlas_normal", "data_paths.scatlas_cancer"]
     outputs: ["results/scatlas/"]
-    depends_on: ["pilot"]
+    depends_on: [pilot]
+    signatures: [CytoSig, SecAct]
+    analyses: [activity, differential]
+    aggregation: pseudobulk
     gpu: true
     time_estimate: "10h"
 
@@ -34,20 +76,64 @@ stages:
     script: "scripts/04_integrated.py"
     inputs: ["results/cima/", "results/inflammation/", "results/scatlas/"]
     outputs: ["results/integrated/"]
-    depends_on: ["cima", "inflammation", "scatlas"]
+    depends_on: [cima, inflammation, scatlas]
+    analyses: [cross_atlas]
     gpu: false
     time_estimate: "2h"
 
   figures:
     script: "scripts/05_figures.py"
     outputs: ["results/figures/"]
-    depends_on: ["integrated"]
+    depends_on: [integrated]
     gpu: false
     time_estimate: "1h"
+    note: "Publication matplotlib figures — run separately, not GPU-accelerated"
 
   visualization:
     script: "scripts/06_preprocess_viz_data.py"
     outputs: ["visualization/data/"]
-    depends_on: ["integrated"]
+    depends_on: [integrated]
     gpu: false
     time_estimate: "4h"
+    note: "Web portal JSON preprocessing — run separately"
+
+  cross_atlas:
+    script: "scripts/07_cross_atlas_analysis.py"
+    depends_on: [integrated]
+    analyses: [cross_atlas]
+    gpu: false
+    time_estimate: "2h"
+
+  immune:
+    script: "scripts/08_scatlas_immune_analysis.py"
+    depends_on: [scatlas]
+    analyses: [activity, differential]
+    gpu: true
+    time_estimate: "6h"
+
+  validation:
+    script: "scripts/10_atlas_validation_pipeline.py"
+    depends_on: [cima, inflammation, scatlas]
+    analyses: [validation]
+    gpu: false
+    time_estimate: "4h"
+
+  donor_level:
+    script: "scripts/11_donor_level_pipeline.py"
+    depends_on: [validation]
+    analyses: [validation]
+    gpu: false
+    time_estimate: "3h"
+
+  bulk_validation:
+    script: "scripts/15_bulk_validation.py"
+    analyses: [activity, correlation]
+    gpu: false
+    time_estimate: "6h"
+
+  resampled:
+    script: "scripts/16_resampled_validation.py"
+    depends_on: [validation]
+    analyses: [activity, validation]
+    gpu: false
+    time_estimate: "8h"

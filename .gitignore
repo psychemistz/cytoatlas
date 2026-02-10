@@ -83,3 +83,7 @@ data/bulk/
 
 # API static data files (large, generated)
 cytoatlas-api/static/data/*.json
+
+# Runtime artifacts
+cytoatlas-api/logs/
+scripts/__pycache__/

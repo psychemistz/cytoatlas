@@ -72,7 +72,7 @@ Frontend SPA (JavaScript)
 | **Integrated Analysis** | `scripts/04_integrated.py` | Python/SciPy | Cross-atlas comparison |
 | **Figures** | `scripts/05_figures.py` | Matplotlib/Seaborn | Publication-quality visualizations |
 | **Preprocessing** | `scripts/06_preprocess_viz_data.py` | Python/Pandas | H5AD + CSV → JSON for web |
-| **Immune Analysis** | `scripts/07_scatlas_immune_analysis.py` | Python/CuPy | T cell exhaustion + infiltration |
+| **Immune Analysis** | `scripts/08_scatlas_immune_analysis.py` | Python/CuPy | T cell exhaustion + infiltration |
 
 ### 2.2 REST API Backend
 
@@ -710,15 +710,12 @@ class DataRepository(Protocol):
     async def get_correlations(self, gene: str) -> CorrelationData: ...
     async def get_disease_activity(self, disease: str) -> ActivityData: ...
 
-# Implementations
+# Active implementations
+class DuckDBRepository(DataRepository):
+    # Primary — query atlas_data.duckdb (columnar, compressed)
+
 class JSONRepository(DataRepository):
-    # Load from visualization/data/*.json
-
-class ParquetRepository(DataRepository):
-    # Load from results/*.parquet (future)
-
-class PostgreSQLRepository(DataRepository):
-    # Query from database tables
+    # Fallback — load from visualization/data/*.json
 ```
 
 ---

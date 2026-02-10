@@ -18,7 +18,7 @@ flowchart TB
         P01[01_cima_activity.py]
         P02[02_inflam_activity.py]
         P03[03_scatlas_analysis.py]
-        P07[07_scatlas_immune_analysis.py]
+        P08[08_scatlas_immune_analysis.py]
         P06[06_preprocess_viz_data.py]
     end
 
@@ -36,13 +36,13 @@ flowchart TB
     CIMA_H5AD --> P01
     INFLAM_H5AD --> P02
     SCATLAS_H5AD --> P03
-    SCATLAS_H5AD --> P07
+    SCATLAS_H5AD --> P08
     SIGS --> P01 & P02 & P03
 
     P01 --> CIMA_OUT
     P02 --> INFLAM_OUT
     P03 --> SCATLAS_OUT
-    P07 --> SCATLAS_OUT
+    P08 --> SCATLAS_OUT
 
     CIMA_OUT --> P06
     INFLAM_OUT --> P06
@@ -60,7 +60,7 @@ flowchart TB
 | 1 | `01_cima_activity.py` | CIMA activity + correlations | ~2 hr | Yes |
 | 2 | `02_inflam_activity.py` | Inflammation activity + disease analysis | ~3 hr | Yes |
 | 3 | `03_scatlas_analysis.py` | scAtlas organs + cancer comparison | ~4 hr | Yes |
-| 3b | `07_scatlas_immune_analysis.py` | Immune infiltration + exhaustion | ~2 hr | Yes |
+| 3b | `08_scatlas_immune_analysis.py` | Immune infiltration + exhaustion | ~2 hr | Yes |
 | 4 | `06_preprocess_viz_data.py` | JSON preprocessing for web | ~30 min | No |
 
 ## Common Processing Steps

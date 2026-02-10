@@ -3,10 +3,7 @@
 from app.repositories.base import BaseRepository
 from app.repositories.duckdb_repository import DuckDBRepository
 from app.repositories.json_repository import JSONRepository
-from app.repositories.parquet_repository import ParquetRepository
 from app.repositories.protocols import AtlasRepository, CursorPage
-from app.repositories.sqlite_scatter_repository import SQLiteScatterRepository
-from app.repositories.sqlite_singlecell_repository import SQLiteSingleCellRepository
 from app.repositories.versioning import DataVersionTracker, get_version_tracker
 
 __all__ = [
@@ -16,8 +13,5 @@ __all__ = [
     "DataVersionTracker",
     "DuckDBRepository",
     "JSONRepository",
-    "ParquetRepository",
-    "SQLiteScatterRepository",
-    "SQLiteSingleCellRepository",
     "get_version_tracker",
 ]

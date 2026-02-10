@@ -30,7 +30,6 @@ from app.schemas.validation import (
     SingleCellDistributionData,
     ValidationSummary,
 )
-from app.repositories.sqlite_singlecell_repository import SQLiteSingleCellRepository
 from app.services.bulk_validation_service import BulkValidationService
 from app.services.validation_service import ValidationService
 
@@ -635,24 +634,13 @@ async def get_summary_boxplot_target(
 # ========================================================================== #
 
 
-_sc_repo: SQLiteSingleCellRepository | None = None
-
-
-def get_sc_repo() -> SQLiteSingleCellRepository:
-    """Singleton singlecell SQLite repository."""
-    global _sc_repo
-    if _sc_repo is None:
-        _sc_repo = SQLiteSingleCellRepository()
-    return _sc_repo
-
-
 @router.get("/singlecell-full/atlases", response_model=List[str])
 async def list_singlecell_full_atlases() -> List[str]:
-    """List atlases with all-cell single-cell validation data."""
-    repo = get_sc_repo()
-    if not repo.available:
-        return []
-    return await repo.list_atlases()
+    """List atlases with all-cell single-cell validation data.
+
+    Note: Requires DuckDB backend with singlecell tables loaded.
+    """
+    return []
 
 
 @router.get("/singlecell-full/{atlas}/signatures")
@@ -661,10 +649,7 @@ async def list_singlecell_full_signatures(
     sigtype: str = Query("cytosig", description="Signature type"),
 ) -> List[dict]:
     """List single-cell targets with stats computed from ALL cells."""
-    repo = get_sc_repo()
-    if not repo.available:
-        raise HTTPException(status_code=503, detail="Single-cell DB not available")
-    return await repo.get_targets(atlas, sigtype)
+    raise HTTPException(status_code=503, detail="Single-cell full backend not yet available")
 
 
 @router.get("/singlecell-full/{atlas}/scatter/{target}")
@@ -674,16 +659,7 @@ async def get_singlecell_full_scatter(
     sigtype: str = Query("cytosig", description="Signature type"),
 ) -> dict:
     """Get all-cell scatter data: exact stats + density bins + 50K sampled points."""
-    repo = get_sc_repo()
-    if not repo.available:
-        raise HTTPException(status_code=503, detail="Single-cell DB not available")
-    result = await repo.get_scatter(atlas, sigtype, target)
-    if not result:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No single-cell data for {atlas}/{target}/{sigtype}",
-        )
-    return result
+    raise HTTPException(status_code=503, detail="Single-cell full backend not yet available")
 
 
 @router.get("/singlecell-full/{atlas}/celltypes/{target}")
@@ -693,7 +669,4 @@ async def get_singlecell_full_celltypes(
     sigtype: str = Query("cytosig", description="Signature type"),
 ) -> List[dict]:
     """Get per-celltype stats computed from ALL cells."""
-    repo = get_sc_repo()
-    if not repo.available:
-        raise HTTPException(status_code=503, detail="Single-cell DB not available")
-    return await repo.get_celltype_stats(atlas, sigtype, target)
+    raise HTTPException(status_code=503, detail="Single-cell full backend not yet available")

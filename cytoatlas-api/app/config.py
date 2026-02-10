@@ -134,17 +134,6 @@ class Settings(BaseSettings):
         description="Path to SQLite file for app state (users, chat, jobs)",
     )
 
-    # Legacy data paths (deprecated — kept for fallback when DuckDB unavailable)
-    parquet_data_path: Path = Field(
-        default=Path("/vf/users/parks34/projects/2secactpy/visualization/data/parquet")
-    )
-    sqlite_scatter_db_path: Path = Field(
-        default=Path("/vf/users/parks34/projects/2secactpy/visualization/data/validation_scatter.db")
-    )
-    sqlite_singlecell_db_path: Path = Field(
-        default=Path("/vf/users/parks34/projects/2secactpy/visualization/data/singlecell_scatter.db")
-    )
-
     @property
     def use_duckdb(self) -> bool:
         """Check if DuckDB atlas file exists."""
@@ -200,24 +189,6 @@ class Settings(BaseSettings):
         default=Path(
             "/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/PanCancer_igt_s9_fine_counts.h5ad"
         )
-    )
-
-    # NicheFormer spatial transcriptomics (~30M cells) — Round 4
-    nicheformer_h5ad: Path | None = Field(
-        default=None,
-        description="Path to NicheFormer spatial H5AD (set when data is available)",
-    )
-
-    # scGPT cohort (~35M cells) — Round 4
-    scgpt_h5ad: Path | None = Field(
-        default=None,
-        description="Path to scGPT cohort H5AD (set when data is available)",
-    )
-
-    # cellxgene Census datasets — Round 4
-    cellxgene_cache_dir: Path = Field(
-        default=Path("/data/parks34/projects/2secactpy/data/cellxgene"),
-        description="Cache directory for cellxgene Census downloads",
     )
 
     # Celery
