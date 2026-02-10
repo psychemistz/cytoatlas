@@ -1,0 +1,222 @@
+# CytoAtlas SLURM Job Configuration
+# Used by submit_jobs.sh to generate and submit SLURM jobs.
+#
+# Resource profiles:
+#   gpu_heavy:  A100 GPU, 128G RAM, 16 CPUs, 24-48h (large atlas analyses)
+#   gpu_medium: A100 GPU, 128G RAM, 8 CPUs, 4-8h  (moderate GPU work)
+#   gpu_lite:   A100 GPU, 128G RAM, 8 CPUs, 2h    (pilot, quick GPU jobs)
+#   cpu_normal: No GPU, 64G RAM, 8 CPUs, 2-4h     (integration, figures)
+#   cpu_heavy:  No GPU, 128G RAM, 16 CPUs, 6h      (preprocessing)
+
+profiles:
+  gpu_heavy:
+    partition: gpu
+    gres: "gpu:a100:1"
+    mem: "128G"
+    cpus: 16
+    modules: ["CUDA/12.8.1", "cuDNN/9.12.0/CUDA-12"]
+
+  gpu_medium:
+    partition: gpu
+    gres: "gpu:a100:1"
+    mem: "128G"
+    cpus: 8
+    modules: ["CUDA/12.8.1", "cuDNN/9.12.0/CUDA-12"]
+
+  gpu_lite:
+    partition: gpu
+    gres: "gpu:a100:1"
+    mem: "128G"
+    cpus: 8
+    modules: ["CUDA/12.8.1", "cuDNN/9.12.0/CUDA-12"]
+
+  cpu_normal:
+    partition: norm
+    mem: "64G"
+    cpus: 8
+    modules: []
+
+  cpu_heavy:
+    partition: norm
+    mem: "128G"
+    cpus: 16
+    modules: []
+
+# Common settings
+common:
+  project_dir: /data/parks34/projects/2secactpy
+  conda_env: secactpy
+  mail_user: seongyong.park@nih.gov
+
+# ---------------------------------------------------------------------------
+# Job definitions
+# ---------------------------------------------------------------------------
+
+jobs:
+  # === Phase 0: Pilot ===
+  pilot:
+    name: "Pilot Analysis"
+    profile: gpu_lite
+    time: "02:00:00"
+    script: "scripts/00_pilot_analysis.py"
+    args: "--n-cells 100000 --seed 42"
+    phase: 0
+
+  # === Phase 1-3: Main Analyses (parallel) ===
+  cima:
+    name: "CIMA Activity"
+    profile: gpu_heavy
+    time: "24:00:00"
+    script: "scripts/01_cima_activity.py"
+    args: "--mode pseudobulk"
+    phase: 1
+    depends_on: [pilot]
+
+  inflammation:
+    name: "Inflammation Atlas"
+    profile: gpu_heavy
+    time: "48:00:00"
+    script: "scripts/02_inflam_activity.py"
+    args: "--mode pseudobulk"
+    phase: 1
+    depends_on: [pilot]
+
+  scatlas:
+    name: "scAtlas Analysis"
+    profile: gpu_medium
+    time: "08:00:00"
+    script: "scripts/03_scatlas_analysis.py"
+    args: "--mode all"
+    phase: 1
+    depends_on: [pilot]
+
+  # === Phase 4: Integration ===
+  integrated:
+    name: "Integrated Analysis"
+    profile: cpu_normal
+    time: "04:00:00"
+    script: "scripts/04_integrated.py"
+    args: ""
+    phase: 2
+    depends_on: [cima, inflammation, scatlas]
+
+  # === Phase 5: Figures ===
+  figures:
+    name: "Publication Figures"
+    profile: cpu_normal
+    time: "02:00:00"
+    script: "scripts/05_figures.py"
+    args: "--all"
+    phase: 3
+    depends_on: [integrated]
+
+  # === Phase 6: Preprocessing ===
+  preprocess_viz:
+    name: "Preprocess Viz Data"
+    profile: cpu_heavy
+    time: "06:00:00"
+    script: "scripts/06_preprocess_viz_data.py"
+    args: ""
+    phase: 3
+    depends_on: [integrated]
+
+  # === Validation jobs ===
+  cima_pseudobulk:
+    name: "CIMA Pseudobulk"
+    profile: gpu_medium
+    time: "08:00:00"
+    script: "scripts/09_atlas_validation_pseudobulk.py"
+    args: "--atlas cima --level {level} --output-dir results/atlas_validation"
+    array: ["L1", "L2", "L3", "L4"]
+    array_var: level
+    phase: 10
+
+  cima_activity_val:
+    name: "CIMA Activity Validation"
+    profile: gpu_medium
+    time: "04:00:00"
+    script: "scripts/09_atlas_validation_activity.py"
+    args: "--atlas cima --level {level} --validate"
+    array: ["L1", "L2", "L3", "L4"]
+    array_var: level
+    phase: 11
+    depends_on: [cima_pseudobulk]
+
+  inflam_pseudobulk:
+    name: "Inflammation Pseudobulk"
+    profile: gpu_medium
+    time: "08:00:00"
+    script: "scripts/09_atlas_validation_pseudobulk.py"
+    args: "--atlas inflammation_{cohort} --level {level} --output-dir results/atlas_validation"
+    array: ["main_L1", "main_L2", "val_L1", "val_L2", "ext_L1", "ext_L2"]
+    array_var: cohort_level
+    phase: 10
+
+  inflam_activity_val:
+    name: "Inflammation Activity Validation"
+    profile: gpu_medium
+    time: "04:00:00"
+    script: "scripts/09_atlas_validation_activity.py"
+    args: "--atlas inflammation_{cohort} --level {level} --validate"
+    array: ["main_L1", "main_L2", "val_L1", "val_L2", "ext_L1", "ext_L2"]
+    array_var: cohort_level
+    phase: 11
+    depends_on: [inflam_pseudobulk]
+
+  scatlas_pseudobulk:
+    name: "scAtlas Pseudobulk"
+    profile: gpu_medium
+    time: "08:00:00"
+    script: "scripts/09_atlas_validation_pseudobulk.py"
+    args: "--atlas scatlas_{dataset} --level {level} --output-dir results/atlas_validation"
+    array: ["normal_organ_celltype", "normal_celltype", "normal_organ",
+            "cancer_organ_celltype", "cancer_celltype", "cancer_organ"]
+    array_var: dataset_level
+    phase: 10
+
+  scatlas_activity_val:
+    name: "scAtlas Activity Validation"
+    profile: gpu_medium
+    time: "04:00:00"
+    script: "scripts/09_atlas_validation_activity.py"
+    args: "--atlas scatlas_{dataset} --level {level} --validate"
+    array: ["normal_organ_celltype", "normal_celltype", "normal_organ",
+            "cancer_organ_celltype", "cancer_celltype", "cancer_organ"]
+    array_var: dataset_level
+    phase: 11
+    depends_on: [scatlas_pseudobulk]
+
+  cross_atlas_validation:
+    name: "Cross-Atlas Validation"
+    profile: cpu_normal
+    time: "04:00:00"
+    script: "scripts/07_cross_atlas_analysis.py"
+    args: ""
+    phase: 12
+    depends_on: [cima_activity_val, inflam_activity_val, scatlas_activity_val]
+
+  preprocess_bulk_validation:
+    name: "Preprocess Bulk Validation"
+    profile: cpu_heavy
+    time: "06:00:00"
+    script: "scripts/14_preprocess_bulk_validation.py"
+    args: ""
+    phase: 12
+
+  validation_summary:
+    name: "Validation Summary"
+    profile: cpu_normal
+    time: "02:00:00"
+    script: "scripts/17_preprocess_validation_summary.py"
+    args: ""
+    phase: 13
+    depends_on: [cross_atlas_validation, preprocess_bulk_validation]
+
+  resampled_inflammation:
+    name: "Resampled Inflammation"
+    profile: gpu_heavy
+    time: "24:00:00"
+    script: "scripts/16_resampled_validation.py"
+    args: "--atlas inflammation"
+    phase: 14
+    depends_on: [inflam_activity_val]

@@ -212,12 +212,12 @@ def cmd_export(args: argparse.Namespace) -> int:
     output_path = Path(args.output or ".")
 
     if fmt == "duckdb":
-        from cytoatlas_pipeline.export import DuckDBExporter
-        exporter = DuckDBExporter(output_path / "atlas_data.duckdb")
+        from cytoatlas_pipeline.export import DuckDBWriter
+        exporter = DuckDBWriter(output_path / "atlas_data.duckdb")
         exporter.export_directory(input_path)
     elif fmt == "parquet":
-        from cytoatlas_pipeline.export import ParquetExporter
-        exporter = ParquetExporter(output_path)
+        from cytoatlas_pipeline.export import ParquetWriter
+        exporter = ParquetWriter(output_path)
         exporter.export_directory(input_path)
     elif fmt == "json":
         from cytoatlas_pipeline.export import JSONWriter
