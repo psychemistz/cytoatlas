@@ -1,5 +1,13 @@
-"""Parquet-based repository implementation with predicate pushdown."""
+"""Parquet-based repository implementation with predicate pushdown.
 
+.. deprecated::
+    ParquetRepository is superseded by :class:`~app.repositories.duckdb_repository.DuckDBRepository`
+    which provides the same columnar performance benefits with a unified SQL
+    interface.  This module will be removed once the DuckDB migration is complete.
+"""
+
+import logging
+import warnings
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -12,6 +20,7 @@ from app.config import get_settings
 from app.repositories.base import BaseRepository
 from app.repositories.json_repository import JSONRepository
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
@@ -20,6 +29,10 @@ class ParquetRepository(BaseRepository):
     Parquet repository with predicate pushdown and memory mapping.
 
     Falls back to JSON repository if Parquet file not found.
+
+    .. deprecated::
+        Prefer DuckDBRepository for new integrations.  DuckDB provides
+        the same columnar performance benefits with a unified SQL interface.
     """
 
     def __init__(self, parquet_base_path: Path | None = None):

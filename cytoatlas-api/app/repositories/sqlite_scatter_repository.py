@@ -7,6 +7,12 @@ for non-blocking FastAPI integration.
 DB schema:
     scatter_targets  — metadata (source, atlas, level, sigtype, target, rho, pval, …)
     scatter_points   — zlib-compressed JSON point arrays keyed by target_id
+
+.. deprecated::
+    The scatter_targets and scatter_points tables are migrated into the DuckDB
+    atlas file by ``scripts/convert_data_to_duckdb.py``.  Once the DuckDB
+    migration is complete, this module will be removed in favour of
+    :class:`~app.repositories.duckdb_repository.DuckDBRepository`.
 """
 
 from __future__ import annotations
@@ -26,7 +32,12 @@ logger = logging.getLogger(__name__)
 
 
 class SQLiteScatterRepository:
-    """Read-only repository over the validation_scatter.db SQLite file."""
+    """Read-only repository over the validation_scatter.db SQLite file.
+
+    .. deprecated::
+        Prefer DuckDBRepository once atlas_data.duckdb is generated.
+        The scatter tables are migrated into DuckDB by the conversion script.
+    """
 
     def __init__(self, db_path: Path | None = None):
         settings = get_settings()

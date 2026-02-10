@@ -785,6 +785,57 @@ TABLE_CONFIGS = {
         "extract_key": "correlations",
         "indexes": ["signature", "signature_type"],
     },
+    # ------- Additional service-referenced JSON files -------
+    "cima_biochem_scatter": {
+        "source": VIZ_DATA / "cima_biochem_scatter.json",
+        "type": "flat_json",
+        "indexes": ["protein", "metabolite"],
+    },
+    "cima_eqtl": {
+        "source": VIZ_DATA / "cima_eqtl.json",
+        "type": "flat_json",
+        "indexes": ["gene", "variant"],
+    },
+    "cima_eqtl_top": {
+        "source": VIZ_DATA / "cima_eqtl_top.json",
+        "type": "flat_json",
+        "indexes": ["gene"],
+    },
+    "cima_population_stratification": {
+        "source": VIZ_DATA / "cima_population_stratification.json",
+        "type": "flat_json",
+        "indexes": ["population", "cell_type"],
+    },
+    "disease_sankey": {
+        "source": VIZ_DATA / "disease_sankey.json",
+        "type": "flat_json",
+        "indexes": [],
+    },
+    "gene_list": {
+        "source": VIZ_DATA / "gene_list.json",
+        "type": "flat_json",
+        "indexes": [],
+    },
+    "inflammation_cell_drivers": {
+        "source": VIZ_DATA / "inflammation_cell_drivers.json",
+        "type": "flat_json",
+        "indexes": ["cell_type", "disease"],
+    },
+    "inflammation_longitudinal": {
+        "source": VIZ_DATA / "inflammation_longitudinal.json",
+        "type": "flat_json",
+        "indexes": ["disease", "signature_type"],
+    },
+    "summary_stats": {
+        "source": VIZ_DATA / "summary_stats.json",
+        "type": "flat_json",
+        "indexes": [],
+    },
+    "treatment_response": {
+        "source": VIZ_DATA / "treatment_response.json",
+        "type": "flat_json",
+        "indexes": ["disease", "signature_type"],
+    },
 }
 
 # Files to skip in auto-discovery (already handled above, too large, or not tabular)
@@ -827,14 +878,22 @@ SKIP_IN_AUTO_DISCOVER = {
     "organ_cancer_matrix.json",
     "cross_atlas.json",
     "cohort_validation.json",
+    # Additional service-referenced files (now explicitly configured)
+    "cima_biochem_scatter.json",
+    "cima_eqtl.json",
+    "cima_eqtl_top.json",
+    "cima_population_stratification.json",
+    "disease_sankey.json",
+    "gene_list.json",
+    "inflammation_cell_drivers.json",
+    "inflammation_longitudinal.json",
+    "summary_stats.json",
+    "treatment_response.json",
     # Too large / handled by SQLite scatter pipeline
     "bulk_donor_correlations.json",
     # Non-tabular metadata files
-    "gene_list.json",
     "celltype_mapping.json",
     "search_index.json",
-    "disease_sankey.json",
-    "summary_stats.json",
     "cima_signature_expression.json",
 }
 

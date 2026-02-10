@@ -32,7 +32,9 @@ dependencies = [
     # Database
     "sqlalchemy[asyncio]>=2.0.25",
     "asyncpg>=0.29.0",
+    "aiosqlite>=0.19.0",
     "alembic>=1.13.0",
+    "duckdb>=1.0.0",
 
     # Caching & Background Tasks
     "redis>=5.0.0",

@@ -1,6 +1,15 @@
-"""JSON-based repository implementation with LRU eviction."""
+"""JSON-based repository implementation with LRU eviction.
 
+.. deprecated::
+    JSONRepository is retained as a fallback during the DuckDB migration.
+    New code should use :class:`~app.repositories.duckdb_repository.DuckDBRepository`
+    as the primary data backend.  Once the DuckDB migration is complete and
+    ``atlas_data.duckdb`` is generated, this module will be removed.
+"""
+
+import logging
 import sys
+import warnings
 from collections import OrderedDict
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -11,7 +20,10 @@ import orjson
 from app.config import get_settings
 from app.repositories.base import BaseRepository
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
+
+_DEPRECATION_WARNED = False
 
 
 class JSONRepository(BaseRepository):
@@ -20,6 +32,10 @@ class JSONRepository(BaseRepository):
 
     Implements AtlasRepository protocol using JSON files as storage.
     Backward-compatible with existing BaseService.load_json() behavior.
+
+    .. deprecated::
+        Prefer DuckDBRepository for new integrations.  This repository
+        is kept only as a fallback until the DuckDB migration is complete.
     """
 
     def __init__(

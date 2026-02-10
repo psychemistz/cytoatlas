@@ -202,6 +202,24 @@ class Settings(BaseSettings):
         )
     )
 
+    # NicheFormer spatial transcriptomics (~30M cells) — Round 4
+    nicheformer_h5ad: Path | None = Field(
+        default=None,
+        description="Path to NicheFormer spatial H5AD (set when data is available)",
+    )
+
+    # scGPT cohort (~35M cells) — Round 4
+    scgpt_h5ad: Path | None = Field(
+        default=None,
+        description="Path to scGPT cohort H5AD (set when data is available)",
+    )
+
+    # cellxgene Census datasets — Round 4
+    cellxgene_cache_dir: Path = Field(
+        default=Path("/data/parks34/projects/2secactpy/data/cellxgene"),
+        description="Cache directory for cellxgene Census downloads",
+    )
+
     # Celery
     celery_broker_url: str = Field(default="redis://localhost:6379/1")
     celery_result_backend: str = Field(default="redis://localhost:6379/2")
