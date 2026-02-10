@@ -99,11 +99,20 @@ class BulkValidationService(BaseService):
     # ------------------------------------------------------------------ #
 
     def _get_bulk_donor_monolith(self) -> dict:
-        """Lazy-load the monolithic bulk_donor_correlations.json."""
+        """Lazy-load the monolithic bulk_donor_correlations.json.
+
+        This 5.5GB file should NOT be needed when split files exist in
+        validation/{donor_scatter,celltype_scatter}/ and validation/bulk_donor_meta.json.
+        If you see the warning below, run: python scripts/14_preprocess_bulk_validation.py
+        """
         if self._bulk_donor_monolith is None:
             path = self.data_dir / "bulk_donor_correlations.json"
             if path.exists():
-                logger.info("Loading monolithic bulk_donor_correlations.json (~5.5GB)...")
+                logger.warning(
+                    "Loading monolithic bulk_donor_correlations.json (~5.5GB) — "
+                    "this should not happen if split files exist. "
+                    "Run scripts/14_preprocess_bulk_validation.py to generate them."
+                )
                 with open(path, "rb") as f:
                     self._bulk_donor_monolith = orjson.loads(f.read())
             else:
@@ -415,28 +424,29 @@ class BulkValidationService(BaseService):
     #  Summary Boxplot (validation_corr_boxplot.json)                      #
     # ================================================================== #
 
-    def _load_boxplot_data(self) -> dict | None:
-        """Load validation_corr_boxplot.json (cached)."""
+    async def _load_boxplot_data(self) -> dict | None:
+        """Load validation_corr_boxplot.json (cached).
+
+        Uses self.load_json() so requests are transparently served from DuckDB
+        when available.
+        """
         cache_key = "_boxplot_data"
         if cache_key in self._file_cache:
             return self._file_cache[cache_key]
 
-        path = self.data_dir / "validation_corr_boxplot.json"
-        if not path.exists():
-            return None
-
         try:
-            with open(path, "rb") as f:
-                data = orjson.loads(f.read())
+            data = await self.load_json("validation_corr_boxplot.json")
             self._file_cache[cache_key] = data
             return data
+        except FileNotFoundError:
+            return None
         except Exception:
             logger.exception("Failed to load validation_corr_boxplot.json")
             return None
 
     async def get_summary_boxplot(self, sigtype: str = "cytosig") -> dict:
         """Get full boxplot data for the summary tab."""
-        data = self._load_boxplot_data()
+        data = await self._load_boxplot_data()
         if not data:
             return {"categories": [], "targets": [], "rhos": {}}
 
@@ -451,7 +461,7 @@ class BulkValidationService(BaseService):
         self, target: str, sigtype: str = "cytosig"
     ) -> dict | None:
         """Get rho distributions for one target across all categories."""
-        data = self._load_boxplot_data()
+        data = await self._load_boxplot_data()
         if not data:
             return None
 

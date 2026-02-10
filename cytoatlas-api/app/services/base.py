@@ -78,8 +78,12 @@ _JSON_TO_TABLE: dict[str, str] = {
     "gene_list.json": "gene_list",
     "inflammation_cell_drivers.json": "inflammation_cell_drivers",
     "inflammation_longitudinal.json": "inflammation_longitudinal",
-    "summary_stats.json": "summary_stats",
     "treatment_response.json": "treatment_response",
+    # Validation tables
+    "cima_atlas_validation.json": "cima_atlas_validation",
+    "gene_expression_inflammation.json": "gene_expression_inflammation",
+    "validation_corr_boxplot.json": "validation_corr_boxplot",
+    "validation_summary.json": "validation_summary",
 }
 
 # Lazy-initialized DuckDB repository singleton

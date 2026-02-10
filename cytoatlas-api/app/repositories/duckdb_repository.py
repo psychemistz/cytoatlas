@@ -32,12 +32,9 @@ _STREAM_BATCH_SIZE = 2_000
 # arbitrary table access via user input.
 _KNOWN_TABLES: frozenset[str] = frozenset(
     {
-        # Core protocol tables
+        # Core activity table (from activity_boxplot.json)
         "activity",
-        "correlations",
-        "differential",
         # Large visualization JSON tables
-        "activity_boxplot",
         "inflammation_disease",
         "inflammation_disease_filtered",
         "singlecell_activity",
@@ -52,6 +49,7 @@ _KNOWN_TABLES: frozenset[str] = frozenset(
         "inflammation_severity_filtered",
         "scatlas_organs",
         "gene_expression",
+        "gene_expression_inflammation",
         "expression_boxplot",
         "cima_celltype",
         "inflammation_celltype",
@@ -79,6 +77,7 @@ _KNOWN_TABLES: frozenset[str] = frozenset(
         "cross_atlas",
         "cohort_validation",
         # Auto-discovered tables (loaded by services)
+        "cima_atlas_validation",
         "cima_biochem_scatter",
         "cima_eqtl",
         "cima_eqtl_top",
@@ -87,19 +86,9 @@ _KNOWN_TABLES: frozenset[str] = frozenset(
         "gene_list",
         "inflammation_cell_drivers",
         "inflammation_longitudinal",
-        "summary_stats",
         "treatment_response",
-        # SQLite migration tables
-        "scatter_targets",
-        "scatter_points",
-        # Legacy aliases
-        "cima_activity",
-        "inflammation_activity",
-        "scatlas_activity",
-        "bulk_donor_correlations",
-        "bulk_rnaseq_validation",
-        "cross_sample_validation",
-        "single_cell_validation",
+        "validation_corr_boxplot",
+        "validation_summary",
     }
 )
 

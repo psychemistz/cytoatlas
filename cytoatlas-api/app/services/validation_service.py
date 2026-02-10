@@ -417,11 +417,14 @@ class ValidationService(BaseService):
             })
         return result
 
-    def _load_singlecell_activity(self, atlas: str, signature_type: str) -> List[Dict[str, Any]]:
+    async def _load_singlecell_activity(self, atlas: str, signature_type: str) -> List[Dict[str, Any]]:
         """Load per-celltype activity stats from singlecell JSON files.
 
         Tries per-atlas files first ({prefix}_singlecell_{sigtype}.json), then
         falls back to consolidated singlecell_activity.json with atlas name matching.
+
+        Uses self.load_json() so requests are transparently served from DuckDB
+        when available.
         """
         cache_key = f"sc_activity_{atlas}_{signature_type}"
         if cache_key in self._cache:
@@ -439,22 +442,20 @@ class ValidationService(BaseService):
         prefixes = atlas_file_map.get(atlas, [atlas])
         sig_suffix = sig_file_map.get(signature_type, signature_type.lower())
 
-        # Try per-atlas files first
+        # Try per-atlas files first (DuckDB-aware via load_json)
         all_records: List[Dict[str, Any]] = []
         for prefix in prefixes:
-            path = self.data_dir / f"{prefix}_singlecell_{sig_suffix}.json"
-            if path.exists():
-                try:
-                    with open(path) as f:
-                        records = json.load(f)
-                    if isinstance(records, list):
-                        all_records.extend(records)
-                except (json.JSONDecodeError, IOError):
-                    pass
+            filename = f"{prefix}_singlecell_{sig_suffix}.json"
+            try:
+                records = await self.load_json(filename)
+                if isinstance(records, list):
+                    all_records.extend(records)
+            except FileNotFoundError:
+                pass
 
         # Fallback: filter from consolidated singlecell_activity.json
         if not all_records:
-            consolidated = self._load_consolidated_singlecell_activity()
+            consolidated = await self._load_consolidated_singlecell_activity()
             # Map API atlas names to names used in consolidated file
             atlas_name_map = {
                 "cima": ["CIMA"],
@@ -471,24 +472,22 @@ class ValidationService(BaseService):
         self._cache[cache_key] = all_records
         return all_records
 
-    def _load_consolidated_singlecell_activity(self) -> List[Dict[str, Any]]:
-        """Load the consolidated singlecell_activity.json (cached)."""
+    async def _load_consolidated_singlecell_activity(self) -> List[Dict[str, Any]]:
+        """Load the consolidated singlecell_activity.json (cached).
+
+        Uses self.load_json() so requests are transparently served from DuckDB
+        when available.
+        """
         cache_key = "sc_activity_consolidated"
         if cache_key in self._cache:
             return self._cache[cache_key]
 
-        path = self.data_dir / "singlecell_activity.json"
-        if not path.exists():
-            self._cache[cache_key] = []
-            return []
-
         try:
-            with open(path) as f:
-                data = json.load(f)
+            data = await self.load_json("singlecell_activity.json")
             if isinstance(data, list):
                 self._cache[cache_key] = data
                 return data
-        except (json.JSONDecodeError, IOError):
+        except (FileNotFoundError, IOError):
             pass
 
         self._cache[cache_key] = []
@@ -530,7 +529,7 @@ class ValidationService(BaseService):
         signature_type: str = "CytoSig",
     ) -> List[Dict[str, Any]]:
         """Get per-celltype mean activity for a signature from singlecell JSON files."""
-        records = self._load_singlecell_activity(atlas, signature_type)
+        records = await self._load_singlecell_activity(atlas, signature_type)
         results = []
         for r in records:
             if r.get("signature") == signature:

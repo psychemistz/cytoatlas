@@ -50,6 +50,17 @@ class JSONRepository(BaseRepository):
             max_cache_entries: Maximum number of cached files
             max_cache_bytes: Maximum cache size in bytes (default 2GB)
         """
+        global _DEPRECATION_WARNED
+        if not _DEPRECATION_WARNED:
+            warnings.warn(
+                "JSONRepository is deprecated and retained only as a fallback. "
+                "Use DuckDBRepository as the primary data backend. "
+                "Generate atlas_data.duckdb with: python scripts/convert_data_to_duckdb.py --all",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            _DEPRECATION_WARNED = True
+
         self._cache: OrderedDict[str, Any] = OrderedDict()
         self._cache_sizes: dict[str, int] = {}
         self._max_cache_entries = max_cache_entries
