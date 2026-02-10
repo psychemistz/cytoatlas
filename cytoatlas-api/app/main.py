@@ -36,6 +36,7 @@ from app.routers import (
     websocket_router,
 )
 from app.routers.pipeline import router as pipeline_router
+from app.routers.v2 import v2_atlases_router, v2_validation_router
 
 settings = get_settings()
 
@@ -286,6 +287,11 @@ def create_app() -> FastAPI:
     app.include_router(chat_router, prefix=api_prefix)
     app.include_router(websocket_router, prefix=api_prefix)
     app.include_router(pipeline_router, prefix=api_prefix)  # Pipeline management
+
+    # API v2 routers (unified endpoints with DuckDB backend)
+    v2_prefix = settings.api_v2_prefix
+    app.include_router(v2_atlases_router, prefix=v2_prefix)
+    app.include_router(v2_validation_router, prefix=v2_prefix)
 
     # Mount static files (CSS, JS, assets)
     if STATIC_DIR.exists():

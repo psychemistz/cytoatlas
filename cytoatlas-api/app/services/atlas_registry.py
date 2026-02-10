@@ -157,6 +157,56 @@ class AtlasRegistry:
             created_at=datetime(2024, 1, 1),
         )
 
+        # ---- NEW ATLASES (Round 4 — planned) ----
+
+        # NicheFormer spatial transcriptomics
+        self._atlases["nicheformer"] = AtlasMetadata(
+            name="nicheformer",
+            display_name="NicheFormer (Spatial Transcriptomics)",
+            description="~30 million cells with spatial context from multiple tissues, "
+            "enabling niche-level cytokine activity analysis.",
+            atlas_type=AtlasType.TISSUE,
+            data_dir=str(settings.viz_data_path),
+            n_cells=0,  # TBD after processing
+            species="human",
+            version="0.1.0",
+            status=AtlasStatus.PLANNED,
+            features=["cell_type_activity", "spatial_niche", "organ_signatures"],
+            created_at=datetime(2026, 2, 9),
+        )
+
+        # scGPT cohort
+        self._atlases["scgpt"] = AtlasMetadata(
+            name="scgpt",
+            display_name="scGPT Cohort",
+            description="~35 million cells processed with scGPT embeddings for "
+            "foundation model-enhanced activity inference.",
+            atlas_type=AtlasType.IMMUNE,
+            data_dir=str(settings.viz_data_path),
+            n_cells=0,  # TBD after processing
+            species="human",
+            version="0.1.0",
+            status=AtlasStatus.PLANNED,
+            features=["cell_type_activity", "embedding_analysis"],
+            created_at=datetime(2026, 2, 9),
+        )
+
+        # cellxgene cohort
+        self._atlases["cellxgene"] = AtlasMetadata(
+            name="cellxgene",
+            display_name="cellxgene Census Cohort",
+            description="Curated single-cell datasets from the cellxgene Census, "
+            "enabling broad cross-study validation.",
+            atlas_type=AtlasType.IMMUNE,
+            data_dir=str(settings.viz_data_path),
+            n_cells=0,  # TBD — depends on selected datasets
+            species="human",
+            version="0.1.0",
+            status=AtlasStatus.PLANNED,
+            features=["cell_type_activity", "cross_study_validation"],
+            created_at=datetime(2026, 2, 9),
+        )
+
     def _load_registry(self) -> None:
         """Load user-registered atlases from file."""
         if self._registry_file and self._registry_file.exists():

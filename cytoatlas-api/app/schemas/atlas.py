@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 class AtlasStatus(str, Enum):
     """Atlas processing status."""
 
+    PLANNED = "planned"          # Planned but data not yet available
     PENDING = "pending"          # Registered but not processed
     PROCESSING = "processing"    # Activity computation in progress
     READY = "ready"              # Ready for queries

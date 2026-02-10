@@ -1,7 +1,7 @@
 """
 Output generation pipeline.
 
-Writers for JSON, CSV, H5AD, and Parquet formats.
+Writers for JSON, CSV, H5AD, Parquet, and DuckDB formats.
 """
 
 from cytoatlas_pipeline.export.json_writer import (
@@ -20,6 +20,10 @@ from cytoatlas_pipeline.export.parquet_writer import (
     ParquetWriter,
     write_activity_parquet,
 )
+from cytoatlas_pipeline.export.duckdb_writer import (
+    DuckDBWriter,
+    write_activity_duckdb,
+)
 
 __all__ = [
     "JSONWriter",
@@ -30,4 +34,6 @@ __all__ = [
     "write_activity_h5ad",
     "ParquetWriter",
     "write_activity_parquet",
+    "DuckDBWriter",
+    "write_activity_duckdb",
 ]

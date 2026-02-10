@@ -1,5 +1,6 @@
 """Base service class with common functionality."""
 
+import logging
 import sys
 from collections import OrderedDict
 from pathlib import Path
@@ -16,7 +17,24 @@ from app.core.streaming import StreamingJSONResponse, create_streaming_response
 from app.models.atlas import Atlas
 from app.repositories.json_repository import JSONRepository
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
+
+# Lazy-initialized DuckDB repository singleton
+_duckdb_repo = None
+
+
+def _get_duckdb_repository():
+    """Get or create DuckDB repository singleton (lazy init)."""
+    global _duckdb_repo
+    if _duckdb_repo is None and settings.use_duckdb:
+        try:
+            from app.repositories.duckdb_repository import DuckDBRepository
+            _duckdb_repo = DuckDBRepository(str(settings.duckdb_atlas_path))
+            logger.info("DuckDB repository initialized: %s", settings.duckdb_atlas_path)
+        except Exception as e:
+            logger.warning("DuckDB repository unavailable, falling back to JSON: %s", e)
+    return _duckdb_repo
 
 
 class BaseService:
@@ -26,12 +44,15 @@ class BaseService:
         """Initialize service with optional database session."""
         self.db = db
         self._cache = CacheService()
-        self._repository = JSONRepository()
+        self._json_repository = JSONRepository()
 
     @property
-    def repository(self) -> JSONRepository:
-        """Get repository instance."""
-        return self._repository
+    def repository(self):
+        """Get repository instance (DuckDB if available, else JSON fallback)."""
+        duckdb_repo = _get_duckdb_repository()
+        if duckdb_repo is not None:
+            return duckdb_repo
+        return self._json_repository
 
     @property
     def viz_data_path(self) -> Path:

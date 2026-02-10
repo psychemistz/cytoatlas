@@ -189,10 +189,20 @@ def process_h5ad_task(
                 expr = expr.A1
             pseudobulk_df = pd.DataFrame({"all_cells": expr}, index=adata_mem.var_names)
 
-        # Step 5: Run CytoSig/SecAct inference
+        # Step 5: Run CytoSig/SecAct inference via RidgeInference
         results = {}
         progress_per_sig = 40 // len(signature_matrices)
         current_progress = 50
+
+        # Try to use pipeline RidgeInference (proper ridge regression)
+        use_ridge = False
+        try:
+            from cytoatlas_pipeline.activity.ridge import RidgeInference
+            from cytoatlas_pipeline.core.config import RidgeConfig
+            use_ridge = True
+            logger.info("Using RidgeInference from cytoatlas-pipeline")
+        except ImportError:
+            logger.warning("cytoatlas-pipeline not available, using correlation fallback")
 
         for sig_name, sig_matrix in signature_matrices.items():
             update_job_status(job_id, "processing", current_progress, f"Computing {sig_name} activity")
@@ -207,29 +217,49 @@ def process_h5ad_task(
                 logger.warning(f"Only {len(common_genes)} genes overlap with {sig_name}")
                 continue
 
-            # Compute activity using ridge regression (simplified version)
-            from scipy import stats
+            if use_ridge:
+                # Proper ridge regression via SecActPy
+                ridge_config = RidgeConfig(lambda_=5e5, n_rand=1000, seed=0)
+                ridge = RidgeInference(config=ridge_config)
+                activity_df = ridge.fit_predict(
+                    pseudobulk_df.loc[common_genes],
+                    sig_matrix.loc[common_genes],
+                )
+            else:
+                # Fallback: correlation-based score
+                from scipy import stats
 
-            expr_subset = pseudobulk_df.loc[common_genes].values
-            sig_subset = sig_matrix.loc[common_genes].values
+                expr_subset = pseudobulk_df.loc[common_genes].values
+                sig_subset = sig_matrix.loc[common_genes].values
 
-            # Z-score normalization
-            expr_z = stats.zscore(expr_subset, axis=0)
-            sig_z = stats.zscore(sig_subset, axis=0)
+                expr_z = stats.zscore(expr_subset, axis=0)
+                sig_z = stats.zscore(sig_subset, axis=0)
 
-            # Activity = correlation-based score
-            activity = np.corrcoef(expr_z.T, sig_z.T)[:expr_z.shape[1], expr_z.shape[1]:]
+                activity = np.corrcoef(expr_z.T, sig_z.T)[:expr_z.shape[1], expr_z.shape[1]:]
 
-            activity_df = pd.DataFrame(
-                activity,
-                index=pseudobulk_df.columns,
-                columns=sig_matrix.columns
-            )
+                activity_df = pd.DataFrame(
+                    activity,
+                    index=pseudobulk_df.columns,
+                    columns=sig_matrix.columns,
+                )
 
             results[sig_name] = activity_df
 
-            # Save results
+            # Save results as CSV
             activity_df.to_csv(result_dir / f"{sig_name.lower()}_activity.csv")
+
+            # Also write to DuckDB if available
+            try:
+                from cytoatlas_pipeline.export.duckdb_writer import DuckDBWriter
+                from app.config import get_settings
+                db_settings = get_settings()
+                if db_settings.duckdb_atlas_path.exists():
+                    with DuckDBWriter(db_settings.duckdb_atlas_path) as writer:
+                        writer.write_activity(
+                            activity_df, atlas_name, sig_name.lower(),
+                        )
+            except Exception as e:
+                logger.warning(f"DuckDB write skipped: {e}")
 
             current_progress += progress_per_sig
 

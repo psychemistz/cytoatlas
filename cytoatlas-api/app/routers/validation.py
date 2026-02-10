@@ -30,6 +30,7 @@ from app.schemas.validation import (
     SingleCellDistributionData,
     ValidationSummary,
 )
+from app.repositories.sqlite_singlecell_repository import SQLiteSingleCellRepository
 from app.services.bulk_validation_service import BulkValidationService
 from app.services.validation_service import ValidationService
 
@@ -592,3 +593,107 @@ async def get_singlecell_celltypes(
 ) -> List[dict]:
     """Get per-celltype stats computed from single-cell sampled points."""
     return await service.get_singlecell_celltypes(atlas, signature, sigtype)
+
+
+# ========================================================================== #
+#  Summary Boxplot (Tab 0 in 5-tab layout)                                    #
+# ========================================================================== #
+
+
+def get_summary_boxplot_service() -> BulkValidationService:
+    """Get bulk validation service for summary boxplot."""
+    return BulkValidationService()
+
+
+@router.get("/summary-boxplot")
+async def get_summary_boxplot(
+    sigtype: str = Query("cytosig", description="Signature type (cytosig or secact)"),
+    service: BulkValidationService = Depends(get_summary_boxplot_service),
+) -> dict:
+    """Get full validation_corr_boxplot data for summary tab boxplots."""
+    return await service.get_summary_boxplot(sigtype)
+
+
+@router.get("/summary-boxplot/{target}")
+async def get_summary_boxplot_target(
+    target: str = Path(..., description="Target/signature name"),
+    sigtype: str = Query("cytosig", description="Signature type"),
+    service: BulkValidationService = Depends(get_summary_boxplot_service),
+) -> dict:
+    """Get rho distributions for one target across all categories."""
+    result = await service.get_summary_boxplot_target(target, sigtype)
+    if not result:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No summary boxplot data for {target}/{sigtype}",
+        )
+    return result
+
+
+# ========================================================================== #
+#  Single-Cell Full (All Cells) — Tab 4 in 5-tab layout                      #
+# ========================================================================== #
+
+
+_sc_repo: SQLiteSingleCellRepository | None = None
+
+
+def get_sc_repo() -> SQLiteSingleCellRepository:
+    """Singleton singlecell SQLite repository."""
+    global _sc_repo
+    if _sc_repo is None:
+        _sc_repo = SQLiteSingleCellRepository()
+    return _sc_repo
+
+
+@router.get("/singlecell-full/atlases", response_model=List[str])
+async def list_singlecell_full_atlases() -> List[str]:
+    """List atlases with all-cell single-cell validation data."""
+    repo = get_sc_repo()
+    if not repo.available:
+        return []
+    return await repo.list_atlases()
+
+
+@router.get("/singlecell-full/{atlas}/signatures")
+async def list_singlecell_full_signatures(
+    atlas: str = Path(..., description="Atlas name"),
+    sigtype: str = Query("cytosig", description="Signature type"),
+) -> List[dict]:
+    """List single-cell targets with stats computed from ALL cells."""
+    repo = get_sc_repo()
+    if not repo.available:
+        raise HTTPException(status_code=503, detail="Single-cell DB not available")
+    return await repo.get_targets(atlas, sigtype)
+
+
+@router.get("/singlecell-full/{atlas}/scatter/{target}")
+async def get_singlecell_full_scatter(
+    atlas: str = Path(..., description="Atlas name"),
+    target: str = Path(..., description="Target/signature name"),
+    sigtype: str = Query("cytosig", description="Signature type"),
+) -> dict:
+    """Get all-cell scatter data: exact stats + density bins + 50K sampled points."""
+    repo = get_sc_repo()
+    if not repo.available:
+        raise HTTPException(status_code=503, detail="Single-cell DB not available")
+    result = await repo.get_scatter(atlas, sigtype, target)
+    if not result:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No single-cell data for {atlas}/{target}/{sigtype}",
+        )
+    return result
+
+
+@router.get("/singlecell-full/{atlas}/celltypes/{target}")
+async def get_singlecell_full_celltypes(
+    atlas: str = Path(..., description="Atlas name"),
+    target: str = Path(..., description="Target/signature name"),
+    sigtype: str = Query("cytosig", description="Signature type"),
+) -> List[dict]:
+    """Get per-celltype stats computed from ALL cells."""
+    repo = get_sc_repo()
+    if not repo.available:
+        raise HTTPException(status_code=503, detail="Single-cell DB not available")
+    return await repo.get_celltype_stats(atlas, sigtype, target)

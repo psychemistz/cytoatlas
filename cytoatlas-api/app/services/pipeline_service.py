@@ -1,6 +1,9 @@
 """Pipeline status and metadata service."""
 
 import json
+import logging
+import subprocess
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +12,7 @@ import yaml
 from app.config import get_settings
 from app.services.base import BaseService
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
@@ -150,6 +154,106 @@ class PipelineService(BaseService):
             return config.get("stages", {})
         except Exception:
             return {}
+
+    async def run_stage(self, stage_name: str) -> dict[str, Any]:
+        """Run a pipeline stage via SLURM sbatch.
+
+        Args:
+            stage_name: Name of the stage to run.
+
+        Returns:
+            Dictionary with job submission info.
+
+        Raises:
+            ValueError: If stage not found or no script configured.
+        """
+        stages = await self._load_pipeline_definition()
+        if stage_name not in stages:
+            available = list(stages.keys())
+            raise ValueError(f"Stage '{stage_name}' not found. Available: {available}")
+
+        stage_def = stages[stage_name]
+        script = stage_def.get("script")
+        if not script:
+            raise ValueError(f"Stage '{stage_name}' has no script configured")
+
+        # Resolve script path
+        script_path = settings.results_base_path.parent / script
+        if not script_path.exists():
+            raise ValueError(f"Script not found: {script_path}")
+
+        # Submit via sbatch
+        try:
+            result = subprocess.run(
+                ["sbatch", str(script_path)],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(f"sbatch failed: {result.stderr}")
+
+            # Parse job ID from sbatch output (e.g., "Submitted batch job 12345")
+            job_id = None
+            if "Submitted batch job" in result.stdout:
+                job_id = result.stdout.strip().split()[-1]
+
+            # Update status file
+            self._update_stage_status(stage_name, "submitted")
+
+            logger.info("Submitted SLURM job for stage %s: job_id=%s", stage_name, job_id)
+
+            return {
+                "stage": stage_name,
+                "status": "submitted",
+                "job_id": job_id,
+                "script": str(script_path),
+                "submitted_at": datetime.utcnow().isoformat(),
+            }
+
+        except FileNotFoundError:
+            # sbatch not available — try Celery as fallback
+            return await self._run_via_celery(stage_name, stage_def)
+
+    async def _run_via_celery(self, stage_name: str, stage_def: dict) -> dict[str, Any]:
+        """Fall back to Celery task submission when SLURM is unavailable."""
+        try:
+            from app.tasks.celery_app import celery_app
+
+            task = celery_app.send_task(
+                "app.tasks.process_atlas.process_h5ad",
+                kwargs={"stage_name": stage_name},
+            )
+
+            return {
+                "stage": stage_name,
+                "status": "queued",
+                "task_id": task.id,
+                "backend": "celery",
+                "submitted_at": datetime.utcnow().isoformat(),
+            }
+        except Exception as e:
+            raise RuntimeError(
+                f"Neither SLURM nor Celery available for pipeline execution: {e}"
+            )
+
+    def _update_stage_status(self, stage_name: str, status: str) -> None:
+        """Update the stage status in the status file."""
+        if self.status_file.exists():
+            try:
+                with open(self.status_file) as f:
+                    data = json.load(f)
+            except Exception:
+                data = self._get_empty_status()
+        else:
+            data = self._get_empty_status()
+
+        data["stages"][stage_name] = status
+        data["last_updated"] = datetime.utcnow().isoformat()
+
+        self.status_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.status_file, "w") as f:
+            json.dump(data, f, indent=2)
 
     def _get_empty_status(self) -> dict[str, Any]:
         """

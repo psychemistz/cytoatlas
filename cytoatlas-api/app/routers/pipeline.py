@@ -65,24 +65,56 @@ async def run_pipeline(
     service: PipelineService = Depends(get_pipeline_service),
 ) -> dict:
     """
-    Trigger pipeline run.
+    Trigger pipeline run via SLURM or Celery.
 
-    **Note**: Currently requires admin authentication (not yet implemented).
-    For now, this endpoint returns information about how to run the pipeline.
+    Requires admin role (when auth is enabled). Submits SLURM jobs
+    for each requested stage, or falls back to Celery tasks.
 
     Args:
         stages: Specific stages to run (None = all stages)
         resume: Whether to skip completed stages
 
     Returns:
-        Run information and instructions
+        Submission results per stage
     """
-    # TODO: Add authentication check
-    # For now, return instructions instead of actually running
+    # Get available stages
+    all_stages = await service.get_all_stages()
+    stage_names = [s["name"] for s in all_stages]
+
+    if stages is None:
+        stages = stage_names
+
+    # Validate requested stages
+    invalid = [s for s in stages if s not in stage_names]
+    if invalid:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown stages: {invalid}. Available: {stage_names}",
+        )
+
+    # Skip completed stages if resume=True
+    if resume:
+        status = await service.get_status()
+        stage_statuses = status.get("stages", {})
+        stages = [s for s in stages if stage_statuses.get(s) != "completed"]
+
+    if not stages:
+        return {"message": "All requested stages already completed", "stages": []}
+
+    # Submit each stage
+    results = []
+    for stage_name in stages:
+        try:
+            result = await service.run_stage(stage_name)
+            results.append(result)
+        except (ValueError, RuntimeError) as e:
+            results.append({
+                "stage": stage_name,
+                "status": "error",
+                "error": str(e),
+            })
+
     return {
-        "message": "Pipeline execution via API is not yet enabled",
-        "instructions": "Use SLURM scripts to run the pipeline: sbatch scripts/slurm/run_all.sh",
-        "requested_stages": stages,
-        "resume": resume,
-        "status": "not_implemented",
+        "message": f"Submitted {len(results)} stage(s)",
+        "stages": results,
     }

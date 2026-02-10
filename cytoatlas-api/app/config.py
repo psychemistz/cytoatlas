@@ -68,6 +68,7 @@ class Settings(BaseSettings):
 
     # API
     api_v1_prefix: str = "/api/v1"
+    api_v2_prefix: str = "/api/v2"
     allowed_origins: str = Field(default="http://localhost:8000,http://localhost:3000")
     max_request_body_mb: int = 100
 
@@ -120,12 +121,31 @@ class Settings(BaseSettings):
     viz_data_path: Path = Field(
         default=Path("/vf/users/parks34/projects/2secactpy/visualization/data")
     )
+
+    # DuckDB (primary data backend — replaces JSON/Parquet/SQLite scatter)
+    duckdb_atlas_path: Path = Field(
+        default=Path("/vf/users/parks34/projects/2secactpy/atlas_data.duckdb"),
+        description="Path to DuckDB file containing all science data",
+    )
+
+    # SQLite for app state (users, conversations, jobs)
+    sqlite_app_path: Path = Field(
+        default=Path("/vf/users/parks34/projects/2secactpy/app.db"),
+        description="Path to SQLite file for app state (users, chat, jobs)",
+    )
+
+    # Legacy data paths (deprecated — kept for fallback when DuckDB unavailable)
     parquet_data_path: Path = Field(
         default=Path("/vf/users/parks34/projects/2secactpy/visualization/data/parquet")
     )
     sqlite_scatter_db_path: Path = Field(
         default=Path("/vf/users/parks34/projects/2secactpy/visualization/data/validation_scatter.db")
     )
+
+    @property
+    def use_duckdb(self) -> bool:
+        """Check if DuckDB atlas file exists."""
+        return self.duckdb_atlas_path.exists()
 
     # CIMA paths
     cima_h5ad: Path = Field(

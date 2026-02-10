@@ -457,3 +457,59 @@ class BulkValidationService(BaseService):
         """Get cross-atlas correlation summary rows."""
         meta = self._get_meta_fallback()
         return meta.get("summary", [])
+
+    # ================================================================== #
+    #  Summary Boxplot (validation_corr_boxplot.json)                      #
+    # ================================================================== #
+
+    def _load_boxplot_data(self) -> dict | None:
+        """Load validation_corr_boxplot.json (cached)."""
+        cache_key = "_boxplot_data"
+        if cache_key in self._file_cache:
+            return self._file_cache[cache_key]
+
+        path = self.data_dir / "validation_corr_boxplot.json"
+        if not path.exists():
+            return None
+
+        try:
+            with open(path, "rb") as f:
+                data = orjson.loads(f.read())
+            self._file_cache[cache_key] = data
+            return data
+        except Exception:
+            logger.exception("Failed to load validation_corr_boxplot.json")
+            return None
+
+    async def get_summary_boxplot(self, sigtype: str = "cytosig") -> dict:
+        """Get full boxplot data for the summary tab."""
+        data = self._load_boxplot_data()
+        if not data:
+            return {"categories": [], "targets": [], "rhos": {}}
+
+        sig_data = data.get(sigtype, {})
+        return {
+            "categories": data.get("categories", []),
+            "targets": list(sig_data.get("rhos", {}).keys()) if isinstance(sig_data.get("rhos"), dict) else [],
+            **sig_data,
+        }
+
+    async def get_summary_boxplot_target(
+        self, target: str, sigtype: str = "cytosig"
+    ) -> dict | None:
+        """Get rho distributions for one target across all categories."""
+        data = self._load_boxplot_data()
+        if not data:
+            return None
+
+        sig_data = data.get(sigtype, {})
+        rhos = sig_data.get("rhos", {})
+
+        if target not in rhos:
+            return None
+
+        return {
+            "target": target,
+            "categories": data.get("categories", []),
+            "rhos": rhos[target],
+        }

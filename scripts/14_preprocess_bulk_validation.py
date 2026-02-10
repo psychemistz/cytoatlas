@@ -86,12 +86,15 @@ SECACT_MUST_KEEP = CYTOSIG_NAMES | {
     "IFNL1", "IL6", "CCL2", "CCL5", "CXCL10", "CSF1", "CSF2", "CSF3",
     "TNF", "TGFB2", "IL18", "IL33", "IL23A", "IL17F",
 }
-SECACT_TOP_N = 100
+SECACT_TOP_N = None  # Include all targets (was 100)
 
 
-def filter_secact_targets(targets_data: dict, top_n: int = SECACT_TOP_N) -> dict:
-    """Keep top N SecAct targets by |rho| plus must-keep IDs."""
-    if len(targets_data) <= top_n:
+def filter_secact_targets(targets_data: dict, top_n: int | None = SECACT_TOP_N) -> dict:
+    """Keep top N SecAct targets by |rho| plus must-keep IDs.
+
+    If top_n is None, return all targets unfiltered.
+    """
+    if top_n is None or len(targets_data) <= top_n:
         return targets_data
 
     # Sort by |rho| descending
@@ -1066,15 +1069,8 @@ def build_bulk_rnaseq_json() -> dict:
                         "points": points_s,
                     }
 
-                # Filter to manage file size
-                if sig_type == "lincytosig" and len(targets_data_s) > 30:
-                    sorted_t = sorted(
-                        targets_data_s.items(),
-                        key=lambda x: abs(x[1]["rho"]) if x[1]["rho"] is not None else 0,
-                        reverse=True,
-                    )
-                    targets_data_s = dict(sorted_t[:30])
-                elif sig_type == "secact":
+                # Filter SecAct targets (no-op when SECACT_TOP_N is None)
+                if sig_type == "secact":
                     targets_data_s = filter_secact_targets(targets_data_s)
 
                 level_scatter[sig_type] = targets_data_s
@@ -1152,10 +1148,7 @@ def build_bulk_rnaseq_json() -> dict:
                         "n": n_fb,
                         "points": points_fb,
                     }
-                if sig_type == "lincytosig" and len(targets_data_fb) > 30:
-                    sorted_t = sorted(targets_data_fb.items(), key=lambda x: abs(x[1]["rho"]) if x[1]["rho"] is not None else 0, reverse=True)
-                    targets_data_fb = dict(sorted_t[:30])
-                elif sig_type == "secact":
+                if sig_type == "secact":
                     targets_data_fb = filter_secact_targets(targets_data_fb)
                 atlas_scatter[sig_type] = targets_data_fb
                 print(f"    bulk_scatter/{atlas_key}/{sig_type}: {len(targets_data_fb)} targets, {n_fb} pts/target")

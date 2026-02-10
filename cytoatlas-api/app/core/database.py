@@ -1,9 +1,19 @@
-"""Async SQLAlchemy database configuration."""
+"""Async SQLAlchemy database configuration.
+
+Supports two backends:
+- SQLite (via aiosqlite) — default for HPC, zero daemon dependencies
+- PostgreSQL (via asyncpg) — optional for production deployments
+
+When neither database_url nor sqlite_app_path is configured, the app runs
+without persistence (all state is in-memory).
+"""
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+import logging
 from typing import Optional
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -14,6 +24,7 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.config import get_settings
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
@@ -23,19 +34,58 @@ class Base(DeclarativeBase):
     pass
 
 
-# Only create engine if database is configured
-engine: Optional[AsyncEngine] = None
+def _build_engine() -> Optional[AsyncEngine]:
+    """Build async engine from configuration.
+
+    Priority:
+    1. Explicit database_url (PostgreSQL or any SQLAlchemy-supported URL)
+    2. sqlite_app_path (SQLite via aiosqlite — default for HPC)
+    3. None (no persistence)
+    """
+    if settings.use_database and settings.database_url:
+        url = str(settings.database_url)
+        logger.info(f"Database: Using configured URL ({url.split('@')[-1] if '@' in url else url})")
+        return create_async_engine(
+            url,
+            pool_size=settings.database_pool_size,
+            max_overflow=settings.database_max_overflow,
+            pool_timeout=settings.database_pool_timeout,
+            echo=settings.debug,
+        )
+
+    # Default: SQLite via aiosqlite
+    sqlite_path = settings.sqlite_app_path
+    if sqlite_path:
+        sqlite_path.parent.mkdir(parents=True, exist_ok=True)
+        url = f"sqlite+aiosqlite:///{sqlite_path}"
+        logger.info(f"Database: Using SQLite at {sqlite_path}")
+        eng = create_async_engine(
+            url,
+            echo=settings.debug,
+            # SQLite-specific: no pool limits needed
+            pool_size=0,
+            max_overflow=-1,
+        )
+
+        # Enable WAL mode and foreign keys for SQLite
+        @event.listens_for(eng.sync_engine, "connect")
+        def _set_sqlite_pragma(dbapi_conn, connection_record):
+            cursor = dbapi_conn.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.execute("PRAGMA busy_timeout=5000")
+            cursor.close()
+
+        return eng
+
+    return None
+
+
+# Build engine and session factory
+engine: Optional[AsyncEngine] = _build_engine()
 async_session_factory: Optional[async_sessionmaker[AsyncSession]] = None
 
-if settings.use_database and settings.database_url:
-    engine = create_async_engine(
-        str(settings.database_url),
-        pool_size=settings.database_pool_size,
-        max_overflow=settings.database_max_overflow,
-        pool_timeout=settings.database_pool_timeout,
-        echo=settings.debug,
-    )
-
+if engine is not None:
     async_session_factory = async_sessionmaker(
         engine,
         class_=AsyncSession,

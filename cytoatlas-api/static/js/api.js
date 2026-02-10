@@ -255,6 +255,80 @@ const API = {
         return this.get('/validation/compare-atlases', { signature_type: signatureType });
     },
 
+    // ==================== Validation: Summary Boxplot ====================
+
+    async getSummaryBoxplot(sigtype = 'cytosig') {
+        return this.get('/validation/summary-boxplot', { sigtype });
+    },
+
+    async getSummaryBoxplotTarget(target, sigtype = 'cytosig') {
+        return this.get(`/validation/summary-boxplot/${encodeURIComponent(target)}`, { sigtype });
+    },
+
+    // ==================== Validation: Bulk RNA-seq ====================
+
+    async getBulkRnaseqDatasets() {
+        return this.get('/validation/bulk-rnaseq/datasets');
+    },
+
+    async getBulkRnaseqSummary(dataset, sigtype = 'cytosig') {
+        return this.get(`/validation/bulk-rnaseq/${dataset}/summary`, { sigtype });
+    },
+
+    async getBulkRnaseqTargets(dataset, sigtype = 'cytosig') {
+        return this.get(`/validation/bulk-rnaseq/${dataset}/targets`, { sigtype });
+    },
+
+    async getBulkRnaseqScatter(dataset, target, sigtype = 'cytosig') {
+        return this.get(`/validation/bulk-rnaseq/${dataset}/scatter/${encodeURIComponent(target)}`, { sigtype });
+    },
+
+    // ==================== Validation: Donor Level ====================
+
+    async getDonorAtlases() {
+        return this.get('/validation/donor/atlases');
+    },
+
+    async getDonorTargets(atlas, sigtype = 'cytosig') {
+        return this.get(`/validation/donor/${atlas}/targets`, { sigtype });
+    },
+
+    async getDonorScatter(atlas, target, sigtype = 'cytosig') {
+        return this.get(`/validation/donor/${atlas}/scatter/${encodeURIComponent(target)}`, { sigtype });
+    },
+
+    // ==================== Validation: Cell Type Level ====================
+
+    async getCelltypeLevels(atlas) {
+        return this.get(`/validation/celltype/${atlas}/levels`);
+    },
+
+    async getCelltypeTargets(atlas, sigtype = 'cytosig', level = 'donor_l1') {
+        return this.get(`/validation/celltype/${atlas}/targets`, { sigtype, level });
+    },
+
+    async getCelltypeScatter(atlas, target, sigtype = 'cytosig', level = 'donor_l1') {
+        return this.get(`/validation/celltype/${atlas}/scatter/${encodeURIComponent(target)}`, { sigtype, level });
+    },
+
+    // ==================== Validation: Single-Cell Full (All Cells) ====================
+
+    async getSingleCellFullAtlases() {
+        return this.get('/validation/singlecell-full/atlases');
+    },
+
+    async getSingleCellFullSignatures(atlas, sigtype = 'cytosig') {
+        return this.get(`/validation/singlecell-full/${atlas}/signatures`, { sigtype });
+    },
+
+    async getSingleCellFullScatter(atlas, target, sigtype = 'cytosig') {
+        return this.get(`/validation/singlecell-full/${atlas}/scatter/${encodeURIComponent(target)}`, { sigtype });
+    },
+
+    async getSingleCellFullCelltypes(atlas, target, sigtype = 'cytosig') {
+        return this.get(`/validation/singlecell-full/${atlas}/celltypes/${encodeURIComponent(target)}`, { sigtype });
+    },
+
     // ==================== Export ====================
 
     getExportUrl(atlas, format = 'csv', type = 'activity') {

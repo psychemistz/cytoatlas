@@ -22,7 +22,7 @@ Comprehensive documentation is available in the `docs/` directory:
 |----------|-------------|
 | [docs/README.md](docs/README.md) | **Master index** - Start here for all documentation |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | **Deployment Guide** - HPC/SLURM setup, environment variables, troubleshooting |
-| [docs/API_REFERENCE.md](docs/API_REFERENCE.md) | **API Reference** - 188+ endpoints grouped by domain, curl examples |
+| [docs/API_REFERENCE.md](docs/API_REFERENCE.md) | **API Reference** - 226 endpoints grouped by domain, curl examples |
 | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | **User Guide** - How to use CytoAtlas (atlases, chat, exports, comparisons) |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | **Architecture** - System design (14 sections: overview, components, data flow, tech stack, DDD) |
 | [docs/OVERVIEW.md](docs/OVERVIEW.md) | Quick overview (redirects to ARCHITECTURE.md) |
@@ -185,32 +185,36 @@ cytoatlas-pipeline/              # GPU-accelerated pipeline package (scaffolded)
 Protocol-based abstraction for testability and backend swappability:
 
 ```python
-class DataRepository(Protocol):
-    async def get_correlations(self, gene: str) -> CorrelationData: ...
-    async def get_disease_activity(self, disease: str) -> ActivityData: ...
+class AtlasRepository(Protocol):
+    async def get_activity(self, atlas, signature_type, **filters) -> list[dict]: ...
+    async def get_correlations(self, atlas, variable, **filters) -> list[dict]: ...
+    async def get_differential(self, atlas, comparison, **filters) -> list[dict]: ...
+    async def get_data(self, data_type, **filters) -> list[dict]: ...
+    async def stream_results(self, data_type, **filters) -> AsyncIterator[dict]: ...
 
 # Implementations
-class JSONRepository(DataRepository):      # Active — primary backend
+class DuckDBRepository(AtlasRepository):   # Active — primary backend (Round 4)
+    # Query from atlas_data.duckdb (columnar, compressed)
+
+class JSONRepository(AtlasRepository):      # Legacy — fallback when DuckDB unavailable
     # Load from visualization/data/*.json
 
-class ParquetRepository(DataRepository):   # Ready — flat layout, JSON fallback
+class ParquetRepository(AtlasRepository):   # Deprecated — replaced by DuckDB
     # Load from visualization/data/parquet/{name}.parquet
-
-class PostgreSQLRepository(DataRepository): # Scaffolded — models created
-    # Query from database tables
 ```
 
-### Parquet Backend (Infrastructure Ready)
+### DuckDB Backend (Round 4)
 
-Conversion script and repository are implemented. Run to generate files:
+Single-file analytical database for all science data:
 ```bash
-python scripts/convert_json_to_parquet.py --all           # snappy (fast reads)
-python scripts/convert_json_to_parquet.py --all --compression zstd  # max compression
+python scripts/convert_data_to_duckdb.py --all    # Convert all JSON/CSV → DuckDB
+python scripts/convert_data_to_duckdb.py --table activity  # Individual table
 ```
-- Targets: activity_boxplot (392MB), inflammation_disease (275MB), age_bmi_boxplots (234MB), singlecell_activity (155MB), scatlas_celltypes (126MB), inflammation_disease_filtered (56MB)
-- Handles nested JSON: `extract_key` for dict-wrapped, `flatten_func` for deeply nested
-- bulk_donor_correlations.json (5.5GB) handled separately via scatter metadata Parquet in `14_preprocess_bulk_validation.py`
-- Output: `visualization/data/parquet/{name}.parquet`
+- Consolidates 4 backends (JSON + Parquet + SQLite scatter + PostgreSQL) into 2 (DuckDB + SQLite)
+- DuckDB: all science data (activity, correlations, differential, scatter, validation)
+- SQLite: app state (users, conversations, jobs)
+- Zero daemon dependencies (file-based) — ideal for HPC
+- Reduces API memory from ~2-5GB to ~100MB (query-based, not load-all)
 
 ## Statistical Methods
 
@@ -258,7 +262,7 @@ All differential analyses use `activity_diff` field (renamed from `log2fc`):
 
 UI labels show "Δ Activity" to reflect the calculation (difference, not ratio).
 
-## CytoAtlas REST API (188+ endpoints)
+## CytoAtlas REST API (226 endpoints)
 
 ```bash
 cd cytoatlas-api
@@ -270,14 +274,21 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 | Router | Endpoints | Description |
 |--------|-----------|-------------|
-| CIMA | ~32 | Age/BMI correlations, biochemistry, metabolites, eQTL |
-| Inflammation | ~44 | Disease activity, treatment response, cohort validation |
-| scAtlas | ~36 | Organ signatures, cancer comparison, immune infiltration |
-| Cross-Atlas | ~28 | Atlas comparison, conserved signatures |
-| Validation | ~12 | 5-type credibility assessment |
-| Search | ~4 | Global search |
-| Chat | ~4 | Claude AI assistant |
-| Submit | ~4 | Dataset submission |
+| Atlases (Unified) | 16 | Dynamic API for all atlases (recommended) |
+| CIMA (Legacy) | 28 | Age/BMI correlations, biochemistry, metabolites, eQTL |
+| Inflammation (Legacy) | 42 | Disease activity, treatment response, cohort validation |
+| scAtlas (Legacy) | 31 | Organ signatures, cancer comparison, immune infiltration |
+| Cross-Atlas | 20 | Atlas comparison, conserved signatures |
+| Validation | 28 | 5-type credibility assessment |
+| Search | 6 | Global search |
+| Chat | 8 | Claude AI assistant |
+| Submit | 9 | Dataset submission |
+| Auth | 5 | JWT + API key authentication |
+| Export | 9 | Data export (CSV, JSON, HDF5) |
+| Gene | 11 | Gene-centric views and analysis |
+| Health | 4 | Health checks, system status |
+| Pipeline | 4 | Pipeline status and management |
+| WebSocket | 3 | Real-time updates |
 
 ### Current Status (2026-02-09, Round 1-3 Complete)
 
@@ -299,7 +310,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 - ⬜ Resampled bootstrap: Inflammation main/val/ext (resampled pseudobulk exists, activity inference not run)
 
 **API Backend**
-- ✅ 188+ endpoints across 14 routers (100% functional)
+- ✅ 226 endpoints across 15 routers (100% functional)
 - ✅ All 12 services implemented (JSON loading, caching, filtering)
 - ✅ Repository pattern framework (abstraction layer, protocol-based)
 - ✅ Tiered caching (hot/warm/cold data layers)
@@ -330,7 +341,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 **Documentation (Round 3)**
 - ✅ CLAUDE.md updated (current status, security model, architecture patterns)
 - ✅ DEPLOYMENT.md created (HPC/SLURM, development setup, environment variables)
-- ✅ API_REFERENCE.md created (14 router groups, 188+ endpoints with examples)
+- ✅ API_REFERENCE.md created (15 router groups, 226 endpoints with examples)
 - ✅ USER_GUIDE.md created (atlas overview, chat interface, exports)
 - ✅ ARCHITECTURE.md updated (chat system, frontend, pipeline management, data layer)
 - ✅ docs/README.md consolidated (master index with links)
@@ -357,18 +368,19 @@ See `docs/ARCHITECTURE.md` for detailed system documentation and `docs/DEPLOYMEN
 Data abstraction layer for testability and backend swappability:
 
 ```python
-# Protocol-based abstraction (runtime-checkable)
-class DataRepository(Protocol):
-    async def get_correlations(self, gene: str) -> CorrelationData: ...
-    async def get_disease_activity(self, disease: str) -> ActivityData: ...
+# Protocol-based abstraction (PEP 544)
+class AtlasRepository(Protocol):
+    async def get_activity(self, atlas, signature_type, **filters) -> list[dict]: ...
+    async def get_correlations(self, atlas, variable, **filters) -> list[dict]: ...
+    async def get_data(self, data_type, **filters) -> list[dict]: ...
 
 # Implementations
-class JSONRepository(DataRepository):      # Active — primary backend
-class ParquetRepository(DataRepository):   # Ready — flat layout, auto JSON fallback
-class PostgreSQLRepository(DataRepository): # Scaffolded — models created
+class DuckDBRepository(AtlasRepository):   # Active — primary backend (Round 4)
+class JSONRepository(AtlasRepository):      # Legacy — fallback
+class ParquetRepository(AtlasRepository):   # Deprecated — replaced by DuckDB
 ```
 
-**ParquetRepository** uses flat directory `visualization/data/parquet/{data_type}.parquet`, with automatic fallback to JSONRepository when a Parquet file doesn't exist.
+**DuckDBRepository** queries `atlas_data.duckdb` with parameterized SQL, returning pandas DataFrames compatible with existing service code. Falls back to JSON if DuckDB unavailable.
 
 ### Tiered Caching Strategy
 
@@ -556,13 +568,32 @@ All chat inputs go through RAG validation:
 - [ ] Generate Parquet files (`python scripts/convert_json_to_parquet.py --all`)
 - [ ] Regenerate bulk_donor_correlations.json with Parquet metadata (full HPC rebuild)
 
-#### Round 4: Extensibility & Scaling (Future)
-- [ ] GPU pipeline module implementations (`cytoatlas-pipeline/src/`)
-- [ ] User-submitted datasets (CELEX-style workflow)
-- [ ] Chunked file upload (multipart/form-data)
-- [ ] Celery background processing (async activity inference)
-- [ ] API versioning (v1, v2 support alongside v1)
-- [ ] External data integration (cellxgene, GEO)
+#### Round 4: Data Architecture & Scaling (In Progress)
+
+**DuckDB + SQLite Migration:**
+- [x] DuckDB conversion script (`scripts/convert_data_to_duckdb.py`)
+- [x] DuckDB repository (`cytoatlas-api/app/repositories/duckdb_repository.py`)
+- [x] SQLite app state migration (`database.py` updated for aiosqlite)
+- [x] Config updated (`duckdb_atlas_path`, `sqlite_app_path`)
+- [x] Services migrated to DuckDB backend
+- [ ] Generate atlas_data.duckdb from visualization JSON + CSV data (HPC job)
+
+**GPU Pipeline Modules:**
+- [x] Core infrastructure (gpu_manager, checkpoint, memory, cache) — implemented
+- [x] Differential analysis (wilcoxon, ttest, effect_size, fdr, stratified)
+- [x] Validation modules (sample_level, celltype_level, biological, etc.)
+- [x] Export modules (json, csv, h5ad, parquet, duckdb)
+- [x] Ingest modules (local_h5ad, cellxgene, remote_h5ad)
+- [x] Orchestration (scheduler, recovery, celery_tasks)
+
+**API v2 & New Atlas Support:**
+- [x] API v2 router infrastructure (`/api/v2/atlases/{atlas}/...`)
+- [x] Celery tasks upgraded with RidgeInference
+- [x] Atlas registry for NicheFormer, scGPT, cellxgene
+- [x] Pipeline placeholder scripts (17, 18, 19)
+- [ ] NicheFormer spatial transcriptomics integration (~30M cells)
+- [ ] scGPT cohort integration (~35M cells)
+- [ ] cellxgene cohort integration (size TBD)
 - [ ] AlphaGenome eQTL analysis
 
 ## Git Configuration
