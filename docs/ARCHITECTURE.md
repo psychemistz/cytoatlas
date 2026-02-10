@@ -12,7 +12,7 @@ Comprehensive architecture documentation for the Pan-Disease Single-Cell Cytokin
 ### 1.1 Purpose
 
 The CytoAtlas project computes **cytokine and secreted protein activity signatures** across 12+ million human immune cells from three major single-cell atlases (CIMA, Inflammation Atlas, scAtlas) to identify disease-specific and conserved signaling patterns. Activity signatures are made available via:
-- REST API (188+ endpoints, FastAPI)
+- REST API (217 endpoints, FastAPI)
 - Web dashboard (Single-Page Application)
 - Interactive panels (Plotly, D3.js visualization)
 
@@ -23,8 +23,8 @@ The CytoAtlas project computes **cytokine and secreted protein activity signatur
 | **Total cells analyzed** | 17M+ |
 | **Single-cell atlases** | 3 (CIMA, Inflammation, scAtlas) |
 | **Signature types** | 3 (CytoSig 44, LinCytoSig 178, SecAct 1,249) |
-| **REST API endpoints** | 188+ |
-| **API routers** | 14 |
+| **REST API endpoints** | 217 |
+| **API routers** | 15 |
 | **Analysis scripts** | 7 Python pipelines + 5 SLURM batches |
 | **Web UI pages** | 8 (Landing, Explore, Compare, Validate, Submit, Chat, etc.) |
 | **JSON visualization files** | 30+ (~500MB) |
@@ -80,7 +80,7 @@ Frontend SPA (JavaScript)
 |-----------|----------|-------|---------|
 | **FastAPI App** | `cytoatlas-api/app/main.py` | 1 | Application factory with lifespan |
 | **Configuration** | `cytoatlas-api/app/config.py` | 1 | Pydantic settings, environment variables |
-| **Routers** | `cytoatlas-api/app/routers/` | 14 files | 188+ endpoints across 14 categories |
+| **Routers** | `cytoatlas-api/app/routers/` | 14 files | 217 endpoints across 15 routers |
 | **Services** | `cytoatlas-api/app/services/` | 12 files | Business logic, JSON loading, caching |
 | **Schemas** | `cytoatlas-api/app/schemas/` | 10 files | Pydantic v2 request/response models |
 | **Core** | `cytoatlas-api/app/core/` | 5 files | Security, cache, database, logging |
@@ -150,7 +150,7 @@ Step 5: Web Data
 ### 3.2 From JSON to REST API Response
 
 ```
-Client Request: GET /api/v1/cima/correlations?gene=IL17A&protein=IL17A
+Client Request: GET /api/v1/atlases/cima/correlations?gene=IL17A&protein=IL17A
 
 ↓
 
@@ -235,25 +235,26 @@ Response
 
 ## 5. API Architecture
 
-### 5.1 Router Structure (14 routers, 188+ endpoints)
+### 5.1 Router Structure (15 routers, 217 endpoints)
 
 ```
 /api/v1/
 ├── /health                    # 2 endpoints (health check, readiness)
 ├── /auth                      # 4 endpoints (login, register, verify, logout)
-├── /cima/                     # ~32 endpoints
+├── /atlases/                  # 5 management endpoints (list, register, delete, info, features)
+├── /atlases/cima/             # ~28 endpoints
 │  ├─ /summary                 # Atlas overview
 │  ├─ /cell-types              # Available cell types
 │  ├─ /correlations            # Age/BMI/biochemistry correlations
 │  ├─ /differential            # Disease vs. healthy
 │  └─ /eqtl                    # Genetic regulation (6 endpoints)
-├── /inflammation/             # ~44 endpoints
+├── /atlases/inflammation/     # ~42 endpoints
 │  ├─ /diseases                # List available diseases
 │  ├─ /disease-activity        # Disease-specific activity patterns
 │  ├─ /treatment-response      # Treatment response prediction
 │  ├─ /cohort-validation       # Validation cohort consistency
 │  └─ ... (10+ more endpoints)
-├── /scatlas/                  # ~36 endpoints
+├── /atlases/scatlas/          # ~31 endpoints
 │  ├─ /organs                  # Organ signatures
 │  ├─ /cancer-types            # Cancer comparison
 │  ├─ /immune-infiltration     # Immune cell distribution
@@ -527,7 +528,7 @@ class LineChart {
 const chart = new LineChart('chart-container', {
   layout: { title: 'Age Correlation', xaxis: { title: 'Age (years)' } }
 });
-await chart.render(await api.get('/api/v1/cima/correlations/age'));
+await chart.render(await api.get('/api/v1/atlases/cima/correlations/age'));
 ```
 
 ### 7.3 State Management
@@ -595,7 +596,7 @@ class APIClient {
 
 // Usage
 const api = new APIClient();
-const cimaActivity = await api.get('/api/v1/cima/activity?signature_type=CytoSig');
+const cimaActivity = await api.get('/api/v1/atlases/cima/activity?signature_type=CytoSig');
 ```
 
 ---
@@ -884,7 +885,7 @@ User Submission Bounded Context
 | Round 1 | Documentation Cleanup | ✅ Complete | ARCHITECTURE.md, ADRs, archive system |
 | Round 2 | Security Hardening | ✅ Complete | JWT, RBAC, audit logging, rate limiting |
 | Round 3 | Data Layer & Documentation | ✅ Complete | Chat system, frontend components, pipeline management, user docs |
-| Round 4 | Extensibility (Planned) | Pending | User submissions, API v2, GraphQL |
+| Round 4 | Extensibility (Planned) | Pending | User submissions, GraphQL |
 
 ---
 
@@ -961,7 +962,7 @@ Alert: Database connection pool exhausted
 | **Pipeline Documentation** | [pipelines/README.md](pipelines/README.md) | Analysis pipeline details |
 | **Output Catalog** | [outputs/README.md](outputs/README.md) | File structure and lineage |
 | **Deployment Guide** | [docs/DEPLOYMENT.md](DEPLOYMENT.md) | HPC/SLURM setup, environment variables |
-| **API Reference** | [docs/API_REFERENCE.md](API_REFERENCE.md) | All 188+ endpoints with examples |
+| **API Reference** | [docs/API_REFERENCE.md](API_REFERENCE.md) | All 217 endpoints with examples |
 | **User Guide** | [docs/USER_GUIDE.md](USER_GUIDE.md) | Using CytoAtlas (atlases, chat, exports) |
 | **Decisions Log** | [decisions/README.md](decisions/README.md) | Architecture Decision Records (ADRs) |
 | **Archived Plans** | [archive/README.md](archive/README.md) | Historical planning documents |

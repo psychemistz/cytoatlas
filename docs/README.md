@@ -10,7 +10,7 @@ Comprehensive documentation for the Pan-Disease Single-Cell Cytokine Activity At
 |----------|---------|
 | **[DEPLOYMENT.md](DEPLOYMENT.md)** | **START HERE** - Setup guide for development, HPC, production |
 | **[USER_GUIDE.md](USER_GUIDE.md)** | How to explore CIMA, Inflammation, scAtlas data |
-| **[API_REFERENCE.md](API_REFERENCE.md)** | All 226 REST API endpoints with curl examples |
+| **[API_REFERENCE.md](API_REFERENCE.md)** | All 217 REST API endpoints with curl examples |
 | **[ARCHITECTURE.md](ARCHITECTURE.md)** | System design: components, data flow, technology stack |
 | **[CLAUDE.md](../CLAUDE.md)** | Project context for Claude Code |
 
@@ -63,7 +63,7 @@ docs/
 ### Getting Started
 - [DEPLOYMENT.md](DEPLOYMENT.md) - **Development, HPC, and production deployment**
 - [USER_GUIDE.md](USER_GUIDE.md) - **How to use CytoAtlas (atlases, chat, exports)**
-- [API_REFERENCE.md](API_REFERENCE.md) - **All 226 REST API endpoints**
+- [API_REFERENCE.md](API_REFERENCE.md) - **All 217 REST API endpoints**
 
 ### Technical Documentation
 - [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture (14 sections)

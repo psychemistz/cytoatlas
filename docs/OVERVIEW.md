@@ -17,7 +17,7 @@ Pan-Disease Single-Cell Cytokine Activity Atlas - computes cytokine and secreted
 ## Quick Facts
 
 - **Total cells analyzed**: 17M+
-- **REST API endpoints**: 226 across 14 routers
+- **REST API endpoints**: 217 across 15 routers
 - **Signature types**: CytoSig (44), LinCytoSig (178), SecAct (1,249)
 - **Web UI pages**: 8 interactive pages with Plotly + D3.js
 - **Analysis scripts**: 7 Python pipelines + 5 SLURM batch jobs
@@ -30,7 +30,7 @@ Pan-Disease Single-Cell Cytokine Activity Atlas - computes cytokine and secreted
    - Ridge regression against signature matrices
 
 2. **REST API** (`cytoatlas-api/`)
-   - FastAPI backend with 226 endpoints
+   - FastAPI backend with 217 endpoints
    - JSON-based data access with caching
    - Optional PostgreSQL + Redis for scaling
 

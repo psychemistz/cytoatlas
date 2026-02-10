@@ -34,11 +34,5 @@ if [ $? -ne 0 ]; then
     # Don't fail - user might be committing non-API changes
 fi
 
-# Run coverage reporter to show missing endpoints
-if [ -f "$API_DIR/agents/qa_checkers/coverage_reporter.py" ]; then
-    echo "Checking endpoint coverage..."
-    python -m agents.qa_checkers.coverage_reporter --missing-only 2>/dev/null || true
-fi
-
 echo "Pre-commit checks passed."
 exit 0

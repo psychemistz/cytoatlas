@@ -143,8 +143,8 @@ const AtlasDetailPageExample = {
 
             // Load both datasets in parallel
             const [ageData, bmiData] = await Promise.all([
-                dataLoader.load('/cima/correlations/age', { signature_type: signatureType }),
-                dataLoader.load('/cima/correlations/bmi', { signature_type: signatureType })
+                dataLoader.load('/atlases/cima/correlations/age', { signature_type: signatureType }),
+                dataLoader.load('/atlases/cima/correlations/bmi', { signature_type: signatureType })
             ]);
 
             const html = `
@@ -188,7 +188,7 @@ const AtlasDetailPageExample = {
             // For demo, pick a signature (in real implementation, add signature selector)
             const signature = 'IFNG';
 
-            const data = await dataLoader.load(`/cima/boxplots/age/${signature}`, {
+            const data = await dataLoader.load(`/atlases/cima/boxplots/age/${signature}`, {
                 signature_type: signatureType
             });
 
@@ -214,7 +214,7 @@ const AtlasDetailPageExample = {
         this.tabPanel.addTab('differential', 'Differential', async () => {
             const signatureType = this.filterBar.getValue('signatureType');
 
-            const data = await dataLoader.load('/cima/differential', {
+            const data = await dataLoader.load('/atlases/cima/differential', {
                 signature_type: signatureType,
                 comparison: 'male_vs_female' // Example comparison
             });
@@ -264,7 +264,7 @@ const AtlasDetailPageExample = {
         this.tabPanel.addTab('biochemistry', 'Biochemistry', async () => {
             const signatureType = this.filterBar.getValue('signatureType');
 
-            const data = await dataLoader.load('/cima/correlations/biochemistry', {
+            const data = await dataLoader.load('/atlases/cima/correlations/biochemistry', {
                 signature_type: signatureType
             });
 

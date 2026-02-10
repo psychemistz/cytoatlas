@@ -207,7 +207,7 @@ python scripts/06_preprocess_viz_data.py
 
 ## Context 3: API Gateway Domain
 
-CytoAtlas REST API — 226 endpoints across 15 routers.
+CytoAtlas REST API — 217 endpoints across 15 routers.
 
 ### Quick Start
 
@@ -254,10 +254,10 @@ class JSONRepository(AtlasRepository):      # Fallback — load visualization/da
 
 | Router | Endpoints | Description |
 |--------|-----------|-------------|
-| Atlases (Unified) | 16 | Dynamic API for all atlases (recommended) |
-| CIMA (Legacy) | 28 | Age/BMI correlations, biochemistry, metabolites, eQTL |
-| Inflammation (Legacy) | 42 | Disease activity, treatment response, cohort validation |
-| scAtlas (Legacy) | 31 | Organ signatures, cancer comparison, immune infiltration |
+| Atlas Management | 5 | Atlas registry: list, register, delete, info, features |
+| CIMA (`/atlases/cima`) | 28 | Age/BMI correlations, biochemistry, metabolites, eQTL |
+| Inflammation (`/atlases/inflammation`) | 42 | Disease activity, treatment response, cohort validation |
+| scAtlas (`/atlases/scatlas`) | 31 | Organ signatures, cancer comparison, immune infiltration |
 | Cross-Atlas | 20 | Atlas comparison, conserved signatures |
 | Validation | 28 | 5-type credibility assessment |
 | Search | 6 | Global search |
@@ -421,7 +421,7 @@ All data access logged to JSONL: `{timestamp, user_id, email, ip_address, method
 | [docs/README.md](docs/README.md) | Master index |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design (14 sections) |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | HPC/SLURM setup, environment variables |
-| [docs/API_REFERENCE.md](docs/API_REFERENCE.md) | 226 endpoints with curl examples |
+| [docs/API_REFERENCE.md](docs/API_REFERENCE.md) | 217 endpoints with curl examples |
 | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | How to use CytoAtlas |
 | [docs/ATLAS_VALIDATION.md](docs/ATLAS_VALIDATION.md) | Validation methodology |
 | [docs/CELL_TYPE_MAPPING.md](docs/CELL_TYPE_MAPPING.md) | Cell type harmonization |
@@ -437,18 +437,20 @@ All data access logged to JSONL: `{timestamp, user_id, email, ip_address, method
 ### Completed
 
 - All 7 analysis pipelines (pilot, CIMA, Inflammation, scAtlas, integrated, figures, immune)
-- 226 API endpoints across 15 routers (100% functional)
+- 209 API endpoints across 15 routers (100% functional)
 - 8-page SPA with 40+ visualization panels
 - Pipeline package: 18 subpackages, ~18.7K lines implemented
 - Validation: standard + resampled + single-cell + bulk RNA-seq
 - Security: JWT, RBAC, audit logging, rate limiting
+- Maintenance infrastructure: `scripts/maintenance/audit_clutter.py`, equivalence test harness
 
 ### In Progress
 
 - [ ] Generate `atlas_data.duckdb` (run `convert_data_to_duckdb.py --all` on HPC)
 - [ ] Resampled bootstrap: Inflammation main/val/ext (pseudobulk exists, run `16_resampled_validation.py`)
 - [ ] Pipeline CLI entry point (`cytoatlas-pipeline` command)
-- [ ] Script-to-pipeline equivalence tests
+- [ ] Script-to-pipeline equivalence tests (harness ready in `cytoatlas-pipeline/tests/equivalence/`)
+- [ ] SLURM wrapper consolidation (3 layers → 1 parameterized template)
 
 ### Future Work
 
@@ -459,7 +461,23 @@ All data access logged to JSONL: `{timestamp, user_id, email, ip_address, method
 
 ### Archive
 
-Retired scripts and legacy code in `archive/` — see `archive/README.md` for index.
+Retired scripts, agents, docs, and legacy code in `archive/` — see `archive/README.md` for index.
+
+---
+
+## Routine Maintenance
+
+Run `python scripts/maintenance/audit_clutter.py --report` after major updates or every ~50 commits. See `scripts/maintenance/README.md` for the full checklist.
+
+**Quick check:**
+```bash
+python scripts/maintenance/audit_clutter.py --report
+```
+
+**Equivalence tests:**
+```bash
+pytest cytoatlas-pipeline/tests/equivalence/ -v --tb=short
+```
 
 ---
 

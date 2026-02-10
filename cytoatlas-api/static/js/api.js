@@ -92,75 +92,75 @@ const API = {
     // ==================== CIMA ====================
 
     async getCimaSummary() {
-        return this.get('/cima/summary');
+        return this.get('/atlases/cima/summary');
     },
 
     async getCimaActivity(params = {}) {
-        return this.get('/cima/activity', params);
+        return this.get('/atlases/cima/activity', params);
     },
 
     async getCimaCorrelations(variable, params = {}) {
-        return this.get(`/cima/correlations/${variable}`, params);
+        return this.get(`/atlases/cima/correlations/${variable}`, params);
     },
 
     async getCimaAgeBoxplots(signature, params = {}) {
-        return this.get(`/cima/boxplots/age/${signature}`, params);
+        return this.get(`/atlases/cima/boxplots/age/${signature}`, params);
     },
 
     async getCimaBmiBoxplots(signature, params = {}) {
-        return this.get(`/cima/boxplots/bmi/${signature}`, params);
+        return this.get(`/atlases/cima/boxplots/bmi/${signature}`, params);
     },
 
     async getCimaDifferential(params = {}) {
-        return this.get('/cima/differential', params);
+        return this.get('/atlases/cima/differential', params);
     },
 
     async getCimaMetabolites(params = {}) {
-        return this.get('/cima/correlations/metabolites', params);
+        return this.get('/atlases/cima/correlations/metabolites', params);
     },
 
     // ==================== Inflammation ====================
 
     async getInflammationSummary() {
-        return this.get('/inflammation/summary');
+        return this.get('/atlases/inflammation/summary');
     },
 
     async getInflammationActivity(params = {}) {
-        return this.get('/inflammation/activity', params);
+        return this.get('/atlases/inflammation/activity', params);
     },
 
     async getInflammationDiseaseActivity(params = {}) {
-        return this.get('/inflammation/disease-activity', params);
+        return this.get('/atlases/inflammation/disease-activity', params);
     },
 
     async getInflammationAgeBoxplots(signature, params = {}) {
-        return this.get(`/inflammation/boxplots/age/${signature}`, params);
+        return this.get(`/atlases/inflammation/boxplots/age/${signature}`, params);
     },
 
     async getInflammationBmiBoxplots(signature, params = {}) {
-        return this.get(`/inflammation/boxplots/bmi/${signature}`, params);
+        return this.get(`/atlases/inflammation/boxplots/bmi/${signature}`, params);
     },
 
     async getInflammationTreatmentResponse(params = {}) {
-        return this.get('/inflammation/treatment-response', params);
+        return this.get('/atlases/inflammation/treatment-response', params);
     },
 
     // ==================== scAtlas ====================
 
     async getScatlasSummary() {
-        return this.get('/scatlas/summary');
+        return this.get('/atlases/scatlas/summary');
     },
 
     async getScatlasActivity(params = {}) {
-        return this.get('/scatlas/activity', params);
+        return this.get('/atlases/scatlas/activity', params);
     },
 
     async getScatlasOrgans() {
-        return this.get('/scatlas/organs');
+        return this.get('/atlases/scatlas/organs');
     },
 
     async getScatlasCellTypes() {
-        return this.get('/scatlas/cell-types');
+        return this.get('/atlases/scatlas/cell-types');
     },
 
     // ==================== Cross-Atlas ====================

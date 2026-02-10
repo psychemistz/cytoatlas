@@ -1,6 +1,6 @@
 # CytoAtlas REST API Reference
 
-Complete reference for all 188+ endpoints across 14 routers. Organized by domain with curl examples.
+Complete reference for all 217 endpoints across 15 routers. Organized by domain with curl examples.
 
 **Last Updated**: 2026-02-09
 **Base URL**: `/api/v1`
@@ -181,7 +181,7 @@ curl -X POST http://localhost:8000/api/v1/auth/api-key \
 }
 
 # Use in subsequent requests
-curl -s http://localhost:8000/api/v1/cima/summary \
+curl -s http://localhost:8000/api/v1/atlases/cima/summary \
   -H "X-API-Key: sk-1234567890abcdef"
 ```
 
@@ -207,18 +207,18 @@ curl -X DELETE http://localhost:8000/api/v1/auth/api-key \
 
 ---
 
-## 3. CIMA Atlas (Legacy - Deprecated)
+## 3. CIMA Atlas
 
 Endpoints for CIMA atlas data. Marked `deprecated=True` in favor of unified endpoints.
 
 ### Summary
 
-**GET** `/cima/summary`
+**GET** `/atlases/cima/summary`
 
 Get CIMA atlas summary statistics.
 
 ```bash
-curl -s http://localhost:8000/api/v1/cima/summary | jq '.cells, .samples'
+curl -s http://localhost:8000/api/v1/atlases/cima/summary | jq '.cells, .samples'
 ```
 
 **Response**: `CIMASummaryStats` | **Auth**: None | **Status**: 200
@@ -227,12 +227,12 @@ curl -s http://localhost:8000/api/v1/cima/summary | jq '.cells, .samples'
 
 ### Available Cell Types
 
-**GET** `/cima/cell-types`
+**GET** `/atlases/cima/cell-types`
 
 Get list of available cell types.
 
 ```bash
-curl -s http://localhost:8000/api/v1/cima/cell-types | jq '.'
+curl -s http://localhost:8000/api/v1/atlases/cima/cell-types | jq '.'
 
 # Response
 ["CD4 T cells", "CD8 T cells", "B cells", "Monocytes", ...]
@@ -244,12 +244,12 @@ curl -s http://localhost:8000/api/v1/cima/cell-types | jq '.'
 
 ### Cell Type Activity
 
-**GET** `/cima/activity`
+**GET** `/atlases/cima/activity`
 
 Get mean activity by cell type.
 
 ```bash
-curl -s 'http://localhost:8000/api/v1/cima/activity?signature_type=CytoSig' | jq '.[] | {cell_type, signature, mean_activity}'
+curl -s 'http://localhost:8000/api/v1/atlases/cima/activity?signature_type=CytoSig' | jq '.[] | {cell_type, signature, mean_activity}'
 ```
 
 **Query Parameters**:
@@ -261,12 +261,12 @@ curl -s 'http://localhost:8000/api/v1/cima/activity?signature_type=CytoSig' | jq
 
 ### Age Correlations
 
-**GET** `/cima/correlations/age`
+**GET** `/atlases/cima/correlations/age`
 
 Get activity correlation with age.
 
 ```bash
-curl -s 'http://localhost:8000/api/v1/cima/correlations/age?signature_type=CytoSig&offset=0&limit=10' | jq '.'
+curl -s 'http://localhost:8000/api/v1/atlases/cima/correlations/age?signature_type=CytoSig&offset=0&limit=10' | jq '.'
 ```
 
 **Query Parameters**:
@@ -280,12 +280,12 @@ curl -s 'http://localhost:8000/api/v1/cima/correlations/age?signature_type=CytoS
 
 ### BMI Correlations
 
-**GET** `/cima/correlations/bmi`
+**GET** `/atlases/cima/correlations/bmi`
 
 Get activity correlation with BMI.
 
 ```bash
-curl -s 'http://localhost:8000/api/v1/cima/correlations/bmi?signature_type=CytoSig' | jq '.'
+curl -s 'http://localhost:8000/api/v1/atlases/cima/correlations/bmi?signature_type=CytoSig' | jq '.'
 ```
 
 **Query Parameters**: Same as age correlations
@@ -294,18 +294,18 @@ curl -s 'http://localhost:8000/api/v1/cima/correlations/bmi?signature_type=CytoS
 
 ---
 
-## 4. Inflammation Atlas (Legacy - Deprecated)
+## 4. Inflammation Atlas
 
 Endpoints for Inflammation Atlas data. Marked `deprecated=True` in favor of unified endpoints.
 
 ### Summary
 
-**GET** `/inflammation/summary`
+**GET** `/atlases/inflammation/summary`
 
 Get Inflammation Atlas summary statistics.
 
 ```bash
-curl -s http://localhost:8000/api/v1/inflammation/summary | jq '.cells, .samples, .diseases'
+curl -s http://localhost:8000/api/v1/atlases/inflammation/summary | jq '.cells, .samples, .diseases'
 ```
 
 **Response**: `InflammationSummaryStats` | **Auth**: None | **Status**: 200
@@ -314,12 +314,12 @@ curl -s http://localhost:8000/api/v1/inflammation/summary | jq '.cells, .samples
 
 ### Available Diseases
 
-**GET** `/inflammation/diseases`
+**GET** `/atlases/inflammation/diseases`
 
 Get list of available diseases.
 
 ```bash
-curl -s http://localhost:8000/api/v1/inflammation/diseases | jq '.'
+curl -s http://localhost:8000/api/v1/atlases/inflammation/diseases | jq '.'
 
 # Response
 ["COVID-19", "Influenza", "Sepsis", "Autoimmune", ...]
@@ -331,12 +331,12 @@ curl -s http://localhost:8000/api/v1/inflammation/diseases | jq '.'
 
 ### Disease Activity
 
-**GET** `/inflammation/disease-activity`
+**GET** `/atlases/inflammation/disease-activity`
 
 Get disease-specific activity patterns by cell type.
 
 ```bash
-curl -s 'http://localhost:8000/api/v1/inflammation/disease-activity?disease=COVID-19&signature_type=CytoSig' | jq '.'
+curl -s 'http://localhost:8000/api/v1/atlases/inflammation/disease-activity?disease=COVID-19&signature_type=CytoSig' | jq '.'
 ```
 
 **Query Parameters**:
@@ -349,12 +349,12 @@ curl -s 'http://localhost:8000/api/v1/inflammation/disease-activity?disease=COVI
 
 ### Treatment Response
 
-**GET** `/inflammation/treatment-response`
+**GET** `/atlases/inflammation/treatment-response`
 
 Get treatment response prediction results by cell type.
 
 ```bash
-curl -s 'http://localhost:8000/api/v1/inflammation/treatment-response?disease=COVID-19' | jq '.'
+curl -s 'http://localhost:8000/api/v1/atlases/inflammation/treatment-response?disease=COVID-19' | jq '.'
 ```
 
 **Query Parameters**:
@@ -364,18 +364,18 @@ curl -s 'http://localhost:8000/api/v1/inflammation/treatment-response?disease=CO
 
 ---
 
-## 5. scAtlas (Legacy - Deprecated)
+## 5. scAtlas
 
 Endpoints for scAtlas data. Marked `deprecated=True` in favor of unified endpoints.
 
 ### Summary
 
-**GET** `/scatlas/summary`
+**GET** `/atlases/scatlas/summary`
 
 Get scAtlas summary statistics.
 
 ```bash
-curl -s http://localhost:8000/api/v1/scatlas/summary | jq '.cells, .organs, .cancer_types'
+curl -s http://localhost:8000/api/v1/atlases/scatlas/summary | jq '.cells, .organs, .cancer_types'
 ```
 
 **Response**: `ScAtlasSummaryStats` | **Auth**: None | **Status**: 200
@@ -384,12 +384,12 @@ curl -s http://localhost:8000/api/v1/scatlas/summary | jq '.cells, .organs, .can
 
 ### Available Organs
 
-**GET** `/scatlas/organs`
+**GET** `/atlases/scatlas/organs`
 
 Get list of available organs/tissues.
 
 ```bash
-curl -s http://localhost:8000/api/v1/scatlas/organs | jq '.'
+curl -s http://localhost:8000/api/v1/atlases/scatlas/organs | jq '.'
 
 # Response
 ["Blood", "Bone Marrow", "Lymph Node", "Spleen", "Liver", ...]
@@ -401,12 +401,12 @@ curl -s http://localhost:8000/api/v1/scatlas/organs | jq '.'
 
 ### Organ Signatures
 
-**GET** `/scatlas/organ-signatures`
+**GET** `/atlases/scatlas/organ-signatures`
 
 Get cell type signature patterns by organ.
 
 ```bash
-curl -s 'http://localhost:8000/api/v1/scatlas/organ-signatures?organ=Blood&signature_type=CytoSig' | jq '.'
+curl -s 'http://localhost:8000/api/v1/atlases/scatlas/organ-signatures?organ=Blood&signature_type=CytoSig' | jq '.'
 ```
 
 **Query Parameters**:
@@ -419,12 +419,12 @@ curl -s 'http://localhost:8000/api/v1/scatlas/organ-signatures?organ=Blood&signa
 
 ### Cancer Comparison
 
-**GET** `/scatlas/cancer-comparison`
+**GET** `/atlases/scatlas/cancer-comparison`
 
 Compare cancer vs adjacent normal tissue activities.
 
 ```bash
-curl -s 'http://localhost:8000/api/v1/scatlas/cancer-comparison?cancer_type=NSCLC&signature_type=CytoSig' | jq '.'
+curl -s 'http://localhost:8000/api/v1/atlases/scatlas/cancer-comparison?cancer_type=NSCLC&signature_type=CytoSig' | jq '.'
 ```
 
 **Query Parameters**:
@@ -953,10 +953,10 @@ curl -s http://localhost:8000/openapi.json > openapi.json
 
 ```bash
 # Get all cytokine activities in CIMA
-curl -s 'http://localhost:8000/api/v1/cima/activity?signature_type=CytoSig'
+curl -s 'http://localhost:8000/api/v1/atlases/cima/activity?signature_type=CytoSig'
 
 # Get disease activity for COVID-19
-curl -s 'http://localhost:8000/api/v1/inflammation/disease-activity?disease=COVID-19'
+curl -s 'http://localhost:8000/api/v1/atlases/inflammation/disease-activity?disease=COVID-19'
 
 # Compare CIMA vs Inflammation atlases
 curl -s 'http://localhost:8000/api/v1/cross-atlas/pairwise-scatter?atlas1=CIMA&atlas2=Inflammation'
@@ -976,7 +976,7 @@ curl -s http://localhost:8000/api/v1/auth/me \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 
 # Using API key
-curl -s http://localhost:8000/api/v1/cima/summary \
+curl -s http://localhost:8000/api/v1/atlases/cima/summary \
   -H "X-API-Key: sk-1234567890abcdef"
 ```
 

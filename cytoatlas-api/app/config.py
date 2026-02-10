@@ -68,7 +68,6 @@ class Settings(BaseSettings):
 
     # API
     api_v1_prefix: str = "/api/v1"
-    api_v2_prefix: str = "/api/v2"
     allowed_origins: str = Field(default="http://localhost:8000,http://localhost:3000")
     max_request_body_mb: int = 100
 

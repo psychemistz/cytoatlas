@@ -35,7 +35,7 @@ https://cytoatlas.example.com/  (production)
 
 **REST API**: All data accessible programmatically
 ```bash
-curl https://cytoatlas.example.com/api/v1/cima/summary
+curl https://cytoatlas.example.com/api/v1/atlases/cima/summary
 ```
 
 ### Optional Registration
@@ -89,13 +89,13 @@ Understand how age and metabolic factors influence immune cell activity in healt
 
 ```bash
 # Get age correlations for all signatures
-curl -s 'http://localhost:8000/api/v1/cima/correlations/age?signature_type=CytoSig' | jq '.'
+curl -s 'http://localhost:8000/api/v1/atlases/cima/correlations/age?signature_type=CytoSig' | jq '.'
 
 # Filter by specific gene
-curl -s 'http://localhost:8000/api/v1/cima/correlations/age?gene=IL17A&signature_type=CytoSig' | jq '.'
+curl -s 'http://localhost:8000/api/v1/atlases/cima/correlations/age?gene=IL17A&signature_type=CytoSig' | jq '.'
 
 # Get activity for specific cell type
-curl -s 'http://localhost:8000/api/v1/cima/activity/CD8?signature_type=CytoSig' | jq '.[] | {signature, mean_activity, std_activity}'
+curl -s 'http://localhost:8000/api/v1/atlases/cima/activity/CD8?signature_type=CytoSig' | jq '.[] | {signature, mean_activity, std_activity}'
 ```
 
 ---
@@ -139,16 +139,16 @@ Identify disease-specific immune cell activity patterns and predict treatment re
 
 ```bash
 # Get disease activity patterns
-curl -s 'http://localhost:8000/api/v1/inflammation/disease-activity?disease=COVID-19&signature_type=CytoSig' | jq '.'
+curl -s 'http://localhost:8000/api/v1/atlases/inflammation/disease-activity?disease=COVID-19&signature_type=CytoSig' | jq '.'
 
 # Get treatment response predictions
-curl -s 'http://localhost:8000/api/v1/inflammation/treatment-response?disease=COVID-19' | jq '.'
+curl -s 'http://localhost:8000/api/v1/atlases/inflammation/treatment-response?disease=COVID-19' | jq '.'
 
 # Get disease list
-curl -s 'http://localhost:8000/api/v1/inflammation/diseases' | jq '.'
+curl -s 'http://localhost:8000/api/v1/atlases/inflammation/diseases' | jq '.'
 
 # Compare responder vs non-responder
-curl -s 'http://localhost:8000/api/v1/inflammation/disease-activity?disease=COVID-19&comparison=treatment_response' | jq '.'
+curl -s 'http://localhost:8000/api/v1/atlases/inflammation/disease-activity?disease=COVID-19&comparison=treatment_response' | jq '.'
 ```
 
 ---
@@ -190,16 +190,16 @@ Map immune cell activity across normal organs and compare with cancer environmen
 
 ```bash
 # Get organ signatures
-curl -s 'http://localhost:8000/api/v1/scatlas/organ-signatures?organ=Blood&signature_type=CytoSig' | jq '.'
+curl -s 'http://localhost:8000/api/v1/atlases/scatlas/organ-signatures?organ=Blood&signature_type=CytoSig' | jq '.'
 
 # Get cancer comparison
-curl -s 'http://localhost:8000/api/v1/scatlas/cancer-comparison?cancer_type=NSCLC&comparison=tumor_vs_adjacent' | jq '.'
+curl -s 'http://localhost:8000/api/v1/atlases/scatlas/cancer-comparison?cancer_type=NSCLC&comparison=tumor_vs_adjacent' | jq '.'
 
 # Get T cell exhaustion scores
-curl -s 'http://localhost:8000/api/v1/scatlas/t-cell-exhaustion?cancer_type=NSCLC' | jq '.'
+curl -s 'http://localhost:8000/api/v1/atlases/scatlas/t-cell-exhaustion?cancer_type=NSCLC' | jq '.'
 
 # List available organs
-curl -s 'http://localhost:8000/api/v1/scatlas/organs' | jq '.'
+curl -s 'http://localhost:8000/api/v1/atlases/scatlas/organs' | jq '.'
 ```
 
 ---
@@ -476,13 +476,13 @@ console.log(`Fetched ${allActivity.length} records`);
 ```bash
 # Process all diseases
 for disease in COVID-19 Influenza Sepsis Autoimmune; do
-  curl -s "http://localhost:8000/api/v1/inflammation/disease-activity?disease=$disease" \
+  curl -s "http://localhost:8000/api/v1/atlases/inflammation/disease-activity?disease=$disease" \
     -o "disease_${disease}.json"
 done
 
 # Process all organs
 for organ in Blood "Bone Marrow" Spleen "Lymph Node" Liver; do
-  curl -s "http://localhost:8000/api/v1/scatlas/organ-signatures?organ=$organ&signature_type=CytoSig" \
+  curl -s "http://localhost:8000/api/v1/atlases/scatlas/organ-signatures?organ=$organ&signature_type=CytoSig" \
     -o "organ_${organ}.json"
 done
 ```

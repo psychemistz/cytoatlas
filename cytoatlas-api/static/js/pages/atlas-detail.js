@@ -234,7 +234,7 @@ const AtlasDetailPage = {
 
     async loadCimaOverview(content) {
         // Load summary stats
-        const stats = await API.get('/cima/summary');
+        const stats = await API.get('/atlases/cima/summary');
 
         content.innerHTML = `
             <div class="overview-section">
@@ -387,8 +387,8 @@ const AtlasDetailPage = {
 
         // Load signatures for dropdown and heatmap data
         const [signatures, heatmapData] = await Promise.all([
-            API.get('/cima/signatures', { signature_type: this.signatureType }),
-            API.get('/cima/heatmap/activity', { signature_type: this.signatureType }),
+            API.get('/atlases/cima/signatures', { signature_type: this.signatureType }),
+            API.get('/atlases/cima/heatmap/activity', { signature_type: this.signatureType }),
         ]);
 
         // Populate protein dropdown
@@ -428,7 +428,7 @@ const AtlasDetailPage = {
         container.innerHTML = '<p class="loading">Loading...</p>';
 
         try {
-            const data = await API.get('/cima/activity', { signature_type: this.signatureType });
+            const data = await API.get('/atlases/cima/activity', { signature_type: this.signatureType });
 
             if (data && data.length > 0) {
                 // Filter for selected protein
@@ -658,8 +658,8 @@ const AtlasDetailPage = {
         let ageData = null, bmiData = null;
         try {
             [ageData, bmiData] = await Promise.all([
-                API.get('/cima/correlations/age', { signature_type: this.signatureType }),
-                API.get('/cima/correlations/bmi', { signature_type: this.signatureType }),
+                API.get('/atlases/cima/correlations/age', { signature_type: this.signatureType }),
+                API.get('/atlases/cima/correlations/bmi', { signature_type: this.signatureType }),
             ]);
             console.log('CIMA Age data:', ageData?.length, 'records', ageData?.[0]);
             console.log('CIMA BMI data:', bmiData?.length, 'records');
@@ -876,7 +876,7 @@ const AtlasDetailPage = {
 
     async loadCimaStratifiedCellTypes() {
         try {
-            const cellTypes = await API.get('/cima/cell-types');
+            const cellTypes = await API.get('/atlases/cima/cell-types');
             const select = document.getElementById('cima-strat-celltype');
             if (select && cellTypes && cellTypes.length > 0) {
                 select.innerHTML = '<option value="All">All Cell Types (Sample-level)</option>' +
@@ -889,7 +889,7 @@ const AtlasDetailPage = {
 
     async loadStratifiedSignatures() {
         try {
-            const signatures = await API.get('/cima/signatures', { signature_type: this.signatureType });
+            const signatures = await API.get('/atlases/cima/signatures', { signature_type: this.signatureType });
             this.stratifiedSignatures = signatures || [];
         } catch (e) {
             console.warn('Failed to load stratified signatures:', e);
@@ -1014,8 +1014,8 @@ const AtlasDetailPage = {
     async loadBiochemData() {
         // Load both CytoSig and SecAct data
         const [cytosigData, secactData] = await Promise.all([
-            API.get('/cima/correlations/biochemistry', { signature_type: 'CytoSig' }),
-            API.get('/cima/correlations/biochemistry', { signature_type: 'SecAct' }),
+            API.get('/atlases/cima/correlations/biochemistry', { signature_type: 'CytoSig' }),
+            API.get('/atlases/cima/correlations/biochemistry', { signature_type: 'SecAct' }),
         ]);
 
         this.biochemData = {
@@ -1183,7 +1183,7 @@ const AtlasDetailPage = {
     },
 
     async loadBiochemScatterData() {
-        this.biochemScatterData = await API.get('/cima/scatter/biochem-samples');
+        this.biochemScatterData = await API.get('/atlases/cima/scatter/biochem-samples');
     },
 
     showScatterProteinSuggestions(query) {
@@ -1418,7 +1418,7 @@ const AtlasDetailPage = {
         `;
 
         // Load metabolite data with current signature type
-        this.metaboliteData = await API.get('/cima/correlations/metabolites', { signature_type: this.signatureType, limit: 500 });
+        this.metaboliteData = await API.get('/atlases/cima/correlations/metabolites', { signature_type: this.signatureType, limit: 500 });
         this.updateMetabolitePlots();
     },
 
@@ -1660,7 +1660,7 @@ const AtlasDetailPage = {
         `;
 
         // Load population stratification data
-        this.populationStratificationData = await API.get('/cima/population-stratification', { signature_type: this.signatureType });
+        this.populationStratificationData = await API.get('/atlases/cima/population-stratification', { signature_type: this.signatureType });
         this.updatePopulationStratification();
     },
 
@@ -1922,8 +1922,8 @@ const AtlasDetailPage = {
 
         // Load biochemistry and metabolite correlations
         const [biochemData, metabData] = await Promise.all([
-            API.get('/cima/correlations/biochemistry', { signature_type: sigType }),
-            API.get('/cima/correlations/metabolites', { signature_type: sigType, limit: 500 })
+            API.get('/atlases/cima/correlations/biochemistry', { signature_type: sigType }),
+            API.get('/atlases/cima/correlations/metabolites', { signature_type: sigType, limit: 500 })
         ]);
 
         // Define cytokine subsets
@@ -2189,7 +2189,7 @@ const AtlasDetailPage = {
         const distContainer = document.getElementById('pop-distribution');
         if (distContainer) distContainer.innerHTML = '<div class="loading">Loading data...</div>';
 
-        this.populationData = await API.get('/cima/population-stratification', { signature_type: sigType });
+        this.populationData = await API.get('/atlases/cima/population-stratification', { signature_type: sigType });
         this.updatePopulationPlots();
     },
 
@@ -2429,7 +2429,7 @@ const AtlasDetailPage = {
         `;
 
         // Load eQTL data
-        this.eqtlData = await API.get('/cima/eqtl');
+        this.eqtlData = await API.get('/atlases/cima/eqtl');
         this.populateEqtlCellTypes();
         this.updateEqtlPlots();
     },
@@ -2691,7 +2691,7 @@ const AtlasDetailPage = {
 
     async loadInflamOverview(content) {
         // Load summary stats
-        const stats = await API.get('/inflammation/summary');
+        const stats = await API.get('/atlases/inflammation/summary');
 
         content.innerHTML = `
             <div class="overview-section">
@@ -2839,7 +2839,7 @@ const AtlasDetailPage = {
         `;
 
         // Load activity data for current signature type
-        const activityData = await API.get('/inflammation/activity', { signature_type: this.signatureType });
+        const activityData = await API.get('/atlases/inflammation/activity', { signature_type: this.signatureType });
         this.inflamActivityData = { [this.signatureType]: activityData };
 
         // Get unique signatures for autocomplete
@@ -2919,7 +2919,7 @@ const AtlasDetailPage = {
             const container = document.getElementById('inflam-activity-profile');
             if (container) container.innerHTML = '<p class="loading">Loading...</p>';
 
-            const data = await API.get('/inflammation/activity', { signature_type: sigType });
+            const data = await API.get('/atlases/inflammation/activity', { signature_type: sigType });
             this.inflamActivityData[sigType] = data;
 
             // Update signatures for autocomplete
@@ -3112,8 +3112,8 @@ const AtlasDetailPage = {
 
         // Load correlation data
         const [ageData, bmiData] = await Promise.all([
-            API.get('/inflammation/correlations/age', { signature_type: this.signatureType }),
-            API.get('/inflammation/correlations/bmi', { signature_type: this.signatureType }),
+            API.get('/atlases/inflammation/correlations/age', { signature_type: this.signatureType }),
+            API.get('/atlases/inflammation/correlations/bmi', { signature_type: this.signatureType }),
         ]);
 
         // Store data for cell type heatmap
@@ -3270,7 +3270,7 @@ const AtlasDetailPage = {
 
     async loadInflamStratifiedCellTypes() {
         try {
-            const cellTypes = await API.get('/inflammation/cell-types');
+            const cellTypes = await API.get('/atlases/inflammation/cell-types');
             const select = document.getElementById('inflam-strat-celltype');
             if (select && cellTypes && cellTypes.length > 0) {
                 // Keep "All" as first option, then add specific cell types
@@ -3284,7 +3284,7 @@ const AtlasDetailPage = {
 
     async loadInflamStratifiedSignatures() {
         try {
-            const signatures = await API.get('/inflammation/signatures', { signature_type: this.signatureType });
+            const signatures = await API.get('/atlases/inflammation/signatures', { signature_type: this.signatureType });
             this.inflamStratifiedSignatures = signatures || [];
         } catch (e) {
             console.warn('Failed to load inflammation stratified signatures:', e);
@@ -3387,7 +3387,7 @@ const AtlasDetailPage = {
         `;
 
         // Load pre-aggregated disease activity summary (much smaller than raw data)
-        this.diseaseActivitySummary = await API.get('/inflammation/disease-activity-summary', { signature_type: this.signatureType });
+        this.diseaseActivitySummary = await API.get('/atlases/inflammation/disease-activity-summary', { signature_type: this.signatureType });
         this.populateInflamDiseaseGroups();
         this.updateInflamDiseaseBar();
         this.updateInflamDiseaseHeatmap();
@@ -3608,7 +3608,7 @@ const AtlasDetailPage = {
         `;
 
         // Load raw differential data
-        this.inflamDifferentialRaw = await API.get('/inflammation/differential-raw');
+        this.inflamDifferentialRaw = await API.get('/atlases/inflammation/differential-raw');
 
         // Populate disease dropdown from raw data
         if (this.inflamDifferentialRaw && this.inflamDifferentialRaw.length > 0) {
@@ -3671,7 +3671,7 @@ const AtlasDetailPage = {
         `;
 
         // Load raw treatment response data (same format as index.html)
-        this.treatmentResponseRaw = await API.get('/inflammation/treatment-response-raw');
+        this.treatmentResponseRaw = await API.get('/atlases/inflammation/treatment-response-raw');
 
         await this.updateTreatmentResponse();
     },
@@ -3685,7 +3685,7 @@ const AtlasDetailPage = {
             <div id="disease-sankey" class="plot-container" style="height: 650px;"></div>
         `;
 
-        const data = await API.get('/inflammation/sankey');
+        const data = await API.get('/atlases/inflammation/sankey');
         if (data && data.nodes && data.links) {
             this.renderSankeyDiagram('disease-sankey', data);
         } else {
@@ -3733,7 +3733,7 @@ const AtlasDetailPage = {
     async updateInflamValidation() {
         const sigType = this.signatureType;
 
-        const data = await API.get('/inflammation/cohort-validation', { signature_type: sigType });
+        const data = await API.get('/atlases/inflammation/cohort-validation', { signature_type: sigType });
         if (data && (data.correlations?.length || data.consistency?.length)) {
             this.validationData = data;
             this.updateCohortValidation();
@@ -3955,10 +3955,10 @@ const AtlasDetailPage = {
 
     async initTemporalPanel() {
         // Load full temporal analysis
-        this.temporalData = await API.get('/inflammation/temporal') || {};
+        this.temporalData = await API.get('/atlases/inflammation/temporal') || {};
 
         // Populate disease dropdown - only diseases with multiple timepoints
-        this.temporalDiseases = await API.get('/inflammation/temporal/diseases') || [];
+        this.temporalDiseases = await API.get('/atlases/inflammation/temporal/diseases') || [];
 
         const diseaseSelect = document.getElementById('temporal-disease');
         if (diseaseSelect) {
@@ -3975,7 +3975,7 @@ const AtlasDetailPage = {
         }
 
         // Load signatures for dropdown
-        const signatures = await API.get('/inflammation/signatures', { signature_type: this.signatureType }) || [];
+        const signatures = await API.get('/atlases/inflammation/signatures', { signature_type: this.signatureType }) || [];
         const sigSelect = document.getElementById('temporal-signature');
         if (sigSelect && signatures.length > 0) {
             sigSelect.innerHTML = '<option value="">All signatures (heatmap)</option>' +
@@ -4072,13 +4072,13 @@ const AtlasDetailPage = {
 
         // Get heatmap data if multiple timepoints
         if (hasMultiple) {
-            const heatmapData = await API.get(`/inflammation/temporal/heatmap/${disease}`, {
+            const heatmapData = await API.get(`/atlases/inflammation/temporal/heatmap/${disease}`, {
                 signature_type: this.signatureType
             });
             this.renderTemporalHeatmap(heatmapData, disease);
 
             // Get activity data for table
-            const activityData = await API.get('/inflammation/temporal/activity', {
+            const activityData = await API.get('/atlases/inflammation/temporal/activity', {
                 disease: disease,
                 signature_type: this.signatureType
             }) || [];
@@ -4147,7 +4147,7 @@ const AtlasDetailPage = {
         lineChartDiv.style.display = 'block';
 
         // Get activity data
-        const activityData = await API.get('/inflammation/temporal/activity', {
+        const activityData = await API.get('/atlases/inflammation/temporal/activity', {
             disease: disease,
             signature_type: this.signatureType
         }) || [];
@@ -4318,7 +4318,7 @@ const AtlasDetailPage = {
 
     async initSeverityPanel() {
         // Load raw severity data (same format as index.html)
-        this.severityRawData = await API.get('/inflammation/severity-raw') || [];
+        this.severityRawData = await API.get('/atlases/inflammation/severity-raw') || [];
 
         if (!this.severityRawData || this.severityRawData.length === 0) {
             console.log('initSeverityPanel: No severity data available');
@@ -4668,7 +4668,7 @@ const AtlasDetailPage = {
 
     async initDriversPanel() {
         // Load raw cell drivers data (same format as index.html)
-        this.cellDriversData = await API.get('/inflammation/cell-drivers');
+        this.cellDriversData = await API.get('/atlases/inflammation/cell-drivers');
 
         if (!this.cellDriversData || !this.cellDriversData.effects) {
             console.log('initDriversPanel: No cell drivers data available');
@@ -4907,7 +4907,7 @@ const AtlasDetailPage = {
 
     async loadScatlasOverview(content) {
         // Load summary stats
-        const stats = await API.get('/scatlas/summary');
+        const stats = await API.get('/atlases/scatlas/summary');
 
         content.innerHTML = `
             <div class="overview-section">
@@ -5057,14 +5057,14 @@ const AtlasDetailPage = {
 
         // Load both normal organ and cancer data (with error handling)
         try {
-            this.scatlasOrganData = await API.get('/scatlas/organ-signatures', { signature_type: this.signatureType });
+            this.scatlasOrganData = await API.get('/atlases/scatlas/organ-signatures', { signature_type: this.signatureType });
         } catch (e) {
             console.warn('Failed to load organ signatures:', e);
             this.scatlasOrganData = null;
         }
 
         try {
-            this.cancerTypesData = await API.get('/scatlas/cancer-types-signatures', { signature_type: this.signatureType });
+            this.cancerTypesData = await API.get('/atlases/scatlas/cancer-types-signatures', { signature_type: this.signatureType });
         } catch (e) {
             console.warn('Failed to load cancer types signatures:', e);
             this.cancerTypesData = null;
@@ -5571,7 +5571,7 @@ const AtlasDetailPage = {
         `;
 
         // Load cell type signatures data
-        this.scatlasCelltypeData = await API.get('/scatlas/celltype-signatures', { signature_type: this.signatureType });
+        this.scatlasCelltypeData = await API.get('/atlases/scatlas/celltype-signatures', { signature_type: this.signatureType });
 
         if (this.scatlasCelltypeData) {
             // Store signatures for autocomplete
@@ -5864,7 +5864,7 @@ const AtlasDetailPage = {
 
         // Load adjacent tissue boxplot data (with proper statistics including by_cancer_type)
         try {
-            this.diffBoxplotData = await API.get('/scatlas/adjacent-tissue-boxplots', { signature_type: sigType });
+            this.diffBoxplotData = await API.get('/atlases/scatlas/adjacent-tissue-boxplots', { signature_type: sigType });
             console.log('Loaded boxplot data:', this.diffBoxplotData?.boxplot_data?.length || 0, 'records');
         } catch (e) {
             console.warn('Failed to load boxplot data:', e);
@@ -5873,7 +5873,7 @@ const AtlasDetailPage = {
 
         // Load organ data for normal comparison
         try {
-            this.diffOrganData = await API.get('/scatlas/organ-signatures', { signature_type: sigType });
+            this.diffOrganData = await API.get('/atlases/scatlas/organ-signatures', { signature_type: sigType });
             console.log('Loaded organ data:', this.diffOrganData?.length || 0, 'records');
         } catch (e) {
             console.warn('Failed to load organ signatures:', e);
@@ -5882,7 +5882,7 @@ const AtlasDetailPage = {
 
         // Load cancer types data
         try {
-            this.diffCancerTypesData = await API.get('/scatlas/cancer-types-signatures', { signature_type: sigType });
+            this.diffCancerTypesData = await API.get('/atlases/scatlas/cancer-types-signatures', { signature_type: sigType });
             console.log('Loaded cancer types data:', this.diffCancerTypesData?.data?.length || 0, 'records');
         } catch (e) {
             console.warn('Failed to load cancer types signatures:', e);
@@ -6454,7 +6454,7 @@ const AtlasDetailPage = {
 
     async loadImmuneData() {
         try {
-            const data = await API.get('/scatlas/immune-infiltration-full');
+            const data = await API.get('/atlases/scatlas/immune-infiltration-full');
             if (data) {
                 this.immuneData = data;
                 this.updateImmuneInfiltration();
@@ -6667,7 +6667,7 @@ const AtlasDetailPage = {
 
         // Load T cell state data
         try {
-            this.tcellStateData = await API.get('/scatlas/tcell-states', { signature_type: this.signatureType });
+            this.tcellStateData = await API.get('/atlases/scatlas/tcell-states', { signature_type: this.signatureType });
         } catch (e) {
             console.warn('Failed to load T cell state data:', e);
             this.tcellStateData = null;
@@ -6916,7 +6916,7 @@ const AtlasDetailPage = {
 
         // Load exhaustion data (use lowercase signature type for API)
         try {
-            this.exhaustionData = await API.get('/scatlas/exhaustion-comparison', { signature_type: this.signatureType });
+            this.exhaustionData = await API.get('/atlases/scatlas/exhaustion-comparison', { signature_type: this.signatureType });
         } catch (e) {
             console.warn('Failed to load exhaustion data:', e);
             this.exhaustionData = null;
@@ -7144,7 +7144,7 @@ const AtlasDetailPage = {
 
         // Load CAF data (full data with subtypes and proportions)
         try {
-            this.cafData = await API.get('/scatlas/caf-full', { signature_type: this.signatureType });
+            this.cafData = await API.get('/atlases/scatlas/caf-full', { signature_type: this.signatureType });
         } catch (e) {
             console.warn('Failed to load CAF data:', e);
             this.cafData = null;
@@ -7533,8 +7533,8 @@ const AtlasDetailPage = {
     async populateStratifiedDropdowns() {
         try {
             const [cellTypes, signatures] = await Promise.all([
-                API.get('/cima/cell-types'),
-                API.get('/cima/signatures', { signature_type: this.signatureType }),
+                API.get('/atlases/cima/cell-types'),
+                API.get('/atlases/cima/signatures', { signature_type: this.signatureType }),
             ]);
 
             const ctSelect = document.getElementById('stratified-celltype');
@@ -7556,7 +7556,7 @@ const AtlasDetailPage = {
 
     async populateSignatureDropdown(selectId) {
         try {
-            const signatures = await API.get(`/${this.currentAtlas}/signatures`, { signature_type: this.signatureType });
+            const signatures = await API.get(`/atlases/${this.currentAtlas}/signatures`, { signature_type: this.signatureType });
             const select = document.getElementById(selectId);
             if (signatures && select) {
                 select.innerHTML = signatures.map(s => `<option value="${s}">${s}</option>`).join('');
@@ -7568,7 +7568,7 @@ const AtlasDetailPage = {
 
     async populateDiseaseDropdown(selectId = 'disease-select') {
         try {
-            const diseases = await API.get('/inflammation/diseases');
+            const diseases = await API.get('/atlases/inflammation/diseases');
             const select = document.getElementById(selectId);
             if (diseases && select) {
                 select.innerHTML = '<option value="">All Diseases</option>' +
@@ -7581,8 +7581,8 @@ const AtlasDetailPage = {
 
     async populateBiochemDropdowns() {
         try {
-            const markers = await API.get('/cima/biochem-variables');
-            const signatures = await API.get('/cima/signatures', { signature_type: this.signatureType });
+            const markers = await API.get('/atlases/cima/biochem-variables');
+            const signatures = await API.get('/atlases/cima/signatures', { signature_type: this.signatureType });
 
             const markerSelect = document.getElementById('biochem-marker');
             const sigSelect = document.getElementById('biochem-signature');
@@ -7601,7 +7601,7 @@ const AtlasDetailPage = {
 
     async populateEqtlDropdowns() {
         try {
-            const signatures = await API.get('/cima/signatures', { signature_type: 'CytoSig' });
+            const signatures = await API.get('/atlases/cima/signatures', { signature_type: 'CytoSig' });
             const select = document.getElementById('eqtl-signature');
             if (signatures && select) {
                 select.innerHTML = signatures.map(s => `<option value="${s}">${s}</option>`).join('');
@@ -7638,7 +7638,7 @@ const AtlasDetailPage = {
                     params.cell_type = cellType;
                 }
 
-                const data = await API.get(`/cima/boxplots/${endpoint}/${signature}`, params);
+                const data = await API.get(`/atlases/cima/boxplots/${endpoint}/${signature}`, params);
 
                 if (data && data.length > 0) {
                     const titleCellType = cellType === 'All' ? '' : ` (${cellType})`;
@@ -7659,7 +7659,7 @@ const AtlasDetailPage = {
             try {
                 heatmapContainer.innerHTML = '<p class="loading">Loading heatmap...</p>';
 
-                const data = await API.get(`/cima/boxplots/${endpoint}/${signature}/heatmap`, {
+                const data = await API.get(`/atlases/cima/boxplots/${endpoint}/${signature}/heatmap`, {
                     signature_type: this.signatureType
                 });
 
@@ -7738,7 +7738,7 @@ const AtlasDetailPage = {
                     params.cell_type = cellType;
                 }
 
-                const data = await API.get(`/inflammation/boxplots/${endpoint}/${signature}`, params);
+                const data = await API.get(`/atlases/inflammation/boxplots/${endpoint}/${signature}`, params);
 
                 if (data && data.length > 0) {
                     const titleCellType = cellType === 'All' ? '' : ` (${cellType})`;
@@ -7759,7 +7759,7 @@ const AtlasDetailPage = {
             try {
                 heatmapContainer.innerHTML = '<p class="loading">Loading heatmap...</p>';
 
-                const data = await API.get(`/inflammation/boxplots/${endpoint}/${signature}/heatmap`, {
+                const data = await API.get(`/atlases/inflammation/boxplots/${endpoint}/${signature}/heatmap`, {
                     signature_type: this.signatureType
                 });
 
@@ -7784,7 +7784,7 @@ const AtlasDetailPage = {
         if (!plotContainer) return;
 
         try {
-            const data = await API.get('/cima/differential', {
+            const data = await API.get('/atlases/cima/differential', {
                 comparison, signature_type: this.signatureType,
             });
 
@@ -7826,7 +7826,7 @@ const AtlasDetailPage = {
         if (!plotContainer) return;
 
         try {
-            const data = await API.get('/inflammation/disease-activity', {
+            const data = await API.get('/atlases/inflammation/disease-activity', {
                 disease, signature_type: this.signatureType,
             });
 
@@ -8245,7 +8245,7 @@ const AtlasDetailPage = {
 
         try {
             // Endpoint format: /cima/scatter/biochem/{signature}/{variable}
-            const data = await API.get(`/cima/scatter/biochem/${signature}/${marker}`, {
+            const data = await API.get(`/atlases/cima/scatter/biochem/${signature}/${marker}`, {
                 signature_type: this.signatureType
             });
             if (data && data.x && data.y) {
@@ -8267,7 +8267,7 @@ const AtlasDetailPage = {
         const tableContainer = document.getElementById('eqtl-table');
 
         try {
-            const data = await API.get('/cima/eqtl', { signature, search, limit: 20 });
+            const data = await API.get('/atlases/cima/eqtl', { signature, search, limit: 20 });
 
             if (data && data.length > 0) {
                 // Render as table

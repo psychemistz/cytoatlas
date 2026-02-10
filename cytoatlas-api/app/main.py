@@ -36,7 +36,6 @@ from app.routers import (
     websocket_router,
 )
 from app.routers.pipeline import router as pipeline_router
-from app.routers.v2 import v2_atlases_router, v2_validation_router
 
 settings = get_settings()
 
@@ -48,24 +47,20 @@ tags_metadata = [
         "description": "Health check and system status endpoints",
     },
     {
-        "name": "Atlases (Unified API)",
-        "description": "Unified dynamic API for all atlases. Use these endpoints instead of atlas-specific routes. "
-        "Supports built-in atlases (CIMA, Inflammation, scAtlas) and user-registered atlases.",
+        "name": "Atlas Management",
+        "description": "Atlas registry management: list, register, delete, and query atlas metadata.",
     },
     {
-        "name": "CIMA Atlas (Legacy)",
-        "description": "**DEPRECATED**: Use `/atlases/cima/...` instead. Legacy CIMA-specific endpoints. "
-        "Kept for backward compatibility but will be removed in a future version.",
+        "name": "CIMA Atlas",
+        "description": "CIMA-specific endpoints: age/BMI correlations, biochemistry, metabolites, population stratification, eQTL.",
     },
     {
-        "name": "Inflammation Atlas (Legacy)",
-        "description": "**DEPRECATED**: Use `/atlases/inflammation/...` instead. Legacy Inflammation-specific endpoints. "
-        "Kept for backward compatibility but will be removed in a future version.",
+        "name": "Inflammation Atlas",
+        "description": "Inflammation Atlas endpoints: disease activity, treatment response, temporal dynamics, severity, cohort validation.",
     },
     {
-        "name": "scAtlas (Legacy)",
-        "description": "**DEPRECATED**: Use `/atlases/scatlas/...` instead. Legacy scAtlas-specific endpoints. "
-        "Kept for backward compatibility but will be removed in a future version.",
+        "name": "scAtlas",
+        "description": "scAtlas endpoints: organ signatures, cancer comparison, immune infiltration, T-cell states, exhaustion, CAF.",
     },
     {
         "name": "Cross-Atlas",
@@ -205,17 +200,6 @@ def create_app() -> FastAPI:
             if not request.url.path.endswith("/health") and "/ws" not in request.url.path:
                 response.headers["Cache-Control"] = "public, max-age=3600"
 
-        # Add deprecation header for legacy endpoints
-        if request.url.path.startswith(f"{settings.api_v1_prefix}/cima") or \
-           request.url.path.startswith(f"{settings.api_v1_prefix}/inflammation") or \
-           request.url.path.startswith(f"{settings.api_v1_prefix}/scatlas"):
-            # Extract atlas name from path
-            path_parts = request.url.path.split("/")
-            if len(path_parts) >= 4:
-                atlas_name = path_parts[3]  # /api/v1/cima/...
-                response.headers["X-Deprecated"] = f"Use /atlases/{atlas_name}/... instead"
-                response.headers["Deprecation"] = "true"
-
         return response
 
     # Middleware (NOTE: FastAPI processes in REVERSE order of add_middleware calls)
@@ -272,8 +256,8 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router, prefix=api_prefix)
     app.include_router(auth_router, prefix=api_prefix)
-    app.include_router(atlases_router, prefix=api_prefix)  # Unified dynamic API
-    app.include_router(cima_router, prefix=api_prefix)      # Legacy CIMA-specific
+    app.include_router(atlases_router, prefix=api_prefix)  # Atlas management
+    app.include_router(cima_router, prefix=api_prefix)
     app.include_router(inflammation_router, prefix=api_prefix)
     app.include_router(scatlas_router, prefix=api_prefix)
     app.include_router(cross_atlas_router, prefix=api_prefix)
@@ -287,11 +271,6 @@ def create_app() -> FastAPI:
     app.include_router(chat_router, prefix=api_prefix)
     app.include_router(websocket_router, prefix=api_prefix)
     app.include_router(pipeline_router, prefix=api_prefix)  # Pipeline management
-
-    # API v2 routers (unified endpoints with DuckDB backend)
-    v2_prefix = settings.api_v2_prefix
-    app.include_router(v2_atlases_router, prefix=v2_prefix)
-    app.include_router(v2_validation_router, prefix=v2_prefix)
 
     # Mount static files (CSS, JS, assets)
     if STATIC_DIR.exists():

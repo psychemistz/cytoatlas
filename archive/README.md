@@ -1,15 +1,18 @@
 # Archive
 
-Legacy and superseded files moved here during the comprehensive project restructuring on 2026-02-09. These files are preserved for reference but are no longer part of the active codebase.
+Legacy and superseded files moved here during project maintenance. These files are preserved for reference but are no longer part of the active codebase.
 
 ## Directory Structure
 
 | Directory | Contents |
 |-----------|----------|
-| `scripts/generation/` | One-off data generation and visualization scripts (e.g., atlas comparisons, boxplots, signature correlations) |
-| `scripts/regeneration/` | Re-run and patching scripts used to fix or regenerate specific outputs |
-| `scripts/utility/` | Cell type mapping, panel validation, pseudobulk creation, gene name fixing, and other preprocessing utilities |
-| `scripts/early_pipeline/` | Early pipeline iterations (04-13) superseded by the current pipeline (00-06 + 07, 10, 11, 14-16) |
+| `agents/` | Sprint-specific agent prompts (orchestrator, code_reviewer, frontend_checker, etc.) |
+| `docs/` | Stale documentation (DECISIONS.md, QA_LOG.md) |
+| `hooks/` | Retired git hooks (post-decision.sh) |
+| `scripts/generation/` | One-off data generation and visualization scripts |
+| `scripts/regeneration/` | Re-run and patching scripts |
+| `scripts/utility/` | Cell type mapping, panel validation, orchestration scripts, R validation |
+| `scripts/early_pipeline/` | Early pipeline iterations (04-13) superseded by current pipeline |
 | `scripts/alphagenome/` | AlphaGenome experimental pipeline (stages 1-5) |
 | `scripts/future/` | Placeholder scripts for future atlases (NicheFormer, scGPT, cellxgene) |
 | `scripts/preprocessing/` | Superseded preprocessing scripts (singlecell validation) |

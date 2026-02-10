@@ -26,9 +26,8 @@ from app.schemas.inflammation import (
 from app.services.inflammation_service import InflammationService
 
 router = APIRouter(
-    prefix="/inflammation",
-    tags=["Inflammation Atlas (Legacy)"],
-    deprecated=True,
+    prefix="/atlases/inflammation",
+    tags=["Inflammation Atlas"],
 )
 
 

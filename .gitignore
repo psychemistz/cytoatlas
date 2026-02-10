@@ -34,6 +34,7 @@ sample_data/
 # Logs
 *.log
 logs/agent_sessions/*.log
+logs/*.json
 
 # Jupyter Notebook
 .ipynb_checkpoints/

@@ -1,10 +1,8 @@
 """
-Unified Atlas API endpoints.
+Atlas management endpoints.
 
-This router provides a dynamic API that works with any registered atlas,
-including built-in atlases (CIMA, Inflammation, scAtlas) and user-registered atlases.
-
-Endpoints follow the pattern: /api/v1/atlases/{atlas_name}/...
+Provides atlas registry operations: list, register, delete, info, and features.
+Atlas-specific data endpoints live in cima.py, inflammation.py, scatlas.py.
 """
 
 from typing import Annotated
@@ -13,7 +11,6 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query
 
 from app.schemas.atlas import (
     AtlasListResponse,
-    AtlasMetadata,
     AtlasRegisterRequest,
     AtlasResponse,
     AtlasStatus,
@@ -21,7 +18,7 @@ from app.schemas.atlas import (
 from app.services.atlas_registry import AtlasRegistry, get_registry
 from app.services.generic_atlas_service import GenericAtlasService
 
-router = APIRouter(prefix="/atlases", tags=["Atlases (Unified API)"])
+router = APIRouter(prefix="/atlases", tags=["Atlas Management"])
 
 
 def get_atlas_service(
@@ -170,196 +167,9 @@ async def delete_atlas(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# ==================== Generic Data Endpoints ====================
-
-
-@router.get("/{atlas_name}/summary")
-async def get_atlas_summary(
-    service: Annotated[GenericAtlasService, Depends(get_atlas_service)],
-) -> dict:
-    """Get summary statistics for an atlas."""
-    return await service.get_summary()
-
-
-@router.get("/{atlas_name}/cell-types")
-async def get_cell_types(
-    service: Annotated[GenericAtlasService, Depends(get_atlas_service)],
-) -> list[str]:
-    """Get list of cell types in the atlas."""
-    return await service.get_cell_types()
-
-
-@router.get("/{atlas_name}/signatures")
-async def get_signatures(
-    service: Annotated[GenericAtlasService, Depends(get_atlas_service)],
-    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
-) -> list[str]:
-    """Get list of signatures available in the atlas."""
-    return await service.get_signatures(signature_type)
-
-
 @router.get("/{atlas_name}/features")
 async def get_features(
     service: Annotated[GenericAtlasService, Depends(get_atlas_service)],
 ) -> list[str]:
     """Get list of available features/analyses for this atlas."""
     return service.get_available_features()
-
-
-@router.get("/{atlas_name}/activity")
-async def get_activity(
-    service: Annotated[GenericAtlasService, Depends(get_atlas_service)],
-    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
-    cell_type: str | None = Query(None),
-    limit: int = Query(1000, ge=1, le=10000),
-    offset: int = Query(0, ge=0),
-) -> list[dict]:
-    """
-    Get activity data (cell type x signature matrix).
-
-    Returns mean activity values for each cell type and signature combination.
-    """
-    return await service.get_activity(signature_type, cell_type, limit, offset)
-
-
-@router.get("/{atlas_name}/correlations/{variable}")
-async def get_correlations(
-    variable: str = Path(..., description="Variable to correlate (e.g., age, bmi)"),
-    service: GenericAtlasService = Depends(get_atlas_service),
-    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
-    cell_type: str | None = Query(None),
-    limit: int = Query(1000, ge=1, le=10000),
-) -> list[dict]:
-    """
-    Get correlation data between signatures and a variable.
-
-    Available variables depend on the atlas (use /features endpoint to check).
-    """
-    # Check if feature is available
-    available_vars = service.get_available_variables()
-    if variable not in available_vars:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Variable '{variable}' not available for this atlas. "
-            f"Available: {available_vars}",
-        )
-
-    return await service.get_correlations(variable, signature_type, cell_type, limit)
-
-
-@router.get("/{atlas_name}/differential")
-async def get_differential(
-    service: Annotated[GenericAtlasService, Depends(get_atlas_service)],
-    comparison: str | None = Query(None, description="Comparison type"),
-    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
-    cell_type: str | None = Query(None),
-    limit: int = Query(1000, ge=1, le=10000),
-) -> list[dict]:
-    """
-    Get differential analysis results.
-
-    Returns log2 fold change and significance for each signature.
-    """
-    if not service.supports_feature("differential"):
-        raise HTTPException(
-            status_code=400,
-            detail="Differential analysis not available for this atlas",
-        )
-    return await service.get_differential(comparison, signature_type, cell_type, limit)
-
-
-# ==================== Atlas-Specific Endpoints ====================
-
-
-@router.get("/{atlas_name}/diseases")
-async def get_diseases(
-    service: Annotated[GenericAtlasService, Depends(get_atlas_service)],
-) -> list[str]:
-    """
-    Get list of diseases (for disease-focused atlases).
-
-    Returns 400 if atlas doesn't have disease data.
-    """
-    if not service.supports_feature("disease_activity"):
-        raise HTTPException(
-            status_code=400,
-            detail="Disease data not available for this atlas",
-        )
-    return await service.get_diseases()
-
-
-@router.get("/{atlas_name}/organs")
-async def get_organs(
-    service: Annotated[GenericAtlasService, Depends(get_atlas_service)],
-) -> list[str]:
-    """
-    Get list of organs (for tissue atlases).
-
-    Returns 400 if atlas doesn't have organ data.
-    """
-    if not service.supports_feature("organ_signatures"):
-        raise HTTPException(
-            status_code=400,
-            detail="Organ data not available for this atlas",
-        )
-    return await service.get_organs()
-
-
-@router.get("/{atlas_name}/boxplots/{variable}/{signature}")
-async def get_boxplot_data(
-    variable: str = Path(..., description="Variable name (e.g., age, bmi)"),
-    signature: str = Path(..., description="Signature name"),
-    service: GenericAtlasService = Depends(get_atlas_service),
-    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
-) -> dict:
-    """
-    Get boxplot data for variable vs signature.
-
-    Returns distribution of signature activity across variable bins.
-    """
-    available_vars = service.get_available_variables()
-    if variable not in available_vars:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Variable '{variable}' not available for this atlas. "
-            f"Available: {available_vars}",
-        )
-
-    result = await service.get_boxplot_data(variable, signature, signature_type)
-    if not result:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No boxplot data found for {variable} vs {signature}",
-        )
-
-    return result
-
-
-@router.get("/{atlas_name}/heatmap/activity")
-async def get_heatmap_data(
-    service: Annotated[GenericAtlasService, Depends(get_atlas_service)],
-    data_type: str = Query("activity", pattern="^(activity|correlation|differential)$"),
-    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
-    limit: int = Query(100, ge=1, le=500),
-) -> list[dict]:
-    """
-    Get heatmap data (cell type x signature matrix).
-
-    Returns data suitable for generating heatmaps.
-    """
-    return await service.get_heatmap_data(data_type, signature_type, limit)
-
-
-@router.get("/{atlas_name}/cell-type-correlations")
-async def get_cell_type_correlations(
-    service: Annotated[GenericAtlasService, Depends(get_atlas_service)],
-    signature_type: str = Query("CytoSig", pattern="^(CytoSig|SecAct)$"),
-    limit: int = Query(1000, ge=1, le=10000),
-) -> list[dict]:
-    """
-    Get cell type correlations (signature-signature co-expression).
-
-    Returns correlation matrix showing which signatures are co-expressed
-    across cell types.
-    """
-    return await service.get_cell_type_correlations(signature_type, limit)
