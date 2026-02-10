@@ -141,6 +141,9 @@ class Settings(BaseSettings):
     sqlite_scatter_db_path: Path = Field(
         default=Path("/vf/users/parks34/projects/2secactpy/visualization/data/validation_scatter.db")
     )
+    sqlite_singlecell_db_path: Path = Field(
+        default=Path("/vf/users/parks34/projects/2secactpy/visualization/data/singlecell_scatter.db")
+    )
 
     @property
     def use_duckdb(self) -> bool:

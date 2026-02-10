@@ -20,6 +20,68 @@ from app.repositories.json_repository import JSONRepository
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+# ---------------------------------------------------------------------------
+#  JSON filename → DuckDB table name mapping
+#
+#  Used by load_json() to transparently query DuckDB instead of reading
+#  JSON files from disk.  Keys are the bare JSON filenames (no path),
+#  values are the DuckDB table names from convert_data_to_duckdb.py.
+# ---------------------------------------------------------------------------
+_JSON_TO_TABLE: dict[str, str] = {
+    # Large visualization files (highest-impact for DuckDB migration)
+    "activity_boxplot.json": "activity",
+    "inflammation_disease.json": "inflammation_disease",
+    "inflammation_disease_filtered.json": "inflammation_disease_filtered",
+    "singlecell_activity.json": "singlecell_activity",
+    "scatlas_celltypes.json": "scatlas_celltypes",
+    "age_bmi_boxplots.json": "age_bmi_boxplots",
+    "age_bmi_boxplots_filtered.json": "age_bmi_boxplots_filtered",
+    "bulk_rnaseq_validation.json": "bulk_validation",
+    # Medium-size flat JSON files
+    "inflammation_severity.json": "inflammation_severity",
+    "inflammation_severity_filtered.json": "inflammation_severity_filtered",
+    "scatlas_organs.json": "scatlas_organs",
+    "gene_expression.json": "gene_expression",
+    "expression_boxplot.json": "expression_boxplot",
+    "cima_celltype.json": "cima_celltype",
+    "inflammation_celltype.json": "inflammation_celltype",
+    "cima_differential.json": "cima_differential",
+    "inflammation_differential.json": "inflammation_differential",
+    "cima_metabolites_top.json": "cima_metabolites_top",
+    "scatlas_organs_top.json": "scatlas_organs_top",
+    # Single-cell files
+    "cima_singlecell_cytosig.json": "cima_singlecell_cytosig",
+    "scatlas_normal_singlecell_cytosig.json": "scatlas_normal_singlecell_cytosig",
+    "scatlas_cancer_singlecell_cytosig.json": "scatlas_cancer_singlecell_cytosig",
+    "scatlas_normal_singlecell_secact.json": "scatlas_normal_singlecell_secact",
+    "scatlas_cancer_singlecell_secact.json": "scatlas_cancer_singlecell_secact",
+    # Nested JSON files (flattened in DuckDB)
+    "cima_correlations.json": "cima_correlations",
+    "inflammation_correlations.json": "inflammation_correlations",
+    "inflammation_celltype_correlations.json": "inflammation_celltype_correlations",
+    "cima_celltype_correlations.json": "cima_celltype_correlations",
+    "exhaustion.json": "exhaustion",
+    "immune_infiltration.json": "immune_infiltration",
+    "caf_signatures.json": "caf_signatures",
+    "adjacent_tissue.json": "adjacent_tissue",
+    "cancer_comparison.json": "cancer_comparison",
+    "cancer_types.json": "cancer_types",
+    "organ_cancer_matrix.json": "organ_cancer_matrix",
+    "cross_atlas.json": "cross_atlas",
+    "cohort_validation.json": "cohort_validation",
+    # Additional files loaded by services (auto-discovered in DuckDB conversion)
+    "cima_biochem_scatter.json": "cima_biochem_scatter",
+    "cima_eqtl.json": "cima_eqtl",
+    "cima_eqtl_top.json": "cima_eqtl_top",
+    "cima_population_stratification.json": "cima_population_stratification",
+    "disease_sankey.json": "disease_sankey",
+    "gene_list.json": "gene_list",
+    "inflammation_cell_drivers.json": "inflammation_cell_drivers",
+    "inflammation_longitudinal.json": "inflammation_longitudinal",
+    "summary_stats.json": "summary_stats",
+    "treatment_response.json": "treatment_response",
+}
+
 # Lazy-initialized DuckDB repository singleton
 _duckdb_repo = None
 
@@ -31,7 +93,11 @@ def _get_duckdb_repository():
         try:
             from app.repositories.duckdb_repository import DuckDBRepository
             _duckdb_repo = DuckDBRepository(str(settings.duckdb_atlas_path))
-            logger.info("DuckDB repository initialized: %s", settings.duckdb_atlas_path)
+            if _duckdb_repo.available:
+                logger.info("DuckDB repository initialized: %s", settings.duckdb_atlas_path)
+            else:
+                logger.warning("DuckDB file not found, falling back to JSON")
+                _duckdb_repo = None
         except Exception as e:
             logger.warning("DuckDB repository unavailable, falling back to JSON: %s", e)
     return _duckdb_repo
@@ -66,19 +132,39 @@ class BaseService:
 
     async def load_json(self, filename: str, subdir: str | None = None) -> Any:
         """
-        Load JSON data from visualization directory using orjson (2-3x faster).
+        Load data, preferring DuckDB when available, else JSON file.
+
+        When a DuckDB backend is configured and the requested file has a
+        corresponding DuckDB table (see ``_JSON_TO_TABLE``), data is
+        fetched from DuckDB via ``get_data()``.  Otherwise falls back to
+        reading the JSON file from disk using orjson.
 
         Args:
             filename: JSON filename
-            subdir: Optional subdirectory
+            subdir: Optional subdirectory (bypasses DuckDB for subdir loads)
 
         Returns:
-            Parsed JSON data
+            Parsed data (list[dict] from DuckDB or raw JSON)
 
         Raises:
-            FileNotFoundError: If file doesn't exist
+            FileNotFoundError: If file doesn't exist (and no DuckDB fallback)
             ValueError: If path traversal is detected
         """
+        # Try DuckDB for top-level viz data files (not subdirectory loads)
+        if subdir is None:
+            duckdb_repo = _get_duckdb_repository()
+            table_name = _JSON_TO_TABLE.get(filename)
+            if duckdb_repo is not None and table_name is not None:
+                try:
+                    return await duckdb_repo.get_data(table_name)
+                except Exception as e:
+                    logger.debug(
+                        "DuckDB query failed for %s (table=%s), "
+                        "falling back to JSON: %s",
+                        filename, table_name, e,
+                    )
+
+        # Fallback: load from JSON file
         if subdir:
             path = self.viz_data_path / subdir / filename
         else:

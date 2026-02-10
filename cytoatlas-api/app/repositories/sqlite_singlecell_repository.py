@@ -30,9 +30,7 @@ class SQLiteSingleCellRepository:
 
     def __init__(self, db_path: Path | None = None):
         settings = get_settings()
-        self._db_path = db_path or (
-            Path(settings.viz_data_path) / "singlecell_scatter.db"
-        )
+        self._db_path = db_path or settings.sqlite_singlecell_db_path
         self._conn: sqlite3.Connection | None = None
         self._available: bool | None = None
 
