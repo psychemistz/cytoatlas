@@ -13,7 +13,7 @@ Legacy and superseded files moved here during project maintenance. These files a
 | `scripts/regeneration/` | Re-run and patching scripts |
 | `scripts/utility/` | Cell type mapping, panel validation, orchestration scripts, R validation |
 | `scripts/early_pipeline/` | Early pipeline iterations (04-13) superseded by current pipeline |
-| `scripts/alphagenome/` | AlphaGenome experimental pipeline (stages 1-5) |
+| `scripts/alphagenome/` | **Relocated** to `/data/parks34/projects/4germicb/data/alphagenome_eqtl/cytoatlas_outputs/` |
 | `scripts/future/` | Placeholder scripts for future atlases (NicheFormer, scGPT, cellxgene) |
 | `scripts/preprocessing/` | Superseded preprocessing scripts (singlecell validation) |
 | `slurm/` | Legacy SLURM job scripts for archived analyses |

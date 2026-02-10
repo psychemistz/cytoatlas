@@ -457,7 +457,7 @@ All data access logged to JSONL: `{timestamp, user_id, email, ip_address, method
 - NicheFormer spatial transcriptomics integration (~30M cells)
 - scGPT cohort integration (~35M cells)
 - cellxgene Census cohort integration
-- AlphaGenome eQTL analysis (see `docs/pipelines/alphagenome_plan.md`)
+- AlphaGenome eQTL analysis (relocated to `/data/parks34/projects/4germicb/data/alphagenome_eqtl/cytoatlas_outputs/`)
 
 ### Archive
 
