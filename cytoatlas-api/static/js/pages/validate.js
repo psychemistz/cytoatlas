@@ -1548,9 +1548,16 @@ const ValidatePage = {
         if (!selectEl) return;
         const lowerQ = query.toLowerCase();
         const options = selectEl.options;
+        let firstVisible = null;
         for (let i = 0; i < options.length; i++) {
             const match = options[i].textContent.toLowerCase().includes(lowerQ) || !lowerQ;
             options[i].style.display = match ? '' : 'none';
+            if (match && firstVisible === null) firstVisible = options[i];
+        }
+        // Auto-select first visible option and trigger change
+        if (firstVisible && selectEl.value !== firstVisible.value) {
+            selectEl.value = firstVisible.value;
+            selectEl.dispatchEvent(new Event('change'));
         }
     },
 };
