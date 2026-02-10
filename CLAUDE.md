@@ -452,10 +452,7 @@ All data access logged to JSONL: `{timestamp, user_id, email, ip_address, method
 - Pipeline CLI: Fixed export command (DuckDBExporter→DuckDBWriter), 21 CLI unit tests
 - Script-to-pipeline equivalence tests: 30 tests across 2 test files (CSV↔JSON, JSON↔DuckDB)
 - SLURM consolidation: `scripts/slurm/jobs.yaml` + `submit_jobs.py` replaces 28 individual scripts
-
-### In Progress
-
-- [ ] Resampled bootstrap: Inflammation main/val/ext (needs HPC: generate resampled H5ADs, then run `16_resampled_validation.py`)
+- Resampled bootstrap: All atlases complete (CIMA, Inflammation main/val/ext, scAtlas normal/cancer) — 36 scatter JSONs, 14 correlation CSVs, 18 activity H5ADs
 
 ### Future Work
 

@@ -1542,36 +1542,39 @@ const ValidatePage = {
         } else if (hasActivity) {
             // Per-celltype mean activity bar chart (from singlecell_activity.json)
             const sorted = [...stats].sort((a, b) => (b.mean_activity || 0) - (a.mean_activity || 0));
-            const top20 = sorted.slice(0, 20);
             const getColor = (v) => {
                 if (v > 0.5) return '#1a9850';
                 if (v > 0) return '#91cf60';
                 if (v > -0.5) return '#fee08b';
                 return '#d73027';
             };
+            // Dynamic height: 18px per bar, min 350px
+            const plotHeight = Math.max(350, sorted.length * 18 + 80);
+            div.style.height = plotHeight + 'px';
             Plotly.newPlot(div, [{
                 type: 'bar',
-                y: top20.map(s => s.celltype.replace(/_/g, ' ')),
-                x: top20.map(s => s.mean_activity || 0),
+                y: sorted.map(s => s.celltype.replace(/_/g, ' ')),
+                x: sorted.map(s => s.mean_activity || 0),
                 orientation: 'h',
-                marker: { color: top20.map(s => getColor(s.mean_activity || 0)) },
-                text: top20.map(s => {
+                marker: { color: sorted.map(s => getColor(s.mean_activity || 0)) },
+                text: sorted.map(s => {
                     const act = (s.mean_activity || 0).toFixed(3);
                     const n = (s.n_cells || 0).toLocaleString();
                     return `act=${act}, n=${n}`;
                 }),
                 textposition: 'outside',
-                hovertemplate: '%{y}<br>Mean activity = %{x:.3f}<extra></extra>',
+                hovertemplate: '%{y}<br>Mean activity = %{x:.3f}<br>n = %{text}<extra></extra>',
                 error_x: {
                     type: 'data',
-                    array: top20.map(s => s.std_activity || 0),
+                    array: sorted.map(s => s.std_activity || 0),
                     visible: true,
                     color: 'rgba(0,0,0,0.3)',
                 },
             }], {
+                height: plotHeight,
                 xaxis: { title: 'Mean Activity (z-score)' },
-                yaxis: { automargin: true, autorange: 'reversed' },
-                margin: { l: 150, r: 100, t: 30, b: 50 },
+                yaxis: { automargin: true, autorange: 'reversed', tickfont: { size: 9 } },
+                margin: { l: 180, r: 100, t: 30, b: 50 },
             }, { responsive: true });
         } else {
             div.innerHTML = '<p class="no-data">No per-celltype data available</p>';
@@ -1588,13 +1591,12 @@ const ValidatePage = {
             return;
         }
 
-        // Sort by mean_activity descending and take top 15 for readability
+        // Sort by mean_activity descending, show all cell types
         const sorted = [...stats]
             .filter(s => s.mean_activity != null && s.n_cells >= 10)
             .sort((a, b) => (b.mean_activity || 0) - (a.mean_activity || 0));
-        const top15 = sorted.slice(0, 15);
 
-        if (!top15.length) {
+        if (!sorted.length) {
             div.innerHTML = '<p class="no-data">No cell types with sufficient data</p>';
             return;
         }
@@ -1605,25 +1607,31 @@ const ValidatePage = {
             '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5',
         ];
 
-        // Simulate box-like display: bar at mean, error bars at ±std
+        // Dynamic height: 18px per bar, min 350px
+        const plotHeight = Math.max(350, sorted.length * 18 + 80);
+        div.style.height = plotHeight + 'px';
+
+        // Horizontal bar with error bars (mean ± std)
         Plotly.newPlot(div, [{
             type: 'bar',
-            x: top15.map(s => s.celltype.replace(/_/g, ' ')),
-            y: top15.map(s => s.mean_activity || 0),
-            marker: { color: top15.map((_, i) => colors[i % colors.length]) },
-            error_y: {
+            y: sorted.map(s => s.celltype.replace(/_/g, ' ')),
+            x: sorted.map(s => s.mean_activity || 0),
+            orientation: 'h',
+            marker: { color: sorted.map((_, i) => colors[i % colors.length]) },
+            error_x: {
                 type: 'data',
-                array: top15.map(s => s.std_activity || 0),
+                array: sorted.map(s => s.std_activity || 0),
                 visible: true,
                 color: 'rgba(0,0,0,0.4)',
             },
-            hovertemplate: '%{x}<br>Mean: %{y:.3f}<br>n=%{text}<extra></extra>',
-            text: top15.map(s => (s.n_cells || 0).toLocaleString()),
+            hovertemplate: '%{y}<br>Mean: %{x:.3f}<br>n=%{text}<extra></extra>',
+            text: sorted.map(s => (s.n_cells || 0).toLocaleString()),
         }], {
-            yaxis: { title: 'Activity (z-score)' },
-            margin: { l: 60, r: 20, t: 30, b: 120 },
+            height: plotHeight,
+            xaxis: { title: 'Activity (z-score)' },
+            yaxis: { automargin: true, autorange: 'reversed', tickfont: { size: 9 } },
+            margin: { l: 180, r: 80, t: 30, b: 50 },
             showlegend: false,
-            xaxis: { tickangle: -45 },
         }, { responsive: true });
     },
 
