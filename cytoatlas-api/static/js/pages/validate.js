@@ -273,6 +273,7 @@ const ValidatePage = {
         ];
 
         const traces = cats.map((cat, i) => {
+            const catName = typeof cat === 'string' ? cat : (cat.label || cat.key || String(cat));
             let yVals = [];
             if (target === '_all') {
                 // All targets: collect rho values for this category from all targets
@@ -295,7 +296,7 @@ const ValidatePage = {
             return {
                 type: 'box',
                 y: yVals,
-                name: cat.replace(/_/g, ' '),
+                name: catName.replace(/_/g, ' '),
                 marker: { color: colors[i % colors.length] },
                 boxpoints: yVals.length < 50 ? 'all' : 'outliers',
                 jitter: 0.3,
