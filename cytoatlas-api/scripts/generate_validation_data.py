@@ -1257,9 +1257,9 @@ def main():
     )
     parser.add_argument(
         "--signature-type",
-        choices=["CytoSig", "SecAct", "all"],
+        choices=["CytoSig", "LinCytoSig", "SecAct", "all"],
         default="all",
-        help="Signature type (default: all = CytoSig + SecAct)",
+        help="Signature type (default: all = CytoSig + LinCytoSig + SecAct)",
     )
 
     args = parser.parse_args()
