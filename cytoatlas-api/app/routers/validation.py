@@ -733,8 +733,7 @@ async def get_singlecell_full_scatter(
     sigtype: str = Query("cytosig", description="Signature type"),
     service: ValidationService = Depends(get_validation_service),
 ) -> dict:
-    """Get single-cell scatter data: sampled points + density + per-celltype activity."""
-    import numpy as np
+    """Get single-cell scatter data: sampled points + per-celltype activity."""
     from scipy import stats as sp_stats
 
     sig_type_map = {"cytosig": "CytoSig", "lincytosig": "LinCytoSig", "secact": "SecAct"}
@@ -757,7 +756,7 @@ async def get_singlecell_full_scatter(
     celltypes = sorted(ct_set) if ct_set else ["all"]
     ct_to_idx = {ct: i for i, ct in enumerate(celltypes)}
 
-    # Convert sampled_points to compact format and collect arrays for density/stats
+    # Convert sampled_points to compact format: [expr, act, ct_idx, 0, is_expressing]
     points = []
     expr_vals = []
     act_vals = []
@@ -777,29 +776,6 @@ async def get_singlecell_full_scatter(
         rho, pval = sp_stats.spearmanr(expr_vals, act_vals)
         rho = round(float(rho), 4) if rho is not None else None
         pval = float(f"{pval:.2e}") if pval is not None else None
-
-    # Compute 2D density histogram from sampled points
-    density = None
-    if len(expr_vals) >= 20:
-        xs = np.array(expr_vals)
-        ys = np.array(act_vals)
-        n_bins = 50
-        x_min, x_max = float(xs.min()), float(xs.max())
-        y_min, y_max = float(ys.min()), float(ys.max())
-        x_pad = max((x_max - x_min) * 0.02, 0.01)
-        y_pad = max((y_max - y_min) * 0.02, 0.01)
-        counts, _xedges, _yedges = np.histogram2d(
-            xs, ys, bins=n_bins,
-            range=[[x_min - x_pad, x_max + x_pad], [y_min - y_pad, y_max + y_pad]],
-        )
-        # Transpose: histogram2d returns (x_bins, y_bins), Plotly heatmap expects (y, x)
-        counts_t = counts.T
-        density = {
-            "n_bins": n_bins,
-            "counts": [int(v) for v in counts_t.ravel()],
-            "expr_range": [round(x_min - x_pad, 4), round(x_max + x_pad, 4)],
-            "act_range": [round(y_min - y_pad, 4), round(y_max + y_pad, 4)],
-        }
 
     # Load per-celltype activity stats from singlecell_activity JSON files
     celltype_stats = await service.get_singlecell_activity_by_celltype(
@@ -825,7 +801,6 @@ async def get_singlecell_full_scatter(
         "mean_activity_expressing": mean_expr,
         "mean_activity_non_expressing": mean_non,
         "activity_diff": activity_diff,
-        "density": density,
         "sampled": {
             "celltypes": celltypes,
             "points": points,

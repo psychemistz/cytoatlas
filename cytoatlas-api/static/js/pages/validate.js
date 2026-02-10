@@ -1151,7 +1151,7 @@ const ValidatePage = {
         content.innerHTML = `
             <div class="tab-panel">
                 <h3>Single-Cell Validation (All Cells)</h3>
-                <p>Single-cell level validation using all cells (no aggregation). The density heatmap shows the joint distribution of expression and activity across millions of cells; the scatter overlay shows a 50K stratified sample colored by cell type. Per-cell-type bar charts show how correlation varies across populations.</p>
+                <p>Single-cell level validation using all cells (no aggregation). Each point represents a sampled cell colored by expressing status. Per-cell-type bar charts show how activity varies across populations.</p>
 
                 <div class="filter-bar">
                     ${this._atlasSelectHTML('val-sc-atlas', this.SC_FULL_ATLAS_OPTIONS, this.singleCell.atlas)}
@@ -1173,7 +1173,7 @@ const ValidatePage = {
                 <div class="panel-grid">
                     <div class="panel" style="grid-column: span 2;">
                         <div class="viz-title">Expression vs Activity</div>
-                        <div class="viz-subtitle" id="val-sc-subtitle">Density from all cells + 50K scatter overlay</div>
+                        <div class="viz-subtitle" id="val-sc-subtitle">Each point = one sampled cell</div>
                         <div id="val-sc-scatter" class="plot-container" style="height: 500px;"></div>
                     </div>
                 </div>
@@ -1353,7 +1353,7 @@ const ValidatePage = {
         const subtitle = document.getElementById('val-sc-subtitle');
         if (subtitle) {
             const nSampled = data.sampled ? data.sampled.points.length : 0;
-            subtitle.textContent = `Density heatmap + ${nSampled.toLocaleString()} sampled points (${(data.n_total || 0).toLocaleString()} total cells)`;
+            subtitle.textContent = `${nSampled.toLocaleString()} sampled cells (${(data.n_total || 0).toLocaleString()} total)`;
         }
 
         // Update bar subtitle based on data type
@@ -1366,8 +1366,8 @@ const ValidatePage = {
                 : `Mean activity across ${stats.length} cell types`;
         }
 
-        // Render density + scatter
-        this._renderDensityScatter('val-sc-scatter', data);
+        // Render scatter plot
+        this._renderSingleCellScatter('val-sc-scatter', data);
 
         // Render per-celltype bar chart
         this._renderCelltypeBar('val-sc-bar', data);
@@ -1379,126 +1379,90 @@ const ValidatePage = {
         this._renderExprVsNonExprBox('val-sc-box', data);
     },
 
-    _renderDensityScatter(divId, data) {
+    _renderSingleCellScatter(divId, data) {
         const div = document.getElementById(divId);
         if (!div) return;
 
-        const traces = [];
         const hideNonExpr = this.singleCell.hideNonExpr;
         const ctFilter = this.singleCell.celltype;
 
-        // Layer 1: Density heatmap from ALL cells
-        if (data.density) {
-            const d = data.density;
-            const nBins = d.n_bins || 100;
-            const counts = d.counts || [];
+        if (!data.sampled || !data.sampled.points) {
+            div.innerHTML = '<p class="no-data">No scatter data</p>';
+            return;
+        }
 
-            // Reshape flat array to 2D
-            const z = [];
-            for (let i = 0; i < nBins; i++) {
-                z.push(counts.slice(i * nBins, (i + 1) * nBins));
+        let points = data.sampled.points;
+        const celltypes = data.sampled.celltypes || [];
+        const hasCelltypes = celltypes.length > 1 || (celltypes.length === 1 && celltypes[0] !== 'all');
+
+        // Filter by celltype
+        if (ctFilter && hasCelltypes) {
+            const ctIdx = celltypes.indexOf(ctFilter);
+            if (ctIdx >= 0) {
+                points = points.filter(p => p[2] === ctIdx);
             }
+        }
 
-            // Apply log transform for better visualization
-            const zLog = z.map(row => row.map(v => v > 0 ? Math.log10(v + 1) : 0));
+        // Filter non-expressing
+        if (hideNonExpr) {
+            points = points.filter(p => p[4] === 1);
+        }
 
+        if (points.length === 0) {
+            div.innerHTML = '<p class="no-data">No data after filtering</p>';
+            return;
+        }
+
+        const xArr = points.map(p => p[0]);
+        const yArr = points.map(p => p[1]);
+
+        const colors = [
+            '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+            '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
+            '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5',
+        ];
+
+        const traces = [];
+
+        if (hasCelltypes) {
+            // Color by cell type — one trace per group for legend
+            const groupIndices = {};
+            points.forEach((p, i) => {
+                const gIdx = p[2] !== undefined ? p[2] : 0;
+                if (!groupIndices[gIdx]) groupIndices[gIdx] = [];
+                groupIndices[gIdx].push(i);
+            });
+            for (const [gIdxStr, indices] of Object.entries(groupIndices)) {
+                const gIdx = parseInt(gIdxStr);
+                const gName = gIdx >= 0 && gIdx < celltypes.length ? celltypes[gIdx] : 'Other';
+                traces.push({
+                    type: 'scatter',
+                    mode: 'markers',
+                    name: gName.replace(/_/g, ' '),
+                    x: indices.map(i => xArr[i]),
+                    y: indices.map(i => yArr[i]),
+                    marker: { size: 5, color: colors[gIdx % colors.length], opacity: 0.5 },
+                    hovertemplate: `${gName}<br>Expr: %{x:.2f}<br>Activity: %{y:.2f}<extra></extra>`,
+                });
+            }
+        } else {
+            // Color by expressing status
             traces.push({
-                type: 'heatmap',
-                z: zLog,
-                x0: d.expr_range[0],
-                dx: (d.expr_range[1] - d.expr_range[0]) / nBins,
-                y0: d.act_range[0],
-                dy: (d.act_range[1] - d.act_range[0]) / nBins,
-                colorscale: [
-                    [0, 'rgba(255,255,255,0)'],
-                    [0.01, 'rgba(240,249,255,0.3)'],
-                    [0.1, 'rgba(107,174,214,0.5)'],
-                    [0.3, 'rgba(49,130,189,0.6)'],
-                    [0.6, 'rgba(8,81,156,0.7)'],
-                    [1, 'rgba(8,48,107,0.9)'],
-                ],
-                showscale: false,
-                hovertemplate: 'Expr: %{x:.2f}<br>Activity: %{y:.2f}<br>Count: %{z:.0f}<extra>density</extra>',
+                type: 'scatter',
+                mode: 'markers',
+                x: xArr,
+                y: yArr,
+                marker: {
+                    size: 5, opacity: 0.5,
+                    color: points.map(p => p[4] === 1 ? '#2ca02c' : '#999999'),
+                },
+                text: points.map(p => p[4] === 1 ? 'Expressing' : 'Non-expressing'),
+                hovertemplate: '%{text}<br>Expr: %{x:.2f}<br>Activity: %{y:.2f}<extra></extra>',
+                showlegend: false,
             });
         }
 
-        // Layer 2: Scatter overlay
-        if (data.sampled && data.sampled.points) {
-            let points = data.sampled.points;
-            const celltypes = data.sampled.celltypes || [];
-            const hasCelltypes = celltypes.length > 1 || (celltypes.length === 1 && celltypes[0] !== 'all');
-
-            // Filter by celltype
-            if (ctFilter && hasCelltypes) {
-                const ctIdx = celltypes.indexOf(ctFilter);
-                if (ctIdx >= 0) {
-                    points = points.filter(p => p[2] === ctIdx);
-                }
-            }
-
-            // Filter non-expressing
-            if (hideNonExpr) {
-                points = points.filter(p => p[4] === 1); // is_expressing flag
-            }
-
-            if (points.length > 0) {
-                if (hasCelltypes) {
-                    // Color by cell type
-                    const ctColors = [
-                        '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-                        '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
-                        '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5',
-                    ];
-                    traces.push({
-                        type: 'scattergl',
-                        mode: 'markers',
-                        x: points.map(p => p[0]),
-                        y: points.map(p => p[1]),
-                        marker: {
-                            size: 2, opacity: 0.4,
-                            color: points.map(p => ctColors[p[2] % ctColors.length]),
-                        },
-                        text: points.map(p => celltypes[p[2]] || 'unknown'),
-                        hovertemplate: '%{text}<br>Expr: %{x:.2f}<br>Activity: %{y:.2f}<extra></extra>',
-                        showlegend: false,
-                    });
-                } else {
-                    // Color by expressing status (green = expressing, gray = non-expressing)
-                    traces.push({
-                        type: 'scattergl',
-                        mode: 'markers',
-                        x: points.map(p => p[0]),
-                        y: points.map(p => p[1]),
-                        marker: {
-                            size: 2.5, opacity: 0.5,
-                            color: points.map(p => p[4] === 1 ? '#2ca02c' : '#999999'),
-                        },
-                        text: points.map(p => p[4] === 1 ? 'Expressing' : 'Non-expressing'),
-                        hovertemplate: '%{text}<br>Expr: %{x:.2f}<br>Activity: %{y:.2f}<extra></extra>',
-                        showlegend: false,
-                    });
-                }
-            }
-        }
-
-        // Collect x/y arrays for trendline and rho recomputation
-        let xArr, yArr;
-        if (data.sampled && data.sampled.points) {
-            let filteredPts = data.sampled.points;
-            if (ctFilter) {
-                const celltypes = data.sampled.celltypes || [];
-                const ctIdx = celltypes.indexOf(ctFilter);
-                if (ctIdx >= 0) filteredPts = filteredPts.filter(p => p[2] === ctIdx);
-            }
-            if (hideNonExpr) filteredPts = filteredPts.filter(p => p[4] === 1);
-            xArr = filteredPts.map(p => p[0]);
-            yArr = filteredPts.map(p => p[1]);
-        } else {
-            xArr = [];
-            yArr = [];
-        }
-
-        // Trendline (Theil-Sen, consistent with other tabs)
+        // Trendline (Theil-Sen)
         const trendline = this.calculateTrendline(xArr, yArr);
         if (trendline.x) traces.push(trendline);
 
@@ -1508,9 +1472,8 @@ const ValidatePage = {
             ? this._spearmanRho(xArr, yArr)
             : (data.rho != null ? Number(data.rho) : this._spearmanRho(xArr, yArr));
 
-        // Stats annotation (consistent with donor/celltype tabs)
-        let annoText = `Spearman rho = ${rhoVal.toFixed(3)}`;
         const pval = isFiltered ? null : (data.pval != null ? Number(data.pval) : null);
+        let annoText = `Spearman rho = ${rhoVal.toFixed(3)}`;
         if (pval != null) {
             annoText += `<br>p = ${pval.toExponential(2)}`;
         }
@@ -1525,6 +1488,7 @@ const ValidatePage = {
             xaxis: { title: `${data.gene || data.target} Expression (z-score)` },
             yaxis: { title: `${data.target} Activity (z-score)` },
             margin: { l: 60, r: 30, t: 50, b: 60 },
+            legend: { orientation: 'v', x: 1.02, y: 1, font: { size: 9 } },
             annotations: [{
                 x: 0.02, y: 0.98, xref: 'paper', yref: 'paper',
                 text: annoText,
