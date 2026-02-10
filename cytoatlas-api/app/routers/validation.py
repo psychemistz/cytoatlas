@@ -782,6 +782,15 @@ async def get_singlecell_full_scatter(
         atlas, target, sig_label
     )
 
+    # Load per-celltype expression stats from gene_expression.json
+    # Try HGNC gene name first, then target name (handles CytoSig name differences)
+    from app.services.gene_service import get_all_names
+    names = get_all_names(target)
+    hgnc_gene = names.get("hgnc") or gene
+    expression_stats = await service.get_gene_expression_by_celltype(atlas, hgnc_gene)
+    if not expression_stats and hgnc_gene != target:
+        expression_stats = await service.get_gene_expression_by_celltype(atlas, target)
+
     # Compute activity_diff (difference, not ratio — z-scores)
     mean_expr = data.get("mean_activity_expressing")
     mean_non = data.get("mean_activity_non_expressing")
@@ -791,7 +800,7 @@ async def get_singlecell_full_scatter(
 
     return {
         "target": target,
-        "gene": gene,
+        "gene": hgnc_gene,
         "atlas": atlas,
         "rho": rho,
         "pval": pval,
@@ -806,6 +815,7 @@ async def get_singlecell_full_scatter(
             "points": points,
         },
         "celltype_stats": celltype_stats,
+        "expression_stats": expression_stats,
     }
 
 

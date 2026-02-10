@@ -542,6 +542,38 @@ class ValidationService(BaseService):
         results.sort(key=lambda x: abs(x["mean_activity"]), reverse=True)
         return results
 
+    async def get_gene_expression_by_celltype(
+        self,
+        atlas: str,
+        gene: str,
+    ) -> List[Dict[str, Any]]:
+        """Get per-celltype expression stats for a gene from gene_expression.json."""
+        atlas_map = {
+            "cima": "CIMA",
+            "inflammation": "Inflammation",
+            "scatlas": "scAtlas_Normal",
+        }
+        atlas_label = atlas_map.get(atlas, atlas)
+
+        data = await self.load_json("gene_expression.json")
+        if not data:
+            return []
+
+        results = []
+        gene_upper = gene.upper()
+        for r in data:
+            if r.get("atlas") != atlas_label:
+                continue
+            if r.get("gene", "").upper() == gene_upper:
+                results.append({
+                    "celltype": r.get("cell_type", "Unknown"),
+                    "mean_expression": float(r.get("mean_expression", 0)),
+                    "pct_expressed": float(r.get("pct_expressed", 0)),
+                    "n_cells": int(r.get("n_cells", 0)),
+                })
+        results.sort(key=lambda x: x["mean_expression"], reverse=True)
+        return results
+
     async def get_singlecell_celltypes(
         self,
         atlas: str,

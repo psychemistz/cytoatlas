@@ -1358,11 +1358,16 @@ const ValidatePage = {
 
         // Update expression subtitle
         const exprSubtitle = document.getElementById('val-sc-expr-subtitle');
-        if (exprSubtitle && data.sampled && data.sampled.celltypes) {
-            const nCt = data.sampled.celltypes.filter(c => c !== 'all').length;
-            exprSubtitle.textContent = nCt > 0
-                ? `Mean expression across ${nCt} cell types (from sampled cells)`
-                : 'Mean expression by cell type (from sampled cells)';
+        if (exprSubtitle) {
+            const exprStats = data.expression_stats || [];
+            if (exprStats.length) {
+                exprSubtitle.textContent = `${data.gene || data.target} expression across ${exprStats.length} cell types`;
+            } else if (data.sampled && data.sampled.celltypes) {
+                const nCt = data.sampled.celltypes.filter(c => c !== 'all').length;
+                exprSubtitle.textContent = nCt > 0
+                    ? `Mean expression across ${nCt} cell types (from sampled cells)`
+                    : 'Mean expression by cell type';
+            }
         }
 
         // Update activity bar subtitle
@@ -1511,8 +1516,45 @@ const ValidatePage = {
         const div = document.getElementById(divId);
         if (!div) return;
 
+        // Priority 1: use expression_stats from gene_expression.json (precomputed, all cells)
+        const exprStats = data.expression_stats || [];
+        if (exprStats.length) {
+            const sorted = [...exprStats].sort((a, b) => (b.mean_expression || 0) - (a.mean_expression || 0));
+            const getColor = (v) => {
+                if (v > 1.0) return '#1a9850';
+                if (v > 0.5) return '#91cf60';
+                if (v > 0) return '#fee08b';
+                return '#d73027';
+            };
+            const plotHeight = Math.max(350, sorted.length * 18 + 80);
+            div.style.height = plotHeight + 'px';
+
+            Plotly.newPlot(div, [{
+                type: 'bar',
+                y: sorted.map(s => s.celltype.replace(/_/g, ' ')),
+                x: sorted.map(s => s.mean_expression || 0),
+                orientation: 'h',
+                marker: { color: sorted.map(s => getColor(s.mean_expression || 0)) },
+                text: sorted.map(s => {
+                    const expr = (s.mean_expression || 0).toFixed(3);
+                    const pct = (s.pct_expressed || 0).toFixed(1);
+                    const n = (s.n_cells || 0).toLocaleString();
+                    return `expr=${expr}, ${pct}% det, n=${n}`;
+                }),
+                textposition: 'outside',
+                hovertemplate: '%{y}<br>Mean expression = %{x:.3f}<br>%{text}<extra></extra>',
+            }], {
+                height: plotHeight,
+                xaxis: { title: `Mean Expression — ${data.gene || data.target}` },
+                yaxis: { automargin: true, autorange: 'reversed', tickfont: { size: 9 } },
+                margin: { l: 180, r: 120, t: 30, b: 50 },
+            }, { responsive: true });
+            return;
+        }
+
+        // Priority 2: compute from sampled points (when cell_type annotations exist)
         if (!data.sampled || !data.sampled.points || !data.sampled.celltypes) {
-            div.innerHTML = '<p class="no-data">No per-celltype expression data</p>';
+            div.innerHTML = '<p class="no-data">No per-celltype expression data available</p>';
             return;
         }
 
@@ -1521,7 +1563,7 @@ const ValidatePage = {
         const hasCelltypes = celltypes.length > 1 || (celltypes.length === 1 && celltypes[0] !== 'all');
 
         if (!hasCelltypes) {
-            div.innerHTML = '<p class="no-data">No cell type annotations in sampled data</p>';
+            div.innerHTML = '<p class="no-data">No per-celltype expression data available</p>';
             return;
         }
 
@@ -1530,10 +1572,9 @@ const ValidatePage = {
         points.forEach(p => {
             const ctIdx = p[2] !== undefined ? p[2] : 0;
             if (!groups[ctIdx]) groups[ctIdx] = [];
-            groups[ctIdx].push(p[0]); // expression value
+            groups[ctIdx].push(p[0]);
         });
 
-        // Compute mean and std per celltype
         const ctStats = [];
         for (const [idxStr, vals] of Object.entries(groups)) {
             const idx = parseInt(idxStr);
@@ -1577,7 +1618,7 @@ const ValidatePage = {
             },
         }], {
             height: plotHeight,
-            xaxis: { title: 'Mean Expression (z-score)' },
+            xaxis: { title: `Mean Expression — ${data.gene || data.target}` },
             yaxis: { automargin: true, autorange: 'reversed', tickfont: { size: 9 } },
             margin: { l: 180, r: 100, t: 30, b: 50 },
         }, { responsive: true });
