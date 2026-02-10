@@ -1179,20 +1179,20 @@ const ValidatePage = {
                 </div>
                 <div class="panel-grid">
                     <div class="panel">
+                        <div class="viz-title">Per-Cell-Type Expression</div>
+                        <div class="viz-subtitle" id="val-sc-expr-subtitle">Mean expression by cell type (from sampled cells)</div>
+                        <div id="val-sc-expr" class="plot-container" style="height: 350px;"></div>
+                    </div>
+                    <div class="panel">
                         <div class="viz-title">Per-Cell-Type Activity</div>
                         <div class="viz-subtitle" id="val-sc-bar-subtitle">Mean activity by cell type</div>
                         <div id="val-sc-bar" class="plot-container" style="height: 350px;"></div>
-                    </div>
-                    <div class="panel">
-                        <div class="viz-title">Activity by Cell Type</div>
-                        <div class="viz-subtitle">Distribution of activity across top cell types</div>
-                        <div id="val-sc-group-box" class="plot-container" style="height: 350px;"></div>
                     </div>
                 </div>
                 <div class="panel-grid">
                     <div class="panel" style="grid-column: span 2;">
                         <div class="viz-title">Activity: Expressing vs Non-Expressing</div>
-                        <div class="viz-subtitle">Mean activity comparison from ALL cells</div>
+                        <div class="viz-subtitle">Activity distribution by expressing status (from sampled cells)</div>
                         <div id="val-sc-box" class="plot-container" style="height: 350px;"></div>
                     </div>
                 </div>
@@ -1356,24 +1356,30 @@ const ValidatePage = {
             subtitle.textContent = `${nSampled.toLocaleString()} sampled cells (${(data.n_total || 0).toLocaleString()} total)`;
         }
 
-        // Update bar subtitle based on data type
+        // Update expression subtitle
+        const exprSubtitle = document.getElementById('val-sc-expr-subtitle');
+        if (exprSubtitle && data.sampled && data.sampled.celltypes) {
+            const nCt = data.sampled.celltypes.filter(c => c !== 'all').length;
+            exprSubtitle.textContent = nCt > 0
+                ? `Mean expression across ${nCt} cell types (from sampled cells)`
+                : 'Mean expression by cell type (from sampled cells)';
+        }
+
+        // Update activity bar subtitle
         const barSubtitle = document.getElementById('val-sc-bar-subtitle');
         if (barSubtitle) {
             const stats = data.celltype_stats || [];
-            const hasRho = stats.length && stats[0].rho != null;
-            barSubtitle.textContent = hasRho
-                ? 'Spearman rho per cell type'
-                : `Mean activity across ${stats.length} cell types`;
+            barSubtitle.textContent = `Mean activity across ${stats.length} cell types`;
         }
 
         // Render scatter plot
         this._renderSingleCellScatter('val-sc-scatter', data);
 
-        // Render per-celltype bar chart
-        this._renderCelltypeBar('val-sc-bar', data);
+        // Render per-celltype expression (from sampled points)
+        this._renderCelltypeExpression('val-sc-expr', data);
 
-        // Render activity distribution by cell type
-        this._renderCelltypeGroupBox('val-sc-group-box', data);
+        // Render per-celltype activity bar chart
+        this._renderCelltypeBar('val-sc-bar', data);
 
         // Render expressing vs non-expressing comparison
         this._renderExprVsNonExprBox('val-sc-box', data);
@@ -1501,6 +1507,82 @@ const ValidatePage = {
         Plotly.newPlot(div, traces, layout, { responsive: true });
     },
 
+    _renderCelltypeExpression(divId, data) {
+        const div = document.getElementById(divId);
+        if (!div) return;
+
+        if (!data.sampled || !data.sampled.points || !data.sampled.celltypes) {
+            div.innerHTML = '<p class="no-data">No per-celltype expression data</p>';
+            return;
+        }
+
+        const points = data.sampled.points;
+        const celltypes = data.sampled.celltypes;
+        const hasCelltypes = celltypes.length > 1 || (celltypes.length === 1 && celltypes[0] !== 'all');
+
+        if (!hasCelltypes) {
+            div.innerHTML = '<p class="no-data">No cell type annotations in sampled data</p>';
+            return;
+        }
+
+        // Group expression values (p[0]) by celltype index (p[2])
+        const groups = {};
+        points.forEach(p => {
+            const ctIdx = p[2] !== undefined ? p[2] : 0;
+            if (!groups[ctIdx]) groups[ctIdx] = [];
+            groups[ctIdx].push(p[0]); // expression value
+        });
+
+        // Compute mean and std per celltype
+        const ctStats = [];
+        for (const [idxStr, vals] of Object.entries(groups)) {
+            const idx = parseInt(idxStr);
+            if (idx < 0 || idx >= celltypes.length) continue;
+            const n = vals.length;
+            if (n < 3) continue;
+            const mean = vals.reduce((s, v) => s + v, 0) / n;
+            const std = Math.sqrt(vals.reduce((s, v) => s + (v - mean) ** 2, 0) / n);
+            ctStats.push({ celltype: celltypes[idx], mean_expr: mean, std_expr: std, n });
+        }
+
+        if (!ctStats.length) {
+            div.innerHTML = '<p class="no-data">No cell types with sufficient expression data</p>';
+            return;
+        }
+
+        const sorted = ctStats.sort((a, b) => b.mean_expr - a.mean_expr);
+        const getColor = (v) => {
+            if (v > 1.0) return '#1a9850';
+            if (v > 0.5) return '#91cf60';
+            if (v > 0) return '#fee08b';
+            return '#d73027';
+        };
+        const plotHeight = Math.max(350, sorted.length * 18 + 80);
+        div.style.height = plotHeight + 'px';
+
+        Plotly.newPlot(div, [{
+            type: 'bar',
+            y: sorted.map(s => s.celltype.replace(/_/g, ' ')),
+            x: sorted.map(s => s.mean_expr),
+            orientation: 'h',
+            marker: { color: sorted.map(s => getColor(s.mean_expr)) },
+            text: sorted.map(s => `expr=${s.mean_expr.toFixed(3)}, n=${s.n.toLocaleString()}`),
+            textposition: 'outside',
+            hovertemplate: '%{y}<br>Mean expression = %{x:.3f}<extra></extra>',
+            error_x: {
+                type: 'data',
+                array: sorted.map(s => s.std_expr),
+                visible: true,
+                color: 'rgba(0,0,0,0.3)',
+            },
+        }], {
+            height: plotHeight,
+            xaxis: { title: 'Mean Expression (z-score)' },
+            yaxis: { automargin: true, autorange: 'reversed', tickfont: { size: 9 } },
+            margin: { l: 180, r: 100, t: 30, b: 50 },
+        }, { responsive: true });
+    },
+
     _renderCelltypeBar(divId, data) {
         const div = document.getElementById(divId);
         if (!div) return;
@@ -1581,93 +1663,66 @@ const ValidatePage = {
         }
     },
 
-    _renderCelltypeGroupBox(divId, data) {
-        const div = document.getElementById(divId);
-        if (!div) return;
-
-        const stats = data.celltype_stats || [];
-        if (!stats.length) {
-            div.innerHTML = '<p class="no-data">No per-celltype data available</p>';
-            return;
-        }
-
-        // Sort by mean_activity descending, show all cell types
-        const sorted = [...stats]
-            .filter(s => s.mean_activity != null && s.n_cells >= 10)
-            .sort((a, b) => (b.mean_activity || 0) - (a.mean_activity || 0));
-
-        if (!sorted.length) {
-            div.innerHTML = '<p class="no-data">No cell types with sufficient data</p>';
-            return;
-        }
-
-        const colors = [
-            '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-            '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
-            '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5',
-        ];
-
-        // Dynamic height: 18px per bar, min 350px
-        const plotHeight = Math.max(350, sorted.length * 18 + 80);
-        div.style.height = plotHeight + 'px';
-
-        // Horizontal bar with error bars (mean ± std)
-        Plotly.newPlot(div, [{
-            type: 'bar',
-            y: sorted.map(s => s.celltype.replace(/_/g, ' ')),
-            x: sorted.map(s => s.mean_activity || 0),
-            orientation: 'h',
-            marker: { color: sorted.map((_, i) => colors[i % colors.length]) },
-            error_x: {
-                type: 'data',
-                array: sorted.map(s => s.std_activity || 0),
-                visible: true,
-                color: 'rgba(0,0,0,0.4)',
-            },
-            hovertemplate: '%{y}<br>Mean: %{x:.3f}<br>n=%{text}<extra></extra>',
-            text: sorted.map(s => (s.n_cells || 0).toLocaleString()),
-        }], {
-            height: plotHeight,
-            xaxis: { title: 'Activity (z-score)' },
-            yaxis: { automargin: true, autorange: 'reversed', tickfont: { size: 9 } },
-            margin: { l: 180, r: 80, t: 30, b: 50 },
-            showlegend: false,
-        }, { responsive: true });
-    },
-
     _renderExprVsNonExprBox(divId, data) {
         const div = document.getElementById(divId);
         if (!div) return;
 
-        // Support both old field names and new API names
-        const meanExpr = data.mean_activity_expressing ?? data.mean_act_expressing ?? null;
-        const meanNonExpr = data.mean_activity_non_expressing ?? data.mean_act_non_expressing ?? null;
+        if (!data.sampled || !data.sampled.points) {
+            div.innerHTML = '<p class="no-data">No sampled data for boxplot</p>';
+            return;
+        }
 
-        if (meanExpr == null && meanNonExpr == null) {
+        // Split sampled points into expressing (p[4]=1) and non-expressing (p[4]=0)
+        const exprAct = [];
+        const nonExprAct = [];
+        data.sampled.points.forEach(p => {
+            if (p[4] === 1) exprAct.push(p[1]); // activity
+            else nonExprAct.push(p[1]);
+        });
+
+        if (!exprAct.length && !nonExprAct.length) {
             div.innerHTML = '<p class="no-data">No expressing/non-expressing data</p>';
             return;
         }
 
-        const exprVal = meanExpr != null ? Number(meanExpr) : 0;
-        const nonExprVal = meanNonExpr != null ? Number(meanNonExpr) : 0;
+        // Compute activity difference from summary stats (more accurate than sampled)
+        const meanExpr = data.mean_activity_expressing ?? data.mean_act_expressing ?? null;
+        const meanNonExpr = data.mean_activity_non_expressing ?? data.mean_act_non_expressing ?? null;
+        const actDiff = data.activity_diff != null
+            ? Number(data.activity_diff)
+            : (meanExpr != null && meanNonExpr != null ? Number(meanExpr) - Number(meanNonExpr) : null);
 
-        // Compute activity difference (not ratio — z-scores can be negative)
-        const actDiff = data.activity_diff != null ? Number(data.activity_diff) : (exprVal - nonExprVal);
+        const traces = [];
+        if (exprAct.length) {
+            traces.push({
+                type: 'box',
+                y: exprAct,
+                name: 'Expressing',
+                marker: { color: '#2ca02c' },
+                boxmean: 'sd',
+            });
+        }
+        if (nonExprAct.length) {
+            traces.push({
+                type: 'box',
+                y: nonExprAct,
+                name: 'Non-Expressing',
+                marker: { color: '#d62728' },
+                boxmean: 'sd',
+            });
+        }
 
-        Plotly.newPlot(div, [{
-            type: 'bar',
-            x: ['Expressing', 'Non-Expressing'],
-            y: [exprVal, nonExprVal],
-            marker: { color: ['#2ca02c', '#d62728'] },
-            text: [exprVal.toFixed(3), nonExprVal.toFixed(3)],
-            textposition: 'outside',
-        }], {
-            yaxis: { title: 'Mean Activity (z-score)' },
+        const annoText = actDiff != null
+            ? `\u0394 Activity = ${actDiff.toFixed(3)}<br>n_expr = ${exprAct.length.toLocaleString()}, n_non = ${nonExprAct.length.toLocaleString()}`
+            : `n_expr = ${exprAct.length.toLocaleString()}, n_non = ${nonExprAct.length.toLocaleString()}`;
+
+        Plotly.newPlot(div, traces, {
+            yaxis: { title: 'Activity (z-score)' },
             margin: { l: 60, r: 30, t: 60, b: 50 },
+            showlegend: false,
             annotations: [{
                 x: 0.5, y: 1.1, xref: 'paper', yref: 'paper',
-                text: `\u0394 Activity = ${actDiff.toFixed(3)}` +
-                      `<br>n_expr = ${(data.n_expressing || 0).toLocaleString()}, n_total = ${(data.n_total || 0).toLocaleString()}`,
+                text: annoText,
                 showarrow: false, font: { size: 11 },
             }],
         }, { responsive: true });
