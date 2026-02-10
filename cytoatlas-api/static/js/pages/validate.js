@@ -543,6 +543,11 @@ const ValidatePage = {
                 <div class="filter-bar">
                     ${this._atlasSelectHTML('val-donor-atlas', this.SC_ATLAS_OPTIONS, atlas)}
                     ${this._sigtypeSelectHTML('val-donor-sigtype', this.ALL_SIG_OPTIONS, this.donorLevel.sigtype)}
+                    <label>Level:
+                        <select id="val-donor-level">
+                            ${levels.map(l => `<option value="${l}" ${l === this.donorLevel.level ? 'selected' : ''}>${config ? config.levels[l] : l}</option>`).join('')}
+                        </select>
+                    </label>
                     <label>Target:
                         <select id="val-donor-target"><option value="">Loading...</option></select>
                     </label>
@@ -579,6 +584,7 @@ const ValidatePage = {
 
         const atlasSel = document.getElementById('val-donor-atlas');
         const sigtypeSel = document.getElementById('val-donor-sigtype');
+        const levelSel = document.getElementById('val-donor-level');
         const targetSel = document.getElementById('val-donor-target');
         const groupSel = document.getElementById('val-donor-group');
         const hideNonExpr = document.getElementById('val-donor-hide-nonexpr');
@@ -595,6 +601,13 @@ const ValidatePage = {
         if (sigtypeSel) {
             sigtypeSel.addEventListener('change', () => {
                 this.donorLevel.sigtype = sigtypeSel.value;
+                this.donorLevel.target = null;
+                this._loadDonorTargets();
+            });
+        }
+        if (levelSel) {
+            levelSel.addEventListener('change', () => {
+                this.donorLevel.level = levelSel.value;
                 this.donorLevel.target = null;
                 this._loadDonorTargets();
             });
@@ -634,9 +647,11 @@ const ValidatePage = {
 
         const atlas = this.donorLevel.atlas;
         const sig = this.donorLevel.sigtype;
+        const level = this.donorLevel.level || 'donor_l1';
+        // Use celltype API (has level dimension + groups) instead of donor API (no groups)
         const targets = await this.cachedFetch(
-            () => API.getDonorTargets(atlas, sig),
-            `donor-targets-${atlas}-${sig}`
+            () => API.getCelltypeTargets(atlas, sig, level),
+            `donor-targets-${atlas}-${sig}-${level}`
         );
 
         this.donorLevel.targets = targets;
@@ -659,10 +674,12 @@ const ValidatePage = {
         const atlas = this.donorLevel.atlas;
         const target = this.donorLevel.target;
         const sig = this.donorLevel.sigtype;
-        const cacheKey = `donor-scatter-${atlas}-${target}-${sig}`;
+        const level = this.donorLevel.level || 'donor_l1';
+        const cacheKey = `donor-scatter-${atlas}-${level}-${target}-${sig}`;
 
+        // Use celltype API (has level + groups) for proper group coloring
         const data = await this.cachedFetch(
-            () => API.getDonorScatter(atlas, target, sig),
+            () => API.getCelltypeScatter(atlas, target, sig, level),
             cacheKey
         );
 
