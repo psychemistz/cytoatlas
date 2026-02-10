@@ -201,7 +201,7 @@ const ValidatePage = {
         content.innerHTML = `
             <div class="tab-panel">
                 <h3>Validation Summary</h3>
-                <p>Distribution of Spearman correlations between expression and activity across aggregation levels. CytoSig and SecAct shown side-by-side for each category.</p>
+                <p>Distribution of Spearman correlations (rho) between signature gene expression and predicted cytokine/secreted protein activity. Each box shows the per-target rho distribution across entities (donors, tissues, or cell types) at a given aggregation level. Higher rho indicates stronger agreement between expression and inferred activity. CytoSig (43 cytokines, blue) and SecAct (1,249 secreted proteins, orange) are shown side-by-side.</p>
 
                 <div class="filter-bar">
                     <label>Target:
@@ -360,7 +360,7 @@ const ValidatePage = {
         content.innerHTML = `
             <div class="tab-panel">
                 <h3>Bulk RNA-seq Validation</h3>
-                <p>Correlation between bulk RNA-seq expression and predicted activity across GTEx tissues and TCGA cancer types.</p>
+                <p>Validation against independent bulk RNA-seq cohorts. For each target, mean expression of signature genes is correlated with predicted activity across samples. GTEx provides normal tissue validation; TCGA provides cancer-type validation. Points are colored by tissue/cancer type. Spearman rho and Pearson r are computed on visible points.</p>
 
                 <div class="filter-bar">
                     ${this._sigtypeSelectHTML('val-bulk-sigtype', this.BULK_SIG_OPTIONS, this.bulkRnaseq.sigtype)}
@@ -538,7 +538,7 @@ const ValidatePage = {
         content.innerHTML = `
             <div class="tab-panel">
                 <h3>Donor-Level Validation</h3>
-                <p>Correlation between pseudobulk expression and predicted activity per donor. Points colored by cell type or group.</p>
+                <p>Cross-sample validation at the donor level. For each target, pseudobulk mean expression is correlated with predicted activity across donors. Points are colored by cell type. A positive Spearman rho confirms that donors with higher signature gene expression also have higher inferred activity.</p>
 
                 <div class="filter-bar">
                     ${this._atlasSelectHTML('val-donor-atlas', this.SC_ATLAS_OPTIONS, atlas)}
@@ -708,7 +708,7 @@ const ValidatePage = {
         content.innerHTML = `
             <div class="tab-panel">
                 <h3>Cell Type Level Validation</h3>
-                <p>Correlation between expression and activity stratified by cell type. Each point represents a donor x cell type combination.</p>
+                <p>Cell-type-stratified validation. Each point represents a donor x cell type pseudobulk sample. Correlating mean expression with predicted activity at this finer granularity tests whether the activity signal is preserved within individual cell types, not just across donors.</p>
 
                 <div class="filter-bar">
                     ${this._atlasSelectHTML('val-ct-atlas', this.SC_ATLAS_OPTIONS, atlas)}
@@ -885,7 +885,7 @@ const ValidatePage = {
         content.innerHTML = `
             <div class="tab-panel">
                 <h3>Single-Cell Validation (All Cells)</h3>
-                <p>Correlation between single-cell gene expression and predicted activity. Density heatmap computed from ALL cells; scatter overlay shows 50K stratified sample.</p>
+                <p>Single-cell level validation using all cells (no aggregation). The density heatmap shows the joint distribution of expression and activity across millions of cells; the scatter overlay shows a 50K stratified sample colored by cell type. Per-cell-type bar charts show how correlation varies across populations.</p>
 
                 <div class="filter-bar">
                     ${this._atlasSelectHTML('val-sc-atlas', this.SC_FULL_ATLAS_OPTIONS, this.singleCell.atlas)}
@@ -1312,8 +1312,9 @@ const ValidatePage = {
         const xArr = points.map(p => p[0]);
         const yArr = points.map(p => p[1]);
 
-        // Compute Pearson r on visible points
+        // Compute correlations on visible points
         const n = xArr.length;
+        const spearmanR = this._spearmanRho(xArr, yArr);
         const sumX = xArr.reduce((a, b) => a + b, 0);
         const sumY = yArr.reduce((a, b) => a + b, 0);
         const sumXY = xArr.reduce((a, x, i) => a + x * yArr[i], 0);
@@ -1368,14 +1369,8 @@ const ValidatePage = {
         if (trendline.x) traces.push(trendline);
 
         // Annotation
-        let annoText = `Spearman rho = ${(data.rho || 0).toFixed(3)}`;
-        if (data.pval !== null && data.pval !== undefined) {
-            annoText += `<br>p = ${Number(data.pval).toExponential(2)}`;
-        }
-        if (data.rho_ci) {
-            annoText += `<br>95% CI: [${data.rho_ci[0]}, ${data.rho_ci[1]}]`;
-        }
-        annoText += `<br>Pearson r = ${pearsonR.toFixed(3)} (visible)`;
+        let annoText = `Spearman rho = ${spearmanR.toFixed(3)}`;
+        annoText += `<br>Pearson r = ${pearsonR.toFixed(3)}`;
         annoText += `<br>n = ${n} ${unitLabel}`;
         if (hideNonExpr) annoText += '<br>(non-expressing hidden)';
         if (celltypeFilter) annoText += `<br>${filterLabel}: ${celltypeFilter}`;
@@ -1550,6 +1545,36 @@ const ValidatePage = {
             showlegend: false,
             hoverinfo: 'skip',
         };
+    },
+
+    /**
+     * Compute Spearman rank correlation (Pearson on ranks).
+     */
+    _spearmanRho(x, y) {
+        const n = x.length;
+        if (n < 3) return 0;
+        const rank = (arr) => {
+            const sorted = arr.map((v, i) => [v, i]).sort((a, b) => a[0] - b[0]);
+            const ranks = new Array(n);
+            let i = 0;
+            while (i < n) {
+                let j = i;
+                while (j < n - 1 && sorted[j + 1][0] === sorted[j][0]) j++;
+                const avgRank = (i + j) / 2 + 1;
+                for (let k = i; k <= j; k++) ranks[sorted[k][1]] = avgRank;
+                i = j + 1;
+            }
+            return ranks;
+        };
+        const rx = rank(x);
+        const ry = rank(y);
+        const sumRx = rx.reduce((a, b) => a + b, 0);
+        const sumRy = ry.reduce((a, b) => a + b, 0);
+        const sumRxRy = rx.reduce((a, v, i) => a + v * ry[i], 0);
+        const sumRx2 = rx.reduce((a, v) => a + v * v, 0);
+        const sumRy2 = ry.reduce((a, v) => a + v * v, 0);
+        const d = Math.sqrt((n * sumRx2 - sumRx * sumRx) * (n * sumRy2 - sumRy * sumRy));
+        return d > 0 ? (n * sumRxRy - sumRx * sumRy) / d : 0;
     },
 
     /**
