@@ -56,12 +56,21 @@ CHUNK_SIZE = 500_000
 # JSON loading
 # ---------------------------------------------------------------------------
 def load_json(path: Path):
-    """Load JSON file using orjson if available, else stdlib json."""
+    """Load JSON file using orjson if available, else stdlib json.
+
+    Falls back to stdlib json when orjson fails (e.g. NaN/Infinity values
+    which are valid in JavaScript but rejected by strict JSON parsers).
+    """
     try:
         import orjson
         with open(path, "rb") as f:
             return orjson.loads(f.read())
     except ImportError:
+        with open(path) as f:
+            return json.load(f)
+    except Exception:
+        # orjson rejects NaN/Infinity — fall back to stdlib json which accepts them
+        logger.info("  orjson failed, falling back to stdlib json for %s", path.name)
         with open(path) as f:
             return json.load(f)
 
@@ -116,24 +125,25 @@ def flatten_bulk_rnaseq(data: dict) -> list[dict]:
     """Flatten bulk_rnaseq_validation.json.
 
     Input: {dataset: {n_samples, tissue_types/cancer_types, summary, donor_level, donor_scatter}}
-    Output: flat records from donor_level arrays with dataset column.
-    We extract the summary-level data (donor_level) since scatter points are in SQLite.
+    Where summary and donor_level are dicts keyed by sigtype (cytosig, secact, lincytosig),
+    each containing a list of records or a summary dict.
+    Output: flat records from donor_level arrays with dataset and sig_type columns.
     """
     rows = []
     for dataset, info in data.items():
         if not isinstance(info, dict):
             continue
-        # Extract summary records
-        summary = info.get("summary")
-        if isinstance(summary, list):
-            for rec in summary:
-                if isinstance(rec, dict):
-                    row = {"dataset": dataset, "data_section": "summary"}
-                    row.update(rec)
-                    rows.append(row)
-        # Extract donor_level records
+        # Extract donor_level records: {sigtype: [records]}
         donor_level = info.get("donor_level")
-        if isinstance(donor_level, list):
+        if isinstance(donor_level, dict):
+            for sig_type, records in donor_level.items():
+                if isinstance(records, list):
+                    for rec in records:
+                        if isinstance(rec, dict):
+                            row = {"dataset": dataset, "data_section": "donor_level", "sig_type": sig_type}
+                            row.update(rec)
+                            rows.append(row)
+        elif isinstance(donor_level, list):
             for rec in donor_level:
                 if isinstance(rec, dict):
                     row = {"dataset": dataset, "data_section": "donor_level"}
@@ -194,6 +204,23 @@ FLATTEN_FUNCS = {
 }
 
 
+def _stabilize_dtypes(df: pd.DataFrame) -> pd.DataFrame:
+    """Ensure consistent column types to prevent DuckDB inference mismatches.
+
+    Converts object columns to explicit string type and replaces NaN with None
+    so that DuckDB does not infer DOUBLE from a column that is actually VARCHAR.
+    """
+    import numpy as np
+
+    for col in df.columns:
+        if df[col].dtype == object:
+            df[col] = df[col].astype(str).replace("nan", None).replace("None", None)
+        elif df[col].dtype in (np.float64, np.float32):
+            # Replace NaN with None so DuckDB uses NULL
+            df[col] = df[col].where(df[col].notna(), None)
+    return df
+
+
 # ---------------------------------------------------------------------------
 # Core conversion functions
 # ---------------------------------------------------------------------------
@@ -218,9 +245,9 @@ def _create_indexes(db: duckdb.DuckDBPyConnection, table_name: str, columns: lis
         idx_name = f"idx_{table_name}_{col}"
         try:
             db.execute(f'CREATE INDEX IF NOT EXISTS "{idx_name}" ON "{table_name}" ("{col}")')
-        except duckdb.CatalogException:
-            # Index may already exist or column may not exist
-            logger.debug("Could not create index %s on %s.%s", idx_name, table_name, col)
+        except (duckdb.CatalogException, duckdb.BinderException):
+            # Index may already exist or column may not exist in data
+            logger.warning("Could not create index %s on %s.%s (column may not exist)", idx_name, table_name, col)
 
 
 def _drop_table(db: duckdb.DuckDBPyConnection, table_name: str):
@@ -266,7 +293,7 @@ def convert_flat_json(
     total_rows = 0
     for i in range(0, len(data), CHUNK_SIZE):
         chunk = data[i : i + CHUNK_SIZE]
-        df = pd.DataFrame(chunk)
+        df = _stabilize_dtypes(pd.DataFrame(chunk))
         if i == 0:
             db.execute(
                 f'CREATE TABLE "{table_name}" AS SELECT * FROM df'
@@ -352,25 +379,14 @@ def convert_nested_json(
     logger.info("  %d records extracted", len(records))
     del data
 
-    # Insert in chunks
-    _drop_table(db, table_name)
-    total_rows = 0
-    for i in range(0, len(records), CHUNK_SIZE):
-        chunk = records[i : i + CHUNK_SIZE]
-        df = pd.DataFrame(chunk)
-        if i == 0:
-            db.execute(
-                f'CREATE TABLE "{table_name}" AS SELECT * FROM df'
-            )
-        else:
-            db.execute(
-                f'INSERT INTO "{table_name}" SELECT * FROM df'
-            )
-        total_rows += len(df)
-        if len(records) > CHUNK_SIZE:
-            logger.info("  Inserted chunk %d-%d (%d rows)", i, i + len(chunk), total_rows)
-
+    # Build full DataFrame at once to avoid cross-chunk type inference mismatches.
+    # Records are already in memory from extract/flatten, so no extra memory cost.
+    df = _stabilize_dtypes(pd.DataFrame(records))
     del records
+    total_rows = len(df)
+
+    _drop_table(db, table_name)
+    db.execute(f'CREATE TABLE "{table_name}" AS SELECT * FROM df')
     _create_indexes(db, table_name, indexes)
 
     elapsed = time.time() - t0
@@ -410,65 +426,26 @@ def convert_csv_files(
 
     logger.info("Found %d CSV files matching '%s'", len(matching), csv_pattern)
 
-    _drop_table(db, table_name)
-    total_rows = 0
-
-    for i, csv_path in enumerate(matching):
+    # Read all CSVs into one DataFrame to avoid cross-file type inference mismatches
+    all_dfs = []
+    for csv_path in matching:
         t0 = time.time()
         logger.info("  Reading %s (%s) ...", csv_path.name, _size_str(csv_path))
+        df = pd.read_csv(csv_path, low_memory=False)
+        df["source_file"] = csv_path.stem
+        all_dfs.append(df)
+        logger.info("    %d rows in %.1fs", len(df), time.time() - t0)
 
-        # Read in chunks for large CSVs
-        chunks = []
-        for chunk_df in pd.read_csv(csv_path, chunksize=CHUNK_SIZE):
-            chunk_df["source_file"] = csv_path.stem
-            chunks.append(chunk_df)
+    if not all_dfs:
+        logger.warning("No CSV data loaded")
+        return 0
 
-        if not chunks:
-            logger.warning("  Empty CSV: %s", csv_path.name)
-            continue
+    combined = _stabilize_dtypes(pd.concat(all_dfs, ignore_index=True))
+    del all_dfs
+    total_rows = len(combined)
 
-        df = pd.concat(chunks, ignore_index=True)
-        n_rows = len(df)
-
-        if i == 0:
-            db.execute(
-                f'CREATE TABLE "{table_name}" AS SELECT * FROM df'
-            )
-        else:
-            # Align columns: new CSVs may have different columns
-            try:
-                db.execute(
-                    f'INSERT INTO "{table_name}" SELECT * FROM df'
-                )
-            except duckdb.BinderException:
-                # Column mismatch: get existing columns and insert matching ones
-                existing_cols = [
-                    row[0]
-                    for row in db.execute(
-                        f"SELECT column_name FROM information_schema.columns "
-                        f"WHERE table_name = '{table_name}'"
-                    ).fetchall()
-                ]
-                # Add missing columns to the table
-                for col in df.columns:
-                    if col not in existing_cols:
-                        dtype = "VARCHAR" if df[col].dtype == object else "DOUBLE"
-                        db.execute(f'ALTER TABLE "{table_name}" ADD COLUMN "{col}" {dtype}')
-                        existing_cols.append(col)
-                # Add missing columns to df
-                for col in existing_cols:
-                    if col not in df.columns:
-                        df[col] = None
-                # Reorder to match
-                df = df[existing_cols]
-                db.execute(
-                    f'INSERT INTO "{table_name}" SELECT * FROM df'
-                )
-
-        total_rows += n_rows
-        elapsed = time.time() - t0
-        logger.info("    %d rows in %.1fs", n_rows, elapsed)
-
+    _drop_table(db, table_name)
+    db.execute(f'CREATE TABLE "{table_name}" AS SELECT * FROM combined')
     _create_indexes(db, table_name, indexes)
     logger.info("  Table '%s': %d total rows from %d files", table_name, total_rows, len(matching))
     return total_rows
@@ -578,12 +555,12 @@ TABLE_CONFIGS = {
     "activity": {
         "source": VIZ_DATA / "activity_boxplot.json",
         "type": "flat_json",
-        "indexes": ["atlas", "cell_type", "sig_type"],
+        "indexes": ["atlas", "cell_type", "signature_type"],
     },
     "inflammation_disease": {
         "source": VIZ_DATA / "inflammation_disease.json",
         "type": "flat_json",
-        "indexes": ["disease", "cell_type", "sig_type"],
+        "indexes": ["disease", "cell_type", "signature_type"],
     },
     "inflammation_disease_filtered": {
         "source": VIZ_DATA / "inflammation_disease_filtered.json",
@@ -593,7 +570,7 @@ TABLE_CONFIGS = {
     "singlecell_activity": {
         "source": VIZ_DATA / "singlecell_activity.json",
         "type": "flat_json",
-        "indexes": ["atlas", "cell_type", "sig_type"],
+        "indexes": ["atlas", "cell_type", "signature_type"],
     },
     "scatlas_celltypes": {
         "source": VIZ_DATA / "scatlas_celltypes.json",
@@ -605,13 +582,13 @@ TABLE_CONFIGS = {
         "source": VIZ_DATA / "age_bmi_boxplots.json",
         "type": "nested_json",
         "flatten_func": "flatten_age_bmi",
-        "indexes": ["atlas", "variable", "cell_type"],
+        "indexes": ["atlas", "section", "cell_type"],
     },
     "age_bmi_boxplots_filtered": {
         "source": VIZ_DATA / "age_bmi_boxplots_filtered.json",
         "type": "nested_json",
         "flatten_func": "flatten_age_bmi",
-        "indexes": ["atlas", "variable"],
+        "indexes": ["atlas", "section"],
     },
     "bulk_validation": {
         "source": VIZ_DATA / "bulk_rnaseq_validation.json",
@@ -629,7 +606,7 @@ TABLE_CONFIGS = {
     "inflammation_severity": {
         "source": VIZ_DATA / "inflammation_severity.json",
         "type": "flat_json",
-        "indexes": ["disease", "severity", "sig_type"],
+        "indexes": ["disease", "severity", "signature_type"],
     },
     "inflammation_severity_filtered": {
         "source": VIZ_DATA / "inflammation_severity_filtered.json",
@@ -752,7 +729,7 @@ TABLE_CONFIGS = {
     "adjacent_tissue": {
         "source": VIZ_DATA / "adjacent_tissue.json",
         "type": "nested_json",
-        "extract_key": "tumor_vs_adjacent",
+        "flatten_func": "flatten_dict_of_lists",
         "indexes": ["cancer_type", "signature_type"],
     },
     "cancer_comparison": {
@@ -788,27 +765,32 @@ TABLE_CONFIGS = {
     # ------- Additional service-referenced JSON files -------
     "cima_biochem_scatter": {
         "source": VIZ_DATA / "cima_biochem_scatter.json",
-        "type": "flat_json",
-        "indexes": ["protein", "metabolite"],
+        "type": "nested_json",
+        "extract_key": "samples",
+        "indexes": [],
     },
     "cima_eqtl": {
         "source": VIZ_DATA / "cima_eqtl.json",
-        "type": "flat_json",
-        "indexes": ["gene", "variant"],
+        "type": "nested_json",
+        "extract_key": "eqtls",
+        "indexes": ["gene"],
     },
     "cima_eqtl_top": {
         "source": VIZ_DATA / "cima_eqtl_top.json",
-        "type": "flat_json",
+        "type": "nested_json",
+        "extract_key": "eqtls",
         "indexes": ["gene"],
     },
     "cima_population_stratification": {
         "source": VIZ_DATA / "cima_population_stratification.json",
-        "type": "flat_json",
-        "indexes": ["population", "cell_type"],
+        "type": "nested_json",
+        "flatten_func": "flatten_cross_atlas",
+        "indexes": [],
     },
     "disease_sankey": {
         "source": VIZ_DATA / "disease_sankey.json",
-        "type": "flat_json",
+        "type": "nested_json",
+        "flatten_func": "flatten_dict_of_lists",
         "indexes": [],
     },
     "gene_list": {
@@ -818,23 +800,27 @@ TABLE_CONFIGS = {
     },
     "inflammation_cell_drivers": {
         "source": VIZ_DATA / "inflammation_cell_drivers.json",
-        "type": "flat_json",
+        "type": "nested_json",
+        "extract_key": "effects",
         "indexes": ["cell_type", "disease"],
     },
     "inflammation_longitudinal": {
         "source": VIZ_DATA / "inflammation_longitudinal.json",
-        "type": "flat_json",
+        "type": "nested_json",
+        "extract_key": "timepoint_activity",
         "indexes": ["disease", "signature_type"],
     },
     "summary_stats": {
         "source": VIZ_DATA / "summary_stats.json",
-        "type": "flat_json",
+        "type": "nested_json",
+        "flatten_func": "flatten_cross_atlas",
         "indexes": [],
     },
     "treatment_response": {
         "source": VIZ_DATA / "treatment_response.json",
-        "type": "flat_json",
-        "indexes": ["disease", "signature_type"],
+        "type": "nested_json",
+        "flatten_func": "flatten_dict_of_lists",
+        "indexes": [],
     },
 }
 
@@ -981,7 +967,7 @@ def auto_discover_json(
             n = 0
             for i in range(0, len(records), CHUNK_SIZE):
                 chunk = records[i : i + CHUNK_SIZE]
-                df = pd.DataFrame(chunk)
+                df = _stabilize_dtypes(pd.DataFrame(chunk))
                 if i == 0:
                     db.execute(f'CREATE TABLE "{table_name}" AS SELECT * FROM df')
                 else:
