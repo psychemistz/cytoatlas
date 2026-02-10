@@ -39,6 +39,9 @@ def _load_signature_matrix(signature_type: str) -> Optional[pd.DataFrame]:
         if signature_type == "CytoSig":
             from secactpy import load_cytosig
             mat = load_cytosig()
+        elif signature_type == "LinCytoSig":
+            from secactpy import load_lincytosig
+            mat = load_lincytosig()
         elif signature_type == "SecAct":
             from secactpy import load_secact
             mat = load_secact()
@@ -286,8 +289,9 @@ class RealValidationGenerator:
     def _load_singlecell_resources(self) -> Optional[Dict[str, Any]]:
         """Load and cache single-cell activity + expression + metadata.
 
-        Opens activity H5AD and original H5AD, samples up to 50K common cells,
-        reads activity matrix, expression for signature genes, and obs metadata.
+        Opens activity H5AD and original H5AD, uses ALL common cells for
+        accurate statistics.  Reads activity matrix, expression for signature
+        genes, and obs metadata.
 
         Returns dict with keys: activity, signatures, metadata, expression,
         sig_to_gene, n_total, n_sample.  Returns None on failure.
@@ -335,11 +339,9 @@ class RealValidationGenerator:
                 self._cache[cache_key] = None
                 return None
 
-            # Sample up to 50K cells
-            n_sample = min(50000, n_common)
-            rng = np.random.RandomState(42)
-            sample_idx = np.sort(rng.choice(n_common, n_sample, replace=False))
-            sampled_cells = common_cells[sample_idx]
+            # Use ALL common cells for accurate statistics
+            n_sample = n_common
+            sampled_cells = common_cells
 
             # --- Metadata from original H5AD ---
             field_map = self._get_obs_field_mapping()
@@ -887,12 +889,13 @@ class RealValidationGenerator:
 
         from scipy import stats as scipy_stats
 
-        # Limit array sizes for Mann-Whitney (performance)
-        cap = 10000
+        # Limit array sizes for Mann-Whitney (performance on millions of cells)
+        cap = 100000
+        rng_mw = np.random.RandomState(42)
+        mw_expr = act_expr if len(act_expr) <= cap else rng_mw.choice(act_expr, cap, replace=False)
+        mw_non = act_non if len(act_non) <= cap else rng_mw.choice(act_non, cap, replace=False)
         _, p_value = scipy_stats.mannwhitneyu(
-            act_expr[: min(cap, len(act_expr))],
-            act_non[: min(cap, len(act_non))],
-            alternative="greater",
+            mw_expr, mw_non, alternative="greater",
         )
 
         # Subsample for visualization (up to 500 points)
@@ -929,7 +932,7 @@ class RealValidationGenerator:
             "signature_type": self.signature_type,
             "validation_level": "singlecell",
             "expression_threshold": 0.0,
-            "n_total_cells": n_total,
+            "n_total_cells": n_sample,
             "n_expressing": n_expressing,
             "n_non_expressing": n_non_expressing,
             "expressing_fraction": expressing_fraction,
@@ -1265,7 +1268,7 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     atlases = ["cima", "inflammation", "scatlas"] if args.atlas == "all" else [args.atlas]
-    sig_types = ["CytoSig", "SecAct"] if args.signature_type == "all" else [args.signature_type]
+    sig_types = ["CytoSig", "LinCytoSig", "SecAct"] if args.signature_type == "all" else [args.signature_type]
 
     for atlas in atlases:
         print(f"\nGenerating validation data for {atlas}...")
