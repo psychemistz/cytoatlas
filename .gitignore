@@ -73,9 +73,7 @@ htmlcov/
 !results/.gitkeep
 !logs/.gitkeep
 
-visualization/data/validation/scatlas_validation.json
-visualization/data/validation/inflammation_validation.json
-visualization/data/validation/cima_validation.json
+visualization/data/validation/
 visualization/data/boxplot/
 
 # Bulk RNA-seq data (large, downloaded externally)
