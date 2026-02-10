@@ -38,12 +38,12 @@ const ValidatePage = {
             groupLabel: 'Cell Type',
         },
         scatlas_normal: {
-            levels: { donor_organ: 'Organ', donor_organ_celltype1: 'Cell Type 1', donor_organ_celltype2: 'Cell Type 2' },
-            groupLabel: { donor_organ: 'Organ', donor_organ_celltype1: 'Cell Type', donor_organ_celltype2: 'Cell Type' },
+            levels: { donor_organ: 'By Organ', donor_organ_celltype1: 'Organ × Cell Type (broad)', donor_organ_celltype2: 'Organ × Cell Type (fine)' },
+            groupLabel: { donor_organ: 'Organ', donor_organ_celltype1: 'Organ × Cell Type', donor_organ_celltype2: 'Organ × Cell Type' },
         },
         scatlas_cancer: {
-            levels: { donor_organ: 'Sample Type', donor_organ_celltype1: 'Cell Type 1', donor_organ_celltype2: 'Cell Type 2' },
-            groupLabel: { donor_organ: 'Sample Type', donor_organ_celltype1: 'Cell Type', donor_organ_celltype2: 'Cell Type' },
+            levels: { donor_organ: 'By Sample Type', donor_organ_celltype1: 'Sample × Cell Type (broad)', donor_organ_celltype2: 'Sample × Cell Type (fine)' },
+            groupLabel: { donor_organ: 'Sample Type', donor_organ_celltype1: 'Sample × Cell Type', donor_organ_celltype2: 'Sample × Cell Type' },
         },
     },
 
@@ -65,12 +65,12 @@ const ValidatePage = {
             groupLabel: 'Cell Type',
         },
         scatlas_normal: {
-            levels: { donor_organ: 'Organ', donor_organ_celltype1: 'Cell Type 1', donor_organ_celltype2: 'Cell Type 2' },
-            groupLabel: { donor_organ: 'Organ', donor_organ_celltype1: 'Cell Type', donor_organ_celltype2: 'Cell Type' },
+            levels: { donor_organ: 'By Organ', donor_organ_celltype1: 'Organ × Cell Type (broad)', donor_organ_celltype2: 'Organ × Cell Type (fine)' },
+            groupLabel: { donor_organ: 'Organ', donor_organ_celltype1: 'Organ × Cell Type', donor_organ_celltype2: 'Organ × Cell Type' },
         },
         scatlas_cancer: {
-            levels: { donor_organ: 'Sample Type', donor_organ_celltype1: 'Cell Type 1', donor_organ_celltype2: 'Cell Type 2' },
-            groupLabel: { donor_organ: 'Sample Type', donor_organ_celltype1: 'Cell Type', donor_organ_celltype2: 'Cell Type' },
+            levels: { donor_organ: 'By Sample Type', donor_organ_celltype1: 'Sample × Cell Type (broad)', donor_organ_celltype2: 'Sample × Cell Type (fine)' },
+            groupLabel: { donor_organ: 'Sample Type', donor_organ_celltype1: 'Sample × Cell Type', donor_organ_celltype2: 'Sample × Cell Type' },
         },
     },
 
@@ -551,7 +551,7 @@ const ValidatePage = {
                     <label>Target:
                         <select id="val-donor-target"><option value="">Loading...</option></select>
                     </label>
-                    <label>Group:
+                    <label>${config && config.groupLabel ? (typeof config.groupLabel === 'string' ? config.groupLabel : config.groupLabel[this.donorLevel.level] || 'Group') : 'Group'}:
                         <select id="val-donor-group"><option value="">All</option></select>
                     </label>
                     <label>
@@ -699,11 +699,16 @@ const ValidatePage = {
             if (currentGroup) groupSel.value = currentGroup;
         }
 
+        const donorConfig = this.DONOR_LEVEL_CONFIG[atlas];
+        const donorGroupLabel = donorConfig && donorConfig.groupLabel
+            ? (typeof donorConfig.groupLabel === 'string' ? donorConfig.groupLabel : donorConfig.groupLabel[level] || 'Group')
+            : 'Cell Type';
+
         this._renderValidationScatter('val-donor-scatter', data, target, {
             hideNonExpr: this.donorLevel.hideNonExpr,
             celltypeFilter: this.donorLevel.group,
             unitLabel: 'donors',
-            filterLabel: 'Cell Type',
+            filterLabel: donorGroupLabel,
             atlasLabel: this.donorLevel.atlas,
         });
 
@@ -738,7 +743,7 @@ const ValidatePage = {
                     <label>Target:
                         <select id="val-ct-target"><option value="">Loading...</option></select>
                     </label>
-                    <label>Group:
+                    <label>${config && config.groupLabel ? (typeof config.groupLabel === 'string' ? config.groupLabel : config.groupLabel[this.celltypeLevel.level] || 'Group') : 'Group'}:
                         <select id="val-ct-group"><option value="">All</option></select>
                     </label>
                     <label>
@@ -883,11 +888,16 @@ const ValidatePage = {
             if (currentGroup) groupSel.value = currentGroup;
         }
 
+        const ctConfig = this.CELLTYPE_LEVEL_CONFIG[atlas];
+        const ctGroupLabel = ctConfig && ctConfig.groupLabel
+            ? (typeof ctConfig.groupLabel === 'string' ? ctConfig.groupLabel : ctConfig.groupLabel[level] || 'Group')
+            : 'Cell Type';
+
         this._renderValidationScatter('val-ct-scatter', data, target, {
             hideNonExpr: this.celltypeLevel.hideNonExpr,
             celltypeFilter: this.celltypeLevel.group,
             unitLabel: 'donor x celltype',
-            filterLabel: 'Cell Type',
+            filterLabel: ctGroupLabel,
             atlasLabel: this.celltypeLevel.atlas,
         });
 
