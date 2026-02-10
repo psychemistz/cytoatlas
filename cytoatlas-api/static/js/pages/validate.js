@@ -1417,8 +1417,7 @@ const ValidatePage = {
                     [0.6, 'rgba(8,81,156,0.7)'],
                     [1, 'rgba(8,48,107,0.9)'],
                 ],
-                showscale: true,
-                colorbar: { title: 'log10(n+1)', len: 0.5, y: 0.8 },
+                showscale: false,
                 hovertemplate: 'Expr: %{x:.2f}<br>Activity: %{y:.2f}<br>Count: %{z:.0f}<extra>density</extra>',
             });
         }
