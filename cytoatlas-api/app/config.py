@@ -123,6 +123,9 @@ class Settings(BaseSettings):
     parquet_data_path: Path = Field(
         default=Path("/vf/users/parks34/projects/2secactpy/visualization/data/parquet")
     )
+    sqlite_scatter_db_path: Path = Field(
+        default=Path("/vf/users/parks34/projects/2secactpy/visualization/data/validation_scatter.db")
+    )
 
     # CIMA paths
     cima_h5ad: Path = Field(

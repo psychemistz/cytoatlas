@@ -9,7 +9,9 @@ and outputs visualization/data/bulk_donor_correlations.json with:
 """
 
 import json
+import sqlite3
 import sys
+import zlib
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -889,6 +891,8 @@ def write_split_files(output: dict, bulk_rnaseq: dict | None = None):
           f"{f', {len(bulk_rnaseq)} bulk_rnaseq' if bulk_rnaseq else ''}")
 
 
+SQLITE_DB_PATH = PROJECT_ROOT / "visualization" / "data" / "validation_scatter.db"
+
 BULK_ATLASES = {"gtex", "tcga"}
 
 
@@ -1162,6 +1166,182 @@ def build_bulk_rnaseq_json() -> dict:
     return result
 
 
+def write_sqlite_db(
+    donor_scatter: dict,
+    celltype_scatter: dict,
+    bulk_rnaseq: dict | None = None,
+):
+    """Write all scatter data into a single SQLite DB for fast indexed lookups.
+
+    Creates validation_scatter.db with:
+      - scatter_targets: metadata per (source, atlas, level, sigtype, target)
+      - scatter_points: zlib-compressed JSON point arrays keyed by target_id
+
+    Args:
+        donor_scatter: {atlas: {sig_type: {target: {gene, rho, pval, n, points, ...}}}}
+        celltype_scatter: {atlas: {level: {sig_type: {target: {gene, rho, pval, n, points, ...}}}}}
+        bulk_rnaseq: {dataset: {stratified_scatter: {...}, donor_scatter: {...}, ...}}
+    """
+    SQLITE_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if SQLITE_DB_PATH.exists():
+        SQLITE_DB_PATH.unlink()
+
+    conn = sqlite3.connect(str(SQLITE_DB_PATH))
+    cur = conn.cursor()
+
+    # Create tables without indexes (faster bulk insert)
+    cur.executescript("""
+        CREATE TABLE scatter_targets (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            source      TEXT NOT NULL,
+            atlas       TEXT NOT NULL,
+            level       TEXT NOT NULL DEFAULT '',
+            sigtype     TEXT NOT NULL,
+            target      TEXT NOT NULL,
+            gene        TEXT,
+            rho         REAL,
+            pval        REAL,
+            n           INTEGER,
+            rho_ci_lo   REAL,
+            rho_ci_hi   REAL,
+            groups_json TEXT,
+            extra_json  TEXT
+        );
+
+        CREATE TABLE scatter_points (
+            target_id   INTEGER PRIMARY KEY REFERENCES scatter_targets(id),
+            points_blob BLOB NOT NULL
+        );
+    """)
+
+    total_targets = 0
+    total_points = 0
+
+    def _insert_target(source, atlas, level, sigtype, target_name, info):
+        nonlocal total_targets, total_points
+
+        points = info.get("points", [])
+        rho_ci = info.get("rho_ci")
+        rho_ci_lo = rho_ci[0] if rho_ci and len(rho_ci) == 2 else None
+        rho_ci_hi = rho_ci[1] if rho_ci and len(rho_ci) == 2 else None
+
+        groups = info.get("groups") or info.get("celltypes")
+        groups_json = json.dumps(groups, separators=(",", ":")) if groups else None
+
+        # Extra fields: matched_rho, matched_pval, matched_n, etc.
+        extra = {}
+        for key in ("matched_rho", "matched_pval", "matched_n",
+                     "lincytosig_celltype", "matched_atlas_celltypes"):
+            if key in info:
+                extra[key] = info[key]
+        extra_json = json.dumps(extra, separators=(",", ":")) if extra else None
+
+        cur.execute(
+            "INSERT INTO scatter_targets "
+            "(source, atlas, level, sigtype, target, gene, rho, pval, n, "
+            " rho_ci_lo, rho_ci_hi, groups_json, extra_json) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (source, atlas, level, sigtype, target_name,
+             info.get("gene"), info.get("rho"), info.get("pval"), info.get("n"),
+             rho_ci_lo, rho_ci_hi, groups_json, extra_json),
+        )
+        target_id = cur.lastrowid
+
+        blob = zlib.compress(
+            json.dumps(points, separators=(",", ":")).encode(), level=6
+        )
+        cur.execute(
+            "INSERT INTO scatter_points (target_id, points_blob) VALUES (?,?)",
+            (target_id, blob),
+        )
+
+        total_targets += 1
+        total_points += len(points)
+
+    # --- Donor scatter ---
+    print("  SQLite: inserting donor scatter ...")
+    for atlas, sigtypes in donor_scatter.items():
+        for sigtype, targets in sigtypes.items():
+            for target_name, info in targets.items():
+                _insert_target("donor", atlas, "", sigtype, target_name, info)
+    conn.commit()
+    print(f"    donor: {total_targets} targets, {total_points:,} points")
+
+    donor_count = total_targets
+
+    # --- Celltype scatter ---
+    print("  SQLite: inserting celltype scatter ...")
+    for atlas, levels in celltype_scatter.items():
+        for level, sigtypes in levels.items():
+            for sigtype, targets in sigtypes.items():
+                for target_name, info in targets.items():
+                    _insert_target("celltype", atlas, level, sigtype, target_name, info)
+    conn.commit()
+    ct_count = total_targets - donor_count
+    print(f"    celltype: {ct_count} targets, {total_points:,} total points")
+
+    # --- Bulk RNA-seq scatter ---
+    if bulk_rnaseq:
+        print("  SQLite: inserting bulk_rnaseq scatter ...")
+        pre_bulk = total_targets
+        for dataset, data in bulk_rnaseq.items():
+            # Stratified scatter (GTEx by_tissue, TCGA by_cancer)
+            for level_name, level_data in data.get("stratified_scatter", {}).items():
+                for sigtype, targets in level_data.items():
+                    for target_name, info in targets.items():
+                        _insert_target(
+                            "bulk_rnaseq", dataset, level_name, sigtype,
+                            target_name, info,
+                        )
+            # Donor scatter fallback
+            for sigtype, targets in data.get("donor_scatter", {}).items():
+                if not targets:
+                    continue
+                _insert_target_source = "bulk_rnaseq"
+                for target_name, info in targets.items():
+                    _insert_target(
+                        "bulk_rnaseq", dataset, "", sigtype,
+                        target_name, info,
+                    )
+        conn.commit()
+        bulk_count = total_targets - pre_bulk
+        print(f"    bulk_rnaseq: {bulk_count} targets")
+
+    # --- Create indexes AFTER inserts (much faster) ---
+    print("  SQLite: creating indexes ...")
+    cur.executescript("""
+        CREATE UNIQUE INDEX idx_targets_unique
+            ON scatter_targets(source, atlas, level, sigtype, target);
+        CREATE INDEX idx_targets_lookup
+            ON scatter_targets(source, atlas, level, sigtype);
+    """)
+
+    # Optimize
+    print("  SQLite: ANALYZE + VACUUM ...")
+    cur.execute("ANALYZE")
+    conn.execute("VACUUM")
+    conn.close()
+
+    size_mb = SQLITE_DB_PATH.stat().st_size / (1024 * 1024)
+    print(f"\n  SQLite DB: {SQLITE_DB_PATH}")
+    print(f"  Size: {size_mb:.1f} MB")
+    print(f"  Total: {total_targets} targets, {total_points:,} points")
+
+    # Spot-check: verify decompression
+    conn2 = sqlite3.connect(str(SQLITE_DB_PATH))
+    conn2.row_factory = sqlite3.Row
+    row = conn2.execute(
+        "SELECT t.target, t.n, p.points_blob "
+        "FROM scatter_targets t JOIN scatter_points p ON p.target_id = t.id "
+        "LIMIT 1"
+    ).fetchone()
+    if row:
+        pts = json.loads(zlib.decompress(row["points_blob"]))
+        assert len(pts) == row["n"], f"Point count mismatch: {len(pts)} vs {row['n']}"
+        print(f"  Spot-check OK: {row['target']} has {len(pts)} points")
+    conn2.close()
+
+
 def main():
     print("Building bulk_donor_correlations.json ...")
 
@@ -1250,6 +1430,10 @@ def main():
     # 8. Write split files for API consumption
     print("\n  Writing split files for API ...")
     write_split_files(output, bulk_rnaseq if bulk_rnaseq else None)
+
+    # 9. Write SQLite DB for fast indexed API queries
+    print("\n  Writing SQLite DB ...")
+    write_sqlite_db(donor_scatter, celltype_scatter, bulk_rnaseq if bulk_rnaseq else None)
 
     print("\nDone!")
 
