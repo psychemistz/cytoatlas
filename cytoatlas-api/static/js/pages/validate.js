@@ -1472,18 +1472,48 @@ const ValidatePage = {
             }
         }
 
-        // Stats annotation
-        const rhoVal = data.rho != null ? Number(data.rho) : 0;
+        // Collect x/y arrays for trendline and rho recomputation
+        let xArr, yArr;
+        if (data.sampled && data.sampled.points) {
+            let filteredPts = data.sampled.points;
+            if (ctFilter) {
+                const celltypes = data.sampled.celltypes || [];
+                const ctIdx = celltypes.indexOf(ctFilter);
+                if (ctIdx >= 0) filteredPts = filteredPts.filter(p => p[2] === ctIdx);
+            }
+            if (hideNonExpr) filteredPts = filteredPts.filter(p => p[4] === 1);
+            xArr = filteredPts.map(p => p[0]);
+            yArr = filteredPts.map(p => p[1]);
+        } else {
+            xArr = [];
+            yArr = [];
+        }
+
+        // Trendline (Theil-Sen, consistent with other tabs)
+        const trendline = this.calculateTrendline(xArr, yArr);
+        if (trendline.x) traces.push(trendline);
+
+        // Use pre-computed rho when unfiltered; recompute for filtered views
+        const isFiltered = hideNonExpr || ctFilter;
+        const rhoVal = isFiltered
+            ? this._spearmanRho(xArr, yArr)
+            : (data.rho != null ? Number(data.rho) : this._spearmanRho(xArr, yArr));
+
+        // Stats annotation (consistent with donor/celltype tabs)
         let annoText = `Spearman rho = ${rhoVal.toFixed(3)}`;
-        if (data.pval != null) {
-            annoText += `<br>p = ${Number(data.pval).toExponential(2)}`;
+        const pval = isFiltered ? null : (data.pval != null ? Number(data.pval) : null);
+        if (pval != null) {
+            annoText += `<br>p = ${pval.toExponential(2)}`;
+        }
+        if (data.rho_ci) {
+            annoText += `<br>95% CI [${data.rho_ci[0]}, ${data.rho_ci[1]}]`;
         }
         annoText += `<br>n = ${(data.n_total || 0).toLocaleString()} cells`;
         if (hideNonExpr) annoText += '<br>(non-expressing hidden)';
         if (ctFilter) annoText += `<br>Filter: ${ctFilter}`;
 
         const layout = {
-            xaxis: { title: `${data.gene || data.target} Expression` },
+            xaxis: { title: `${data.gene || data.target} Expression (z-score)` },
             yaxis: { title: `${data.target} Activity (z-score)` },
             margin: { l: 60, r: 30, t: 50, b: 60 },
             annotations: [{
