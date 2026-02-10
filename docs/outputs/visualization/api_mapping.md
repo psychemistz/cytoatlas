@@ -12,40 +12,40 @@ The CytoAtlas API (`cytoatlas-api/`) serves data from the JSON files through str
 
 | JSON File | API Endpoint | Method | Description |
 |-----------|--------------|--------|-------------|
-| `cima_correlations.json` | `/api/v1/cima/correlations` | GET | Age/BMI/biochemistry correlations |
-| `cima_correlations.json` | `/api/v1/cima/correlations/age` | GET | Age correlations only |
-| `cima_correlations.json` | `/api/v1/cima/correlations/bmi` | GET | BMI correlations only |
-| `cima_differential.json` | `/api/v1/cima/differential` | GET | Sex/smoking differential |
-| `cima_metabolites_top.json` | `/api/v1/cima/metabolites` | GET | Top metabolite correlations |
-| `cima_celltype.json` | `/api/v1/cima/celltypes` | GET | Cell type activities |
-| `cima_biochem_scatter.json` | `/api/v1/cima/biochemistry/scatter` | GET | Scatter plot data |
-| `cima_eqtl.json` | `/api/v1/cima/eqtl` | GET | eQTL associations |
+| `cima_correlations.json` | `/api/v1/atlases/cima/correlations` | GET | Age/BMI/biochemistry correlations |
+| `cima_correlations.json` | `/api/v1/atlases/cima/correlations/age` | GET | Age correlations only |
+| `cima_correlations.json` | `/api/v1/atlases/cima/correlations/bmi` | GET | BMI correlations only |
+| `cima_differential.json` | `/api/v1/atlases/cima/differential` | GET | Sex/smoking differential |
+| `cima_metabolites_top.json` | `/api/v1/atlases/cima/metabolites` | GET | Top metabolite correlations |
+| `cima_celltype.json` | `/api/v1/atlases/cima/celltypes` | GET | Cell type activities |
+| `cima_biochem_scatter.json` | `/api/v1/atlases/cima/biochemistry/scatter` | GET | Scatter plot data |
+| `cima_eqtl.json` | `/api/v1/atlases/cima/eqtl` | GET | eQTL associations |
 
 ### Inflammation Endpoints
 
 | JSON File | API Endpoint | Method | Description |
 |-----------|--------------|--------|-------------|
-| `inflammation_celltype.json` | `/api/v1/inflammation/celltypes` | GET | Cell type activities |
-| `inflammation_disease_filtered.json` | `/api/v1/inflammation/disease` | GET | Disease differential |
-| `inflammation_disease_filtered.json` | `/api/v1/inflammation/disease/{name}` | GET | Specific disease |
-| `inflammation_severity_filtered.json` | `/api/v1/inflammation/severity` | GET | Disease severity |
-| `treatment_response.json` | `/api/v1/inflammation/treatment` | GET | Treatment response |
-| `cohort_validation.json` | `/api/v1/inflammation/validation` | GET | Cross-cohort validation |
-| `inflammation_longitudinal.json` | `/api/v1/inflammation/longitudinal` | GET | Longitudinal data |
+| `inflammation_celltype.json` | `/api/v1/atlases/inflammation/celltypes` | GET | Cell type activities |
+| `inflammation_disease_filtered.json` | `/api/v1/atlases/inflammation/disease` | GET | Disease differential |
+| `inflammation_disease_filtered.json` | `/api/v1/atlases/inflammation/disease/{name}` | GET | Specific disease |
+| `inflammation_severity_filtered.json` | `/api/v1/atlases/inflammation/severity` | GET | Disease severity |
+| `treatment_response.json` | `/api/v1/atlases/inflammation/treatment` | GET | Treatment response |
+| `cohort_validation.json` | `/api/v1/atlases/inflammation/validation` | GET | Cross-cohort validation |
+| `inflammation_longitudinal.json` | `/api/v1/atlases/inflammation/longitudinal` | GET | Longitudinal data |
 
 ### scAtlas Endpoints
 
 | JSON File | API Endpoint | Method | Description |
 |-----------|--------------|--------|-------------|
-| `scatlas_organs.json` | `/api/v1/scatlas/organs` | GET | Organ signatures |
-| `scatlas_organs.json` | `/api/v1/scatlas/organs/{organ}` | GET | Specific organ |
-| `scatlas_organs_top.json` | `/api/v1/scatlas/organs/top` | GET | Top organ markers |
-| `scatlas_celltypes.json` | `/api/v1/scatlas/celltypes` | GET | Cell type signatures |
-| `cancer_comparison.json` | `/api/v1/scatlas/cancer/comparison` | GET | Tumor vs Adjacent |
-| `cancer_types.json` | `/api/v1/scatlas/cancer/types` | GET | Cancer type activities |
-| `exhaustion.json` | `/api/v1/scatlas/exhaustion` | GET | T cell exhaustion |
-| `immune_infiltration.json` | `/api/v1/scatlas/immune` | GET | Immune infiltration |
-| `caf_signatures.json` | `/api/v1/scatlas/caf` | GET | CAF signatures |
+| `scatlas_organs.json` | `/api/v1/atlases/scatlas/organs` | GET | Organ signatures |
+| `scatlas_organs.json` | `/api/v1/atlases/scatlas/organs/{organ}` | GET | Specific organ |
+| `scatlas_organs_top.json` | `/api/v1/atlases/scatlas/organs/top` | GET | Top organ markers |
+| `scatlas_celltypes.json` | `/api/v1/atlases/scatlas/celltypes` | GET | Cell type signatures |
+| `cancer_comparison.json` | `/api/v1/atlases/scatlas/cancer/comparison` | GET | Tumor vs Adjacent |
+| `cancer_types.json` | `/api/v1/atlases/scatlas/cancer/types` | GET | Cancer type activities |
+| `exhaustion.json` | `/api/v1/atlases/scatlas/exhaustion` | GET | T cell exhaustion |
+| `immune_infiltration.json` | `/api/v1/atlases/scatlas/immune` | GET | Immune infiltration |
+| `caf_signatures.json` | `/api/v1/atlases/scatlas/caf` | GET | CAF signatures |
 
 ### Cross-Atlas Endpoints
 
@@ -116,19 +116,19 @@ Each endpoint is backed by a service function in `cytoatlas-api/app/services/`:
 ### Get CIMA age correlations for IL6
 
 ```bash
-curl "http://localhost:8000/api/v1/cima/correlations/age?signature=IL6"
+curl "http://localhost:8000/api/v1/atlases/cima/correlations/age?signature=IL6"
 ```
 
 ### Get disease differential for RA in monocytes
 
 ```bash
-curl "http://localhost:8000/api/v1/inflammation/disease/RA?cell_type=Classical%20Monocyte"
+curl "http://localhost:8000/api/v1/atlases/inflammation/disease/RA?cell_type=Classical%20Monocyte"
 ```
 
 ### Get organ signatures with top specificity
 
 ```bash
-curl "http://localhost:8000/api/v1/scatlas/organs/top?signature_type=CytoSig&limit=20"
+curl "http://localhost:8000/api/v1/atlases/scatlas/organs/top?signature_type=CytoSig&limit=20"
 ```
 
 ### Search for TGFB across all atlases

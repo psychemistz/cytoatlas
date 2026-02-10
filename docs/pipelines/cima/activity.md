@@ -190,6 +190,6 @@ python scripts/01_cima_activity.py --mode pseudobulk
 
 ## Panel Analyses
 
-- [Age/BMI/Biochemistry Correlations](panels/correlations.md)
-- [Metabolite Analysis](panels/metabolites.md)
-- [Sex/Smoking Differential](panels/differential.md)
+- Age/BMI/Biochemistry Correlations
+- Metabolite Analysis
+- Sex/Smoking Differential

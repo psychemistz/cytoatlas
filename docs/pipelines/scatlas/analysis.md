@@ -199,10 +199,10 @@ for chunk_i in range(n_chunks):
 
 ## Panel Analyses
 
-- [Organ Signatures](panels/organs.md)
-- [Cancer Comparison](panels/cancer.md)
-- [T Cell Exhaustion](panels/exhaustion.md)
+- Organ Signatures
+- Cancer Comparison
+- T Cell Exhaustion
 
 ## Related Pipelines
 
-- [Immune Infiltration Analysis](immune.md) - Extended immune analysis
+- Immune Infiltration Analysis (`scripts/08_scatlas_immune_analysis.py`)

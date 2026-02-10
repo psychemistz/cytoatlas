@@ -217,6 +217,6 @@ python scripts/02_inflam_activity.py --mode both
 
 ## Panel Analyses
 
-- [Disease Activity Differential](panels/disease.md)
-- [Treatment Response](panels/treatment.md)
-- [Cross-Cohort Validation](panels/validation.md)
+- Disease Activity Differential
+- Treatment Response
+- Cross-Cohort Validation

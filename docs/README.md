@@ -24,12 +24,19 @@ This project computes cytokine and secreted protein activity signatures across 1
 | [Inflammation](datasets/inflammation.md) | 6.3M | 1,047 | Disease activity, treatment response |
 | [scAtlas](datasets/scatlas.md) | 6.4M | 35+ organs | Organ signatures, cancer comparison |
 
+## Quick Facts
+
+- **Total cells analyzed**: 17M+
+- **REST API endpoints**: 217 across 15 routers
+- **Signature types**: CytoSig (44), LinCytoSig (178), SecAct (1,249)
+- **Web UI pages**: 8 interactive pages with Plotly + D3.js
+- **Analysis scripts**: 7 Python pipelines + 5 SLURM batch jobs
+
 ## Full Documentation Structure
 
 ```
 docs/
 ├── README.md                    # This file
-├── OVERVIEW.md                  # High-level project architecture
 │
 ├── datasets/                    # Dataset documentation
 │   ├── README.md                # Dataset index
@@ -46,16 +53,13 @@ docs/
 │   └── visualization/           # Visualization preprocessing
 │
 ├── outputs/                     # Output file documentation
-│   ├── README.md                # Output index
-│   ├── results/                 # CSV/H5AD files
 │   └── visualization/           # JSON files for web dashboard
 │
 ├── registry.json                # Machine-readable documentation registry
 │
 └── templates/                   # Documentation templates
     ├── dataset.template.md
-    ├── pipeline.template.md
-    └── panel.template.md
+    └── pipeline.template.md
 ```
 
 ## All Guides
@@ -66,7 +70,7 @@ docs/
 - [API_REFERENCE.md](API_REFERENCE.md) - **All 217 REST API endpoints**
 
 ### Technical Documentation
-- [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture (14 sections)
+- [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture (17 sections)
   - Chat system (RAG, LLM abstraction, tool calling)
   - Frontend architecture (SPA, chart components, state management)
   - Pipeline management (dependency graph, execution, validation)
@@ -87,8 +91,7 @@ docs/
   - [Visualization Preprocessing](pipelines/visualization/preprocess.md) - JSON generation for web dashboard
 
 ### Outputs & Analysis
-- [outputs/README.md](outputs/README.md) - File structure and lineage
-  - [JSON Catalog](outputs/visualization/index.md) - Complete list of visualization files
+- [JSON Catalog](outputs/visualization/index.md) - Complete list of visualization files
   - [API Mapping](outputs/visualization/api_mapping.md) - JSON to API endpoint mapping
   - [UI Panel Mapping](outputs/visualization/panel_mapping.md) - JSON to UI component mapping
 
@@ -149,7 +152,7 @@ Documentation is accessible via MCP tools in the CytoAtlas API:
 
 ### Architecture & Decisions
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Complete system architecture
-- [DECISIONS.md](DECISIONS.md) - Architecture Decision Records summary
+- [decisions/README.md](decisions/README.md) - Architecture Decision Records summary
   - [ADR-001: Parquet over JSON](decisions/ADR-001-parquet-over-json.md)
   - [ADR-002: Repository Pattern](decisions/ADR-002-repository-pattern.md)
   - [ADR-003: RBAC Model](decisions/ADR-003-rbac-model.md)

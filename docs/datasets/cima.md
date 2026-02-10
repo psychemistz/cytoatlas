@@ -156,10 +156,10 @@ print(f"Found {len(groups)} sample-celltype combinations")
 ## Related Pipelines
 
 - [CIMA Activity Analysis](../pipelines/cima/activity.md)
-- [Age/BMI Correlations](../pipelines/cima/panels/correlations.md)
-- [Biochemistry Analysis](../pipelines/cima/panels/correlations.md#biochemistry)
-- [Metabolite Analysis](../pipelines/cima/panels/metabolites.md)
-- [Sex/Smoking Differential](../pipelines/cima/panels/differential.md)
+- Age/BMI Correlations
+- Biochemistry Analysis
+- Metabolite Analysis
+- Sex/Smoking Differential
 
 ## Output Files
 

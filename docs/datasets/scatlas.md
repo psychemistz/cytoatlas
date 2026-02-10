@@ -202,10 +202,10 @@ print(f"Exhausted T cells: {tex_mask.sum():,}")
 ## Related Pipelines
 
 - [scAtlas Analysis](../pipelines/scatlas/analysis.md)
-- [Organ Signatures](../pipelines/scatlas/panels/organs.md)
-- [Cancer Comparison](../pipelines/scatlas/panels/cancer.md)
-- [T Cell Exhaustion](../pipelines/scatlas/panels/exhaustion.md)
-- [Immune Infiltration](../pipelines/scatlas/immune.md)
+- Organ Signatures
+- Cancer Comparison
+- T Cell Exhaustion
+- Immune Infiltration
 
 ## Output Files
 

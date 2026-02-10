@@ -960,7 +960,7 @@ Alert: Database connection pool exhausted
 | **Project Overview** | [CLAUDE.md](CLAUDE.md) | Quick reference, TODOs, lessons learned |
 | **Dataset Details** | [datasets/README.md](datasets/README.md) | Data source specifications |
 | **Pipeline Documentation** | [pipelines/README.md](pipelines/README.md) | Analysis pipeline details |
-| **Output Catalog** | [outputs/README.md](outputs/README.md) | File structure and lineage |
+| **Output Catalog** | [outputs/visualization/index.md](outputs/visualization/index.md) | Visualization file catalog |
 | **Deployment Guide** | [docs/DEPLOYMENT.md](DEPLOYMENT.md) | HPC/SLURM setup, environment variables |
 | **API Reference** | [docs/API_REFERENCE.md](API_REFERENCE.md) | All 217 endpoints with examples |
 | **User Guide** | [docs/USER_GUIDE.md](USER_GUIDE.md) | Using CytoAtlas (atlases, chat, exports) |

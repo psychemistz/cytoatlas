@@ -186,9 +186,9 @@ for cohort, adata in [('Main', main), ('Validation', val), ('External', ext)]:
 ## Related Pipelines
 
 - [Inflammation Activity Analysis](../pipelines/inflammation/activity.md)
-- [Disease Activity Differential](../pipelines/inflammation/panels/disease.md)
-- [Treatment Response Prediction](../pipelines/inflammation/panels/treatment.md)
-- [Cross-Cohort Validation](../pipelines/inflammation/panels/validation.md)
+- Disease Activity Differential
+- Treatment Response Prediction
+- Cross-Cohort Validation
 
 ## Output Files
 

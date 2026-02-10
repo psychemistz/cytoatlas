@@ -2,6 +2,12 @@
 
 This directory contains outdated or completed planning documents that have been archived to keep the main documentation directory clean.
 
+## Deleted Files
+
+| File | Date Deleted | Reason |
+|------|-------------|--------|
+| `SESSION_HANDOFF_20260204.md` | 2026-02-09 | Session-specific handoff with stale PIDs/job IDs; no lasting value |
+
 ## Archived Plans
 
 ### plans/

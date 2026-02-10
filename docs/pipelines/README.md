@@ -60,8 +60,17 @@ flowchart TB
 | 1 | `01_cima_activity.py` | CIMA activity + correlations | ~2 hr | Yes |
 | 2 | `02_inflam_activity.py` | Inflammation activity + disease analysis | ~3 hr | Yes |
 | 3 | `03_scatlas_analysis.py` | scAtlas organs + cancer comparison | ~4 hr | Yes |
-| 3b | `08_scatlas_immune_analysis.py` | Immune infiltration + exhaustion | ~2 hr | Yes |
-| 4 | `06_preprocess_viz_data.py` | JSON preprocessing for web | ~30 min | No |
+| 4 | `04_integrated.py` | Cross-atlas integration | ~1 hr | No |
+| 5 | `05_figures.py` | Publication figures (matplotlib) | ~30 min | No |
+| 6 | `06_preprocess_viz_data.py` | JSON preprocessing for web | ~30 min | No |
+| 7 | `07_cross_atlas_analysis.py` | Cross-atlas comparison | ~1 hr | No |
+| 8 | `08_scatlas_immune_analysis.py` | Immune infiltration + exhaustion | ~2 hr | Yes |
+| 10 | `10_atlas_validation_pipeline.py` | Multi-level atlas validation | ~2 hr | Yes |
+| 11 | `11_donor_level_pipeline.py` | Donor-level analysis pipeline | ~1 hr | Yes |
+| 14 | `14_preprocess_bulk_validation.py` | JSON preprocessing for validation viz | ~30 min | No |
+| 15 | `15_bulk_validation.py` | GTEx/TCGA bulk RNA-seq activity | ~1 hr | Yes |
+| 16 | `16_resampled_validation.py` | Bootstrap resampled activity inference | ~2 hr | Yes |
+| 17 | `17_preprocess_validation_summary.py` | Validation summary preprocessing | ~15 min | No |
 
 ## Common Processing Steps
 
@@ -104,26 +113,16 @@ result = run_activity_inference(expr_diff, signature, sig_name)
 ## Pipeline Details
 
 ### Phase 0: Pilot Analysis
-- [Pilot Validation](pilot.md)
+- Script: `scripts/00_pilot_analysis.py` — validation on 100K cell subsets
 
 ### Phase 1: CIMA Analysis
-- [CIMA Activity Pipeline](cima/activity.md)
-- [Age/BMI/Biochemistry Correlations](cima/panels/correlations.md)
-- [Metabolite Analysis](cima/panels/metabolites.md)
-- [Sex/Smoking Differential](cima/panels/differential.md)
+- [CIMA Activity Pipeline](cima/activity.md) — age/BMI correlations, biochemistry, metabolites, differential
 
 ### Phase 2: Inflammation Analysis
-- [Inflammation Activity Pipeline](inflammation/activity.md)
-- [Disease Differential](inflammation/panels/disease.md)
-- [Treatment Response](inflammation/panels/treatment.md)
-- [Cross-Cohort Validation](inflammation/panels/validation.md)
+- [Inflammation Activity Pipeline](inflammation/activity.md) — disease differential, treatment response, cross-cohort validation
 
 ### Phase 3: scAtlas Analysis
-- [scAtlas Activity Pipeline](scatlas/analysis.md)
-- [Organ Signatures](scatlas/panels/organs.md)
-- [Cancer Comparison](scatlas/panels/cancer.md)
-- [T Cell Exhaustion](scatlas/panels/exhaustion.md)
-- [Immune Infiltration](scatlas/immune.md)
+- [scAtlas Activity Pipeline](scatlas/analysis.md) — organ signatures, cancer comparison, immune infiltration
 
 ### Phase 4: Visualization
 - [JSON Preprocessing](visualization/preprocess.md)
