@@ -382,13 +382,16 @@ cytoatlas-pipeline/              # GPU-accelerated pipeline package
 
 ## Context 5: Visualization Domain
 
-Web portal — 10-page SPA with 50+ interactive panels.
+Web portal — 12-page SPA with 50+ interactive panels.
 
-- **Stack:** Vanilla JS, Plotly, D3.js
-- **Pages:** Landing, Explore, Compare, Validate, Perturbation, Spatial, Submit, Chat, About, Contact
-- **Charts:** Line, scatter, heatmap, violin, box
+- **Stack:** React 19 + Vite 6 + TypeScript + Tailwind CSS v4 + TanStack Query + Zustand
+- **Location:** `cytoatlas-api/frontend/` (122 source files, ~11.4K LOC)
+- **Pages:** Home, About, Explore, Search, Atlas Detail (CIMA/Inflammation/scAtlas), Validate, Compare, Gene Detail, Perturbation, Spatial, Chat, Submit
+- **Charts:** react-plotly.js (scatter, heatmap, bar, box, violin, volcano, lollipop, forest, sankey)
 - **Labels:** Use "Δ Activity" (not "Log2FC") for differential displays
-- **Data checklist:** See `docs/EMBEDDED_DATA_CHECKLIST.md` before adding new JSON files
+- **Testing:** Vitest (40 unit tests) + Playwright (4 E2E specs)
+- **Build:** `cd frontend && npm run build` outputs to `../static/` with `base: '/static/'`
+- **Dev:** `npm run dev` on port 3000, proxies `/api` to `:8000`
 
 ---
 
@@ -470,9 +473,9 @@ All data access logged to JSONL: `{timestamp, user_id, email, ip_address, method
 
 ### Completed
 
-- All 7 analysis pipelines (pilot, CIMA, Inflammation, scAtlas, integrated, figures, immune)
-- 209 API endpoints across 15 routers (100% functional)
-- 8-page SPA with 40+ visualization panels
+- All 15 analysis pipelines (pilot, CIMA, Inflammation, scAtlas, integrated, figures, immune, parse_10M, Tahoe, spatial, ground truth, drug signatures, spatial neighborhood, perturbation viz preprocessing, spatial viz preprocessing)
+- 260+ API endpoints across 17 routers (100% functional)
+- React 19 + TypeScript frontend: 12 pages, 122 source files, 11.4K LOC (migrated from 25K vanilla JS)
 - Pipeline package: 18 subpackages, ~18.7K lines implemented
 - Validation: standard + resampled + single-cell + bulk RNA-seq
 - Security: JWT, RBAC, audit logging, rate limiting
@@ -487,12 +490,10 @@ All data access logged to JSONL: `{timestamp, user_id, email, ip_address, method
 - Script-to-pipeline equivalence tests: 30 tests across 2 test files (CSV↔JSON, JSON↔DuckDB)
 - SLURM consolidation: `scripts/slurm/jobs.yaml` + `submit_jobs.py` replaces 28 individual scripts
 - Resampled bootstrap: All atlases complete (CIMA, Inflammation main/val/ext, scAtlas normal/cancer) — 36 scatter JSONs, 14 correlation CSVs, 18 activity H5ADs
-
-### In Progress
-
-- SpatialCorpus-110M integration (NicheFormer spatial data, ~110M cells)
-- parse_10M cytokine perturbation integration (~9.7M cells, ground-truth validation)
-- Tahoe-100M drug perturbation integration (~100M cells, drug sensitivity profiling)
+- SpatialCorpus-110M integration: 8 scripts (20-25), 15 API endpoints, spatial_data.duckdb, React Spatial page
+- parse_10M cytokine perturbation: scripts 18/21/24, ground-truth validation, 23 API endpoints, React Perturbation page
+- Tahoe-100M drug perturbation: scripts 19/22/24, drug sensitivity + dose-response, perturbation_data.duckdb
+- React frontend migration: 25K vanilla JS → 11.4K React+TS (54% reduction), 40 unit tests, 4 E2E specs, multi-stage Dockerfile
 
 ### Future Work
 

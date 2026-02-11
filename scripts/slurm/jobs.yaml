@@ -49,13 +49,6 @@ profiles:
     cpus: 16
     modules: ["CUDA/12.8.1", "cuDNN/9.12.0/CUDA-12"]
 
-  gpu_xlarge:
-    partition: gpu
-    gres: "gpu:a100:1"
-    mem: "256G"
-    cpus: 16
-    modules: ["CUDA/12.8.1", "cuDNN/9.12.0/CUDA-12"]
-
 # Common settings
 common:
   project_dir: /data/parks34/projects/2cytoatlas
@@ -234,86 +227,6 @@ jobs:
     args: "--atlas inflammation"
     phase: 14
     depends_on: [inflam_activity_val]
-
-  # === Phase 20: Perturbation Analyses ===
-  parse10m:
-    name: "parse_10M Activity"
-    profile: gpu_heavy
-    time: "24:00:00"
-    script: "scripts/18_parse10m_activity.py"
-    args: "--mode pseudobulk"
-    phase: 20
-
-  parse10m_ground_truth:
-    name: "parse_10M Ground Truth"
-    profile: gpu_medium
-    time: "08:00:00"
-    script: "scripts/21_parse10m_ground_truth.py"
-    args: ""
-    phase: 21
-    depends_on: [parse10m]
-
-  tahoe:
-    name: "Tahoe Drug Response"
-    profile: gpu_heavy
-    time: "48:00:00"
-    script: "scripts/19_tahoe_activity.py"
-    args: "--mode all"
-    phase: 20
-
-  tahoe_drug_sigs:
-    name: "Tahoe Drug Signatures"
-    profile: gpu_medium
-    time: "08:00:00"
-    script: "scripts/22_tahoe_drug_signatures.py"
-    args: ""
-    phase: 21
-    depends_on: [tahoe]
-
-  # === Phase 22: Spatial Analyses ===
-  spatial_visium:
-    name: "Spatial Visium Activity"
-    profile: gpu_heavy
-    time: "48:00:00"
-    script: "scripts/20_spatial_activity.py"
-    args: "--technology visium"
-    phase: 22
-
-  spatial_targeted:
-    name: "Spatial Targeted Scoring"
-    profile: gpu_medium
-    time: "24:00:00"
-    script: "scripts/20_spatial_activity.py"
-    args: "--technology targeted"
-    phase: 22
-
-  spatial_neighborhood:
-    name: "Spatial Neighborhood"
-    profile: gpu_medium
-    time: "16:00:00"
-    script: "scripts/23_spatial_neighborhood.py"
-    args: ""
-    phase: 23
-    depends_on: [spatial_visium, spatial_targeted]
-
-  # === Phase 24: Perturbation/Spatial Preprocessing ===
-  preprocess_perturbation:
-    name: "Preprocess Perturbation Data"
-    profile: cpu_heavy
-    time: "06:00:00"
-    script: "scripts/24_preprocess_perturbation_viz.py"
-    args: ""
-    phase: 24
-    depends_on: [parse10m_ground_truth, tahoe_drug_sigs]
-
-  preprocess_spatial:
-    name: "Preprocess Spatial Data"
-    profile: cpu_heavy
-    time: "06:00:00"
-    script: "scripts/25_preprocess_spatial_viz.py"
-    args: ""
-    phase: 24
-    depends_on: [spatial_neighborhood]
 
   # === Phase 20: Perturbation Analyses ===
   parse10m:
