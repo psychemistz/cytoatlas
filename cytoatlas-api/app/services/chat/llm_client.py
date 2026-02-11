@@ -281,6 +281,26 @@ class AnthropicClient(LLMClient):
 
         return system_prompt, anthropic_messages
 
+    @staticmethod
+    def _convert_tools(tools: list[dict] | None) -> list[dict] | None:
+        """Convert OpenAI-format tools to Anthropic format if needed."""
+        if not tools:
+            return tools
+        converted = []
+        for tool in tools:
+            if tool.get("type") == "function" and "function" in tool:
+                fn = tool["function"]
+                converted.append({
+                    "name": fn["name"],
+                    "description": fn.get("description", ""),
+                    "input_schema": fn.get("parameters", {"type": "object", "properties": {}}),
+                })
+            elif "name" in tool and "input_schema" in tool:
+                converted.append(tool)
+            else:
+                converted.append(tool)
+        return converted
+
     async def chat(
         self,
         messages: list[dict],
@@ -290,12 +310,13 @@ class AnthropicClient(LLMClient):
     ) -> dict[str, Any]:
         """Send a non-streaming chat request."""
         system_prompt, anthropic_messages = self._convert_messages(messages)
+        anthropic_tools = self._convert_tools(tools)
 
         response = await self.client.messages.create(
             model=model or self.default_model,
             max_tokens=max_tokens or self.default_max_tokens,
             system=system_prompt,
-            tools=tools,
+            tools=anthropic_tools,
             messages=anthropic_messages,
         )
 
@@ -333,12 +354,13 @@ class AnthropicClient(LLMClient):
     ) -> AsyncGenerator[dict[str, Any], None]:
         """Stream a chat response."""
         system_prompt, anthropic_messages = self._convert_messages(messages)
+        anthropic_tools = self._convert_tools(tools)
 
         async with self.client.messages.stream(
             model=model or self.default_model,
             max_tokens=max_tokens or self.default_max_tokens,
             system=system_prompt,
-            tools=tools,
+            tools=anthropic_tools,
             messages=anthropic_messages,
         ) as stream:
             async for event in stream:

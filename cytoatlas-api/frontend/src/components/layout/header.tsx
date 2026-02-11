@@ -32,16 +32,16 @@ export function Header() {
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border-light bg-bg-primary shadow-sm">
-      <div className="mx-auto flex max-w-[1400px] items-center gap-4 px-4 py-3">
+    <header className="sticky top-0 z-50 bg-slate-900 shadow-md">
+      <div className="mx-auto flex max-w-[1400px] items-center gap-5 px-5 py-2.5">
         {/* Logo */}
-        <Link to="/" className="flex items-center gap-2 text-lg font-bold text-text-primary no-underline">
+        <Link to="/" className="flex shrink-0 items-center gap-2 text-lg font-bold text-white no-underline hover:text-white">
           <span className="text-2xl">&#128300;</span>
           <span>CytoAtlas</span>
         </Link>
 
         {/* Navigation */}
-        <nav className="flex flex-1 items-center gap-1 overflow-x-auto">
+        <nav className="flex items-center gap-0.5 overflow-x-auto">
           {NAV_LINKS.map(({ to, label }) => (
             <NavLink
               key={to}
@@ -49,10 +49,10 @@ export function Header() {
               end={to === '/'}
               className={({ isActive }) =>
                 cn(
-                  'whitespace-nowrap px-2.5 py-1.5 text-sm font-medium transition-colors border-b-2',
+                  'whitespace-nowrap rounded-md px-3 py-1.5 text-[13px] font-semibold transition-colors',
                   isActive
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-text-secondary hover:text-text-primary',
+                    ? 'bg-blue-600 text-white'
+                    : 'text-white hover:bg-white/15',
                 )
               }
             >
@@ -61,25 +61,27 @@ export function Header() {
           ))}
         </nav>
 
+        <div className="flex-1" />
+
         {/* Search */}
-        <div className="flex flex-1 max-w-[400px] items-center gap-1">
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Search genes (IFNG, TNF, IL6...)"
-            className="w-full max-w-[400px] rounded-md border border-border-light px-3 py-1.5 text-sm outline-none focus:border-primary"
-          />
-          <button
-            onClick={handleSearch}
-            className="rounded-md bg-primary px-3 py-1.5 text-sm text-text-inverse hover:bg-primary-dark"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <div className="flex max-w-[280px] items-center">
+          <div className="relative flex-1">
+            <svg
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+              width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+            >
               <circle cx="11" cy="11" r="8" />
               <path d="m21 21-4.35-4.35" />
             </svg>
-          </button>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Search genes..."
+              className="w-full rounded-lg border border-slate-600 bg-slate-800 py-1.5 pl-8 pr-3 text-sm text-white placeholder-slate-400 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
+            />
+          </div>
         </div>
 
         {/* API Docs */}
@@ -87,7 +89,7 @@ export function Header() {
           href="/docs"
           target="_blank"
           rel="noopener noreferrer"
-          className="whitespace-nowrap rounded-md border border-border-light px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-bg-tertiary"
+          className="whitespace-nowrap rounded-md border border-slate-600 px-3 py-1.5 text-[13px] font-semibold text-white no-underline hover:bg-white/15"
         >
           API Docs
         </a>

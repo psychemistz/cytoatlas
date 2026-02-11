@@ -13,14 +13,20 @@ import type {
 export function useChatSuggestions() {
   return useQuery({
     queryKey: ['chat', 'suggestions'],
-    queryFn: () => get<ChatSuggestion[]>('/chat/suggestions'),
+    queryFn: async () => {
+      const res = await get<{ suggestions: ChatSuggestion[] }>('/chat/suggestions');
+      return res.suggestions;
+    },
   });
 }
 
 export function useChatConversations() {
   return useQuery({
     queryKey: ['chat', 'conversations'],
-    queryFn: () => get<Conversation[]>('/chat/conversations'),
+    queryFn: async () => {
+      const res = await get<{ conversations: Conversation[] }>('/chat/conversations');
+      return res.conversations;
+    },
   });
 }
 

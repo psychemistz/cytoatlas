@@ -75,8 +75,6 @@ export default function Explore() {
               nCells={atlas.n_cells}
               nSamples={atlas.n_samples}
               nCellTypes={atlas.n_cell_types}
-              validationGrade={atlas.validation_grade}
-              sourceType={atlas.source_type}
             />
           ))}
         </div>

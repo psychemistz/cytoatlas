@@ -1,30 +1,31 @@
 @import "tailwindcss";
 
 @theme {
-  /* Colors */
-  --color-primary: #2563eb;
-  --color-primary-dark: #1d4ed8;
+  /* Colors — deeper, higher-contrast palette */
+  --color-primary: #1e40af;
+  --color-primary-dark: #1e3a8a;
   --color-primary-light: #3b82f6;
-  --color-secondary: #64748b;
-  --color-accent: #10b981;
-  --color-danger: #ef4444;
-  --color-warning: #f59e0b;
+  --color-secondary: #475569;
+  --color-accent: #059669;
+  --color-accent-light: #10b981;
+  --color-danger: #dc2626;
+  --color-warning: #d97706;
 
   /* Backgrounds */
   --color-bg-primary: #ffffff;
   --color-bg-secondary: #f8fafc;
   --color-bg-tertiary: #f1f5f9;
-  --color-bg-dark: #1e293b;
+  --color-bg-dark: #0f172a;
 
-  /* Text */
-  --color-text-primary: #1e293b;
-  --color-text-secondary: #475569;
-  --color-text-muted: #94a3b8;
+  /* Text — higher contrast */
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #334155;
+  --color-text-muted: #64748b;
   --color-text-inverse: #ffffff;
 
   /* Borders */
-  --color-border-light: #e2e8f0;
-  --color-border-medium: #cbd5e1;
+  --color-border-light: #cbd5e1;
+  --color-border-medium: #94a3b8;
 
   /* Font */
   --font-sans: 'Inter', system-ui, sans-serif;
@@ -41,10 +42,5 @@ body {
 }
 
 a {
-  color: var(--color-primary);
   text-decoration: none;
-}
-
-a:hover {
-  color: var(--color-primary-dark);
 }

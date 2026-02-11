@@ -55,7 +55,7 @@ class AtlasRegistry:
         # CIMA Atlas
         self._atlases["cima"] = AtlasMetadata(
             name="cima",
-            display_name="CIMA (Cell Atlas of Immune Aging)",
+            display_name="CIMA (Chinese Immune Multi-omics Atlas)",
             description="6.5 million immune cells from 421 healthy donors spanning ages 25-85, "
             "with correlations to age, BMI, biochemistry, and metabolomics.",
             h5ad_path=str(settings.cima_h5ad),

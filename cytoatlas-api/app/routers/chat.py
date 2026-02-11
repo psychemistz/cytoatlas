@@ -451,11 +451,16 @@ async def chat_status() -> dict[str, Any]:
     - Rate limit information
     """
     api_configured = bool(settings.llm_base_url or settings.anthropic_api_key)
+    active_model = (
+        settings.chat_model if settings.llm_base_url
+        else settings.anthropic_chat_model if settings.anthropic_api_key
+        else None
+    )
 
     return {
         "status": "operational" if api_configured else "limited",
         "llm_configured": api_configured,
-        "model": settings.chat_model if api_configured else None,
+        "model": active_model,
         "tools_available": len([t["name"] for t in __import__("app.services.mcp_tools", fromlist=["CYTOATLAS_TOOLS"]).CYTOATLAS_TOOLS]),
         "rate_limits": {
             "anonymous": f"{settings.anon_chat_limit_per_day} messages/day",

@@ -10,7 +10,6 @@ export function useAtlases() {
       return res.atlases.map((a) => ({
         ...a,
         source_type: a.source_type ?? a.atlas_type,
-        validation_grade: a.validation_grade ?? 'A',
       }));
     },
   });

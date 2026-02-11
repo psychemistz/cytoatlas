@@ -6,7 +6,7 @@ export const ATLAS_CONFIGS = {
   cima: {
     name: 'cima',
     displayName: 'CIMA',
-    description: 'Chinese Immune Multi-omics Atlas - Healthy adult immune profiling with biochemistry and metabolomics',
+    description: 'Chinese Immune Multi-omics Atlas — healthy adult immune profiling with biochemistry and metabolomics',
     color: '#2563eb',
   },
   inflammation: {

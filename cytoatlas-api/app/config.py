@@ -204,7 +204,7 @@ class Settings(BaseSettings):
         return self.max_upload_size_gb * 1024 * 1024 * 1024
 
     # LLM API for Chat — primary: vLLM (OpenAI-compatible); fallback: Anthropic Claude
-    llm_base_url: str | None = Field(default="http://localhost:8001/v1")
+    llm_base_url: str | None = Field(default=None)
     llm_api_key: str = Field(default="not-needed")  # vLLM doesn't require auth by default
     chat_model: str = Field(default="mistralai/Mistral-Small-3.1-24B-Instruct-2503")
     chat_max_tokens: int = Field(default=8192)
