@@ -16,8 +16,9 @@ OLD_PORT=8001
 NEW_PORT=8000
 PROJECT_DIR="/vf/users/parks34/projects/2cytoatlas"
 WORKTREE_DIR="/tmp/cytoatlas-old-${SLURM_JOB_ID}"
-# Commit before old static files were removed
-OLD_COMMIT="62f8a88~1"
+# Last commit before React was added — fully working vanilla JS/CSS app
+# with correct project paths and no str() bug (DuckDB works)
+OLD_COMMIT="41dadad"
 
 echo "=========================================="
 echo "  CytoAtlas: Side-by-Side Comparison      "
@@ -36,9 +37,7 @@ git worktree add "$WORKTREE_DIR" "$OLD_COMMIT" --detach 2>/dev/null || {
     git worktree add "$WORKTREE_DIR" "$OLD_COMMIT" --detach
 }
 
-# Copy .env so the old version has correct data paths
-# (The old code has the str() bug so DuckDB won't connect — it will
-# fall back to JSON, which is fine for visual/UI comparison.)
+# Copy .env so the old version picks up current data paths
 cp "$PROJECT_DIR/cytoatlas-api/.env" "$WORKTREE_DIR/cytoatlas-api/.env"
 
 echo "[$(date)] Worktree created at: $WORKTREE_DIR"
