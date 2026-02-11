@@ -13,10 +13,10 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  explore: 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20',
-  compare: 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20',
-  analyze: 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20',
-  explain: 'bg-purple-500/10 text-purple-400 hover:bg-purple-500/20',
+  explore: 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100',
+  compare: 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100',
+  analyze: 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100',
+  explain: 'bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100',
 };
 
 export function SuggestionChips({ suggestions, onSelect }: SuggestionChipsProps) {
@@ -31,7 +31,7 @@ export function SuggestionChips({ suggestions, onSelect }: SuggestionChipsProps)
     <div className="space-y-4">
       {Object.entries(grouped).map(([category, items]) => (
         <div key={category}>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
+          <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">
             {CATEGORY_LABELS[category] || category}
           </h3>
           <div className="flex flex-wrap gap-2">

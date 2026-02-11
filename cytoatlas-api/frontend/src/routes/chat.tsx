@@ -105,7 +105,7 @@ export default function Chat() {
   const showWelcome = selectedConversationId === null && messages.length === 0;
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-4rem)] max-w-[1400px] overflow-hidden">
+    <div className="mx-auto flex h-[calc(100dvh-3rem)] max-w-[1400px] overflow-hidden">
       {/* Sidebar */}
       <ChatSidebar
         conversations={conversations}
@@ -135,7 +135,7 @@ export default function Chat() {
 
         {error && (
           <div className="mx-auto max-w-3xl px-4 pb-2">
-            <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-2 text-sm text-red-400">
+            <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700">
               {error}
             </div>
           </div>
@@ -160,13 +160,13 @@ function WelcomeScreen({
     <div className="flex flex-1 items-center justify-center overflow-y-auto px-4 py-12">
       <div className="w-full max-w-2xl">
         <div className="mb-8 text-center">
-          <h1 className="mb-2 text-3xl font-bold text-text-primary">CytoAtlas Assistant</h1>
-          <p className="text-text-secondary">
+          <h1 className="mb-3 text-3xl font-bold text-slate-900">CytoAtlas Assistant</h1>
+          <p className="text-base text-slate-600">
             Ask questions about cytokine activity, cell types, diseases, and more.
             Powered by AI with access to the full CytoAtlas dataset.
           </p>
           {!llmConfigured && (
-            <div className="mt-4 inline-block rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-2 text-sm text-amber-400">
+            <div className="mt-4 inline-block rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700">
               AI assistant is not configured. Please contact the administrator.
             </div>
           )}
@@ -174,7 +174,7 @@ function WelcomeScreen({
 
         {suggestions.length > 0 && (
           <div>
-            <h2 className="mb-4 text-center text-sm font-medium text-text-muted">
+            <h2 className="mb-4 text-center text-sm font-semibold text-slate-500">
               Try asking about...
             </h2>
             <SuggestionChips suggestions={suggestions} onSelect={onSendSuggestion} />
