@@ -1,13 +1,14 @@
 import { useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { ChatViz } from '@/components/chat/chat-viz';
-import type { ChatMessage } from '@/api/types/chat';
+import type { ChatMessage, ChatVisualization } from '@/api/types/chat';
 
 interface ChatMessagesProps {
   messages: ChatMessage[];
   isStreaming: boolean;
   streamedContent: string;
   toolCalls: string[];
+  visualizations?: ChatVisualization[];
 }
 
 const TOOL_LABELS: Record<string, string> = {
@@ -105,9 +106,11 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 function StreamingBubble({
   content,
   toolCalls,
+  visualizations,
 }: {
   content: string;
   toolCalls: string[];
+  visualizations?: ChatVisualization[];
 }) {
   const activeTools = toolCalls.length > 0;
   const lastTool = activeTools ? toolCalls[toolCalls.length - 1] : null;
@@ -143,6 +146,9 @@ function StreamingBubble({
         {content && (
           <div className="whitespace-pre-wrap">{formatContent(content)}</div>
         )}
+        {visualizations?.map((viz, i) => (
+          <ChatViz key={`stream-viz-${i}`} visualization={viz} />
+        ))}
         {toolLabel && content && (
           <div className="mt-2 flex items-center gap-2 text-xs text-text-muted">
             <svg
@@ -184,6 +190,7 @@ export function ChatMessages({
   isStreaming,
   streamedContent,
   toolCalls,
+  visualizations,
 }: ChatMessagesProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -201,7 +208,7 @@ export function ChatMessages({
           <MessageBubble key={msg.id} message={msg} />
         ))}
         {isStreaming && (
-          <StreamingBubble content={streamedContent} toolCalls={toolCalls} />
+          <StreamingBubble content={streamedContent} toolCalls={toolCalls} visualizations={visualizations} />
         )}
       </div>
     </div>

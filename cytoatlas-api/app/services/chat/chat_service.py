@@ -284,8 +284,8 @@ class ChatService:
             if response["content"]:
                 response_text += response["content"]
 
-            # Check for tool calls
-            if response["finish_reason"] != "tool_calls" or not response["tool_calls"]:
+            # Check for tool calls (OpenAI uses "tool_calls", Anthropic uses "tool_use")
+            if response["finish_reason"] not in ("tool_calls", "tool_use") or not response["tool_calls"]:
                 break
 
             # Execute tools

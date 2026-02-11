@@ -4,6 +4,7 @@ import { get } from '@/api/client';
 import { API_BASE } from '@/lib/constants';
 import type {
   ChatSuggestion,
+  ChatVisualization,
   Conversation,
   ConversationDetail,
   ChatStatus,
@@ -49,12 +50,14 @@ export function useSendMessage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamedContent, setStreamedContent] = useState('');
   const [toolCalls, setToolCalls] = useState<string[]>([]);
+  const [visualizations, setVisualizations] = useState<ChatVisualization[]>([]);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const reset = useCallback(() => {
     setStreamedContent('');
     setToolCalls([]);
+    setVisualizations([]);
     setError(null);
   }, []);
 
@@ -67,6 +70,7 @@ export function useSendMessage() {
       setIsStreaming(true);
       setStreamedContent('');
       setToolCalls([]);
+      setVisualizations([]);
       setError(null);
 
       const controller = new AbortController();
@@ -122,6 +126,9 @@ export function useSendMessage() {
                 case 'tool_call':
                   setToolCalls((prev) => [...prev, chunk.tool_call.name]);
                   break;
+                case 'visualization':
+                  setVisualizations((prev) => [...prev, chunk.visualization]);
+                  break;
                 case 'done':
                   messageId = chunk.message_id;
                   break;
@@ -148,5 +155,5 @@ export function useSendMessage() {
     [],
   );
 
-  return { sendMessage, isStreaming, streamedContent, toolCalls, error, reset };
+  return { sendMessage, isStreaming, streamedContent, toolCalls, visualizations, error, reset };
 }

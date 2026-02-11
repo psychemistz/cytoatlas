@@ -269,15 +269,63 @@ class AnthropicClient(LLMClient):
         return self._client
 
     def _convert_messages(self, messages: list[dict]) -> tuple[str, list[dict]]:
-        """Extract system prompt and convert messages to Anthropic format."""
+        """Extract system prompt and convert messages to Anthropic format.
+
+        Handles conversion of OpenAI-format tool calls and tool results:
+        - Assistant messages with "tool_calls" → content blocks with type "tool_use"
+        - Messages with role "tool" → user messages with type "tool_result" content blocks
+        """
         system_prompt = ""
         anthropic_messages = []
 
         for msg in messages:
             if msg["role"] == "system":
                 system_prompt = msg["content"]
+
+            elif msg["role"] == "assistant":
+                if msg.get("tool_calls"):
+                    # Convert OpenAI tool_calls to Anthropic tool_use content blocks
+                    content_blocks = []
+                    if msg.get("content"):
+                        content_blocks.append({"type": "text", "text": msg["content"]})
+                    for tc in msg["tool_calls"]:
+                        fn = tc.get("function", {})
+                        tool_input = fn.get("arguments", "{}")
+                        if isinstance(tool_input, str):
+                            try:
+                                tool_input = json.loads(tool_input)
+                            except (json.JSONDecodeError, TypeError):
+                                tool_input = {}
+                        content_blocks.append({
+                            "type": "tool_use",
+                            "id": tc.get("id", ""),
+                            "name": fn.get("name", ""),
+                            "input": tool_input,
+                        })
+                    anthropic_messages.append({"role": "assistant", "content": content_blocks})
+                else:
+                    anthropic_messages.append({"role": msg["role"], "content": msg["content"]})
+
+            elif msg["role"] == "tool":
+                # Convert OpenAI tool result to Anthropic tool_result content block
+                tool_result_block = {
+                    "type": "tool_result",
+                    "tool_use_id": msg.get("tool_call_id", ""),
+                    "content": msg.get("content", ""),
+                }
+                # Merge into previous user message if it has tool_result blocks
+                if (anthropic_messages
+                        and anthropic_messages[-1]["role"] == "user"
+                        and isinstance(anthropic_messages[-1]["content"], list)):
+                    anthropic_messages[-1]["content"].append(tool_result_block)
+                else:
+                    anthropic_messages.append({
+                        "role": "user",
+                        "content": [tool_result_block],
+                    })
+
             else:
-                anthropic_messages.append(msg)
+                anthropic_messages.append({"role": msg["role"], "content": msg["content"]})
 
         return system_prompt, anthropic_messages
 

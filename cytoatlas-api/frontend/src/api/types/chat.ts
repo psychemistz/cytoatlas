@@ -27,8 +27,10 @@ export interface ChatSuggestion {
 export interface ChatVisualization {
   container_id: string;
   type?: string;
+  title?: string;
   data?: unknown;
   layout?: unknown;
+  config?: unknown;
 }
 
 export type StreamChunk =

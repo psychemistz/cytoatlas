@@ -34,7 +34,7 @@ export default function Chat() {
   const { data: conversations = [], isLoading: conversationsLoading } = useChatConversations();
   const { data: conversationDetail } = useChatConversation(selectedConversationId);
   const { data: status } = useChatStatus();
-  const { sendMessage, isStreaming, streamedContent, toolCalls, error, reset } = useSendMessage();
+  const { sendMessage, isStreaming, streamedContent, toolCalls, visualizations, error, reset } = useSendMessage();
 
   // Sync messages when a conversation is loaded
   useEffect(() => {
@@ -94,12 +94,13 @@ export default function Chat() {
         id: Date.now() + 1,
         role: 'assistant',
         content: streamedContent,
+        visualizations: visualizations.length > 0 ? visualizations : undefined,
         created_at: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, assistantMessage]);
       reset();
     }
-  }, [isStreaming, streamedContent, reset]);
+  }, [isStreaming, streamedContent, visualizations, reset]);
 
   const llmConfigured = status?.llm_configured ?? false;
   const showWelcome = selectedConversationId === null && messages.length === 0;
@@ -130,6 +131,7 @@ export default function Chat() {
             isStreaming={isStreaming}
             streamedContent={streamedContent}
             toolCalls={toolCalls}
+            visualizations={visualizations}
           />
         )}
 
