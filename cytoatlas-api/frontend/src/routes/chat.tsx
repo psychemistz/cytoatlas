@@ -117,6 +117,16 @@ export default function Chat() {
 
       {/* Main chat area */}
       <div className="flex flex-1 flex-col">
+        {/* Chat header */}
+        <div className="flex items-center border-b border-border-light bg-white px-4 py-2.5">
+          <h1 className="text-base font-semibold text-slate-900">CytoAtlas Assistant</h1>
+          {status?.model && (
+            <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">
+              {status.model.split('/').pop()}
+            </span>
+          )}
+        </div>
+
         {conversationsLoading ? (
           <Spinner message="Loading conversations..." />
         ) : showWelcome ? (
