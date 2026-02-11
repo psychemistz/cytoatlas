@@ -1,5 +1,22 @@
-# Multi-stage build for CytoAtlas API
-FROM python:3.11-slim as builder
+# Stage 1: Build React frontend
+FROM node:22-slim AS frontend-builder
+
+WORKDIR /app/frontend
+
+# Copy frontend dependency files
+COPY frontend/package.json frontend/package-lock.json* ./
+
+# Install dependencies
+RUN npm ci --ignore-scripts
+
+# Copy frontend source
+COPY frontend/ .
+
+# Build frontend (outputs to ../static/)
+RUN npm run build
+
+# Stage 2: Build Python backend
+FROM python:3.11-slim AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -20,8 +37,8 @@ RUN uv venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 RUN uv pip install -e .
 
-# Production stage
-FROM python:3.11-slim as production
+# Stage 3: Production
+FROM python:3.11-slim AS production
 
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash appuser
@@ -34,6 +51,9 @@ ENV PATH="/app/.venv/bin:$PATH"
 
 # Copy application code
 COPY --chown=appuser:appuser . .
+
+# Copy built frontend assets (overwrite static/)
+COPY --from=frontend-builder --chown=appuser:appuser /app/static/ /app/static/
 
 # Switch to non-root user
 USER appuser
