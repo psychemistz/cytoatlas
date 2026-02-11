@@ -12,12 +12,6 @@ const TYPE_OPTIONS = [
   { value: 'user', label: 'Community' },
 ];
 
-const TISSUE_OPTIONS = [
-  { value: 'all', label: 'All Tissues' },
-  { value: 'pbmc', label: 'PBMC' },
-  { value: 'tissue', label: 'Tissue' },
-];
-
 const SORT_OPTIONS = [
   { value: 'cells', label: 'Sort by Cells' },
   { value: 'name', label: 'Sort by Name' },
@@ -27,7 +21,6 @@ const SORT_OPTIONS = [
 export default function Explore() {
   const { data: atlases, isLoading } = useAtlases();
   const [typeFilter, setTypeFilter] = useState('all');
-  const [tissueFilter, setTissueFilter] = useState('all');
   const [sortBy, setSortBy] = useState('cells');
 
   const allAtlases = atlases ?? PLACEHOLDER_ATLASES;
@@ -35,11 +28,6 @@ export default function Explore() {
   const filtered = useMemo(() => {
     let result = allAtlases.filter((a) => {
       if (typeFilter !== 'all' && a.source_type !== typeFilter) return false;
-      if (tissueFilter !== 'all') {
-        const name = a.name.toLowerCase();
-        if (tissueFilter === 'pbmc' && name !== 'cima' && name !== 'inflammation') return false;
-        if (tissueFilter === 'tissue' && name !== 'scatlas') return false;
-      }
       return true;
     });
 
@@ -58,7 +46,7 @@ export default function Explore() {
     });
 
     return result;
-  }, [allAtlases, typeFilter, tissueFilter, sortBy]);
+  }, [allAtlases, typeFilter, sortBy]);
 
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-12">
@@ -69,7 +57,6 @@ export default function Explore() {
 
       <FilterBar className="mb-6">
         <SelectFilter label="" options={TYPE_OPTIONS} value={typeFilter} onChange={setTypeFilter} />
-        <SelectFilter label="" options={TISSUE_OPTIONS} value={tissueFilter} onChange={setTissueFilter} />
         <SelectFilter label="" options={SORT_OPTIONS} value={sortBy} onChange={setSortBy} />
       </FilterBar>
 

@@ -7,6 +7,7 @@ from app.config import get_settings
 from app.core.cache import CacheService, get_cache
 from app.core.database import async_session_factory
 from app.schemas.common import HealthResponse
+from app.services.base import _get_duckdb_repository
 
 router = APIRouter(prefix="/health", tags=["Health"])
 settings = get_settings()
@@ -19,7 +20,7 @@ async def health_check(
     """
     Check API health status.
 
-    Returns status of API, database, and cache connections.
+    Returns status of API, database, cache, and DuckDB connections.
     """
     # Check database
     db_status = "not configured"
@@ -39,8 +40,20 @@ async def health_check(
     except Exception:
         cache_status = "disconnected"
 
+    # Check DuckDB
+    duckdb_status = "not configured"
+    if settings.use_duckdb:
+        try:
+            repo = _get_duckdb_repository()
+            if repo is not None and repo.available:
+                duckdb_status = "connected"
+            else:
+                duckdb_status = "disconnected"
+        except Exception:
+            duckdb_status = "disconnected"
+
     # Determine overall status
-    if db_status == "disconnected":
+    if db_status == "disconnected" or duckdb_status == "disconnected":
         status = "degraded"
     elif db_status == "not configured":
         status = "healthy"  # Running without database is OK
@@ -52,6 +65,7 @@ async def health_check(
         version=settings.app_version,
         database=db_status,
         cache=cache_status,
+        duckdb=duckdb_status,
         environment=settings.environment,
     )
 

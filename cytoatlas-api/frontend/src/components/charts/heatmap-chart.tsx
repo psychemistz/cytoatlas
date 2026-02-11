@@ -5,11 +5,15 @@ import { HEATMAP_COLORSCALE, title as t } from './chart-defaults';
 
 interface HeatmapChartProps {
   z: number[][];
-  x: string[];
-  y: string[];
+  x?: string[];
+  y?: string[];
+  signatures?: string[];
+  cell_types?: string[];
   title?: string;
   xTitle?: string;
   yTitle?: string;
+  xLabel?: string;
+  yLabel?: string;
   colorscale?: [number, string][];
   symmetric?: boolean;
   zmin?: number;
@@ -21,11 +25,15 @@ interface HeatmapChartProps {
 
 export function HeatmapChart({
   z,
-  x,
-  y,
+  x: xProp,
+  y: yProp,
+  signatures,
+  cell_types,
   title,
   xTitle,
   yTitle,
+  xLabel = 'X',
+  yLabel = 'Y',
   colorscale = HEATMAP_COLORSCALE,
   symmetric = true,
   zmin: zminProp,
@@ -35,6 +43,8 @@ export function HeatmapChart({
   height,
 }: HeatmapChartProps) {
   const { data, layout } = useMemo(() => {
+    const x = xProp ?? signatures ?? [];
+    const y = yProp ?? cell_types ?? [];
     let zmin = zminProp;
     let zmax = zmaxProp;
 
@@ -57,7 +67,7 @@ export function HeatmapChart({
         zmin,
         zmax,
         hoverongaps: false,
-        hovertemplate: 'X: %{x}<br>Y: %{y}<br>Value: %{z:.3f}<extra></extra>',
+        hovertemplate: `${xLabel}: %{x}<br>${yLabel}: %{y}<br>Value: %{z:.3f}<extra></extra>`,
         colorbar: {
           title: { text: colorbarTitle, side: 'right' },
           len: 0.9,
@@ -82,7 +92,7 @@ export function HeatmapChart({
     };
 
     return { data: traces, layout: chartLayout };
-  }, [z, x, y, title, xTitle, yTitle, colorscale, symmetric, zminProp, zmaxProp, colorbarTitle, height]);
+  }, [z, xProp, yProp, signatures, cell_types, title, xTitle, yTitle, xLabel, yLabel, colorscale, symmetric, zminProp, zmaxProp, colorbarTitle, height]);
 
   return <PlotlyChart data={data} layout={layout} className={className} />;
 }

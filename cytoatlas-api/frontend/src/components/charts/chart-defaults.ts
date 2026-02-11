@@ -14,7 +14,7 @@ export const PLOTLY_LAYOUT: Partial<Layout> = {
   font: PLOTLY_FONT,
   margin: { l: 80, r: 40, t: 40, b: 80 },
   paper_bgcolor: 'white',
-  plot_bgcolor: 'white',
+  plot_bgcolor: '#fafafa',
   hovermode: 'closest' as const,
 };
 
@@ -35,14 +35,21 @@ export const HEATMAP_COLORSCALE: [number, string][] = [
   [1, '#b2182b'],
 ];
 
+/** Secondary colorscale for correlation heatmaps (biochemistry, metabolites, severity) */
+export const CORRELATION_COLORSCALE: [number, string][] = [
+  [0, '#a8d4e6'],
+  [0.5, '#f5f5f5'],
+  [1, '#f4a6a6'],
+];
+
 export const COLORS = {
-  primary: '#2563eb',
+  primary: '#1f77b4',
   primaryDark: '#1d4ed8',
-  red: '#ef4444',
-  green: '#10b981',
-  amber: '#f59e0b',
-  purple: '#8b5cf6',
-  gray: '#94a3b8',
+  red: '#d62728',
+  green: '#2ca02c',
+  amber: '#ff7f0e',
+  purple: '#9467bd',
+  gray: '#ccc',
   darkSlate: '#1e293b',
   gridline: '#f1f5f9',
   zeroline: '#e2e8f0',

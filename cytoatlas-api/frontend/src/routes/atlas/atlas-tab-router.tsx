@@ -54,7 +54,7 @@ export function AtlasTabRouter({ atlasName, signatureType }: AtlasTabRouterProps
       tabs={tabs}
       defaultTab={activeTab}
       onTabChange={setActiveTab}
-      variant="pill"
+      variant="underline"
     >
       {(tabId) => (
         <ErrorBoundary>

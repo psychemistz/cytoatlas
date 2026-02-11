@@ -108,13 +108,11 @@ export default function Search() {
   );
 }
 
-function Badge({ active, type = 'cs', children }: { active: boolean; type?: 'cs' | 'sa'; children: React.ReactNode }) {
+function Badge({ active, children }: { active: boolean; type?: 'cs' | 'sa'; children: React.ReactNode }) {
   const colorClass =
     !active
       ? 'bg-bg-tertiary text-text-muted'
-      : type === 'sa'
-        ? 'bg-purple-500/20 text-purple-600'
-        : 'bg-primary/10 text-primary';
+      : 'bg-primary/10 text-primary';
 
   return (
     <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-bold leading-none ${colorClass}`}>

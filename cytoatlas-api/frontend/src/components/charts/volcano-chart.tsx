@@ -4,10 +4,16 @@ import { PlotlyChart } from './plotly-chart';
 import { COLORS, title as t } from './chart-defaults';
 
 interface VolcanoPoint {
-  signature: string;
-  activity_diff: number;
-  p_value: number;
-  fdr: number;
+  signature?: string;
+  label?: string;
+  gene?: string;
+  activity_diff?: number;
+  log2fc?: number;
+  x?: number;
+  p_value?: number;
+  pval?: number;
+  y?: number;
+  fdr?: number;
 }
 
 interface VolcanoChartProps {
@@ -30,13 +36,18 @@ export function VolcanoChart({
   onClick,
 }: VolcanoChartProps) {
   const { data, layout } = useMemo(() => {
-    const x = points.map((p) => p.activity_diff);
-    const y = points.map((p) => -Math.log10(Math.max(p.p_value, 1e-300)));
-    const text = points.map((p) => p.signature);
+    const x = points.map((p) => p.activity_diff ?? p.log2fc ?? p.x ?? 0);
+    const y = points.map((p) => {
+      const pval = p.p_value ?? p.pval ?? p.y ?? 1;
+      return pval > 0 ? -Math.log10(pval) : 0;
+    });
+    const text = points.map((p) => p.signature ?? p.label ?? p.gene ?? '');
 
     const colors = points.map((p) => {
-      if (p.fdr < fdrThreshold && Math.abs(p.activity_diff) > activityThreshold) {
-        return p.activity_diff > 0 ? COLORS.red : COLORS.primary;
+      const actDiff = p.activity_diff ?? p.log2fc ?? p.x ?? 0;
+      const fdr = p.fdr ?? p.p_value ?? p.pval ?? 1;
+      if (fdr < fdrThreshold && Math.abs(actDiff) > activityThreshold) {
+        return actDiff > 0 ? COLORS.red : COLORS.green;
       }
       return COLORS.gray;
     });
@@ -48,7 +59,7 @@ export function VolcanoChart({
         x,
         y,
         text,
-        marker: { color: colors, size: 6, opacity: 0.7, line: { color: 'white', width: 0.5 } },
+        marker: { color: colors, size: 10, opacity: 0.7, line: { color: 'white', width: 0.5 } },
         hovertemplate: '%{text}<br>\u0394 Activity: %{x:.3f}<br>-log10(p): %{y:.3f}<extra></extra>',
       },
     ];
@@ -80,7 +91,7 @@ export function VolcanoChart({
       className={className}
       onClick={onClick ? (e) => {
         const idx = (e as { points: { pointIndex: number }[] }).points[0]?.pointIndex;
-        if (idx !== undefined) onClick(points[idx].signature);
+        if (idx !== undefined) onClick(points[idx].signature ?? points[idx].label ?? points[idx].gene ?? '');
       } : undefined}
     />
   );

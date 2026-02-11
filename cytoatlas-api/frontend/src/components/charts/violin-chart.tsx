@@ -3,6 +3,13 @@ import type { Data, Layout } from 'plotly.js-dist-min';
 import { PlotlyChart } from './plotly-chart';
 import { COLORS, title as t } from './chart-defaults';
 
+type AxisConfig = {
+  title?: ReturnType<typeof t>;
+  zeroline?: boolean;
+  zerolinecolor?: string;
+  gridcolor?: string;
+};
+
 interface ViolinChartProps {
   groups: string[];
   values: number[][];
@@ -44,10 +51,24 @@ export function ViolinChart({
       line: { color: colors[i % colors.length] },
     }));
 
+    const valueAxisConfig: AxisConfig = {
+      zeroline: true,
+      zerolinecolor: COLORS.zeroline,
+      gridcolor: COLORS.gridline,
+    };
+
+    const xaxis: AxisConfig = orientation === 'v'
+      ? { title: t(xTitle) }
+      : { title: t(yTitle), ...valueAxisConfig };
+
+    const yaxis: AxisConfig = orientation === 'v'
+      ? { title: t(yTitle), ...valueAxisConfig }
+      : { title: t(xTitle) };
+
     const chartLayout: Partial<Layout> & { violinmode?: string } = {
       title: title ? { text: title, font: { size: 14 } } : undefined,
-      xaxis: { title: t(xTitle) },
-      yaxis: { title: t(yTitle) },
+      xaxis,
+      yaxis,
       violinmode: 'group',
       showlegend: false,
       height,

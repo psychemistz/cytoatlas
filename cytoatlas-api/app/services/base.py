@@ -108,7 +108,7 @@ def _get_duckdb_repository():
     if _duckdb_repo is None and settings.use_duckdb:
         try:
             from app.repositories.duckdb_repository import DuckDBRepository
-            _duckdb_repo = DuckDBRepository(str(settings.duckdb_atlas_path))
+            _duckdb_repo = DuckDBRepository(settings.duckdb_atlas_path)
             if _duckdb_repo.available:
                 logger.info("DuckDB repository initialized: %s", settings.duckdb_atlas_path)
             else:

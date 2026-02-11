@@ -49,10 +49,10 @@ export function Header() {
               end={to === '/'}
               className={({ isActive }) =>
                 cn(
-                  'whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors',
+                  'whitespace-nowrap px-2.5 py-1.5 text-sm font-medium transition-colors border-b-2',
                   isActive
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-text-secondary hover:bg-bg-tertiary hover:text-text-primary',
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-text-secondary hover:text-text-primary',
                 )
               }
             >

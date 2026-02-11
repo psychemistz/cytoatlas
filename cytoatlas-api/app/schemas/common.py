@@ -48,6 +48,7 @@ class HealthResponse(BaseModel):
     version: str
     database: str = "connected"
     cache: str = "connected"
+    duckdb: str = "not configured"
     environment: str
 
 

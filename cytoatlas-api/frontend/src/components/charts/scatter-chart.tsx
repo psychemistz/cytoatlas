@@ -7,13 +7,15 @@ interface ScatterChartProps {
   x: number[];
   y: number[];
   labels?: string[];
+  text?: string[];
   colors?: string | string[];
   sizes?: number | number[];
   xTitle?: string;
   yTitle?: string;
   title?: string;
   showTrendLine?: boolean;
-  stats?: { r?: number; p?: number; rho?: number };
+  stats?: { r?: number; p?: number; rho?: number; spearman_r?: number; pearson_r?: number; p_value?: number; fisherpval?: number };
+  hoverTemplate?: string;
   className?: string;
   height?: number;
 }
@@ -22,31 +24,44 @@ export function ScatterChart({
   x,
   y,
   labels,
+  text: textProp,
   colors = COLORS.primary,
   sizes = 8,
   xTitle,
   yTitle,
   title,
   showTrendLine = false,
-  stats,
+  stats: rawStats,
+  hoverTemplate,
   className,
   height = 500,
 }: ScatterChartProps) {
   const { data, layout } = useMemo(() => {
+    const resolvedLabels = labels ?? textProp;
+
+    // Normalize stats aliases
+    const stats = rawStats
+      ? {
+          rho: rawStats.rho ?? rawStats.spearman_r,
+          r: rawStats.r ?? rawStats.pearson_r,
+          p: rawStats.p ?? rawStats.p_value ?? rawStats.fisherpval,
+        }
+      : undefined;
+
     const traces: Data[] = [
       {
         type: 'scatter',
         mode: 'markers',
         x,
         y,
-        text: labels,
+        text: resolvedLabels,
         marker: {
           color: colors,
           size: sizes,
           opacity: 0.7,
           line: { color: 'white', width: 1 },
         },
-        hovertemplate: '%{text}<br>X: %{x:.3f}<br>Y: %{y:.3f}<extra></extra>',
+        hovertemplate: hoverTemplate ?? '%{text}<br>X: %{x:.3f}<br>Y: %{y:.3f}<extra></extra>',
       },
     ];
 
@@ -113,7 +128,7 @@ export function ScatterChart({
     };
 
     return { data: traces, layout: chartLayout };
-  }, [x, y, labels, colors, sizes, xTitle, yTitle, title, showTrendLine, stats, height]);
+  }, [x, y, labels, textProp, colors, sizes, xTitle, yTitle, title, showTrendLine, rawStats, hoverTemplate, height]);
 
   return <PlotlyChart data={data} layout={layout} className={className} />;
 }

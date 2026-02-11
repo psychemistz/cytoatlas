@@ -42,7 +42,7 @@ export function ForestPlot({ items, title, className, height }: ForestPlotProps)
     const ticktext: string[] = [];
 
     // Group traces by atlas for legend
-    const atlasTraces: Record<string, { x: number[]; y: number[]; error_x: number[] }> = {};
+    const atlasTraces: Record<string, { x: number[]; y: number[]; error_x: number[]; customdata: number[] }> = {};
 
     items.forEach((item, idx) => {
       const baseY = idx;
@@ -53,11 +53,12 @@ export function ForestPlot({ items, title, className, height }: ForestPlotProps)
       item.individual_effects.forEach((effect, aIdx) => {
         const atlasName = effect.atlas;
         if (!atlasTraces[atlasName]) {
-          atlasTraces[atlasName] = { x: [], y: [], error_x: [] };
+          atlasTraces[atlasName] = { x: [], y: [], error_x: [], customdata: [] };
         }
         atlasTraces[atlasName].x.push(effect.effect);
         atlasTraces[atlasName].y.push(baseY + (aIdx - 1) * 0.15);
         atlasTraces[atlasName].error_x.push(effect.se * 1.96);
+        atlasTraces[atlasName].customdata.push(effect.n);
       });
     });
 
@@ -69,6 +70,7 @@ export function ForestPlot({ items, title, className, height }: ForestPlotProps)
         name: atlas,
         x: d.x,
         y: d.y,
+        customdata: d.customdata,
         error_x: {
           type: 'data',
           array: d.error_x,
@@ -78,17 +80,19 @@ export function ForestPlot({ items, title, className, height }: ForestPlotProps)
           thickness: 1.5,
         },
         marker: { color: ATLAS_COLORS[atlas] ?? COLORS.gray, size: 8 },
-        hovertemplate: `${atlas}<br>Effect: %{x:.3f} \u00b1 %{error_x.array:.3f}<extra></extra>`,
+        hovertemplate: `${atlas}: %{x:.3f} (n=%{customdata})<extra></extra>`,
       });
     });
 
     // Pooled effects (diamonds)
+    const pooledCustomdata = items.map((i) => [i.ci_low.toFixed(3), i.ci_high.toFixed(3), i.I2.toFixed(1)]);
     traces.push({
       type: 'scatter',
       mode: 'markers',
       name: 'Pooled',
       x: items.map((i) => i.pooled_effect),
       y: items.map((_, idx) => idx),
+      customdata: pooledCustomdata,
       error_x: {
         type: 'data',
         array: items.map((i) => i.ci_high - i.pooled_effect),
@@ -99,13 +103,15 @@ export function ForestPlot({ items, title, className, height }: ForestPlotProps)
         thickness: 2,
       },
       marker: { color: COLORS.darkSlate, size: 12, symbol: 'diamond' },
-      hovertemplate: 'Pooled: %{x:.3f}<extra></extra>',
+      hovertemplate: 'Pooled: %{x:.3f} [%{customdata[0]}, %{customdata[1]}] I\u00b2: %{customdata[2]}%<extra></extra>',
     });
 
     const dynamicHeight = height ?? Math.max(400, items.length * 60 + 120);
 
     const chartLayout: Partial<Layout> = {
       title: title ? { text: title, font: { size: 14 } } : undefined,
+      paper_bgcolor: 'rgba(0,0,0,0)',
+      plot_bgcolor: 'rgba(0,0,0,0)',
       margin: { l: 120, r: 40, t: 60, b: 80 },
       xaxis: { title: t('Effect Size (Correlation)'), zeroline: true, zerolinecolor: COLORS.zeroline, gridcolor: COLORS.zeroline },
       yaxis: { tickmode: 'array' as const, tickvals, ticktext, autorange: 'reversed' as const, gridcolor: COLORS.zeroline },
