@@ -10,47 +10,65 @@ Comprehensive documentation for the Pan-Disease Single-Cell Cytokine Activity At
 |----------|---------|
 | **[DEPLOYMENT.md](DEPLOYMENT.md)** | **START HERE** - Setup guide for development, HPC, production |
 | **[USER_GUIDE.md](USER_GUIDE.md)** | How to explore CIMA, Inflammation, scAtlas data |
-| **[API_REFERENCE.md](API_REFERENCE.md)** | All 217 REST API endpoints with curl examples |
+| **[PROJECT_STATUS.md](PROJECT_STATUS.md)** | Current project status, what's done, what remains |
+| **[API_REFERENCE.md](API_REFERENCE.md)** | All 260 REST API endpoints with curl examples |
 | **[ARCHITECTURE.md](ARCHITECTURE.md)** | System design: components, data flow, technology stack |
 | **[CLAUDE.md](../CLAUDE.md)** | Project context for Claude Code |
 
 ## Overview
 
-This project computes cytokine and secreted protein activity signatures across 17+ million human immune cells from three major single-cell atlases:
+This project computes cytokine and secreted protein activity signatures across 240M+ human cells from six datasets:
 
 | Atlas | Cells | Samples | Focus |
 |-------|-------|---------|-------|
 | [CIMA](datasets/cima.md) | 6.5M | 428 | Healthy aging, metabolism |
 | [Inflammation](datasets/inflammation.md) | 6.3M | 1,047 | Disease activity, treatment response |
 | [scAtlas](datasets/scatlas.md) | 6.4M | 35+ organs | Organ signatures, cancer comparison |
+| [parse_10M](datasets/parse_10m.md) | 9.7M | 1,092 | Cytokine perturbation, ground truth |
+| [Tahoe-100M](datasets/tahoe.md) | 100.6M | 14 plates | Drug perturbation, 50 cancer lines |
+| [SpatialCorpus](datasets/spatial_corpus.md) | ~110M | 251 files | Spatial transcriptomics (8 technologies) |
 
 ## Quick Facts
 
-- **Total cells analyzed**: 17M+
-- **REST API endpoints**: 217 across 15 routers
-- **Signature types**: CytoSig (44), LinCytoSig (178), SecAct (1,249)
-- **Web UI pages**: 8 interactive pages with Plotly + D3.js
-- **Analysis scripts**: 7 Python pipelines + 5 SLURM batch jobs
+- **Total cells**: 240M+ across 6 datasets
+- **REST API endpoints**: 260 across 17 routers
+- **Signature types**: CytoSig (44), SecAct (1,249)
+- **Web UI**: 12 React pages (React 19 + TypeScript + Vite 6 + Tailwind CSS v4)
+- **Analysis scripts**: 22 Python pipelines (13 completed, 8 pending GPU execution)
+- **See**: [PROJECT_STATUS.md](PROJECT_STATUS.md) for full audit
 
 ## Full Documentation Structure
 
 ```
 docs/
 ├── README.md                    # This file
+├── PROJECT_STATUS.md            # Current project status audit
 │
 ├── datasets/                    # Dataset documentation
 │   ├── README.md                # Dataset index
 │   ├── cima.md                  # CIMA atlas (6.5M cells)
 │   ├── inflammation.md          # Inflammation Atlas (6.3M cells)
 │   ├── scatlas.md               # scAtlas (6.4M cells)
-│   └── signatures.md            # CytoSig + SecAct signatures
+│   ├── parse_10m.md             # parse_10M (9.7M cells, cytokine perturbation)
+│   ├── tahoe.md                 # Tahoe-100M (100M cells, drug perturbation)
+│   ├── spatial_corpus.md        # SpatialCorpus-110M (110M cells, spatial)
+│   ├── signatures.md            # CytoSig + SecAct signatures
+│   └── bulk.md                  # Bulk RNA-seq validation (GTEx, TCGA)
 │
 ├── pipelines/                   # Pipeline documentation
 │   ├── README.md                # Pipeline index + dependency graph
 │   ├── cima/                    # CIMA analysis
 │   ├── inflammation/            # Inflammation Atlas analysis
 │   ├── scatlas/                 # scAtlas analysis
+│   ├── perturbation/            # parse_10M + Tahoe analysis
+│   ├── spatial/                 # SpatialCorpus analysis
 │   └── visualization/           # Visualization preprocessing
+│
+├── decisions/                   # Architecture Decision Records
+│   ├── ADR-001-parquet-over-json.md
+│   ├── ADR-002-repository-pattern.md
+│   ├── ADR-003-rbac-model.md
+│   └── ADR-004-multi-dataset-storage.md
 │
 ├── outputs/                     # Output file documentation
 │   └── visualization/           # JSON files for web dashboard
@@ -67,7 +85,7 @@ docs/
 ### Getting Started
 - [DEPLOYMENT.md](DEPLOYMENT.md) - **Development, HPC, and production deployment**
 - [USER_GUIDE.md](USER_GUIDE.md) - **How to use CytoAtlas (atlases, chat, exports)**
-- [API_REFERENCE.md](API_REFERENCE.md) - **All 217 REST API endpoints**
+- [API_REFERENCE.md](API_REFERENCE.md) - **All 260 REST API endpoints**
 
 ### Technical Documentation
 - [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture (17 sections)
@@ -82,12 +100,19 @@ docs/
   - [CIMA Atlas](datasets/cima.md) - 6.5M cells, 428 samples, healthy donors with biochemistry/metabolomics
   - [Inflammation Atlas](datasets/inflammation.md) - 6.3M cells, 20 diseases, treatment response data
   - [scAtlas](datasets/scatlas.md) - 6.4M cells, 35+ organs, normal and cancer tissues
+  - [parse_10M](datasets/parse_10m.md) - 9.7M cells, cytokine perturbation, ground-truth validation
+  - [Tahoe-100M](datasets/tahoe.md) - 100.6M cells, 50 cancer lines x 95 drugs
+  - [SpatialCorpus-110M](datasets/spatial_corpus.md) - ~110M cells, 8 spatial technologies
   - [Signature Matrices](datasets/signatures.md) - CytoSig (44 cytokines) + SecAct (1,249 secreted proteins)
+  - [Bulk RNA-seq](datasets/bulk.md) - GTEx/TCGA validation data
 
 - [pipelines/README.md](pipelines/README.md) - Pipeline overview and dependency graph
   - [CIMA Pipeline](pipelines/cima/activity.md) - Age/BMI correlations, biochemistry, metabolites
   - [Inflammation Pipeline](pipelines/inflammation/activity.md) - Disease activity, treatment response
   - [scAtlas Pipeline](pipelines/scatlas/analysis.md) - Organ signatures, cancer comparison
+  - [parse_10M Pipeline](pipelines/perturbation/parse10m.md) - Cytokine perturbation activity
+  - [Tahoe Pipeline](pipelines/perturbation/tahoe.md) - Drug response activity
+  - [Spatial Pipeline](pipelines/spatial/activity.md) - Technology-stratified spatial activity
   - [Visualization Preprocessing](pipelines/visualization/preprocess.md) - JSON generation for web dashboard
 
 ### Outputs & Analysis
@@ -151,11 +176,12 @@ Documentation is accessible via MCP tools in the CytoAtlas API:
 - `list_panel_outputs(panel)` - List all outputs for an analysis panel
 
 ### Architecture & Decisions
-- [ARCHITECTURE.md](ARCHITECTURE.md) - Complete system architecture
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Complete system architecture (20 sections)
 - [decisions/README.md](decisions/README.md) - Architecture Decision Records summary
   - [ADR-001: Parquet over JSON](decisions/ADR-001-parquet-over-json.md)
   - [ADR-002: Repository Pattern](decisions/ADR-002-repository-pattern.md)
   - [ADR-003: RBAC Model](decisions/ADR-003-rbac-model.md)
+  - [ADR-004: Multi-Dataset Storage](decisions/ADR-004-multi-dataset-storage.md)
 
 ### Validation & Credibility
 - [ATLAS_VALIDATION.md](ATLAS_VALIDATION.md) - 5-type validation framework

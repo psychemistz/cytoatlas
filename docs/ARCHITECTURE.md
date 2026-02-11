@@ -218,11 +218,14 @@ Response
 
 | Layer | Technologies |
 |-------|--------------|
-| **Framework** | Vanilla JavaScript (no build step) |
-| **Routing** | Client-side hash routing |
-| **Visualization** | Plotly.js, D3.js v7 |
-| **Data Format** | JSON |
-| **Styling** | CSS3 (responsive, mobile-first) |
+| **Framework** | React 19 + TypeScript |
+| **Build** | Vite 6, outputs to `../static/` |
+| **Routing** | React Router v7 (lazy-loaded routes) |
+| **Server State** | TanStack Query v5 (5-min staleTime) |
+| **Client State** | Zustand with persist middleware |
+| **Visualization** | react-plotly.js (plotly.js-dist-min), D3.js v7 |
+| **Styling** | Tailwind CSS v4 (`@theme` directive) |
+| **Testing** | Vitest (unit), Playwright (E2E) |
 | **Browser Support** | Modern browsers (Chrome, Firefox, Safari) |
 
 ### 4.4 DevOps
@@ -238,7 +241,7 @@ Response
 
 ## 5. API Architecture
 
-### 5.1 Router Structure (15 routers, 217 endpoints)
+### 5.1 Router Structure (17 routers, 260 endpoints)
 
 ```
 /api/v1/
@@ -463,144 +466,122 @@ async def execute_tool(tool_name: str, **args) -> str:
 
 ---
 
-## 7. Frontend Architecture (Round 3)
+## 7. Frontend Architecture
 
-### 7.1 Single-Page Application (SPA)
+### 7.1 React SPA
 
-Located in `cytoatlas-api/static/`:
+Located in `cytoatlas-api/frontend/` (source) → builds to `cytoatlas-api/static/` (production):
 
 ```
-static/
-├── index.html                # SPA shell
-├── js/
-│  ├── app.js                # Main orchestrator
-│  ├── router.js             # Client-side routing
-│  ├── api.js                # Fetch wrapper + caching
-│  ├── pages/                # Page components (8 total)
-│  │  ├── landing.js
-│  │  ├── explore.js
-│  │  ├── compare.js
-│  │  ├── validate.js
-│  │  ├── chat.js
-│  │  ├── submit.js
-│  │  ├── about.js
-│  │  └── contact.js
-│  └── components/           # Reusable UI components (20+)
-│     ├── chart/             # Chart components
-│     │  ├── LineChart.js
-│     │  ├── ScatterChart.js
-│     │  ├── HeatmapChart.js
-│     │  ├── ViolinChart.js
-│     │  └── BoxChart.js
-│     ├── table/             # Table components
-│     ├── modal/             # Dialog/modal components
-│     └── form/              # Form components
-└── css/
-   ├── style.css             # Main styles
-   ├── responsive.css        # Mobile/tablet
-   └── dark-theme.css        # Dark mode (optional)
+frontend/
+├── src/
+│  ├── main.tsx              # QueryClientProvider + RouterProvider
+│  ├── index.css             # Tailwind @theme with CytoAtlas colors
+│  ├── routes/               # Page components (12 pages)
+│  │  ├── index.tsx          # Route definitions with lazy loading
+│  │  ├── root-layout.tsx    # <Header/> + <Outlet/> + <Footer/>
+│  │  ├── home.tsx           # Hero, atlas cards, stats
+│  │  ├── atlas-detail.tsx   # Atlas tab router (CIMA/Inflammation/scAtlas)
+│  │  ├── validate.tsx       # 5-tab validation dashboard
+│  │  ├── compare.tsx        # Cross-atlas comparison
+│  │  ├── gene-detail.tsx    # Gene-centric view (5 tabs)
+│  │  ├── perturbation.tsx   # Cytokine/drug perturbation (5 tabs)
+│  │  ├── spatial.tsx        # Spatial transcriptomics (5 tabs)
+│  │  ├── chat.tsx           # AI assistant (SSE streaming)
+│  │  ├── submit.tsx         # Dataset upload (chunked transfer)
+│  │  └── ...
+│  ├── components/           # Reusable components (76 total)
+│  │  ├── charts/            # 13 chart wrappers (react-plotly.js + D3)
+│  │  ├── ui/                # 9 shared UI components
+│  │  ├── atlas/             # 22 atlas tab panels (shared/cima/inflammation/scatlas)
+│  │  ├── validate/          # 5 validation tab components
+│  │  ├── compare/           # 5 comparison tab components
+│  │  ├── gene/              # 5 gene detail tab components
+│  │  ├── perturbation/      # 5 perturbation tab components
+│  │  ├── spatial/           # 5 spatial tab components
+│  │  ├── chat/              # 5 chat UI components
+│  │  └── layout/            # 2 layout wrappers (header, footer)
+│  ├── api/                  # Data layer
+│  │  ├── client.ts          # Fetch wrapper with auth token injection
+│  │  ├── hooks/             # 9 TanStack Query hooks (one per domain)
+│  │  └── types/             # 8 TypeScript interface files
+│  ├── stores/               # Zustand stores
+│  │  ├── app-store.ts       # signatureType (CytoSig/SecAct) with persist
+│  │  ├── atlas-store.ts     # Atlas-level state
+│  │  └── filter-store.ts    # Filter state
+│  └── lib/                  # Utilities
+│     ├── constants.ts       # API_BASE, atlas configs, colors
+│     ├── atlas-config.ts    # Per-atlas tab definitions
+│     └── utils.ts           # formatNumber, debounce, download
+├── e2e/                     # Playwright E2E tests (4 specs)
+├── vite.config.ts           # Build config (base: '/static/', proxy, Vitest)
+└── package.json             # Dependencies and scripts
 ```
 
 ### 7.2 Chart Components
 
-Each chart component wraps Plotly.js or D3.js with CytoAtlas-specific styling:
+Each chart component wraps react-plotly.js with shared defaults:
 
-```javascript
-// components/chart/LineChart.js
-class LineChart {
-  constructor(containerId, config) {
-    this.containerId = containerId;
-    this.config = config;
-  }
-
-  async render(data) {
-    // data: {x: [], y: [], name: string, ...}
-    const trace = {
-      x: data.x,
-      y: data.y,
-      type: 'scatter',
-      mode: 'lines+markers',
-      name: data.name,
-      marker: { size: 8, color: data.color || '#1f77b4' }
-    };
-    Plotly.newPlot(this.containerId, [trace], this.config.layout);
-  }
+```typescript
+// components/charts/plotly-chart.tsx
+export function PlotlyChart({ data, layout, ...props }: PlotlyChartProps) {
+  return (
+    <Plot
+      data={data}
+      layout={{ ...PLOTLY_LAYOUT, ...layout }}
+      config={PLOTLY_CONFIG}
+      useResizeHandler
+      className="w-full"
+    />
+  );
 }
 
-// Usage in page
-const chart = new LineChart('chart-container', {
-  layout: { title: 'Age Correlation', xaxis: { title: 'Age (years)' } }
-});
-await chart.render(await api.get('/api/v1/atlases/cima/correlations/age'));
+// components/charts/scatter-chart.tsx — specialized wrapper
+export function ScatterChart({ x, y, labels, trendLine, ...props }: ScatterChartProps) {
+  const traces = [{ x, y, text: labels, type: 'scattergl', mode: 'markers' }];
+  if (trendLine) traces.push(computeTrendLine(x, y));
+  return <PlotlyChart data={traces} layout={scatterLayout} />;
+}
 ```
+
+10 specialized charts: scatter, heatmap, bar, boxplot, violin, volcano, lollipop (D3), forest-plot, sankey (D3).
 
 ### 7.3 State Management
 
-No external state library (keep dependencies minimal). Use module-level state:
+Two-tier state architecture:
 
-```javascript
-// app/state.js
-const AppState = {
-  currentAtlas: "CIMA",
-  currentView: "explore",
-  selectedCellType: null,
-  selectedSignature: "CytoSig",
-  userData: null,
-
-  set: (key, value) => {
-    AppState[key] = value;
-    // Publish state change
-    document.dispatchEvent(new CustomEvent('statechange', { detail: { key, value } }));
-  },
-
-  get: (key) => AppState[key]
-};
-
-// Listen for state changes
-document.addEventListener('statechange', (e) => {
-  const { key, value } = e.detail;
-  console.log(`State changed: ${key} = ${value}`);
-  // Re-render if needed
-});
-```
-
-### 7.4 Data Loader with Caching
-
-```javascript
-// api.js
-class APIClient {
-  constructor() {
-    this.cache = new Map();
-    this.cacheTTL = 3600000; // 1 hour
-  }
-
-  async get(url, options = {}) {
-    const cacheKey = url;
-    const cached = this.cache.get(cacheKey);
-
-    if (cached && Date.now() - cached.timestamp < this.cacheTTL) {
-      return cached.data;
-    }
-
-    const response = await fetch(url, options);
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-
-    const data = await response.json();
-    this.cache.set(cacheKey, { data, timestamp: Date.now() });
-    return data;
-  }
-
-  invalidateCache(pattern) {
-    for (const [key] of this.cache) {
-      if (key.includes(pattern)) this.cache.delete(key);
-    }
-  }
+**Server state** — TanStack Query with 5-minute staleTime:
+```typescript
+// api/hooks/use-cima.ts
+export function useCimaBiochemistry(signatureType: string) {
+  return useQuery({
+    queryKey: ['cima', 'biochemistry', signatureType],
+    queryFn: () => get(`/api/v1/atlases/cima/biochemistry?signature_type=${signatureType}`),
+  });
 }
-
-// Usage
-const api = new APIClient();
-const cimaActivity = await api.get('/api/v1/atlases/cima/activity?signature_type=CytoSig');
 ```
+
+**Client state** — Zustand with localStorage persistence:
+```typescript
+// stores/app-store.ts
+export const useAppStore = create<AppState>()(
+  persist(
+    (set) => ({
+      signatureType: 'CytoSig',
+      setSignatureType: (type) => set({ signatureType: type }),
+    }),
+    { name: 'cytoatlas-app' }
+  )
+);
+```
+
+### 7.4 Build & Deployment
+
+- **Dev:** `npm run dev` on port 3000, proxies `/api` to `:8000`
+- **Build:** `npm run build` outputs to `../static/` (79 chunks, 5.3 MB)
+- **Production:** FastAPI serves `static/index.html` for all non-API paths via SPA catch-all
+- **Asset paths:** `base: '/static/'` ensures chunks resolve under StaticFiles mount
+- **Docker:** 3-stage build (Node.js frontend → Python backend → production)
 
 ---
 
