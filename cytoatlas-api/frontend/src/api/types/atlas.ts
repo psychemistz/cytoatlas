@@ -5,10 +5,23 @@ export interface Atlas {
   n_cells: number;
   n_samples: number;
   n_cell_types: number;
-  source_type: string;
-  validation_grade: string;
-  status?: string;
+  atlas_type: string;
+  status: string;
+  has_cytosig: boolean;
+  has_secact: boolean;
+  species?: string;
+  version?: string;
+  features?: string[];
   created_at?: string;
+  updated_at?: string;
+  /** Derived fields used by frontend components */
+  source_type?: string;
+  validation_grade?: string;
+}
+
+export interface AtlasListResponse {
+  atlases: Atlas[];
+  total: number;
 }
 
 export interface AtlasSummary {

@@ -1,11 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
 import { get } from '@/api/client';
-import type { Atlas, AtlasSummary } from '@/api/types/atlas';
+import type { Atlas, AtlasListResponse, AtlasSummary } from '@/api/types/atlas';
 
 export function useAtlases() {
   return useQuery({
     queryKey: ['atlases'],
-    queryFn: () => get<Atlas[]>('/atlases'),
+    queryFn: async () => {
+      const res = await get<AtlasListResponse>('/atlases');
+      return res.atlases.map((a) => ({
+        ...a,
+        source_type: a.source_type ?? a.atlas_type,
+        validation_grade: a.validation_grade ?? 'A',
+      }));
+    },
   });
 }
 

@@ -44,11 +44,13 @@ export interface BulkRnaseqTarget {
 }
 
 export interface SingleCellSignature {
+  /** Mapped from backend "target" field */
   signature: string;
-  expression?: number;
-  activity?: number;
-  n_cells?: number;
+  gene?: string;
   rho?: number;
+  n_total?: number;
+  n_expressing?: number;
+  expressing_fraction?: number;
 }
 
 export interface SingleCellCelltypeStat {

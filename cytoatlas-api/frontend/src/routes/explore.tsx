@@ -39,7 +39,7 @@ export default function Explore() {
         case 'name':
           return (a.display_name ?? a.name).localeCompare(b.display_name ?? b.name);
         case 'grade':
-          return (gradeOrder[a.validation_grade] ?? 5) - (gradeOrder[b.validation_grade] ?? 5);
+          return (gradeOrder[a.validation_grade ?? ''] ?? 5) - (gradeOrder[b.validation_grade ?? ''] ?? 5);
         default:
           return 0;
       }

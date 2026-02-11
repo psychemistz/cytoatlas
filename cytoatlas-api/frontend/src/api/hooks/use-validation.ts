@@ -3,12 +3,75 @@ import { get } from '@/api/client';
 import type {
   ValidationTarget,
   ScatterData,
+  ScatterPoint,
   SummaryBoxplotData,
   MethodComparison,
   BulkRnaseqTarget,
   SingleCellSignature,
   SingleCellCelltypeStat,
 } from '@/api/types/validation';
+
+/**
+ * Transform raw scatter response from backend.
+ *
+ * Backend returns compact format:
+ *   { rho, pval, points: [[x, y], ...] or [[x, y, ct_idx], ...], celltypes?: [...] }
+ * Frontend expects:
+ *   { rho, p_value, points: [{x, y, cell_type?, label?}, ...] }
+ */
+function transformScatter(raw: Record<string, unknown>): ScatterData {
+  const rawPoints = (raw.points ?? []) as number[][];
+  const celltypes = (raw.celltypes ?? []) as string[];
+
+  const points: ScatterPoint[] = rawPoints.map((pt) => {
+    const point: ScatterPoint = { x: pt[0], y: pt[1] };
+    if (pt.length > 2 && celltypes.length > 0) {
+      const ctIdx = pt[2];
+      point.cell_type = celltypes[ctIdx] ?? '';
+      point.label = point.cell_type;
+    }
+    return point;
+  });
+
+  return {
+    points,
+    rho: raw.rho as number,
+    p_value: (raw.pval ?? raw.p_value) as number,
+    pearson_r: raw.pearson_r as number | undefined,
+    n: raw.n as number | undefined,
+    target: raw.target as string | undefined,
+  };
+}
+
+/**
+ * Transform singlecell-full scatter response.
+ *
+ * Backend returns nested format:
+ *   { rho, pval, sampled: { celltypes: [...], points: [[expr, act, ct_idx, 0, is_expr], ...] } }
+ */
+function transformSingleCellScatter(raw: Record<string, unknown>): ScatterData {
+  const sampled = (raw.sampled ?? {}) as { celltypes?: string[]; points?: number[][] };
+  const rawPoints = sampled.points ?? [];
+  const celltypes = sampled.celltypes ?? [];
+
+  const points: ScatterPoint[] = rawPoints.map((pt) => {
+    const point: ScatterPoint = { x: pt[0], y: pt[1] };
+    if (pt.length > 2 && celltypes.length > 0) {
+      const ctIdx = pt[2];
+      point.cell_type = celltypes[ctIdx] ?? '';
+      point.label = point.cell_type;
+    }
+    return point;
+  });
+
+  return {
+    points,
+    rho: raw.rho as number,
+    p_value: (raw.pval ?? raw.p_value) as number,
+    n: raw.n_total as number | undefined,
+    target: raw.target as string | undefined,
+  };
+}
 
 export function useValidationAtlases() {
   return useQuery({
@@ -49,11 +112,13 @@ export function useBulkRnaseqTargets(dataset: string, sigtype: string) {
 export function useBulkRnaseqScatter(dataset: string, target: string, sigtype: string) {
   return useQuery({
     queryKey: ['validation', 'bulk-scatter', dataset, target, sigtype],
-    queryFn: () =>
-      get<ScatterData>(
+    queryFn: async () => {
+      const raw = await get<Record<string, unknown>>(
         `/validation/bulk-rnaseq/${dataset}/scatter/${encodeURIComponent(target)}`,
         { sigtype },
-      ),
+      );
+      return transformScatter(raw);
+    },
     enabled: !!dataset && !!target,
   });
 }
@@ -69,11 +134,13 @@ export function useDonorTargets(atlas: string, sigtype: string) {
 export function useDonorScatter(atlas: string, target: string, sigtype: string) {
   return useQuery({
     queryKey: ['validation', 'donor-scatter', atlas, target, sigtype],
-    queryFn: () =>
-      get<ScatterData>(
+    queryFn: async () => {
+      const raw = await get<Record<string, unknown>>(
         `/validation/donor/${atlas}/scatter/${encodeURIComponent(target)}`,
         { sigtype },
-      ),
+      );
+      return transformScatter(raw);
+    },
     enabled: !!atlas && !!target,
   });
 }
@@ -103,11 +170,13 @@ export function useCelltypeScatter(
 ) {
   return useQuery({
     queryKey: ['validation', 'celltype-scatter', atlas, target, sigtype, level],
-    queryFn: () =>
-      get<ScatterData>(
+    queryFn: async () => {
+      const raw = await get<Record<string, unknown>>(
         `/validation/celltype/${atlas}/scatter/${encodeURIComponent(target)}`,
         { sigtype, level },
-      ),
+      );
+      return transformScatter(raw);
+    },
     enabled: !!atlas && !!target && !!level,
   });
 }
@@ -115,8 +184,20 @@ export function useCelltypeScatter(
 export function useSingleCellSignatures(atlas: string, sigtype: string) {
   return useQuery({
     queryKey: ['validation', 'sc-signatures', atlas, sigtype],
-    queryFn: () =>
-      get<SingleCellSignature[]>(`/validation/singlecell-full/${atlas}/signatures`, { sigtype }),
+    queryFn: async () => {
+      const raw = await get<Record<string, unknown>[]>(
+        `/validation/singlecell-full/${atlas}/signatures`,
+        { sigtype },
+      );
+      return raw.map((s) => ({
+        signature: (s.target ?? s.signature) as string,
+        gene: s.gene as string | undefined,
+        rho: s.rho as number | undefined,
+        n_total: s.n_total as number | undefined,
+        n_expressing: s.n_expressing as number | undefined,
+        expressing_fraction: s.expressing_fraction as number | undefined,
+      })) as SingleCellSignature[];
+    },
     enabled: !!atlas,
   });
 }
@@ -124,11 +205,13 @@ export function useSingleCellSignatures(atlas: string, sigtype: string) {
 export function useSingleCellScatter(atlas: string, target: string, sigtype: string) {
   return useQuery({
     queryKey: ['validation', 'sc-scatter', atlas, target, sigtype],
-    queryFn: () =>
-      get<ScatterData>(
+    queryFn: async () => {
+      const raw = await get<Record<string, unknown>>(
         `/validation/singlecell-full/${atlas}/scatter/${encodeURIComponent(target)}`,
         { sigtype },
-      ),
+      );
+      return transformSingleCellScatter(raw);
+    },
     enabled: !!atlas && !!target,
   });
 }
