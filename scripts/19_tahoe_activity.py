@@ -348,10 +348,10 @@ def run_activity_inference(
         raise ValueError(f"Too few common genes: {len(common_genes)}")
 
     # Align data (handle duplicate gene symbols by keeping first occurrence)
-    expr_aligned = expr_df.copy()
+    # Avoid full copy: slice to common genes directly, then uppercase in-place
+    expr_aligned = expr_df.loc[expr_df.index.str.upper().isin(common_genes)].copy()
     expr_aligned.index = expr_aligned.index.str.upper()
     expr_aligned = expr_aligned[~expr_aligned.index.duplicated(keep='first')]
-    expr_aligned = expr_aligned.loc[expr_aligned.index.isin(common_genes)]
 
     sig_aligned = signature.copy()
     sig_aligned.index = sig_aligned.index.str.upper()
@@ -362,12 +362,18 @@ def run_activity_inference(
     expr_aligned = expr_aligned.loc[common_genes]
     sig_aligned = sig_aligned.loc[common_genes]
 
-    # Z-score normalize columns
-    expr_scaled = (expr_aligned - expr_aligned.mean()) / expr_aligned.std(ddof=1)
+    # Z-score normalize columns (in-place to reduce memory)
+    expr_mean = expr_aligned.mean()
+    expr_std = expr_aligned.std(ddof=1)
+    expr_std = expr_std.replace(0, 1)
+    expr_scaled = (expr_aligned - expr_mean) / expr_std
+    del expr_aligned, expr_mean, expr_std
     expr_scaled = expr_scaled.fillna(0)
 
     sig_scaled = (sig_aligned - sig_aligned.mean()) / sig_aligned.std(ddof=1)
     sig_scaled = sig_scaled.fillna(0)
+    del sig_aligned
+    gc.collect()
 
     # Run ridge regression
     n_samples = expr_scaled.shape[1]

@@ -186,6 +186,122 @@ GPU-accelerated processing pipeline (`cytoatlas-pipeline/` package).
 - Pseudo-bulk aggregation (cell type x sample) as primary analysis level
 - Single-cell batch processing (10K cells/batch) for detailed analysis
 - Backed mode (`ad.read_h5ad(..., backed='r')`) for memory efficiency
+- Row-batch streaming for validation data generation (see below)
+
+### GPU Batch Processing for Large-Scale Single-Cell Datasets
+
+When processing large H5AD files (millions of cells) with secactpy, use **batch processing with H5AD streaming on GPU nodes**. This pattern applies to:
+
+1. **Activity inference** (ridge regression via `secactpy.ridge_batch`)
+2. **Validation data generation** (expression vs activity statistics)
+3. **Any per-cell or per-signature computation on large H5ADs**
+
+#### H5AD Streaming (Backed Mode)
+
+Always open large H5ADs in backed mode to avoid loading full matrices into memory:
+
+```python
+import anndata as ad
+
+# Backed mode: data stays on disk, accessed via HDF5 indexing
+adata = ad.read_h5ad("large_file.h5ad", backed="r")  # read-only
+
+# Read rows in batches (efficient for CSR-stored sparse data)
+batch_size = 500_000  # 500K cells per batch (1M on GPU nodes)
+for start in range(0, adata.n_obs, batch_size):
+    end = min(start + batch_size, adata.n_obs)
+    chunk = adata.X[start:end, :]  # reads from HDF5
+    if hasattr(chunk, "toarray"):
+        chunk = chunk.toarray()  # sparse -> dense
+    # Process chunk...
+    del chunk
+    gc.collect()
+
+adata.file.close()
+```
+
+#### Row-Batch vs Column-by-Column
+
+Two strategies for multi-signature H5AD processing:
+
+| Strategy | I/O Passes | Best For |
+|----------|-----------|----------|
+| **Column-by-column** | `n_signatures * 2` | Small signature sets (<50), simple code |
+| **Row-batch streaming** | `ceil(n_cells / batch_size)` | Large signature sets (SecAct: 1249), GPU nodes |
+
+Row-batch streaming reads all signature columns at once per batch, dramatically reducing HDF5 seeks:
+
+```python
+# Row-batch: 4 passes for 2M cells @ 500K batch
+# vs column-by-column: 2498 passes for 1249 SecAct signatures
+python generate_validation_data.py --atlas cima --batch --batch-size 1000000
+```
+
+#### Activity Inference with secactpy on GPU
+
+```python
+from secactpy import ridge_batch, load_cytosig
+
+sig_matrix = load_cytosig()  # (genes x 44 cytokines)
+
+# Projection matrix: computed once, stays on GPU
+# T = (X'X + λI)^{-1} X'  — shape: (n_features, n_genes)
+# For CytoSig: 44 x 20,000 x 8 bytes = 7 MB on GPU
+
+# Process cells in batches
+result = ridge_batch(
+    X=sig_matrix,
+    Y=expression_matrix,  # (n_genes, n_samples) — streamed in batches
+    lambda_=5e5,
+    n_rand=100,           # 100 permutations for single-cell (1000 for pseudobulk)
+    batch_size=10000,     # 10K cells per GPU batch
+    backend="cupy",       # "numpy" for CPU fallback
+)
+```
+
+#### SLURM Configuration for GPU Batch Jobs
+
+```bash
+# GPU partition (A100, 80GB VRAM, 256-512GB host RAM)
+#SBATCH --partition=gpu
+#SBATCH --gres=gpu:a100:1
+#SBATCH --mem=350G
+#SBATCH --cpus-per-task=8
+#SBATCH --time=12:00:00
+
+# Submit validation with batch processing
+sbatch scripts/slurm/run_generate_validation_gpu.sh
+
+# Submit activity inference (uses cytoatlas-pipeline)
+sbatch scripts/slurm/run_singlecell_activity.sh
+```
+
+#### Memory Estimation
+
+```python
+from secactpy.batch import estimate_memory, estimate_batch_size
+
+# Estimate memory for a given workload
+mem = estimate_memory(n_genes=20000, n_features=44, n_samples=6_500_000, n_rand=100)
+# Returns dict: T_matrix, Y_data, results, working, per_batch, total, gpu_per_batch
+
+# Auto-calculate optimal batch size for available GPU
+batch = estimate_batch_size(n_genes=20000, n_features=44, available_gb=80.0, safety_factor=0.7)
+# Returns int: ~350,000 for A100 80GB with CytoSig
+```
+
+#### GPU Memory Cleanup
+
+```python
+import cupy as cp
+import gc
+
+# After each batch
+del chunk, result
+gc.collect()                                          # CPU garbage collect
+cp.get_default_memory_pool().free_all_blocks()        # GPU memory pool cleanup
+cp.cuda.Device().synchronize()                        # Wait for async ops
+```
 
 ### Pipeline Package (`cytoatlas-pipeline/`)
 

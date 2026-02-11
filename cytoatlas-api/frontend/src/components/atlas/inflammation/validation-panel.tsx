@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { get } from '@/api/client';
 import { Spinner } from '@/components/ui/loading-skeleton';
 import { ScatterChart } from '@/components/charts/scatter-chart';
+import { FilterBar, SelectFilter } from '@/components/ui/filter-bar';
 
 interface ValidationPanelProps {
   signatureType: string;
@@ -15,13 +17,27 @@ interface CrossCohortValidation {
   p_value: number;
 }
 
+const COMPARISON_OPTIONS = [
+  { value: 'main_vs_validation', label: 'Main vs Validation' },
+  { value: 'main_vs_external', label: 'Main vs External' },
+  { value: 'validation_vs_external', label: 'Validation vs External' },
+];
+
+const COMPARISON_LABELS: Record<string, { x: string; y: string }> = {
+  main_vs_validation: { x: 'Main Cohort', y: 'Validation Cohort' },
+  main_vs_external: { x: 'Main Cohort', y: 'External Cohort' },
+  validation_vs_external: { x: 'Validation Cohort', y: 'External Cohort' },
+};
+
 export default function ValidationPanel({ signatureType }: ValidationPanelProps) {
+  const [comparison, setComparison] = useState('main_vs_validation');
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ['inflammation', 'cross-cohort-validation', signatureType],
+    queryKey: ['inflammation', 'cross-cohort-validation', signatureType, comparison],
     queryFn: () =>
       get<CrossCohortValidation>(
         '/atlases/inflammation/cross-cohort-validation',
-        { signature_type: signatureType },
+        { signature_type: signatureType, comparison },
       ),
   });
 
@@ -43,23 +59,34 @@ export default function ValidationPanel({ signatureType }: ValidationPanelProps)
     );
   }
 
+  const axisLabels = COMPARISON_LABELS[comparison] ?? COMPARISON_LABELS.main_vs_validation;
+
   return (
     <div className="space-y-6">
+      <FilterBar>
+        <SelectFilter
+          label="Cohort Comparison"
+          options={COMPARISON_OPTIONS}
+          value={comparison}
+          onChange={setComparison}
+        />
+      </FilterBar>
+
       <div>
         <h3 className="mb-2 text-sm font-semibold text-text-secondary">
           Cross-Cohort Validation
         </h3>
         <p className="mb-2 text-xs text-text-muted">
-          Activity in the main cohort (x-axis) versus validation cohort
-          (y-axis). Each point represents a signature. The trend line shows the
-          linear fit.
+          Activity in the {axisLabels.x.toLowerCase()} (x-axis) versus{' '}
+          {axisLabels.y.toLowerCase()} (y-axis). Each point represents a
+          signature. The trend line shows the linear fit.
         </p>
         <ScatterChart
           x={data.main}
           y={data.validation}
           labels={data.signatures}
-          xTitle="Main Cohort Activity"
-          yTitle="Validation Cohort Activity"
+          xTitle={`${axisLabels.x} Activity`}
+          yTitle={`${axisLabels.y} Activity`}
           title="Cross-Cohort Validation"
           showTrendLine
           stats={{ rho: data.rho, p: data.p_value }}

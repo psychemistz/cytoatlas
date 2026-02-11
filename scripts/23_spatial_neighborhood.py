@@ -663,7 +663,14 @@ def analyze_file_neighborhoods(
 
     # Cache metadata before closing file if we skip per-cell analysis
     obs_copy = adata.obs.copy()
-    gene_names = list(adata.var_names)
+    # Use HGNC gene symbols from 'feature_name' column if available
+    # (SpatialCorpus H5AD files store Ensembl IDs in var_names)
+    if 'feature_name' in adata.var.columns:
+        gene_names = list(adata.var['feature_name'].astype(str))
+    elif 'gene_name' in adata.var.columns:
+        gene_names = list(adata.var['gene_name'].astype(str))
+    else:
+        gene_names = list(adata.var_names)
 
     file_results = {
         'filename': filename,
@@ -712,9 +719,10 @@ def analyze_file_neighborhoods(
     X = adata.X
 
     for sig_name, sig_matrix in sig_matrices.items():
-        # Gene overlap check
-        panel_genes = set(gene_names)
-        sig_genes = set(sig_matrix.index)
+        # Gene overlap check (case-insensitive)
+        gene_names_upper = [g.upper() for g in gene_names]
+        panel_genes = set(gene_names_upper)
+        sig_genes = set(g.upper() for g in sig_matrix.index)
         common = sorted(panel_genes & sig_genes)
         coverage = len(common) / len(sig_genes) if len(sig_genes) > 0 else 0.0
 
@@ -724,9 +732,19 @@ def analyze_file_neighborhoods(
 
         log(f"    {sig_name}: {len(common)} common genes ({coverage:.1%} coverage)")
 
-        # Prepare signature matrix for matched genes
-        gene_idx = [gene_names.index(g) for g in common]
-        X_sig = sig_matrix.loc[common].values.copy()
+        # Prepare signature matrix for matched genes (align via uppercase)
+        sig_aligned = sig_matrix.copy()
+        sig_aligned.index = sig_aligned.index.str.upper()
+        sig_aligned = sig_aligned[~sig_aligned.index.duplicated(keep='first')]
+        common = sorted(set(gene_names_upper) & set(sig_aligned.index))
+
+        # Build index mapping: for duplicates, take first occurrence
+        gene_upper_to_idx = {}
+        for i, g in enumerate(gene_names_upper):
+            if g not in gene_upper_to_idx:
+                gene_upper_to_idx[g] = i
+        gene_idx = [gene_upper_to_idx[g] for g in common]
+        X_sig = sig_aligned.loc[common].values.copy()
         np.nan_to_num(X_sig, copy=False, nan=0.0)
 
         sig_cols = list(sig_matrix.columns)

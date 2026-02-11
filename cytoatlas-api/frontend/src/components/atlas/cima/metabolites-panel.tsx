@@ -18,14 +18,26 @@ const CATEGORY_OPTIONS = [
   { value: 'Cofactor', label: 'Cofactor' },
 ];
 
+const THRESHOLD_OPTIONS = [
+  { value: '0.2', label: '|\u03C1| \u2265 0.2' },
+  { value: '0.3', label: '|\u03C1| \u2265 0.3' },
+  { value: '0.4', label: '|\u03C1| \u2265 0.4' },
+  { value: '0.5', label: '|\u03C1| \u2265 0.5' },
+];
+
 function filterAndRank(
   rows: MetaboliteCorrelation[],
   category: string,
+  threshold: number,
   topN: number,
 ) {
+  // Apply correlation threshold first
+  const aboveThreshold = rows.filter((r) => Math.abs(r.rho) >= threshold);
+
+  // Then apply category filter
   const filtered = category === 'All'
-    ? rows
-    : rows.filter((r) => r.category === category);
+    ? aboveThreshold
+    : aboveThreshold.filter((r) => r.category === category);
 
   const sorted = [...filtered].sort((a, b) => Math.abs(b.rho) - Math.abs(a.rho));
   const top = sorted.slice(0, topN);
@@ -41,6 +53,7 @@ function filterAndRank(
 export default function MetabolitesPanel({ signatureType }: MetabolitesPanelProps) {
   const { data, isLoading, error } = useCimaMetabolites(signatureType);
   const [category, setCategory] = useState('All');
+  const [threshold, setThreshold] = useState(0.3);
 
   const availableCategories = useMemo(() => {
     if (!data) return CATEGORY_OPTIONS;
@@ -52,8 +65,8 @@ export default function MetabolitesPanel({ signatureType }: MetabolitesPanelProp
 
   const lollipopData = useMemo(() => {
     if (!data || data.length === 0) return null;
-    return filterAndRank(data, category, 30);
-  }, [data, category]);
+    return filterAndRank(data, category, threshold, 30);
+  }, [data, category, threshold]);
 
   const summaryText = useMemo(() => {
     if (!data) return '';
@@ -102,6 +115,12 @@ export default function MetabolitesPanel({ signatureType }: MetabolitesPanelProp
           options={availableCategories}
           value={category}
           onChange={setCategory}
+        />
+        <SelectFilter
+          label="Min Correlation"
+          options={THRESHOLD_OPTIONS}
+          value={String(threshold)}
+          onChange={(v) => setThreshold(parseFloat(v))}
         />
       </FilterBar>
 

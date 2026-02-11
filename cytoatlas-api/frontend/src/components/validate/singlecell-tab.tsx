@@ -1,25 +1,50 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   useSingleCellSignatures,
   useSingleCellScatter,
   useSingleCellCelltypes,
 } from '@/api/hooks/use-validation';
 import { Spinner } from '@/components/ui/loading-skeleton';
-import { FilterBar, SelectFilter } from '@/components/ui/filter-bar';
+import { FilterBar, SelectFilter, CheckboxFilter } from '@/components/ui/filter-bar';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { ScatterChart } from '@/components/charts/scatter-chart';
 import { BarChart } from '@/components/charts/bar-chart';
+import { BoxplotChart } from '@/components/charts/boxplot-chart';
+
+const SIG_OPTIONS = [
+  { value: 'cytosig', label: 'CytoSig (43)' },
+  { value: 'lincytosig', label: 'LinCytoSig' },
+  { value: 'secact', label: 'SecAct (1,249)' },
+];
 
 interface SinglecellTabProps {
   atlas: string;
-  sigtype: string;
 }
 
-export default function SinglecellTab({ atlas, sigtype }: SinglecellTabProps) {
+export default function SinglecellTab({ atlas }: SinglecellTabProps) {
+  const [sigtype, setSigtype] = useState('cytosig');
   const [target, setTarget] = useState('');
+  const [cellType, setCellType] = useState('');
+  const [hideNonExpr, setHideNonExpr] = useState(false);
 
   const { data: signatures, isLoading: sigLoading } = useSingleCellSignatures(atlas, sigtype);
   const { data: scatter, isLoading: scLoading } = useSingleCellScatter(atlas, target, sigtype);
   const { data: celltypes, isLoading: ctLoading } = useSingleCellCelltypes(atlas, target, sigtype);
+
+  // Auto-select first signature when signatures load
+  useEffect(() => {
+    if (!signatures || signatures.length === 0) return;
+    if (!target) {
+      setTarget(signatures[0].signature);
+    } else {
+      const available = new Set(signatures.map((s) => s.signature));
+      if (!available.has(target)) {
+        const match = signatures.find((s) => s.signature.toLowerCase() === target.toLowerCase());
+        setTarget(match ? match.signature : signatures[0].signature);
+        setCellType('');
+      }
+    }
+  }, [signatures]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sigOptions = useMemo(() => {
     if (!signatures) return [];
@@ -28,6 +53,38 @@ export default function SinglecellTab({ atlas, sigtype }: SinglecellTabProps) {
       label: s.rho != null ? `${s.signature} (rho=${s.rho.toFixed(3)})` : s.signature,
     }));
   }, [signatures]);
+
+  const cellTypeOptions = useMemo(() => {
+    if (!scatter?.points) return [];
+    const unique = [...new Set(scatter.points.map((p) => p.cell_type || ''))].filter(Boolean);
+    unique.sort((a, b) => a.localeCompare(b));
+    return [
+      { value: '', label: 'All' },
+      ...unique.map((ct) => ({ value: ct, label: ct })),
+    ];
+  }, [scatter]);
+
+  const filteredPoints = useMemo(() => {
+    if (!scatter?.points) return [];
+    let pts = scatter.points;
+    if (cellType) {
+      pts = pts.filter((p) => p.cell_type === cellType);
+    }
+    if (hideNonExpr) {
+      pts = pts.filter((p) => p.x > 0);
+    }
+    return pts;
+  }, [scatter, cellType, hideNonExpr]);
+
+  const boxData = useMemo(() => {
+    if (!scatter?.points) return null;
+    const expressing = scatter.points.filter((p) => p.x > 0).map((p) => p.y);
+    const nonExpressing = scatter.points.filter((p) => p.x <= 0).map((p) => p.y);
+    return {
+      groups: ['Expressing', 'Non-expressing'],
+      values: [expressing, nonExpressing],
+    };
+  }, [scatter]);
 
   const ctBarData = useMemo(() => {
     if (!celltypes) return null;
@@ -49,21 +106,44 @@ export default function SinglecellTab({ atlas, sigtype }: SinglecellTabProps) {
   return (
     <div className="space-y-6">
       <FilterBar>
+        <SelectFilter
+          label="Signature"
+          options={SIG_OPTIONS}
+          value={sigtype}
+          onChange={(v) => { setSigtype(v); }}
+        />
         {sigOptions.length > 0 && (
-          <SelectFilter
-            label="Signature"
+          <SearchableSelect
+            label="Target"
             options={sigOptions}
             value={target}
             onChange={setTarget}
+            placeholder="Search signatures..."
+          />
+        )}
+        {cellTypeOptions.length > 0 && target && (
+          <SelectFilter
+            label="Cell Type"
+            options={cellTypeOptions}
+            value={cellType}
+            onChange={setCellType}
+          />
+        )}
+        {target && scatter && (
+          <CheckboxFilter
+            label="Hide non-expressing"
+            checked={hideNonExpr}
+            onChange={setHideNonExpr}
           />
         )}
       </FilterBar>
 
       {sigLoading && <Spinner message="Loading signatures..." />}
 
-      {!target && signatures && signatures.length > 0 && (
-        <p className="py-4 text-center text-sm text-text-muted">
-          Select a signature above to view single-cell validation
+      {!sigLoading && signatures && signatures.length === 0 && (
+        <p className="py-8 text-center text-text-muted">
+          No single-cell validation data available for <strong>{atlas}</strong>.
+          Try selecting a different atlas (e.g., cima, scatlas, inflammation).
         </p>
       )}
 
@@ -75,18 +155,41 @@ export default function SinglecellTab({ atlas, sigtype }: SinglecellTabProps) {
             {target} — Single-Cell Expression vs Activity
           </h3>
           <p className="mb-2 text-xs text-text-muted">
-            Each point is a sampled single cell. Colored by cell type.
+            Each point is a sampled single cell ({filteredPoints.length} points).
+            {!cellType && ' Colored by cell type.'}
           </p>
           <ScatterChart
-            x={scatter.points.map((p) => p.x)}
-            y={scatter.points.map((p) => p.y)}
-            labels={scatter.points.map((p) => p.cell_type || '')}
+            x={filteredPoints.map((p) => p.x)}
+            y={filteredPoints.map((p) => p.y)}
+            groups={!cellType ? filteredPoints.map((p) => p.cell_type || '') : undefined}
+            labels={filteredPoints.map((p) => p.cell_type || '')}
             xTitle="Expression"
             yTitle="Predicted Activity"
             title={`${target}: Single-Cell Validation`}
             showTrendLine
-            stats={{ rho: scatter.rho, p: scatter.p_value }}
+            stats={{ rho: scatter.rho, p: scatter.p_value, n: filteredPoints.length }}
             height={500}
+          />
+        </div>
+      )}
+
+      {boxData && target && !scLoading && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-text-secondary">
+            {target} — Expressing vs Non-expressing Activity Distribution
+          </h3>
+          <p className="mb-2 text-xs text-text-muted">
+            Comparison of predicted activity between cells with expression &gt; 0
+            (expressing) and expression &le; 0 (non-expressing).
+          </p>
+          <BoxplotChart
+            groups={boxData.groups}
+            values={boxData.values}
+            xTitle="Group"
+            yTitle="Predicted Activity"
+            title={`${target}: Expressing vs Non-expressing`}
+            showPoints={false}
+            height={400}
           />
         </div>
       )}

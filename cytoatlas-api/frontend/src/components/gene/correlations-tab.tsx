@@ -3,6 +3,13 @@ import { useGeneCorrelations } from '@/api/hooks/use-gene';
 import { Spinner } from '@/components/ui/loading-skeleton';
 import { BarChart } from '@/components/charts/bar-chart';
 
+function rhoColor(rho: number): string {
+  const abs = Math.abs(rho);
+  if (abs > 0.5) return rho > 0 ? 'text-red-600' : 'text-blue-600';
+  if (abs > 0.3) return rho > 0 ? 'text-orange-500' : 'text-sky-500';
+  return 'text-text-primary';
+}
+
 interface CorrelationsTabProps {
   gene: string;
   signatureType: string;
@@ -21,6 +28,28 @@ export default function CorrelationsTab({
       categories: sorted.map((d) => `${d.variable} (${d.type})`),
       values: sorted.map((d) => d.rho),
     };
+  }, [data]);
+
+  const groupedData = useMemo(() => {
+    if (!data || data.length === 0) return null;
+    const groups = new Map<string, typeof data>();
+    for (const d of data) {
+      const key = d.type;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(d);
+    }
+    // Sort each group by |rho| descending
+    for (const [, items] of groups) {
+      items.sort((a, b) => Math.abs(b.rho) - Math.abs(a.rho));
+    }
+    // Order categories: age, bmi, biochemistry, metabolites, then rest
+    const order = ['age', 'bmi', 'biochemistry', 'metabolites'];
+    const sorted = [...groups.entries()].sort((a, b) => {
+      const ia = order.indexOf(a[0].toLowerCase());
+      const ib = order.indexOf(b[0].toLowerCase());
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    });
+    return sorted;
   }, [data]);
 
   if (isLoading) return <Spinner message="Loading correlations..." />;
@@ -63,38 +92,39 @@ export default function CorrelationsTab({
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-lg border border-border-light">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-bg-secondary">
-            <tr>
-              <th className="px-3 py-2 font-medium">Variable</th>
-              <th className="px-3 py-2 font-medium">Type</th>
-              <th className="px-3 py-2 font-medium text-right">Spearman rho</th>
-              <th className="px-3 py-2 font-medium text-right">p-value</th>
-              <th className="px-3 py-2 font-medium text-right">N</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((d, i) => (
-              <tr key={i} className="border-t border-border-light">
-                <td className="px-3 py-1.5">{d.variable}</td>
-                <td className="px-3 py-1.5">
-                  <span className="rounded bg-bg-secondary px-1.5 py-0.5 text-xs">
-                    {d.type}
-                  </span>
-                </td>
-                <td className="px-3 py-1.5 text-right font-mono">
-                  {d.rho.toFixed(4)}
-                </td>
-                <td className="px-3 py-1.5 text-right font-mono">
-                  {d.p_value.toExponential(2)}
-                </td>
-                <td className="px-3 py-1.5 text-right">{d.n}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {groupedData && groupedData.map(([category, items]) => (
+        <div key={category}>
+          <h3 className="mb-2 text-sm font-semibold capitalize text-text-secondary">
+            {category} ({items.length})
+          </h3>
+          <div className="overflow-x-auto rounded-lg border border-border-light">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-bg-secondary">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Variable</th>
+                  <th className="px-3 py-2 font-medium text-right">Spearman rho</th>
+                  <th className="px-3 py-2 font-medium text-right">p-value</th>
+                  <th className="px-3 py-2 font-medium text-right">N</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((d, i) => (
+                  <tr key={i} className="border-t border-border-light hover:bg-bg-tertiary">
+                    <td className="px-3 py-1.5">{d.variable}</td>
+                    <td className={`px-3 py-1.5 text-right font-mono ${rhoColor(d.rho)}`}>
+                      {d.rho.toFixed(4)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-mono">
+                      {d.p_value.toExponential(2)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right">{d.n}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

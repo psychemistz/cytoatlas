@@ -92,3 +92,23 @@ export function SearchFilter({ value, onChange, placeholder = 'Search...' }: Sea
     />
   );
 }
+
+interface CheckboxFilterProps {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}
+
+export function CheckboxFilter({ label, checked, onChange }: CheckboxFilterProps) {
+  return (
+    <label className="flex cursor-pointer items-center gap-2 text-sm text-text-secondary">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="h-4 w-4 rounded border-border-light accent-primary"
+      />
+      {label}
+    </label>
+  );
+}

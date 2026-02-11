@@ -1,10 +1,11 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { get } from '@/api/client';
 import type { DifferentialData } from '@/api/types/activity';
 import { Spinner } from '@/components/ui/loading-skeleton';
 import { VolcanoChart } from '@/components/charts/volcano-chart';
 import { BarChart } from '@/components/charts/bar-chart';
+import { FilterBar, SelectFilter } from '@/components/ui/filter-bar';
 
 interface DifferentialPanelProps {
   signatureType: string;
@@ -24,16 +25,31 @@ const TITLE_MAP: Record<DifferentialPanelProps['context'], string> = {
   cancer: 'Cancer Differential Activity',
 };
 
+const VARIABLE_OPTIONS = [
+  { value: 'sex', label: 'Sex' },
+  { value: 'age', label: 'Age' },
+  { value: 'bmi', label: 'BMI' },
+  { value: 'blood_type', label: 'Blood Type' },
+  { value: 'smoking', label: 'Smoking' },
+];
+
 export default function DifferentialPanel({
   signatureType,
+  atlasName,
   context,
 }: DifferentialPanelProps) {
+  const isSecAct = /secact/i.test(signatureType);
   const endpoint = ENDPOINT_MAP[context];
+  const [variable, setVariable] = useState('sex');
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['differential', context, signatureType],
+    queryKey: context === 'population'
+      ? ['differential', context, signatureType, variable]
+      : ['differential', context, signatureType],
     queryFn: () =>
-      get<DifferentialData[]>(endpoint, { signature_type: signatureType }),
+      context === 'population'
+        ? get<DifferentialData[]>(endpoint, { signature_type: signatureType, variable })
+        : get<DifferentialData[]>(endpoint, { signature_type: signatureType }),
   });
 
   const volcanoPoints = useMemo(() => {
@@ -75,6 +91,17 @@ export default function DifferentialPanel({
 
   return (
     <div className="space-y-6">
+      {context === 'population' && (
+        <FilterBar>
+          <SelectFilter
+            label="Variable"
+            options={VARIABLE_OPTIONS}
+            value={variable}
+            onChange={setVariable}
+          />
+        </FilterBar>
+      )}
+
       <div>
         <h3 className="mb-2 text-sm font-semibold text-text-secondary">
           {TITLE_MAP[context]} -- Volcano Plot
@@ -84,6 +111,21 @@ export default function DifferentialPanel({
           title={`${TITLE_MAP[context]}: \u0394 Activity vs Significance`}
           fdrThreshold={0.05}
           activityThreshold={0.5}
+          maxPoints={isSecAct ? 200 : undefined}
+          leftLabel={
+            context === 'population'
+              ? `← Higher in ${variable === 'sex' ? 'Female' : 'Low'}`
+              : context === 'disease'
+                ? '← Higher in Healthy'
+                : '← Higher in Normal'
+          }
+          rightLabel={
+            context === 'population'
+              ? `Higher in ${variable === 'sex' ? 'Male' : 'High'} →`
+              : context === 'disease'
+                ? 'Higher in Disease →'
+                : 'Higher in Cancer →'
+          }
         />
       </div>
 

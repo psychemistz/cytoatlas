@@ -57,7 +57,7 @@ export function BarChart({
           ...(orientation === 'v'
             ? { x: categories, y: values }
             : { y: categories, x: values }),
-          marker: { color: colors[0] },
+          marker: { color: colors.length === (values?.length ?? 0) ? colors : colors[0] },
           orientation,
         },
       ];

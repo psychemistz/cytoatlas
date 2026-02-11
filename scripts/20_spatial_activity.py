@@ -190,8 +190,8 @@ def compute_gene_panel_coverage(
     Returns:
         (coverage_fraction, common_genes)
     """
-    panel_genes = set(gene_names)
-    sig_genes = set(sig_matrix.index)
+    panel_genes = set(g.upper() for g in gene_names)
+    sig_genes = set(g.upper() for g in sig_matrix.index)
     common = sorted(panel_genes & sig_genes)
     coverage = len(common) / len(sig_genes) if len(sig_genes) > 0 else 0.0
     return coverage, common
@@ -286,7 +286,15 @@ def aggregate_pseudobulk(
     n_groups = len(unique_groups)
     log(f"    {n_groups} pseudobulk groups from {n_cells:,} cells")
 
-    gene_names = list(adata.var_names)
+    # Use HGNC gene symbols from 'feature_name' column if available
+    # (SpatialCorpus H5AD files store Ensembl IDs in var_names but HGNC symbols
+    # in var['feature_name'] — signature matrices use HGNC symbols)
+    if 'feature_name' in adata.var.columns:
+        gene_names = list(adata.var['feature_name'].astype(str))
+    elif 'gene_name' in adata.var.columns:
+        gene_names = list(adata.var['gene_name'].astype(str))
+    else:
+        gene_names = list(adata.var_names)
 
     # Initialize accumulators (sum + count per group)
     group_sums = np.zeros((n_groups, n_genes), dtype=np.float64)
@@ -356,6 +364,13 @@ def aggregate_pseudobulk(
     expr_matrix = np.array(expr_list)  # (groups x genes)
     expr_df = pd.DataFrame(expr_matrix.T, index=gene_names,
                            columns=[r['group'] for r in meta_rows])
+
+    # Handle duplicate gene names (multiple Ensembl IDs -> same HGNC symbol)
+    if expr_df.index.duplicated().any():
+        n_dups = expr_df.index.duplicated().sum()
+        log(f"    Deduplicating {n_dups} duplicate gene names (averaging)")
+        expr_df = expr_df.groupby(expr_df.index).mean()
+
     meta_df = pd.DataFrame(meta_rows).set_index('group')
 
     return expr_df, meta_df
@@ -427,7 +442,12 @@ def run_activity_for_file(
         log(f"    SKIP: no valid pseudobulk groups")
         return None
 
-    gene_names = list(expr_df.index)
+    # Uppercase gene index for case-insensitive matching
+    expr_upper = expr_df.copy()
+    expr_upper.index = expr_upper.index.str.upper()
+    if expr_upper.index.duplicated().any():
+        expr_upper = expr_upper.groupby(expr_upper.index).mean()
+    gene_names = list(expr_upper.index)
 
     # Run activity inference per signature matrix
     activity_results = {}
@@ -446,18 +466,34 @@ def run_activity_for_file(
 
         log(f"    {sig_name}: {len(common_genes)} common genes ({coverage:.1%} coverage)")
 
+        # Align signature matrix (uppercase + dedup)
+        sig_aligned = sig_matrix.copy()
+        sig_aligned.index = sig_aligned.index.str.upper()
+        sig_aligned = sig_aligned[~sig_aligned.index.duplicated(keep='first')]
+
+        # Recompute common after alignment
+        common_genes = sorted(set(expr_upper.index) & set(sig_aligned.index))
+
         # Prepare matrices
-        X = sig_matrix.loc[common_genes].values.copy()
+        X = sig_aligned.loc[common_genes].values.copy()
         np.nan_to_num(X, copy=False, nan=0.0)
 
-        Y = expr_df.loc[common_genes].values.astype(np.float64)  # (genes x samples)
+        Y = expr_upper.loc[common_genes].values.astype(np.float64)  # (genes x samples)
         np.nan_to_num(Y, copy=False, nan=0.0)
         Y -= Y.mean(axis=1, keepdims=True)
 
         try:
-            from secactpy import ridge
-            result = ridge(X, Y, lambda_=LAMBDA, n_rand=N_RAND,
-                           backend=backend, verbose=False)
+            n_samples = Y.shape[1]
+            if n_samples > 1000:
+                result = ridge_batch(
+                    X, Y, lambda_=LAMBDA, n_rand=N_RAND, seed=SEED,
+                    batch_size=min(5000, n_samples),
+                    backend=backend, verbose=False,
+                )
+            else:
+                from secactpy import ridge
+                result = ridge(X, Y, lambda_=LAMBDA, n_rand=N_RAND,
+                               backend=backend, verbose=False)
             activity = result['zscore'].T.astype(np.float32)  # (samples x signatures)
         except Exception as e:
             log(f"    ERROR in ridge for {sig_name}: {e}")

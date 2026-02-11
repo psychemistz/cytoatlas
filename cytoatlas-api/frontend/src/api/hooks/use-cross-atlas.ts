@@ -99,3 +99,22 @@ export function useCorrelationMatrix(signatureType: string) {
       ),
   });
 }
+
+export function useSignatureReliability(signatureType: string) {
+  return useQuery({
+    queryKey: ['cross-atlas', 'reliability', signatureType],
+    queryFn: () =>
+      get<{
+        signatures: Array<{
+          signature: string;
+          category?: string;
+          mean_correlation: number;
+          correlations: Record<string, { r: number | null; p: number | null; n: number | null }>;
+        }>;
+        summary: Record<string, unknown>;
+        pair_labels: string[];
+        pairs: string[];
+        signature_type: string;
+      }>('/cross-atlas/signature-reliability', { signature_type: signatureType }),
+  });
+}

@@ -3,6 +3,7 @@ import { useGeneExpression } from '@/api/hooks/use-gene';
 import { Spinner } from '@/components/ui/loading-skeleton';
 import { FilterBar, SelectFilter } from '@/components/ui/filter-bar';
 import { BarChart } from '@/components/charts/bar-chart';
+import { BoxplotChart } from '@/components/charts/boxplot-chart';
 
 interface ExpressionTabProps {
   gene: string;
@@ -41,6 +42,19 @@ export default function ExpressionTab({ gene }: ExpressionTabProps) {
     };
   }, [filtered]);
 
+  const boxplotData = useMemo(() => {
+    if (!data?.data || data.data.length === 0) return null;
+    const groupMap = new Map<string, number[]>();
+    for (const d of data.data) {
+      if (!groupMap.has(d.atlas)) groupMap.set(d.atlas, []);
+      groupMap.get(d.atlas)!.push(d.mean_expression);
+    }
+    return {
+      groups: [...groupMap.keys()],
+      values: [...groupMap.values()],
+    };
+  }, [data]);
+
   if (isLoading) return <Spinner message="Loading expression data..." />;
 
   if (error) {
@@ -73,6 +87,21 @@ export default function ExpressionTab({ gene }: ExpressionTabProps) {
       <div className="text-sm text-text-secondary">
         {filtered.length} cell types, {atlases.length} atlases
       </div>
+
+      {boxplotData && boxplotData.groups.length > 1 && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-text-secondary">
+            Expression Distribution by Atlas
+          </h3>
+          <BoxplotChart
+            groups={boxplotData.groups}
+            values={boxplotData.values}
+            title={`${gene}: Expression Distribution`}
+            yTitle="Mean Expression (log-normalized)"
+            height={350}
+          />
+        </div>
+      )}
 
       {barData && (
         <div>

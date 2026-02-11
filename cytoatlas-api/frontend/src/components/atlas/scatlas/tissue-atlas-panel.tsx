@@ -5,9 +5,10 @@ import {
   useScatlasCancerSignatures,
 } from '@/api/hooks/use-scatlas';
 import { Spinner } from '@/components/ui/loading-skeleton';
-import { FilterBar, ToggleGroup } from '@/components/ui/filter-bar';
+import { FilterBar, ToggleGroup, SelectFilter } from '@/components/ui/filter-bar';
 import { HeatmapChart } from '@/components/charts/heatmap-chart';
 import { BoxplotChart } from '@/components/charts/boxplot-chart';
+import { BarChart } from '@/components/charts/bar-chart';
 
 type ViewMode = 'normal' | 'cancer' | 'comparison';
 
@@ -88,6 +89,7 @@ export default function TissueAtlasPanel({
   signatureType,
 }: TissueAtlasPanelProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('normal');
+  const [selectedSignature, setSelectedSignature] = useState('');
 
   const normalQuery = useScatlasOrganSignatures(signatureType);
   const cancerQuery = useScatlasCancerSignatures(signatureType);
@@ -118,6 +120,30 @@ export default function TissueAtlasPanel({
     if (!data) return null;
     return buildBoxplot(data);
   }, [viewMode, normalQuery.data, cancerQuery.data]);
+
+  const signatureOptions = useMemo(() => {
+    const data = viewMode === 'cancer' ? cancerQuery.data : normalQuery.data;
+    if (!data) return [{ value: '', label: 'All Signatures' }];
+    const sigs = [...new Set(data.map((d) => d.signature))].sort();
+    return [
+      { value: '', label: 'All Signatures' },
+      ...sigs.map((s) => ({ value: s, label: s })),
+    ];
+  }, [viewMode, normalQuery.data, cancerQuery.data]);
+
+  const perSignatureBar = useMemo(() => {
+    if (!selectedSignature) return null;
+    const data = viewMode === 'cancer' ? cancerQuery.data : normalQuery.data;
+    if (!data) return null;
+    const filtered = data.filter((d) => d.signature === selectedSignature);
+    if (filtered.length === 0) return null;
+    const sorted = [...filtered].sort((a, b) => b.mean_activity - a.mean_activity);
+    return {
+      categories: sorted.map((d) => d.organ),
+      values: sorted.map((d) => d.mean_activity),
+      colors: sorted.map((d) => (d.mean_activity >= 0 ? '#b2182b' : '#2166ac')),
+    };
+  }, [selectedSignature, viewMode, normalQuery.data, cancerQuery.data]);
 
   if (isLoading) return <Spinner message="Loading tissue atlas data..." />;
 
@@ -155,12 +181,41 @@ export default function TissueAtlasPanel({
         <ToggleGroup
           options={VIEW_OPTIONS}
           value={viewMode}
-          onChange={(v) => setViewMode(v as ViewMode)}
+          onChange={(v) => {
+            setViewMode(v as ViewMode);
+            setSelectedSignature('');
+          }}
           label="View"
         />
+        {viewMode !== 'comparison' && (
+          <SelectFilter
+            label="Signature"
+            options={signatureOptions}
+            value={selectedSignature}
+            onChange={setSelectedSignature}
+          />
+        )}
       </FilterBar>
 
-      {boxplot && (
+      {perSignatureBar && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-text-secondary">
+            {selectedSignature} Activity by {viewMode === 'cancer' ? 'Cancer Type' : 'Organ'}
+          </h3>
+          <BarChart
+            categories={perSignatureBar.categories}
+            values={perSignatureBar.values}
+            orientation="h"
+            xTitle="Mean Activity (z-score)"
+            yTitle={viewMode === 'cancer' ? 'Cancer Type' : 'Organ'}
+            title={`${selectedSignature}: ${modeLabel}`}
+            colors={perSignatureBar.colors}
+            height={Math.max(400, perSignatureBar.categories.length * 24 + 150)}
+          />
+        </div>
+      )}
+
+      {!selectedSignature && boxplot && (
         <div>
           <h3 className="mb-2 text-sm font-semibold text-text-secondary">
             Activity Distribution by {viewMode === 'cancer' ? 'Cancer Type' : 'Organ'}

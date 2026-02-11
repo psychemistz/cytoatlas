@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useCelltypeSankey } from '@/api/hooks/use-cross-atlas';
 import { Spinner } from '@/components/ui/loading-skeleton';
 import { FilterBar, SelectFilter, ToggleGroup } from '@/components/ui/filter-bar';
 import { SankeyChart } from '@/components/charts/sankey-chart';
+import { BarChart } from '@/components/charts/bar-chart';
 
 const LINEAGE_OPTIONS = [
   { value: 'all', label: 'All Lineages' },
@@ -17,6 +18,23 @@ export default function CelltypeMappingTab() {
   const [lineage, setLineage] = useState('all');
 
   const { data, isLoading, error } = useCelltypeSankey(level, lineage);
+
+  const annotationBarData = useMemo(() => {
+    if (!data?.nodes || !data?.links) return null;
+    const atlasGroups = new Map<string, number>();
+    for (const node of data.nodes) {
+      const parts = node.label.split(':');
+      if (parts.length > 1) {
+        const atlas = parts[0].trim();
+        atlasGroups.set(atlas, (atlasGroups.get(atlas) || 0) + 1);
+      }
+    }
+    if (atlasGroups.size === 0) return null;
+    return {
+      categories: [...atlasGroups.keys()],
+      values: [...atlasGroups.values()],
+    };
+  }, [data]);
 
   if (isLoading) return <Spinner message="Loading cell type mapping..." />;
 
@@ -46,6 +64,39 @@ export default function CelltypeMappingTab() {
           onChange={setLineage}
         />
       </FilterBar>
+
+      {data?.nodes && (
+        <div className="rounded-md border border-border-light bg-bg-secondary p-4">
+          <dl className="grid grid-cols-3 gap-4 text-sm">
+            <div>
+              <dt className="text-text-muted">Total Node Types</dt>
+              <dd className="font-mono font-semibold">{data.nodes.length}</dd>
+            </div>
+            <div>
+              <dt className="text-text-muted">Mappings</dt>
+              <dd className="font-mono font-semibold">{data.links.length}</dd>
+            </div>
+            <div>
+              <dt className="text-text-muted">Level</dt>
+              <dd className="font-mono font-semibold capitalize">{level}</dd>
+            </div>
+          </dl>
+        </div>
+      )}
+
+      {annotationBarData && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-text-secondary">
+            Annotations per Atlas
+          </h3>
+          <BarChart
+            categories={annotationBarData.categories}
+            values={annotationBarData.values}
+            title="Cell Type Annotations by Atlas"
+            yTitle="Count"
+          />
+        </div>
+      )}
 
       {level === 'coarse' && data?.nodes && data.nodes.length > 0 && (
         <div>

@@ -264,20 +264,14 @@ jobs:
     depends_on: [tahoe]
 
   # === Phase 22: Spatial Analyses ===
-  spatial_visium:
-    name: "Spatial Visium Activity"
+  # Combined into single job to avoid output file conflicts
+  # (both visium and targeted write to spatial_activity_by_technology.h5ad)
+  spatial:
+    name: "Spatial Activity (All Technologies)"
     profile: gpu_heavy
     time: "48:00:00"
     script: "scripts/20_spatial_activity.py"
-    args: "--technology visium"
-    phase: 22
-
-  spatial_targeted:
-    name: "Spatial Targeted Scoring"
-    profile: gpu_medium
-    time: "24:00:00"
-    script: "scripts/20_spatial_activity.py"
-    args: "--technology targeted"
+    args: "--technology all"
     phase: 22
 
   spatial_neighborhood:
@@ -287,7 +281,7 @@ jobs:
     script: "scripts/23_spatial_neighborhood.py"
     args: ""
     phase: 23
-    depends_on: [spatial_visium, spatial_targeted]
+    depends_on: [spatial]
 
   # === Phase 24: Perturbation/Spatial Preprocessing ===
   preprocess_perturbation:

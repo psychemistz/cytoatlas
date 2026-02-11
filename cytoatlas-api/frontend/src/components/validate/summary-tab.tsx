@@ -1,29 +1,99 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useSummaryBoxplot, useMethodComparison } from '@/api/hooks/use-validation';
 import { Spinner } from '@/components/ui/loading-skeleton';
+import { FilterBar, SelectFilter } from '@/components/ui/filter-bar';
 import { BoxplotChart } from '@/components/charts/boxplot-chart';
 
-interface SummaryTabProps {
-  sigtype: string;
-}
-
-export default function SummaryTab({ sigtype }: SummaryTabProps) {
-  const { data: boxplotData, isLoading: boxLoading } = useSummaryBoxplot(sigtype);
+/**
+ * Summary tab — loads BOTH CytoSig and SecAct data for side-by-side comparison.
+ * Method Comparison shows CytoSig vs LinCytoSig vs SecAct.
+ */
+export default function SummaryTab() {
+  const [selectedTarget, setSelectedTarget] = useState('_all');
+  const { data: cytosigData, isLoading: csLoading } = useSummaryBoxplot('cytosig');
+  const { data: secactData, isLoading: saLoading } = useSummaryBoxplot('secact');
   const { data: methodData, isLoading: methodLoading } = useMethodComparison();
 
-  const boxplotGroups = useMemo(() => {
-    if (!boxplotData?.rhos) return null;
+  const targetOptions = useMemo(() => {
+    const targets = new Set<string>();
+    if (cytosigData?.targets) cytosigData.targets.forEach((t) => targets.add(t));
+    if (secactData?.targets) secactData.targets.forEach((t) => targets.add(t));
+    return [
+      { value: '_all', label: 'All Targets' },
+      ...[...targets].sort().map((t) => ({ value: t, label: t })),
+    ];
+  }, [cytosigData, secactData]);
+
+  // Combined CytoSig + SecAct boxplot (side-by-side)
+  const combinedBoxplot = useMemo(() => {
+    if (!cytosigData?.rhos && !secactData?.rhos) return null;
+
     const groups: string[] = [];
     const values: number[][] = [];
-    for (const [target, catMap] of Object.entries(boxplotData.rhos)) {
-      for (const [cat, rhos] of Object.entries(catMap)) {
-        groups.push(`${target} (${cat})`);
-        values.push(rhos);
+
+    // Collect category keys from whichever dataset has more
+    const csRhos = cytosigData?.rhos ?? {};
+    const saRhos = secactData?.rhos ?? {};
+    const allCats = new Set<string>();
+    for (const catMap of Object.values(csRhos)) {
+      for (const cat of Object.keys(catMap)) allCats.add(cat);
+    }
+    for (const catMap of Object.values(saRhos)) {
+      for (const cat of Object.keys(catMap)) allCats.add(cat);
+    }
+    const catKeys = [...allCats].sort();
+
+    for (const cat of catKeys) {
+      const catLabel = cat.replace(/_/g, ' ');
+
+      // CytoSig values for this category
+      const csVals: number[] = [];
+      if (selectedTarget === '_all') {
+        for (const tgtRhos of Object.values(csRhos)) {
+          const vals = tgtRhos[cat];
+          if (Array.isArray(vals)) csVals.push(...vals);
+          else if (vals != null) csVals.push(vals);
+        }
+      } else {
+        const tgtRhos = csRhos[selectedTarget];
+        if (tgtRhos) {
+          const vals = tgtRhos[cat];
+          if (Array.isArray(vals)) csVals.push(...vals);
+          else if (vals != null) csVals.push(vals);
+        }
+      }
+
+      // SecAct values for this category
+      const saVals: number[] = [];
+      if (selectedTarget === '_all') {
+        for (const tgtRhos of Object.values(saRhos)) {
+          const vals = tgtRhos[cat];
+          if (Array.isArray(vals)) saVals.push(...vals);
+          else if (vals != null) saVals.push(vals);
+        }
+      } else {
+        const tgtRhos = saRhos[selectedTarget];
+        if (tgtRhos) {
+          const vals = tgtRhos[cat];
+          if (Array.isArray(vals)) saVals.push(...vals);
+          else if (vals != null) saVals.push(vals);
+        }
+      }
+
+      if (csVals.length > 0) {
+        groups.push(`CytoSig — ${catLabel}`);
+        values.push(csVals);
+      }
+      if (saVals.length > 0) {
+        groups.push(`SecAct — ${catLabel}`);
+        values.push(saVals);
       }
     }
-    return { groups, values };
-  }, [boxplotData]);
 
+    return groups.length > 0 ? { groups, values } : null;
+  }, [cytosigData, secactData, selectedTarget]);
+
+  // Method comparison: CytoSig vs LinCytoSig vs SecAct
   const methodGroups = useMemo(() => {
     if (!methodData?.rhos) return null;
     const groups: string[] = [];
@@ -34,26 +104,39 @@ export default function SummaryTab({ sigtype }: SummaryTabProps) {
         values.push(rhos);
       }
     }
-    return { groups, values };
+    return groups.length > 0 ? { groups, values } : null;
   }, [methodData]);
 
-  if (boxLoading || methodLoading) return <Spinner message="Loading summary..." />;
+  if (csLoading || saLoading || methodLoading) return <Spinner message="Loading summary..." />;
 
   return (
     <div className="space-y-8">
       <div>
         <h3 className="mb-2 text-sm font-semibold text-text-secondary">
-          Validation Correlation Distribution
+          Correlation Distributions — CytoSig vs SecAct
         </h3>
         <p className="mb-3 text-xs text-text-muted">
           Distribution of Spearman rho values between predicted activity and
-          signature gene expression across validation targets and levels.
+          signature gene expression. CytoSig (43 cytokines) and SecAct (1,249
+          secreted proteins) are shown side-by-side.
         </p>
-        {boxplotGroups ? (
+
+        {targetOptions.length > 1 && (
+          <FilterBar className="mb-4">
+            <SelectFilter
+              label="Target"
+              options={targetOptions}
+              value={selectedTarget}
+              onChange={setSelectedTarget}
+            />
+          </FilterBar>
+        )}
+
+        {combinedBoxplot ? (
           <BoxplotChart
-            groups={boxplotGroups.groups}
-            values={boxplotGroups.values}
-            title="Validation Correlations"
+            groups={combinedBoxplot.groups}
+            values={combinedBoxplot.values}
+            title={selectedTarget === '_all' ? 'All Targets' : selectedTarget}
             yTitle="Spearman rho"
           />
         ) : (
@@ -63,10 +146,11 @@ export default function SummaryTab({ sigtype }: SummaryTabProps) {
 
       <div>
         <h3 className="mb-2 text-sm font-semibold text-text-secondary">
-          Method Comparison
+          Method Comparison — CytoSig vs LinCytoSig vs SecAct
         </h3>
         <p className="mb-3 text-xs text-text-muted">
-          Comparison of CytoSig, LinCytoSig, and SecAct validation performance.
+          Cell-type-level Spearman rho (all donors pooled) across single-cell
+          atlases.
         </p>
         {methodGroups ? (
           <BoxplotChart

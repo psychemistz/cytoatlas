@@ -122,6 +122,7 @@ def load_activity_results() -> Dict[str, ad.AnnData]:
     for sig_type in ['cytosig', 'secact']:
         # Try multiple naming conventions
         candidates = [
+            RESULTS_DIR / f'parse10m_pseudobulk_activity_{sig_type}.h5ad',
             RESULTS_DIR / f'parse10m_{sig_type}.h5ad',
             RESULTS_DIR / f'parse10m_{sig_type}_zscore.h5ad',
             RESULTS_DIR / f'parse10m_activity_{sig_type}.h5ad',

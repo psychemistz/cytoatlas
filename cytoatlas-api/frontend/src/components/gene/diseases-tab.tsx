@@ -58,6 +58,7 @@ export default function DiseasesTab({ gene, signatureType }: DiseasesTabProps) {
             yTitle="Disease"
             title={`${gene}: Disease Associations`}
             height={Math.max(400, barData.categories.length * 28 + 150)}
+            colors={barData.values.map(v => v >= 0 ? '#b2182b' : '#2166ac')}
           />
         </div>
       )}
@@ -78,14 +79,18 @@ export default function DiseasesTab({ gene, signatureType }: DiseasesTabProps) {
               <tr key={i} className="border-t border-border-light">
                 <td className="px-3 py-1.5">{d.disease}</td>
                 <td className="px-3 py-1.5">{d.cohort}</td>
-                <td className="px-3 py-1.5 text-right font-mono">
+                <td className={`px-3 py-1.5 text-right font-mono ${d.activity_diff >= 0 ? 'text-red-600' : 'text-blue-600'}`}>
                   {d.activity_diff.toFixed(3)}
                 </td>
                 <td className="px-3 py-1.5 text-right font-mono">
                   {d.p_value.toExponential(2)}
                 </td>
                 <td className="px-3 py-1.5 text-right font-mono">
-                  {d.fdr != null ? d.fdr.toExponential(2) : '-'}
+                  {d.fdr != null ? (
+                    <span className={d.fdr < 0.05 ? 'font-semibold' : ''}>
+                      {d.fdr.toExponential(2)} {d.fdr < 0.01 ? '**' : d.fdr < 0.05 ? '*' : ''}
+                    </span>
+                  ) : '-'}
                 </td>
               </tr>
             ))}

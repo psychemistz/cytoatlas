@@ -1,5 +1,5 @@
-import { lazy, Suspense, useMemo } from 'react';
-import { useParams } from 'react-router';
+import { lazy, Suspense, useEffect, useMemo } from 'react';
+import { useParams, useNavigate } from 'react-router';
 import { useAppStore } from '@/stores/app-store';
 import { useGeneCheck, useGeneOverview } from '@/api/hooks/use-gene';
 import { TabPanel } from '@/components/ui/tab-panel';
@@ -15,10 +15,17 @@ const CorrelationsTab = lazy(() => import('@/components/gene/correlations-tab'))
 
 export default function GeneDetail() {
   const { symbol = '' } = useParams<{ symbol: string }>();
+  const navigate = useNavigate();
   const signatureType = useAppStore((s) => s.signatureType);
 
   const { data: check, isLoading: checkLoading } = useGeneCheck(symbol);
   const { data: overview, isLoading: overviewLoading } = useGeneOverview(symbol, signatureType);
+
+  useEffect(() => {
+    if (overview?.gene && overview.gene !== symbol) {
+      navigate(`/gene/${encodeURIComponent(overview.gene)}`, { replace: true });
+    }
+  }, [overview?.gene, symbol, navigate]);
 
   const tabs = useMemo(() => {
     const t = [];
@@ -38,16 +45,31 @@ export default function GeneDetail() {
     );
   }
 
+  const externalLinks = useMemo(() => {
+    const s = encodeURIComponent(symbol);
+    return [
+      { name: 'NCBI Gene', url: `https://www.ncbi.nlm.nih.gov/gene/?term=${s}[sym]+AND+human[orgn]` },
+      { name: 'UniProt', url: `https://www.uniprot.org/uniprotkb?query=${s}+AND+organism_id:9606` },
+      { name: 'GeneCards', url: `https://www.genecards.org/cgi-bin/carddisp.pl?gene=${s}` },
+      { name: 'Ensembl', url: `https://www.ensembl.org/Human/Search/Results?q=${s};site=ensembl;facet_species=Human` },
+      { name: 'HGNC', url: `https://www.genenames.org/tools/search/#!/?query=${s}` },
+      { name: 'Gene Ontology', url: `https://amigo.geneontology.org/amigo/search/bioentity?q=${s}` },
+    ];
+  }, [symbol]);
+
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-8">
       <div className="mb-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold">{symbol}</h1>
+            {overview?.gene && overview.gene !== symbol && (
+              <p className="text-xs text-text-muted">Redirected from {symbol}</p>
+            )}
             {overview?.description && (
               <p className="mt-1 text-sm text-text-secondary">{overview.description}</p>
             )}
-            <div className="mt-2 flex gap-3">
+            <div className="mt-2 flex flex-wrap gap-3">
               {check?.has_expression && (
                 <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
                   Expression
@@ -63,6 +85,19 @@ export default function GeneDetail() {
                   SecAct
                 </span>
               )}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {externalLinks.map((link) => (
+                <a
+                  key={link.name}
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded border border-border-primary px-2 py-0.5 text-xs text-primary hover:bg-primary/5"
+                >
+                  {link.name}
+                </a>
+              ))}
             </div>
           </div>
           <SignatureToggle />

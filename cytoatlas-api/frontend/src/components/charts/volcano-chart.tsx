@@ -24,6 +24,9 @@ interface VolcanoChartProps {
   className?: string;
   height?: number;
   onClick?: (signature: string) => void;
+  leftLabel?: string;
+  rightLabel?: string;
+  maxPoints?: number;
 }
 
 export function VolcanoChart({
@@ -34,16 +37,32 @@ export function VolcanoChart({
   className,
   height = 500,
   onClick,
+  leftLabel = '← Lower',
+  rightLabel = 'Higher →',
+  maxPoints,
 }: VolcanoChartProps) {
+  // Truncate to top N by significance score when maxPoints is set (e.g. SecAct 1,249 → 200)
+  const filteredPoints = useMemo(() => {
+    if (!maxPoints || points.length <= maxPoints) return points;
+    return [...points]
+      .map((p) => ({
+        ...p,
+        _score: Math.abs(p.activity_diff ?? p.log2fc ?? p.x ?? 0) *
+          -Math.log10(Math.max(p.p_value ?? p.pval ?? p.y ?? 1, 1e-300)),
+      }))
+      .sort((a, b) => b._score - a._score)
+      .slice(0, maxPoints);
+  }, [points, maxPoints]);
+
   const { data, layout } = useMemo(() => {
-    const x = points.map((p) => p.activity_diff ?? p.log2fc ?? p.x ?? 0);
-    const y = points.map((p) => {
+    const x = filteredPoints.map((p) => p.activity_diff ?? p.log2fc ?? p.x ?? 0);
+    const y = filteredPoints.map((p) => {
       const pval = p.p_value ?? p.pval ?? p.y ?? 1;
       return pval > 0 ? -Math.log10(pval) : 0;
     });
-    const text = points.map((p) => p.signature ?? p.label ?? p.gene ?? '');
+    const text = filteredPoints.map((p) => p.signature ?? p.label ?? p.gene ?? '');
 
-    const colors = points.map((p) => {
+    const colors = filteredPoints.map((p) => {
       const actDiff = p.activity_diff ?? p.log2fc ?? p.x ?? 0;
       const fdr = p.fdr ?? p.p_value ?? p.pval ?? 1;
       if (fdr < fdrThreshold && Math.abs(actDiff) > activityThreshold) {
@@ -73,16 +92,41 @@ export function VolcanoChart({
       { type: 'line' as const, x0: 0, x1: 1, xref: 'paper' as const, y0: yThreshold, y1: yThreshold, line: { dash: 'dash' as const, color: COLORS.gray, width: 1 } },
     ];
 
+    // Dynamic symmetric x-axis range
+    const maxAbsFC = Math.ceil(Math.max(...x.map(Math.abs), 1));
+
+    const annotations = [
+      {
+        x: -activityThreshold * 1.5,
+        y: 1.02,
+        yref: 'paper' as const,
+        xref: 'x' as const,
+        text: leftLabel,
+        showarrow: false,
+        font: { size: 10, color: '#6b7280' },
+      },
+      {
+        x: activityThreshold * 1.5,
+        y: 1.02,
+        yref: 'paper' as const,
+        xref: 'x' as const,
+        text: rightLabel,
+        showarrow: false,
+        font: { size: 10, color: '#6b7280' },
+      },
+    ];
+
     const chartLayout: Partial<Layout> = {
       title: title ? { text: title, font: { size: 14 } } : undefined,
-      xaxis: { title: t('\u0394 Activity'), gridcolor: COLORS.gridline, zerolinecolor: COLORS.zeroline },
+      xaxis: { title: t('\u0394 Activity'), gridcolor: COLORS.gridline, zerolinecolor: COLORS.zeroline, range: [-maxAbsFC, maxAbsFC] },
       yaxis: { title: t('-log10(p-value)'), gridcolor: COLORS.gridline, zeroline: false },
       shapes,
+      annotations,
       height,
     };
 
     return { data: traces, layout: chartLayout };
-  }, [points, title, fdrThreshold, activityThreshold, height]);
+  }, [filteredPoints, title, fdrThreshold, activityThreshold, height, leftLabel, rightLabel]);
 
   return (
     <PlotlyChart
@@ -91,7 +135,7 @@ export function VolcanoChart({
       className={className}
       onClick={onClick ? (e) => {
         const idx = (e as { points: { pointIndex: number }[] }).points[0]?.pointIndex;
-        if (idx !== undefined) onClick(points[idx].signature ?? points[idx].label ?? points[idx].gene ?? '');
+        if (idx !== undefined) onClick(filteredPoints[idx].signature ?? filteredPoints[idx].label ?? filteredPoints[idx].gene ?? '');
       } : undefined}
     />
   );

@@ -34,6 +34,14 @@ export function AtlasHeader({ atlasName, displayName, summary }: AtlasHeaderProp
           >
             Validate
           </Link>
+          <a
+            href={`/api/v1/export/${atlasName}/activity.csv`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-md border border-border-light px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-bg-tertiary"
+          >
+            Export CSV
+          </a>
         </div>
       </div>
     </div>
