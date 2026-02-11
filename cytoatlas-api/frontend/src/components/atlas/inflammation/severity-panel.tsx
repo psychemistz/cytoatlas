@@ -4,6 +4,7 @@ import { get } from '@/api/client';
 import type { CorrelationData } from '@/api/types/activity';
 import { Spinner } from '@/components/ui/loading-skeleton';
 import { HeatmapChart } from '@/components/charts/heatmap-chart';
+import { CORRELATION_COLORSCALE } from '@/components/charts/chart-defaults';
 
 interface SeverityPanelProps {
   signatureType: string;
@@ -87,6 +88,7 @@ export default function SeverityPanel({ signatureType }: SeverityPanelProps) {
             xTitle="Signature"
             yTitle="Disease"
             colorbarTitle="Spearman rho"
+            colorscale={CORRELATION_COLORSCALE}
             symmetric
           />
         </div>

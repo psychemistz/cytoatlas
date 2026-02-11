@@ -5,6 +5,7 @@ import type { CorrelationData } from '@/api/types/activity';
 import { Spinner } from '@/components/ui/loading-skeleton';
 import { LollipopChart } from '@/components/charts/lollipop-chart';
 import { HeatmapChart } from '@/components/charts/heatmap-chart';
+import { CORRELATION_COLORSCALE } from '@/components/charts/chart-defaults';
 
 interface AgeBmiPanelProps {
   signatureType: string;
@@ -127,6 +128,7 @@ export default function AgeBmiPanel({ signatureType, atlasName }: AgeBmiPanelPro
             xTitle="Signature"
             yTitle="Cell Type"
             colorbarTitle="Spearman rho"
+            colorscale={CORRELATION_COLORSCALE}
             symmetric
           />
         </div>

@@ -3,6 +3,7 @@ import { useCimaBiochemistry } from '@/api/hooks/use-cima';
 import type { BiochemCorrelation } from '@/api/types/activity';
 import { Spinner } from '@/components/ui/loading-skeleton';
 import { HeatmapChart } from '@/components/charts/heatmap-chart';
+import { CORRELATION_COLORSCALE } from '@/components/charts/chart-defaults';
 
 interface BiochemistryPanelProps {
   signatureType: string;
@@ -90,6 +91,7 @@ export default function BiochemistryPanel({ signatureType }: BiochemistryPanelPr
           xTitle="Biochemistry Marker"
           yTitle="Signature"
           colorbarTitle="Spearman rho"
+          colorscale={CORRELATION_COLORSCALE}
           symmetric
           height={Math.max(500, heatmap.y.length * 22 + 200)}
         />

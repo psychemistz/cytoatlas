@@ -4,6 +4,7 @@ import { Spinner } from '@/components/ui/loading-skeleton';
 import { FilterBar, SelectFilter } from '@/components/ui/filter-bar';
 import { ScatterChart } from '@/components/charts/scatter-chart';
 import { HeatmapChart } from '@/components/charts/heatmap-chart';
+import { CORRELATION_COLORSCALE } from '@/components/charts/chart-defaults';
 
 interface AtlasComparisonTabProps {
   signatureType: string;
@@ -92,6 +93,7 @@ export default function AtlasComparisonTab({
             y={corrMatrix.y}
             title="Pairwise Atlas Correlations"
             colorbarTitle="Spearman rho"
+            colorscale={CORRELATION_COLORSCALE}
             zmin={-1}
             zmax={1}
             symmetric
