@@ -19,8 +19,8 @@ const TABS = [
   { id: 'summary', label: 'Summary' },
   { id: 'bulk-rnaseq', label: 'Bulk RNA-seq' },
   { id: 'donor', label: 'Donor Level' },
-  { id: 'celltype', label: 'Cell-Type Level' },
-  { id: 'singlecell', label: 'Single Cell' },
+  { id: 'celltype', label: 'Cell Type Level' },
+  { id: 'singlecell', label: 'Single-Cell' },
 ];
 
 export default function Validate() {
@@ -46,7 +46,7 @@ export default function Validate() {
   const sigtype = signatureType === 'CytoSig' ? 'cytosig' : 'secact';
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8">
+    <div className="mx-auto max-w-[1400px] px-4 py-8">
       <div className="mb-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
           <div>

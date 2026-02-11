@@ -6,19 +6,19 @@ export const ATLAS_CONFIGS = {
   cima: {
     name: 'cima',
     displayName: 'CIMA',
-    description: 'Chinese Immune Multi-omics Atlas - Healthy adult immune profiling with biochemistry and metabolomics',
+    description: 'Chinese Immune Multi-omics Atlas - 6.5M cells from 421 healthy adults with matched biochemistry and metabolomics',
     color: '#2563eb',
   },
   inflammation: {
     name: 'inflammation',
     displayName: 'Inflammation Atlas',
-    description: 'Pan-disease immune profiling across multiple inflammatory conditions with treatment response data',
+    description: 'Pan-disease immune profiling - 4.9M cells across 20 inflammatory diseases with treatment response data',
     color: '#10b981',
   },
   scatlas: {
     name: 'scatlas',
     displayName: 'scAtlas',
-    description: 'Human tissue reference atlas with normal organs and pan-cancer immune profiling',
+    description: 'Human tissue reference atlas - 6.4M cells across 35 organs with pan-cancer immune profiling',
     color: '#f59e0b',
   },
 } as const;
@@ -41,7 +41,7 @@ export const PLACEHOLDER_ATLASES: Atlas[] = [
   {
     name: 'cima',
     display_name: 'CIMA',
-    description: 'Chinese Immune Multi-omics Atlas - Healthy adult immune profiling with biochemistry and metabolomics',
+    description: 'Chinese Immune Multi-omics Atlas - 6.5M cells from 421 healthy adults with matched biochemistry and metabolomics',
     n_cells: 6484974,
     n_samples: 421,
     n_cell_types: 39,
@@ -55,7 +55,7 @@ export const PLACEHOLDER_ATLASES: Atlas[] = [
   {
     name: 'inflammation',
     display_name: 'Inflammation Atlas',
-    description: 'Pan-disease immune profiling across multiple inflammatory conditions with treatment response data',
+    description: 'Pan-disease immune profiling - 4.9M cells across 20 inflammatory diseases with treatment response data',
     n_cells: 4900000,
     n_samples: 817,
     n_cell_types: 43,
@@ -69,7 +69,7 @@ export const PLACEHOLDER_ATLASES: Atlas[] = [
   {
     name: 'scatlas',
     display_name: 'scAtlas',
-    description: 'Human tissue reference atlas with normal organs and pan-cancer immune profiling',
+    description: 'Human tissue reference atlas - 6.4M cells across 35 organs with pan-cancer immune profiling',
     n_cells: 6400000,
     n_samples: 781,
     n_cell_types: 213,

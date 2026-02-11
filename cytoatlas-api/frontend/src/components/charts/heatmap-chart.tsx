@@ -71,11 +71,12 @@ export function HeatmapChart({
       xaxis: {
         title: t(xTitle),
         tickangle: -45,
+        tickfont: { size: 10 },
       },
       yaxis: {
         title: t(yTitle),
         tickangle: 0,
-        autorange: 'reversed' as const,
+        tickfont: { size: 10 },
       },
       height: dynamicHeight,
     };

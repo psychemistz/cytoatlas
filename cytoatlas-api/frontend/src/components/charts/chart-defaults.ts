@@ -38,7 +38,7 @@ export const HEATMAP_COLORSCALE: [number, string][] = [
 export const COLORS = {
   primary: '#2563eb',
   primaryDark: '#1d4ed8',
-  red: '#dc2626',
+  red: '#ef4444',
   green: '#10b981',
   amber: '#f59e0b',
   purple: '#8b5cf6',

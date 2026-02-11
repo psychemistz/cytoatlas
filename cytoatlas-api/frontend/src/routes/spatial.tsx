@@ -28,14 +28,14 @@ export default function Spatial() {
   const sigtype = signatureType === 'CytoSig' ? 'cytosig' : 'secact';
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8">
+    <div className="mx-auto max-w-[1400px] px-4 py-8">
       <div className="mb-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">Spatial Analysis</h1>
+            <h1 className="text-3xl font-bold">Spatial Transcriptomics</h1>
             <p className="mt-1 text-sm text-text-secondary">
-              Spatial transcriptomics activity mapping across technologies and tissues
-              from the SpatialCorpus-110M collection
+              Cytokine and secreted protein activity across 251 spatial datasets from 8 technologies
+              (SpatialCorpus-110M, ~110M cells)
             </p>
           </div>
           <SignatureToggle />

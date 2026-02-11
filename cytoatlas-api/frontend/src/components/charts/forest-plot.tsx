@@ -57,7 +57,7 @@ export function ForestPlot({ items, title, className, height }: ForestPlotProps)
         }
         atlasTraces[atlasName].x.push(effect.effect);
         atlasTraces[atlasName].y.push(baseY + (aIdx - 1) * 0.15);
-        atlasTraces[atlasName].error_x.push(effect.se);
+        atlasTraces[atlasName].error_x.push(effect.se * 1.96);
       });
     });
 
@@ -69,7 +69,14 @@ export function ForestPlot({ items, title, className, height }: ForestPlotProps)
         name: atlas,
         x: d.x,
         y: d.y,
-        error_x: { type: 'data', array: d.error_x, visible: true, color: ATLAS_COLORS[atlas] ?? COLORS.gray },
+        error_x: {
+          type: 'data',
+          array: d.error_x,
+          visible: true,
+          color: ATLAS_COLORS[atlas] ?? COLORS.gray,
+          width: 0,
+          thickness: 1.5,
+        },
         marker: { color: ATLAS_COLORS[atlas] ?? COLORS.gray, size: 8 },
         hovertemplate: `${atlas}<br>Effect: %{x:.3f} \u00b1 %{error_x.array:.3f}<extra></extra>`,
       });
@@ -88,6 +95,8 @@ export function ForestPlot({ items, title, className, height }: ForestPlotProps)
         arrayminus: items.map((i) => i.pooled_effect - i.ci_low),
         visible: true,
         color: COLORS.darkSlate,
+        width: 4,
+        thickness: 2,
       },
       marker: { color: COLORS.darkSlate, size: 12, symbol: 'diamond' },
       hovertemplate: 'Pooled: %{x:.3f}<extra></extra>',
@@ -98,12 +107,12 @@ export function ForestPlot({ items, title, className, height }: ForestPlotProps)
     const chartLayout: Partial<Layout> = {
       title: title ? { text: title, font: { size: 14 } } : undefined,
       margin: { l: 120, r: 40, t: 60, b: 80 },
-      xaxis: { title: t('Effect Size'), zeroline: true, zerolinecolor: COLORS.zeroline, gridcolor: COLORS.gridline },
-      yaxis: { tickmode: 'array' as const, tickvals, ticktext, autorange: 'reversed' as const },
+      xaxis: { title: t('Effect Size (Correlation)'), zeroline: true, zerolinecolor: COLORS.zeroline, gridcolor: COLORS.zeroline },
+      yaxis: { tickmode: 'array' as const, tickvals, ticktext, autorange: 'reversed' as const, gridcolor: COLORS.zeroline },
       shapes: [
         { type: 'line', x0: 0, x1: 0, y0: 0, y1: 1, yref: 'paper', line: { dash: 'dash', color: COLORS.gray, width: 1 } },
       ],
-      legend: { orientation: 'h' as const, y: -0.15 },
+      legend: { orientation: 'h' as const, y: -0.15, x: 0.5, xanchor: 'center' as const },
       height: dynamicHeight,
     };
 

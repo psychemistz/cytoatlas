@@ -15,6 +15,7 @@ interface TabPanelProps {
   children: (activeTab: string) => ReactNode;
   className?: string;
   orientation?: 'horizontal' | 'vertical';
+  variant?: 'underline' | 'pill';
 }
 
 export function TabPanel({
@@ -24,6 +25,7 @@ export function TabPanel({
   children,
   className,
   orientation = 'horizontal',
+  variant = 'underline',
 }: TabPanelProps) {
   const [activeTab, setActiveTab] = useState(defaultTab ?? tabs[0]?.id ?? '');
 
@@ -33,13 +35,18 @@ export function TabPanel({
   }
 
   const isVertical = orientation === 'vertical';
+  const isPill = variant === 'pill';
 
   return (
     <div className={cn(isVertical && 'flex gap-4', className)}>
       <div
         className={cn(
           'flex gap-1',
-          isVertical ? 'flex-col border-r border-border-light pr-4' : 'border-b border-border-light pb-1',
+          isVertical
+            ? 'flex-col border-r border-border-light pr-4'
+            : isPill
+              ? 'p-1 bg-bg-tertiary rounded-lg overflow-x-auto mb-4'
+              : 'border-b border-border-light pb-1',
         )}
         role="tablist"
       >
@@ -51,10 +58,20 @@ export function TabPanel({
             disabled={tab.disabled}
             onClick={() => handleTabClick(tab.id)}
             className={cn(
-              'flex items-center gap-2 whitespace-nowrap rounded-t-md px-4 py-2 text-sm font-medium transition-colors',
-              activeTab === tab.id
-                ? 'border-b-2 border-primary bg-bg-primary text-primary'
-                : 'text-text-secondary hover:bg-bg-tertiary hover:text-text-primary',
+              'flex items-center gap-2 whitespace-nowrap px-4 py-2 text-sm font-medium transition-colors',
+              isPill
+                ? cn(
+                    'rounded-md',
+                    activeTab === tab.id
+                      ? 'bg-bg-primary text-primary shadow-sm'
+                      : 'text-text-secondary hover:text-text-primary hover:bg-bg-primary',
+                  )
+                : cn(
+                    'rounded-t-md',
+                    activeTab === tab.id
+                      ? 'border-b-2 border-primary bg-bg-primary text-primary'
+                      : 'text-text-secondary hover:bg-bg-tertiary hover:text-text-primary',
+                  ),
               tab.disabled && 'cursor-not-allowed opacity-50',
             )}
           >
@@ -63,7 +80,13 @@ export function TabPanel({
           </button>
         ))}
       </div>
-      <div className="flex-1 pt-4" role="tabpanel">
+      <div
+        className={cn(
+          'flex-1 pt-4',
+          isPill && 'rounded-lg border border-border-light bg-bg-primary p-8 shadow-sm min-h-[500px]',
+        )}
+        role="tabpanel"
+      >
         {children(activeTab)}
       </div>
     </div>

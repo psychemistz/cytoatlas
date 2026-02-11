@@ -54,6 +54,7 @@ export function AtlasTabRouter({ atlasName, signatureType }: AtlasTabRouterProps
       tabs={tabs}
       defaultTab={activeTab}
       onTabChange={setActiveTab}
+      variant="pill"
     >
       {(tabId) => (
         <ErrorBoundary>
@@ -108,7 +109,7 @@ function renderPanel(atlas: string, tabId: string, signatureType: string) {
 
   if (atlas === 'scatlas') {
     switch (tabId) {
-      case 'differential': return <DifferentialPanel {...props} context="cancer" />;
+      case 'differential-analysis': return <DifferentialPanel {...props} context="cancer" />;
       case 'tissue-atlas': return <TissueAtlasPanel signatureType={signatureType} />;
       case 'immune-infiltration': return <ImmuneInfiltration signatureType={signatureType} />;
       case 'tcell-state': return <TcellStatePanel signatureType={signatureType} />;

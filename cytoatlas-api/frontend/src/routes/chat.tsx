@@ -105,7 +105,7 @@ export default function Chat() {
   const showWelcome = selectedConversationId === null && messages.length === 0;
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
+    <div className="mx-auto flex h-[calc(100vh-4rem)] max-w-[1400px] overflow-hidden">
       {/* Sidebar */}
       <ChatSidebar
         conversations={conversations}

@@ -2,7 +2,7 @@ import { useState, type KeyboardEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useAtlases } from '@/api/hooks/use-atlas';
 import { STATS, EXAMPLE_GENES, PLACEHOLDER_ATLASES } from '@/lib/constants';
-import { formatNumber } from '@/lib/utils';
+import { AtlasCard } from '@/components/ui/atlas-card';
 
 export default function Home() {
   const navigate = useNavigate();
@@ -21,114 +21,113 @@ export default function Home() {
   }
 
   return (
-    <div>
+    <div className="mx-auto max-w-[1400px] px-8 py-8">
       {/* Hero */}
-      <section className="bg-gradient-to-b from-bg-secondary to-bg-primary px-4 py-16 text-center">
-        <h1 className="mb-4 text-4xl font-bold text-text-primary">Pan-Disease Cytokine Activity Atlas</h1>
-        <p className="mx-auto mb-8 max-w-2xl text-lg text-text-secondary">
-          Explore cytokine and secreted protein activities across <strong>17+ million immune cells</strong> from
-          multiple single-cell atlases
-        </p>
-        <div className="mx-auto flex max-w-lg gap-2">
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Search genes (e.g., IFNG, TNF, IL6, IL17A...)"
-            className="flex-1 rounded-lg border border-border-light px-4 py-3 text-base outline-none focus:border-primary"
-          />
-          <button
-            onClick={handleSearch}
-            className="rounded-lg bg-primary px-6 py-3 font-medium text-text-inverse hover:bg-primary-dark"
-          >
-            Search
-          </button>
-        </div>
-        <div className="mt-4 flex items-center justify-center gap-2 text-sm text-text-muted">
-          <span>Try:</span>
-          {EXAMPLE_GENES.map((gene) => (
-            <Link
-              key={gene}
-              to={`/gene/${gene}`}
-              className="rounded-md bg-bg-tertiary px-2.5 py-1 text-primary hover:bg-border-light"
+      <section className="mb-8 rounded-xl bg-gradient-to-br from-primary to-primary-dark px-6 py-12 text-center text-text-inverse">
+        <div className="mx-auto max-w-[800px]">
+          <h1 className="mb-4 text-[2.5rem] font-semibold leading-tight text-text-inverse">
+            Pan-Disease Cytokine Activity Atlas
+          </h1>
+          <p className="mb-8 text-xl opacity-90">
+            Explore cytokine and secreted protein activities across{' '}
+            <strong>17+ million immune cells</strong> from multiple single-cell atlases
+          </p>
+
+          <div className="mx-auto mb-6 flex max-w-[600px] gap-2">
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Search genes (e.g., IFNG, TNF, IL6, IL17A...)"
+              className="flex-1 rounded-lg border-none px-6 py-3 text-lg text-text-primary outline-none"
+            />
+            <button
+              onClick={handleSearch}
+              className="rounded-lg bg-accent px-8 py-3 font-semibold text-text-inverse hover:bg-[#0d9668]"
             >
-              {gene}
-            </Link>
-          ))}
+              Search
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <span className="opacity-80">Try:</span>
+            {EXAMPLE_GENES.map((gene) => (
+              <Link
+                key={gene}
+                to={`/gene/${gene}`}
+                className="rounded-md border border-white/30 bg-white/20 px-3 py-1 text-sm text-text-inverse no-underline hover:bg-white/30"
+              >
+                {gene}
+              </Link>
+            ))}
+          </div>
         </div>
       </section>
 
       {/* Stats */}
-      <section className="border-b border-border-light bg-bg-primary px-4 py-12">
-        <div className="mx-auto grid max-w-4xl grid-cols-2 gap-6 md:grid-cols-4">
+      <section className="mb-8">
+        <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
           {STATS.map(({ value, label }) => (
-            <div key={label} className="text-center">
-              <div className="text-3xl font-bold text-primary">{value}</div>
-              <div className="mt-1 text-sm text-text-secondary">{label}</div>
+            <div
+              key={label}
+              className="rounded-lg border border-border-light bg-bg-primary p-6 text-center shadow-sm"
+            >
+              <div className="mb-1 text-[2rem] font-bold text-primary">{value}</div>
+              <div className="text-sm text-text-secondary">{label}</div>
             </div>
           ))}
         </div>
       </section>
 
       {/* Atlas Cards */}
-      <section className="px-4 py-12">
-        <h2 className="mb-8 text-center text-2xl font-bold">Core Atlases</h2>
-        <div className="mx-auto grid max-w-5xl gap-6 md:grid-cols-3">
+      <section className="mb-8">
+        <h2 className="mb-6 text-[1.75rem] font-semibold">Core Atlases</h2>
+        <div className="grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
           {coreAtlases.map((atlas) => (
-            <Link
+            <AtlasCard
               key={atlas.name}
-              to={`/atlas/${atlas.name}`}
-              className="rounded-xl border border-border-light p-6 shadow-sm transition-shadow hover:shadow-md"
-            >
-              <div className="mb-2 flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-text-primary">{atlas.display_name}</h3>
-                <span className="rounded bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
-                  Grade {atlas.validation_grade}
-                </span>
-              </div>
-              <p className="mb-4 text-sm text-text-secondary">{atlas.description}</p>
-              <div className="flex gap-4 text-xs text-text-muted">
-                <span>{formatNumber(atlas.n_cells)} cells</span>
-                <span>{atlas.n_samples.toLocaleString()} samples</span>
-                <span>{atlas.n_cell_types} cell types</span>
-              </div>
-            </Link>
+              name={atlas.name}
+              displayName={atlas.display_name}
+              description={atlas.description}
+              nCells={atlas.n_cells}
+              nSamples={atlas.n_samples}
+              nCellTypes={atlas.n_cell_types}
+              validationGrade={atlas.validation_grade}
+              sourceType={atlas.source_type}
+            />
           ))}
         </div>
       </section>
 
       {/* Features */}
-      <section className="bg-bg-secondary px-4 py-12">
-        <h2 className="mb-8 text-center text-2xl font-bold">What You Can Do</h2>
-        <div className="mx-auto grid max-w-5xl gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <section className="mb-8">
+        <h2 className="mb-6 text-[1.75rem] font-semibold">What You Can Do</h2>
+        <div className="grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))' }}>
           {FEATURES.map(({ icon, title, description, to, quickLinks }) => (
-            <Link
+            <div
               key={title}
-              to={to}
-              className="rounded-xl border border-border-light bg-bg-primary p-6 shadow-sm transition-shadow hover:shadow-md"
+              onClick={() => navigate(to)}
+              className="cursor-pointer rounded-lg border border-border-light bg-bg-primary p-8 text-center shadow-sm transition-shadow hover:shadow-md"
             >
-              <div className="mb-3 text-3xl">{icon}</div>
-              <h3 className="mb-2 text-lg font-semibold text-text-primary">{title}</h3>
-              <p className="mb-3 text-sm text-text-secondary">{description}</p>
+              <div className="mb-4 text-[2.5rem]">{icon}</div>
+              <h3 className="mb-2 font-semibold">{title}</h3>
+              <p className="text-[0.9375rem] text-text-secondary">{description}</p>
               {quickLinks && (
-                <div className="flex gap-2">
+                <div className="mt-3 flex flex-wrap justify-center gap-2">
                   {quickLinks.map(({ label, href }) => (
-                    <span
+                    <Link
                       key={label}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        navigate(href);
-                      }}
-                      className="cursor-pointer rounded bg-bg-tertiary px-2 py-0.5 text-xs text-primary hover:bg-border-light"
+                      to={href}
+                      onClick={(e) => e.stopPropagation()}
+                      className="rounded px-2 py-0.5 text-xs text-text-secondary no-underline hover:bg-bg-tertiary"
                     >
                       {label}
-                    </span>
+                    </Link>
                   ))}
                 </div>
               )}
-            </Link>
+            </div>
           ))}
         </div>
       </section>
@@ -146,7 +145,7 @@ interface Feature {
 
 const FEATURES: Feature[] = [
   {
-    icon: '\u{1F50D}',
+    icon: '\u{1F50E}',
     title: 'Search',
     description: 'Search genes to view expression and cytokine/protein activity across all atlases',
     to: '/search',

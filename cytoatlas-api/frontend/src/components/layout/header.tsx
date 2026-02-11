@@ -33,7 +33,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-border-light bg-bg-primary shadow-sm">
-      <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3">
+      <div className="mx-auto flex max-w-[1400px] items-center gap-4 px-4 py-3">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 text-lg font-bold text-text-primary no-underline">
           <span className="text-2xl">&#128300;</span>
@@ -51,7 +51,7 @@ export function Header() {
                 cn(
                   'whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors',
                   isActive
-                    ? 'bg-primary text-text-inverse'
+                    ? 'bg-primary/10 text-primary'
                     : 'text-text-secondary hover:bg-bg-tertiary hover:text-text-primary',
                 )
               }
@@ -62,14 +62,14 @@ export function Header() {
         </nav>
 
         {/* Search */}
-        <div className="flex items-center gap-1">
+        <div className="flex flex-1 max-w-[400px] items-center gap-1">
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search genes..."
-            className="w-40 rounded-md border border-border-light px-3 py-1.5 text-sm outline-none focus:border-primary"
+            placeholder="Search genes (IFNG, TNF, IL6...)"
+            className="w-full max-w-[400px] rounded-md border border-border-light px-3 py-1.5 text-sm outline-none focus:border-primary"
           />
           <button
             onClick={handleSearch}

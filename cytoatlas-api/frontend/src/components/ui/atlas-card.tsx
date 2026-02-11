@@ -31,37 +31,46 @@ export function AtlasCard({
   className,
 }: AtlasCardProps) {
   return (
-    <div className={cn('rounded-xl border border-border-light p-6 shadow-sm', className)}>
-      <div className="mb-2 flex items-center gap-2">
-        <h3 className="text-lg font-semibold">{displayName}</h3>
-        {sourceType === 'builtin' && (
-          <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">Core</span>
-        )}
-        {validationGrade && (
-          <span className={cn('rounded px-2 py-0.5 text-xs font-medium', GRADE_COLORS[validationGrade] ?? 'bg-bg-tertiary text-text-muted')}>
-            Grade {validationGrade}
-          </span>
-        )}
+    <div
+      className={cn(
+        'overflow-hidden rounded-xl border border-border-light bg-bg-primary shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg',
+        className,
+      )}
+    >
+      {/* Header section */}
+      <div className="border-b border-border-light p-6">
+        <div className="mb-2 flex items-center gap-2">
+          <h3 className="text-lg font-semibold">{displayName}</h3>
+          {sourceType === 'builtin' && (
+            <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">Core</span>
+          )}
+          {validationGrade && (
+            <span className={cn('rounded px-2 py-0.5 text-xs font-medium', GRADE_COLORS[validationGrade] ?? 'bg-bg-tertiary text-text-muted')}>
+              Grade {validationGrade}
+            </span>
+          )}
+        </div>
+        <p className="text-sm text-text-secondary">{description}</p>
       </div>
 
-      <p className="mb-4 text-sm text-text-secondary">{description}</p>
-
-      <div className="mb-4 grid grid-cols-3 gap-2 text-center">
+      {/* Stats section */}
+      <div className="grid grid-cols-3 gap-2 bg-bg-secondary px-6 py-3 text-center">
         <div>
-          <div className="text-lg font-bold text-primary">{formatNumber(nCells)}</div>
+          <div className="font-semibold text-text-primary">{formatNumber(nCells)}</div>
           <div className="text-xs text-text-muted">Cells</div>
         </div>
         <div>
-          <div className="text-lg font-bold text-primary">{nSamples.toLocaleString()}</div>
+          <div className="font-semibold text-text-primary">{nSamples.toLocaleString()}</div>
           <div className="text-xs text-text-muted">Samples</div>
         </div>
         <div>
-          <div className="text-lg font-bold text-primary">{nCellTypes}</div>
+          <div className="font-semibold text-text-primary">{nCellTypes}</div>
           <div className="text-xs text-text-muted">Cell Types</div>
         </div>
       </div>
 
-      <div className="flex gap-2">
+      {/* Actions section */}
+      <div className="flex gap-2 px-6 py-3">
         <Link
           to={`/atlas/${name}`}
           className="flex-1 rounded-md bg-primary py-2 text-center text-sm font-medium text-text-inverse hover:bg-primary-dark"

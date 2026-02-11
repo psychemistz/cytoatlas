@@ -48,8 +48,8 @@ export function VolcanoChart({
         x,
         y,
         text,
-        marker: { color: colors, size: 8, opacity: 0.7, line: { color: 'white', width: 1 } },
-        hovertemplate: '%{text}<br>\u0394 Activity: %{x:.3f}<br>-log10(p): %{y:.2f}<extra></extra>',
+        marker: { color: colors, size: 6, opacity: 0.7, line: { color: 'white', width: 0.5 } },
+        hovertemplate: '%{text}<br>\u0394 Activity: %{x:.3f}<br>-log10(p): %{y:.3f}<extra></extra>',
       },
     ];
 
@@ -65,7 +65,7 @@ export function VolcanoChart({
     const chartLayout: Partial<Layout> = {
       title: title ? { text: title, font: { size: 14 } } : undefined,
       xaxis: { title: t('\u0394 Activity'), gridcolor: COLORS.gridline, zerolinecolor: COLORS.zeroline },
-      yaxis: { title: t('-log10(p-value)'), gridcolor: COLORS.gridline },
+      yaxis: { title: t('-log10(p-value)'), gridcolor: COLORS.gridline, zeroline: false },
       shapes,
       height,
     };

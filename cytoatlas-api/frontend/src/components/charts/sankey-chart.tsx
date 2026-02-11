@@ -75,5 +75,5 @@ export function SankeyChart({ nodes, links, title, className, height = 600 }: Sa
     return { data: traces, layout: chartLayout };
   }, [nodes, links, title, height]);
 
-  return <PlotlyChart data={data} layout={layout} className={className} />;
+  return <PlotlyChart data={data} layout={layout} config={{ displayModeBar: false }} className={className} />;
 }

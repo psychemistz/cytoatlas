@@ -16,14 +16,14 @@ export default function AtlasDetail() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-12">
+      <div className="mx-auto max-w-[1400px] px-4 py-12">
         <Spinner message={`Loading ${displayName}...`} />
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8">
+    <div className="mx-auto max-w-[1400px] px-4 py-8">
       <AtlasHeader
         atlasName={name}
         displayName={displayName}

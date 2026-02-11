@@ -37,7 +37,7 @@ export default function Search() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-12">
+    <div className="mx-auto max-w-[1000px] px-4 py-12">
       <div className="mb-8 text-center">
         <h1 className="mb-2 text-3xl font-bold">Search</h1>
         <p className="text-text-secondary">
@@ -77,18 +77,18 @@ export default function Search() {
             >
               {gene}
               <span className="flex gap-0.5">
-                <Badge active={cs}>CS</Badge>
-                <Badge active={sa}>SA</Badge>
+                <Badge active={cs} type="cs">CS</Badge>
+                <Badge active={sa} type="sa">SA</Badge>
               </span>
             </Link>
           ))}
         </div>
         <div className="mt-3 flex gap-4 text-xs text-text-muted">
           <span className="flex items-center gap-1">
-            <Badge active>CS</Badge> CytoSig (43 cytokines)
+            <Badge active type="cs">CS</Badge> CytoSig (43 cytokines)
           </span>
           <span className="flex items-center gap-1">
-            <Badge active>SA</Badge> SecAct (1,170 proteins)
+            <Badge active type="sa">SA</Badge> SecAct (1,170 proteins)
           </span>
         </div>
       </div>
@@ -108,13 +108,16 @@ export default function Search() {
   );
 }
 
-function Badge({ active, children }: { active: boolean; children: React.ReactNode }) {
+function Badge({ active, type = 'cs', children }: { active: boolean; type?: 'cs' | 'sa'; children: React.ReactNode }) {
+  const colorClass =
+    !active
+      ? 'bg-bg-tertiary text-text-muted'
+      : type === 'sa'
+        ? 'bg-purple-500/20 text-purple-600'
+        : 'bg-primary/10 text-primary';
+
   return (
-    <span
-      className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-bold leading-none ${
-        active ? 'bg-primary/10 text-primary' : 'bg-bg-tertiary text-text-muted'
-      }`}
-    >
+    <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-bold leading-none ${colorClass}`}>
       {active ? children : '\u2014'}
     </span>
   );

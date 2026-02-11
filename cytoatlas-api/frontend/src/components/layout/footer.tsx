@@ -1,7 +1,7 @@
 export function Footer() {
   return (
     <footer className="border-t border-border-light bg-bg-dark py-6 text-text-inverse">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4">
+      <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-4 px-4">
         <div className="text-sm text-text-muted">
           <p>&copy; 2025 CytoAtlas. Developed at NIH/NCI.</p>
           <p>Data from CIMA, Inflammation Atlas, and scAtlas.</p>

@@ -42,13 +42,13 @@ export default function Perturbation() {
   const sigtype = signatureType === 'CytoSig' ? 'cytosig' : 'secact';
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8">
+    <div className="mx-auto max-w-[1400px] px-4 py-8">
       <div className="mb-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold">Perturbation Analysis</h1>
             <p className="mt-1 text-sm text-text-secondary">
-              Cytokine perturbation responses (parse_10M) and drug sensitivity profiling (Tahoe-100M)
+              Cytokine perturbation ground truth (parse_10M, 9.7M cells) and drug sensitivity profiling (Tahoe-100M, 100.6M cells)
             </p>
           </div>
           <SignatureToggle />

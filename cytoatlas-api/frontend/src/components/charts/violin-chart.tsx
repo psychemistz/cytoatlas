@@ -44,10 +44,11 @@ export function ViolinChart({
       line: { color: colors[i % colors.length] },
     }));
 
-    const chartLayout: Partial<Layout> = {
+    const chartLayout: Partial<Layout> & { violinmode?: string } = {
       title: title ? { text: title, font: { size: 14 } } : undefined,
       xaxis: { title: t(xTitle) },
       yaxis: { title: t(yTitle) },
+      violinmode: 'group',
       showlegend: false,
       height,
     };

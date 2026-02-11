@@ -85,8 +85,10 @@ export function ScatterChart({
               .filter(Boolean)
               .join('<br>'),
             showarrow: false,
-            font: { size: 11 },
-            bgcolor: 'rgba(255,255,255,0.8)',
+            xanchor: 'left' as const,
+            yanchor: 'top' as const,
+            font: { size: 12 },
+            bgcolor: 'white',
             bordercolor: COLORS.zeroline,
             borderwidth: 1,
             borderpad: 4,

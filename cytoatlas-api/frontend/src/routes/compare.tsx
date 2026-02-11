@@ -23,7 +23,7 @@ export default function Compare() {
   const signatureType = useAppStore((s) => s.signatureType);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8">
+    <div className="mx-auto max-w-[1400px] px-4 py-8">
       <div className="mb-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
           <div>
