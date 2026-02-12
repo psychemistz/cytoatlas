@@ -37,14 +37,6 @@ export default function GeneDetail() {
     return t;
   }, [check]);
 
-  if (checkLoading || overviewLoading) {
-    return (
-      <div className="mx-auto max-w-[1400px] px-4 py-12">
-        <Spinner message={`Loading ${symbol}...`} />
-      </div>
-    );
-  }
-
   const externalLinks = useMemo(() => {
     const s = encodeURIComponent(symbol);
     return [
@@ -56,6 +48,14 @@ export default function GeneDetail() {
       { name: 'Gene Ontology', url: `https://amigo.geneontology.org/amigo/search/bioentity?q=${s}` },
     ];
   }, [symbol]);
+
+  if (checkLoading || overviewLoading) {
+    return (
+      <div className="mx-auto max-w-[1400px] px-4 py-12">
+        <Spinner message={`Loading ${symbol}...`} />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-8">
