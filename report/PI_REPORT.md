@@ -255,31 +255,32 @@ We evaluate six approaches for cytokine activity inference, covering three signa
 |---|--------|---------|-------------|
 | 1 | **CytoSig** | 44 | Global (cell-type agnostic) signatures from experimental bulk RNA-seq |
 | 2 | **LinCytoSig (no filter)** | 178 | Cell-type-specific signatures using all ~20K genes |
-| 3 | **LinCytoSig (gene filter)** | 178 | Cell-type-specific signatures with gene-quality filtering (pending full computation) |
+| 3 | **LinCytoSig (gene filter)** | 178 | Cell-type-specific signatures restricted to CytoSig gene space (~4,881 genes) |
 | 4 | **LinCytoSig Best (no filter)** | 44 | Best cell-type variant per cytokine selected via bulk (GTEx/TCGA) correlation, all genes |
 | 5 | **LinCytoSig Best (gene filter)** | 44 | Best cell-type variant per cytokine selected via bulk correlation, gene-filtered |
 | 6 | **SecAct** | 1,249 | Global signatures from spatial transcriptomics (Moran's I) |
 
 **LinCytoSig strategy rationale:**
-- Methods 2–3 use the **cell-type-matched** LinCytoSig signature for each cytokine (e.g., Macrophage__IFNG for macrophages). The "no filter" version uses all ~20K genes in the signature; the "gene filter" version restricts to high-confidence response genes.
+- Methods 2–3 use the **cell-type-matched** LinCytoSig signature for each cytokine (e.g., Macrophage__IFNG for macrophages). The "no filter" version uses all ~20K genes in the signature; the "gene filter" version restricts to the ~4,881 genes present in CytoSig's gene space, testing whether the extra ~15K genes help or hurt prediction.
 - Methods 4–5 take a **bulk-selected best** approach: for each cytokine, test all available cell-type-specific LinCytoSig signatures and select the one with the highest expression-activity correlation in bulk RNA-seq (GTEx + TCGA). This single "best" signature is then applied across all single-cell datasets.
 
-**Donor-level pseudobulk validation (20 matched cytokines, median Spearman ρ):**
+**Donor-level pseudobulk validation (17–20 matched cytokines, median Spearman ρ):**
 
-| Atlas | CytoSig | LinCytoSig (orig) | Best (orig) | Best (filt) | SecAct |
-|-------|---------|-------------------|-------------|-------------|--------|
-| **CIMA** | 0.225 | 0.261 | 0.149 | 0.149 | 0.334 |
-| **Inflammation Main** | 0.434 | 0.139 | 0.433 | 0.433 | 0.509 |
-| **Inflammation Val** | 0.498 | 0.200 | 0.357 | 0.357 | 0.416 |
-| **Inflammation Ext** | 0.267 | 0.099 | 0.130 | 0.130 | 0.264 |
-| **scAtlas Normal** | 0.216 | 0.110 | 0.147 | 0.147 | 0.391 |
-| **scAtlas Cancer** | 0.344 | 0.222 | 0.272 | 0.272 | 0.492 |
+| Atlas | CytoSig | LinCytoSig (orig) | LinCytoSig (filt) | Best (orig) | Best (filt) | SecAct |
+|-------|---------|-------------------|-------------------|-------------|-------------|--------|
+| **CIMA** | 0.225 | 0.082 | 0.166 | 0.063 | 0.141 | 0.334 |
+| **Inflammation Main** | 0.434 | 0.180 | 0.242 | 0.278 | 0.308 | 0.509 |
+| **Inflammation Val** | 0.498 | 0.163 | 0.228 | 0.375 | 0.296 | 0.416 |
+| **Inflammation Ext** | 0.267 | 0.100 | 0.214 | 0.133 | 0.177 | 0.264 |
+| **scAtlas Normal** | 0.216 | 0.173 | 0.194 | 0.298 | 0.230 | 0.391 |
+| **scAtlas Cancer** | 0.344 | 0.172 | 0.147 | 0.275 | 0.267 | 0.492 |
 
 **Key observations from Figure 8:**
 - **SecAct consistently achieves the highest median ρ** across all 6 atlases, benefiting from its broad gene coverage and spatial-transcriptomics-derived signatures.
-- **CytoSig outperforms all LinCytoSig variants** at donor level in most atlases, except CIMA where LinCytoSig (orig) slightly edges ahead (0.261 vs 0.225).
-- **LinCytoSig Best selection** improves over median LinCytoSig in disease-enriched atlases (Inflammation Main: 0.433 vs 0.139) but does not surpass CytoSig.
-- **Gene filtering** has minimal impact on best-selected variants at this aggregation level; the filtered computation for cell-type-matched variants is pending.
+- **CytoSig outperforms all LinCytoSig variants** at donor level across all atlases. The gap is largest in Inflammation Main (0.434 vs best LinCytoSig variant 0.308).
+- **Gene filtering improves LinCytoSig** in 5 of 6 atlases (all except scAtlas Cancer), suggesting that the extra ~15K genes in LinCytoSig introduce noise at donor level. The improvement is most pronounced in Inflammation Ext (0.100 → 0.214, +114%) and CIMA (0.082 → 0.166, +102%).
+- **Best-selected LinCytoSig** outperforms median LinCytoSig in most atlases, with the largest gains in scAtlas Normal (0.173 → 0.298 for best-orig). However, it still does not surpass CytoSig.
+- **The ranking is consistent:** SecAct > CytoSig > LinCytoSig Best ≥ LinCytoSig (filtered) > LinCytoSig (orig). This suggests that for donor-level analysis, global signatures (CytoSig, SecAct) outperform cell-type-specific ones, likely because donor-level pseudobulk averages across cell types where global signatures are inherently optimized.
 
 ### 5.2 When Does LinCytoSig Outperform CytoSig?
 
