@@ -169,7 +169,7 @@ function WelcomeScreen({
   onSendSuggestion: (text: string) => void;
 }) {
   return (
-    <div className="flex flex-1 items-center justify-center overflow-y-auto px-4 py-12">
+    <div className="flex flex-1 items-start justify-center overflow-y-auto px-4 pt-16 pb-12">
       <div className="w-full max-w-2xl">
         <div className="mb-8 text-center">
           <h1 className="mb-3 text-3xl font-bold" style={{ color: '#0f172a' }}>CytoAtlas Assistant</h1>
