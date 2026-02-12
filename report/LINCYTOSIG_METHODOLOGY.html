@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LinCytoSig Methodology &mdash; Cell-Type-Specific Cytokine Signature Construction</title>
+<style>
+  :root {
+    --blue: #2563EB;
+    --amber: #D97706;
+    --green: #059669;
+    --red: #DC2626;
+    --gray: #6B7280;
+    --bg: #FAFAFA;
+    --card: #FFFFFF;
+    --border: #E5E7EB;
+    --text: #1F2937;
+    --text-light: #6B7280;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 40px 30px;
+  }
+  h1 { font-size: 1.8rem; margin-bottom: 8px; color: var(--amber); }
+  h2 { font-size: 1.4rem; margin: 36px 0 16px; padding-bottom: 8px; border-bottom: 2px solid var(--amber); }
+  h3 { font-size: 1.15rem; margin: 24px 0 10px; color: var(--text); }
+  p { margin-bottom: 12px; }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .subtitle { color: var(--text-light); font-size: 0.95rem; margin-bottom: 24px; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 600; }
+  .badge.amber { background: #FEF3C7; color: #92400E; }
+  .badge.blue { background: #DBEAFE; color: #1E40AF; }
+  .badge.green { background: #D1FAE5; color: #065F46; }
+  .badge.red { background: #FEE2E2; color: #991B1B; }
+  .badge.gray { background: #F3F4F6; color: #374151; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0 20px; font-size: 0.9rem; }
+  th, td { padding: 10px 14px; text-align: left; border: 1px solid var(--border); }
+  th { background: #F9FAFB; font-weight: 600; }
+  tr:hover { background: #F9FAFB; }
+  code { background: #F3F4F6; padding: 2px 6px; border-radius: 4px; font-size: 0.88rem; font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+  pre { background: #1F2937; color: #E5E7EB; padding: 20px; border-radius: 8px; overflow-x: auto; margin: 16px 0; font-size: 0.85rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: inherit; }
+  .comment { color: #9CA3AF; }
+  .keyword { color: #93C5FD; }
+  .string { color: #86EFAC; }
+  .number { color: #FCD34D; }
+  .callout { background: #FFFBEB; border-left: 4px solid var(--amber); padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 20px 0; }
+  .callout.blue { background: #EFF6FF; border-left-color: var(--blue); }
+  .callout.green { background: #ECFDF5; border-left-color: var(--green); }
+  .callout.red { background: #FEF2F2; border-left-color: var(--red); }
+  .flowchart { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 24px; margin: 20px 0; text-align: center; }
+  .flow-step { display: inline-block; background: #F9FAFB; border: 2px solid var(--border); border-radius: 8px; padding: 12px 18px; margin: 8px; vertical-align: middle; font-size: 0.9rem; }
+  .flow-step.highlight { border-color: var(--amber); background: #FFFBEB; }
+  .flow-arrow { display: inline-block; font-size: 1.4rem; color: var(--gray); margin: 0 4px; vertical-align: middle; }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin: 20px 0; }
+  .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; text-align: center; }
+  .stat-card .number { font-size: 2rem; font-weight: 700; color: var(--amber); display: block; background: none; padding: 0; }
+  .stat-card .label { font-size: 0.85rem; color: var(--text-light); }
+  ul, ol { margin: 8px 0 16px 24px; }
+  li { margin-bottom: 6px; }
+  .back-link { display: inline-block; margin-bottom: 20px; padding: 6px 14px; background: #F3F4F6; border-radius: 6px; font-size: 0.9rem; }
+  .toc { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 20px 24px; margin: 20px 0; }
+  .toc ul { list-style: none; margin: 0; padding: 0; }
+  .toc li { margin: 6px 0; }
+  .toc a { font-size: 0.95rem; }
+  .hierarchy-tree { font-family: monospace; font-size: 0.88rem; background: #F9FAFB; padding: 16px; border-radius: 8px; margin: 12px 0; line-height: 1.6; }
+  .hierarchy-tree .broad { font-weight: 700; color: var(--amber); }
+  .hierarchy-tree .ct { color: var(--text); }
+  .hierarchy-tree .count { color: var(--text-light); font-size: 0.82rem; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+  .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border); font-size: 0.85rem; color: var(--text-light); }
+</style>
+</head>
+<body>
+
+<a href="PI_REPORT.html#sec5" class="back-link">&larr; Back to PI Report &mdash; Section 5</a>
+
+<h1>LinCytoSig Methodology</h1>
+<p class="subtitle">Cell-Type-Specific Cytokine Signature Construction from the CytoSig Database</p>
+
+<!-- Summary Statistics -->
+<div class="stat-grid">
+  <div class="stat-card">
+    <span class="number">45</span>
+    <span class="label">Cell Types</span>
+  </div>
+  <div class="stat-card">
+    <span class="number">178</span>
+    <span class="label">Signatures</span>
+  </div>
+  <div class="stat-card">
+    <span class="number">57</span>
+    <span class="label">Distinct Cytokines</span>
+  </div>
+  <div class="stat-card">
+    <span class="number">19,918</span>
+    <span class="label">Genes</span>
+  </div>
+  <div class="stat-card">
+    <span class="number">1,628</span>
+    <span class="label">Classified Experiments</span>
+  </div>
+</div>
+
+<!-- Table of Contents -->
+<div class="toc">
+  <strong>Contents</strong>
+  <ul>
+    <li><a href="#motivation">1. Motivation</a></li>
+    <li><a href="#overview">2. Pipeline Overview</a></li>
+    <li><a href="#input">3. Input Data</a></li>
+    <li><a href="#celltype-mapping">4. Cell Type Semantic Mapping</a></li>
+    <li><a href="#aggregation">5. Signature Aggregation</a></li>
+    <li><a href="#filtering">6. Quality Filters</a></li>
+    <li><a href="#output">7. Output</a></li>
+    <li><a href="#hierarchy">8. Full Cell Type Hierarchy</a></li>
+    <li><a href="#coverage">9. Cytokine Coverage</a></li>
+    <li><a href="#comparison">10. LinCytoSig vs CytoSig</a></li>
+    <li><a href="#limitations">11. Limitations</a></li>
+    <li><a href="#source">12. Source Code</a></li>
+  </ul>
+</div>
+
+<hr>
+
+<!-- 1. Motivation -->
+<h2 id="motivation">1. Motivation</h2>
+
+<p><span class="badge blue">CytoSig</span> (Jiang et al., <em>Nature Methods</em>, 2021) provides 44 cytokine response signatures derived by pooling all experimental conditions regardless of cell type. This "cell-type agnostic" approach assumes that a cytokine&rsquo;s transcriptional effect is consistent across all cell types. However, cytokine responses are known to be highly cell-type-specific:</p>
+
+<ul>
+  <li><strong>IL-6</strong> induces acute-phase response genes in hepatocytes but promotes Th17 differentiation in CD4+ T cells</li>
+  <li><strong>TGF&beta;1</strong> drives fibrosis-related programs in fibroblasts but induces regulatory T cell differentiation in na&iuml;ve CD4+ T cells</li>
+  <li><strong>IFN&gamma;</strong> activates antigen presentation in macrophages but has distinct anti-proliferative effects in cancer cell lines</li>
+</ul>
+
+<p><span class="badge amber">LinCytoSig</span> addresses this by stratifying the CytoSig database by cell type before signature construction, producing <strong>cell-type-specific</strong> cytokine response signatures. This enables more accurate activity inference when the cell type context is known.</p>
+
+<hr>
+
+<!-- 2. Pipeline Overview -->
+<h2 id="overview">2. Pipeline Overview</h2>
+
+<div class="flowchart">
+  <div class="flow-step">
+    <strong>CytoSig Database</strong><br>
+    <code>diff.merge</code> + <code>meta_info</code><br>
+    <span style="font-size:0.8rem;color:var(--text-light)">19,918 genes &times; 2,002 experiments</span>
+  </div>
+  <span class="flow-arrow">&rarr;</span>
+  <div class="flow-step highlight">
+    <strong>Semantic Cell Type<br>Classification</strong><br>
+    <span style="font-size:0.8rem;color:var(--text-light)">681 raw annotations &rarr; 45 categories</span>
+  </div>
+  <span class="flow-arrow">&rarr;</span>
+  <div class="flow-step highlight">
+    <strong>Stratified Median<br>Aggregation</strong><br>
+    <span style="font-size:0.8rem;color:var(--text-light)">Per (cell type, cytokine) pair</span>
+  </div>
+  <span class="flow-arrow">&rarr;</span>
+  <div class="flow-step">
+    <strong>Quality Filtering</strong><br>
+    <span style="font-size:0.8rem;color:var(--text-light)">&ge;5 exp/cell type, &ge;3 exp/signature</span>
+  </div>
+  <span class="flow-arrow">&rarr;</span>
+  <div class="flow-step">
+    <strong>LinCytoSig Matrix</strong><br>
+    <span style="font-size:0.8rem;color:var(--text-light)">19,918 genes &times; 178 signatures</span>
+  </div>
+</div>
+
+<hr>
+
+<!-- 3. Input Data -->
+<h2 id="input">3. Input Data</h2>
+
+<p>LinCytoSig is built entirely from the <strong>CytoSig differential expression database</strong> &mdash; the same data source used to construct the original CytoSig matrix.</p>
+
+<h3>3.1 <code>diff.merge</code> &mdash; Differential Expression Matrix</h3>
+
+<p>A <strong>genes &times; experiments</strong> matrix (19,918 &times; 2,002) where each column is a single experimental condition. Each entry is the <strong>log<sub>2</sub> fold-change</strong> between cytokine-treated and control (untreated or vehicle) cells from a bulk RNA-seq or microarray experiment. The matrix is constructed from public repositories (GEO, ArrayExpress) with standardized preprocessing.</p>
+
+<h3>3.2 <code>meta_info</code> &mdash; Experiment Metadata</h3>
+
+<p>A tab-separated file with one row per experiment (column in <code>diff.merge</code>), containing:</p>
+
+<table>
+  <tr><th>Field</th><th>Description</th><th>Example</th></tr>
+  <tr><td><code>Treatment</code></td><td>Cytokine/ligand applied</td><td><code>IFNG</code>, <code>IL6</code>, <code>TGFB1</code></td></tr>
+  <tr><td><code>Condition</code></td><td>Cell type / experimental system</td><td><code>Macrophage</code>, <code>Hela</code>, <code>Bronchial Epithelial</code></td></tr>
+  <tr><td><code>Duration</code></td><td>Treatment time</td><td><code>4h</code>, <code>24h</code></td></tr>
+  <tr><td><code>Dose</code></td><td>Cytokine concentration</td><td><code>10 ng/mL</code></td></tr>
+</table>
+
+<div class="callout">
+  <strong>Key point:</strong> The <code>Condition</code> field contains <strong>raw, unharmonized</strong> cell type annotations from hundreds of independent studies. These include cell line names (HepG2, A549), primary cell descriptions (Primary Dermal Fibroblast), mixed terms (PBMC), and complex strings (CD4-Positive, Alpha-Beta Memory T). There are <strong>681 unique raw annotations</strong> that must be harmonized.
+</div>
+
+<hr>
+
+<!-- 4. Cell Type Semantic Mapping -->
+<h2 id="celltype-mapping">4. Cell Type Semantic Mapping</h2>
+
+<p>The core challenge is mapping 681 heterogeneous raw cell type strings to a consistent set of canonical categories. LinCytoSig uses a <strong>hierarchical regex-based semantic classifier</strong> with 280+ regex patterns organized into 55 cell type categories.</p>
+
+<h3>4.1 Classification Algorithm</h3>
+
+<pre><code><span class="keyword">def</span> classify_celltype(raw_name: str) -&gt; tuple:
+    raw_lower = raw_name.lower().strip()
+    <span class="keyword">for</span> category, patterns <span class="keyword">in</span> CELLTYPE_PATTERNS.items():
+        <span class="keyword">for</span> pattern <span class="keyword">in</span> patterns:
+            <span class="keyword">if</span> re.search(pattern, raw_lower):
+                broad = find_broad_category(category)
+                <span class="keyword">return</span> (category, broad, <span class="string">'high'</span>)
+    <span class="keyword">return</span> (<span class="string">'Unknown'</span>, <span class="string">'Unknown'</span>, <span class="string">'low'</span>)
+</code></pre>
+
+<p><strong>Pattern ordering matters:</strong> More specific patterns are tested before general ones. For example, <code>Th1</code> is matched before the general <code>T_Cell</code> category, and <code>HUVEC</code> before generic <code>Endothelial</code>.</p>
+
+<h3>4.2 Example Pattern Rules</h3>
+
+<table>
+  <tr><th>Canonical Category</th><th>Example Patterns</th><th>Example Raw Annotations Matched</th></tr>
+  <tr>
+    <td><code>Macrophage</code></td>
+    <td><code>\bmacrophage\b</code>, <code>\bm1\s+mdm</code>, <code>\bmdm\b</code>, <code>^mac$</code></td>
+    <td>Macrophage, M1 Mdm_Cf, Cultured Macrophage, Alveolar Macrophage, Thp1 Macrophage_Tb Infected</td>
+  </tr>
+  <tr>
+    <td><code>T_CD4</code></td>
+    <td><code>\bcd4\+?\s*t\b</code>, <code>\bth0\b</code>, <code>\bnaive\s*cd4</code></td>
+    <td>T Cd4, Activated Naive T Cd4, CD4-Positive Alpha-Beta Memory T, Htlv1-Infected T Cd4</td>
+  </tr>
+  <tr>
+    <td><code>Hepatocyte</code></td>
+    <td><code>\bhepatocyte</code>, <code>\bhepg2\b</code>, <code>\bhuh7</code>, <code>\bphh\b</code></td>
+    <td>Hepatocyte, Hepg2, Huh7, Huh7.5, Phh, Hep3B, Primary Hepatocyte, Bioprinted Liver Tissues</td>
+  </tr>
+  <tr>
+    <td><code>Keratinocyte</code></td>
+    <td><code>\bkeratinocyte</code>, <code>\bnhek\b</code>, <code>\bhacat\b</code></td>
+    <td>Keratinocyte, Nhek, Hacat, Primary Keratinocyte, Epidermal Keratinocyte, SLE Keratinocyte</td>
+  </tr>
+  <tr>
+    <td><code>Breast_Cancer_Line</code></td>
+    <td><code>\bmcf7\b</code>, <code>\bmda.*mb</code>, <code>\bt47d\b</code></td>
+    <td>Mcf7, Mda-Mb231, Mda-Mb468, T47D, Mcf10A, Bt474, Sum52Pe</td>
+  </tr>
+</table>
+
+<h3>4.3 Classification Results</h3>
+
+<div class="stat-grid">
+  <div class="stat-card">
+    <span class="number">681</span>
+    <span class="label">Raw Annotations</span>
+  </div>
+  <div class="stat-card">
+    <span class="number">442</span>
+    <span class="label">Classified (64.9%)</span>
+  </div>
+  <div class="stat-card">
+    <span class="number">1,628</span>
+    <span class="label">Classified Experiments (81.3%)</span>
+  </div>
+  <div class="stat-card">
+    <span class="number">45</span>
+    <span class="label">Canonical Categories</span>
+  </div>
+</div>
+
+<div class="callout blue">
+  <strong>Coverage note:</strong> While only 64.9% of raw annotation <em>strings</em> are classified, these account for <strong>81.3% of all experiments</strong> (1,628 of 2,002). The unclassified 239 annotations tend to be rare cell types with very few experiments (e.g., single-experiment entries for specific cell lines, organoids, or tissue biopsies). This conservative approach ensures that only well-characterized cell type categories contribute to LinCytoSig signatures.
+</div>
+
+<hr>
+
+<!-- 5. Signature Aggregation -->
+<h2 id="aggregation">5. Signature Aggregation</h2>
+
+<h3>5.1 Per-(Cell Type, Cytokine) Aggregation</h3>
+
+<p>For each pair of (canonical cell type, cytokine), the algorithm:</p>
+<ol>
+  <li>Identifies all experiments where <code>Treatment == cytokine</code> and <code>canonical_celltype == cell_type</code></li>
+  <li>Retrieves the corresponding columns from <code>diff.merge</code></li>
+  <li>Computes the <strong>median log<sub>2</sub>FC</strong> across all matching experiments for each gene</li>
+  <li>Fills missing values (genes absent from some experiments) with 0 (assumes no effect)</li>
+</ol>
+
+<pre><code><span class="comment"># For each (cell_type, cytokine) pair:</span>
+matching_cols = [exp <span class="keyword">for</span> exp <span class="keyword">in</span> experiments
+                 <span class="keyword">if</span> meta[exp].Treatment == cytokine
+                 <span class="keyword">and</span> meta[exp].canonical_celltype == cell_type]
+
+<span class="comment"># Median is more robust to outliers than mean</span>
+signature = diff[matching_cols].median(axis=<span class="number">1</span>).fillna(<span class="number">0</span>)
+</code></pre>
+
+<h3>5.2 Why Median (Not Mean)?</h3>
+
+<p>The <strong>median</strong> is used instead of mean for robustness to outlier experiments. Because the database contains experiments from diverse labs, protocols, doses, and durations, individual experiments can have extreme values. The median provides a more stable central tendency estimate, consistent with the original CytoSig construction.</p>
+
+<h3>5.3 Comparison with CytoSig</h3>
+
+<table>
+  <tr><th>Step</th><th><span class="badge blue">CytoSig</span></th><th><span class="badge amber">LinCytoSig</span></th></tr>
+  <tr>
+    <td>Grouping</td>
+    <td>All experiments per cytokine (pool all cell types)</td>
+    <td>Experiments per (cell type, cytokine) pair</td>
+  </tr>
+  <tr>
+    <td>Aggregation</td>
+    <td>Median log<sub>2</sub>FC across all experiments</td>
+    <td>Median log<sub>2</sub>FC within each cell type group</td>
+  </tr>
+  <tr>
+    <td>Result shape</td>
+    <td>genes &times; 44 cytokines</td>
+    <td>genes &times; 178 (cell type &times; cytokine) signatures</td>
+  </tr>
+  <tr>
+    <td>Column naming</td>
+    <td><code>IFNG</code>, <code>IL6</code>, <code>TGFB1</code></td>
+    <td><code>Macrophage__IFNG</code>, <code>Hepatocyte__IL6</code></td>
+  </tr>
+</table>
+
+<hr>
+
+<!-- 6. Quality Filters -->
+<h2 id="filtering">6. Quality Filters</h2>
+
+<p>Two experiment-count thresholds ensure signature reliability:</p>
+
+<table>
+  <tr><th>Filter</th><th>Threshold</th><th>Purpose</th><th>Effect</th></tr>
+  <tr>
+    <td><strong>MIN_EXPERIMENTS_PER_CELLTYPE</strong></td>
+    <td>&ge; 5</td>
+    <td>Exclude cell types with insufficient overall experimental coverage</td>
+    <td>Reduces 55 potential categories to 45 passing cell types</td>
+  </tr>
+  <tr>
+    <td><strong>MIN_EXPERIMENTS_PER_SIGNATURE</strong></td>
+    <td>&ge; 3</td>
+    <td>Exclude individual (cell type, cytokine) pairs supported by too few experiments</td>
+    <td>Ensures each signature has at least 3 independent measurements for median computation</td>
+  </tr>
+</table>
+
+<div class="callout">
+  <strong>Filtering cascade:</strong>
+  <br>55 canonical cell type categories &rarr; <strong>45</strong> with &ge;5 experiments (10 excluded)
+  <br>45 &times; 57 = 2,565 possible pairs &rarr; <strong>178</strong> with &ge;3 experiments per pair
+  <br>This means only <strong>6.9%</strong> of all possible (cell type, cytokine) pairs have sufficient experimental support to produce a reliable signature.
+</div>
+
+<hr>
+
+<!-- 7. Output -->
+<h2 id="output">7. Output</h2>
+
+<h3>7.1 Combined Signature Matrix</h3>
+
+<p>The primary output is <code>celltype_cytokine_signatures.csv</code>: a <strong>19,918 genes &times; 178 signatures</strong> matrix. Column names use the format <code>CellType__Cytokine</code> (double underscore separator).</p>
+
+<p>This matrix is loaded in SecActpy as <code>LinCytoSig.tsv.gz</code> and used identically to CytoSig for ridge regression activity inference:</p>
+
+<pre><code><span class="keyword">from</span> secactpy <span class="keyword">import</span> load_lincytosig
+lincytosig = load_lincytosig()  <span class="comment"># shape: (19918, 178)</span>
+
+<span class="comment"># Same ridge regression as CytoSig:</span>
+<span class="comment"># activity = (X'X + &lambda;I)^{-1} X' Y</span>
+</code></pre>
+
+<h3>7.2 Output Files</h3>
+
+<table>
+  <tr><th>File</th><th>Description</th></tr>
+  <tr><td><code>celltype_cytokine_signatures.csv</code></td><td>Combined matrix (19,918 genes &times; 178 signatures)</td></tr>
+  <tr><td><code>celltype_mapping.csv</code></td><td>Raw annotation &rarr; canonical category mapping (681 entries)</td></tr>
+  <tr><td><code>signature_summary.csv</code></td><td>Per-cell-type summary (N cytokines, N experiments, cytokine list)</td></tr>
+  <tr><td><code>metadata.json</code></td><td>Full metadata (cell types, cytokines, experiment counts)</td></tr>
+  <tr><td><code>signatures/*.csv</code></td><td>Individual per-cell-type matrices (45 files)</td></tr>
+</table>
+
+<hr>
+
+<!-- 8. Full Cell Type Hierarchy -->
+<h2 id="hierarchy">8. Full Cell Type Hierarchy</h2>
+
+<p>The 45 cell types are organized into 12 broad categories:</p>
+
+<div class="hierarchy-tree">
+<span class="broad">Immune</span> <span class="count">(11 cell types, 51 signatures, 393 experiments)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Macrophage</span> <span class="count">&mdash; 7 cytokines, 85 exp (TGFB1, IFNA, TNFA, IFNG, IL10, IL4, IL6)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Monocyte</span> <span class="count">&mdash; 9 cytokines, 86 exp (IFNA, IFNB, TNFA, IFNG, IL13, IL10, IL4, MCSF, GMCSF)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">PBMC</span> <span class="count">&mdash; 8 cytokines, 67 exp (IFNB, TNFA, IFNG, IL10, IL4, IL1B, LTA, GCSF)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">T_CD4</span> <span class="count">&mdash; 8 cytokines, 56 exp (TGFB1, IFNA, TNFA, IL10, IL4, IL12, IL2, IL15)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">B_Cell</span> <span class="count">&mdash; 8 cytokines, 52 exp (IFNA, IFNG, IL13, TGFB3, IL6, IL2, CXCL12, NO)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Dendritic_Cell</span> <span class="count">&mdash; 3 cytokines, 11 exp (IFNB, CD40L, GMCSF)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">T_Cell</span> <span class="count">&mdash; 3 cytokines, 14 exp (IFNB, TNFA, IL2)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">NK_Cell</span> <span class="count">&mdash; 2 cytokines, 9 exp (IL2, IL15)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Basophil</span> <span class="count">&mdash; 1 cytokine, 7 exp (IL3)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Neutrophil</span> <span class="count">&mdash; 1 cytokine, 3 exp (GMCSF)</span><br>
+&nbsp;&nbsp;&boxvr; <span class="ct">T_CD8</span> <span class="count">&mdash; 1 cytokine, 3 exp (PDL1)</span><br>
+<br>
+<span class="broad">Epithelial</span> <span class="count">(6 cell types, 39 signatures, 286 experiments)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Hepatocyte</span> <span class="count">&mdash; 11 cytokines, 107 exp (TGFB1, IFNA, IFNB, IFNL, TNFA, IFNG, IL6, OSM, IL27, BMP6, NRG1)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Keratinocyte</span> <span class="count">&mdash; 13 cytokines, 58 exp (TGFB1, IFNA, TNFA, IFNG, IL4, IL1B, IL17A, IL22, IL36A/B/G, INS, TGFA)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Airway_Epithelial</span> <span class="count">&mdash; 4 cytokines, 65 exp (TGFB1, IFNB, TNFA, IL4)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Epithelial</span> <span class="count">&mdash; 4 cytokines, 14 exp (TNFA, IL13, IL1B, IL1A)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Intestinal_Epithelial</span> <span class="count">&mdash; 4 cytokines, 22 exp (TNFA, VEGFA, EGF, INS)</span><br>
+&nbsp;&nbsp;&boxvr; <span class="ct">Renal_Epithelial</span> <span class="count">&mdash; 3 cytokines, 20 exp (TGFB1, TNFA, IFNG)</span><br>
+<br>
+<span class="broad">Cancer Lines</span> <span class="count">(8 cell types, 33 signatures, 245 experiments)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Breast_Cancer_Line</span> <span class="count">&mdash; 11 cytokines, 108 exp (TGFB1, TNFA, IL6, TWEAK, CXCL12, EGF, HGF, FGF10, IGF1, WNT3A, GDNF)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Lung_Cancer_Line</span> <span class="count">&mdash; 7 cytokines, 58 exp (TGFB1, IFNA, IFNB, TNFA, IFNG, TGFB3, IL1A)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Cervical_Cancer_Line</span> <span class="count">&mdash; 5 cytokines, 22 exp (TNFA, IFNG, EGF, IGF1, WNT3A)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Leukemia_Line</span> <span class="count">&mdash; 3 cytokines, 18 exp (IFNB, TNFA, IFNG)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Melanoma_Line</span> <span class="count">&mdash; 2 cytokines, 16 exp (IFNB, IFNG)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Colorectal_Cancer_Line</span> <span class="count">&mdash; 2 cytokines, 8 exp (TNFA, TGFA)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Pancreatic_Cancer_Line</span> <span class="count">&mdash; 2 cytokines, 8 exp (TGFB1, FGF2)</span><br>
+&nbsp;&nbsp;&boxvr; <span class="ct">Osteosarcoma_Line</span> <span class="count">&mdash; 1 cytokine, 7 exp (TWEAK)</span><br>
+<br>
+<span class="broad">Fibroblast</span> <span class="count">(5 cell types, 23 signatures, 149 experiments)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Fibroblast</span> <span class="count">&mdash; 11 cytokines, 84 exp (TGFB1, IFNA, IFNB, TNFA, IFNG, IL13, IL4, IL1B, IL17A, PDGFD, WNT3A)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Dermal_Fibroblast</span> <span class="count">&mdash; 5 cytokines, 33 exp (TGFB1, IFNA, IFNB, PDGFB, FGF2)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Lung_Fibroblast</span> <span class="count">&mdash; 4 cytokines, 19 exp (TGFB1, IL1B, EGF, BMP4)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Synovial_Fibroblast</span> <span class="count">&mdash; 2 cytokines, 8 exp (TGFB1, TNFA)</span><br>
+&nbsp;&nbsp;&boxvr; <span class="ct">Cardiac_Fibroblast</span> <span class="count">&mdash; 1 cytokine, 5 exp (TGFB1)</span><br>
+<br>
+<span class="broad">Endothelial</span> <span class="count">(5 cell types, 10 signatures, 62 experiments)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">HUVEC</span> <span class="count">&mdash; 3 cytokines, 33 exp (TNFA, VEGFA, HMGB1)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Lymphatic_Endothelial</span> <span class="count">&mdash; 3 cytokines, 11 exp (VEGFA, ADM, VEGFC)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Endothelial</span> <span class="count">&mdash; 2 cytokines, 10 exp (IFNA, TNFA)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Microvascular_Endothelial</span> <span class="count">&mdash; 1 cytokine, 4 exp (IFNG)</span><br>
+&nbsp;&nbsp;&boxvr; <span class="ct">Arterial_Endothelial</span> <span class="count">&mdash; 1 cytokine, 4 exp (TNFA)</span><br>
+<br>
+<span class="broad">Stem</span> <span class="count">(1 cell type, 6 signatures, 43 experiments)</span><br>
+&nbsp;&nbsp;&boxvr; <span class="ct">ESC</span> <span class="count">&mdash; 6 cytokines, 43 exp (BMP4, BDNF, WNT3A, Activin A, FGF2, NTF4)</span><br>
+<br>
+<span class="broad">Stromal</span> <span class="count">(2 cell types, 5 signatures, 35 experiments)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">MSC</span> <span class="count">&mdash; 4 cytokines, 27 exp (TGFB1, TGFB3, BMP2, BMP6)</span><br>
+&nbsp;&nbsp;&boxvr; <span class="ct">Adipocyte</span> <span class="count">&mdash; 1 cytokine, 8 exp (BMP2)</span><br>
+<br>
+<span class="broad">Muscle</span> <span class="count">(2 cell types, 4 signatures, 23 experiments)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Smooth_Muscle</span> <span class="count">&mdash; 2 cytokines, 11 exp (TGFB1, IL1B)</span><br>
+&nbsp;&nbsp;&boxvr; <span class="ct">Skeletal_Muscle</span> <span class="count">&mdash; 2 cytokines, 12 exp (GDF11, MSTN)</span><br>
+<br>
+<span class="broad">Bone</span> <span class="count">(3 cell types, 3 signatures, 18 experiments)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Osteocyte</span> <span class="count">&mdash; 1 cytokine, 10 exp (BMP2)</span><br>
+&nbsp;&nbsp;&boxur; <span class="ct">Osteoblast</span> <span class="count">&mdash; 1 cytokine, 4 exp (BMP2)</span><br>
+&nbsp;&nbsp;&boxvr; <span class="ct">Chondrocyte</span> <span class="count">&mdash; 1 cytokine, 4 exp (IL1B)</span><br>
+<br>
+<span class="broad">Neural</span> <span class="count">(1 cell type, 2 signatures, 13 experiments)</span><br>
+&nbsp;&nbsp;&boxvr; <span class="ct">Neuron</span> <span class="count">&mdash; 2 cytokines, 13 exp (PDGFB, BDNF)</span><br>
+<br>
+<span class="broad">Other</span> <span class="count">(1 cell type, 2 signatures, 7 experiments)</span><br>
+&nbsp;&nbsp;&boxvr; <span class="ct">Trophoblast</span> <span class="count">&mdash; 2 cytokines, 7 exp (TNFA, IL1B)</span><br>
+</div>
+
+<hr>
+
+<!-- 9. Cytokine Coverage -->
+<h2 id="coverage">9. Cytokine Coverage</h2>
+
+<p>Of the 57 distinct cytokines in LinCytoSig, coverage varies widely across cell types. Some cytokines (TNF&alpha;, TGF&beta;1, IFN&gamma;) are studied in many cell types, while others are restricted to specific systems.</p>
+
+<h3>9.1 Top Cytokines by Cell Type Breadth</h3>
+
+<table>
+  <tr><th>Cytokine</th><th>Cell Types</th><th>Coverage</th><th>Broad Categories Represented</th></tr>
+  <tr><td>TNFA</td><td>22 / 45</td><td><strong>48.9%</strong></td><td>Immune, Epithelial, Cancer, Fibroblast, Endothelial, Other</td></tr>
+  <tr><td>TGFB1</td><td>16 / 45</td><td><strong>35.6%</strong></td><td>Immune, Epithelial, Cancer, Fibroblast, Muscle, Stromal</td></tr>
+  <tr><td>IFNG</td><td>13 / 45</td><td><strong>28.9%</strong></td><td>Immune, Epithelial, Cancer, Endothelial</td></tr>
+  <tr><td>IFNB</td><td>11 / 45</td><td><strong>24.4%</strong></td><td>Immune, Epithelial, Cancer, Fibroblast</td></tr>
+  <tr><td>IFNA</td><td>10 / 45</td><td><strong>22.2%</strong></td><td>Immune, Epithelial, Cancer, Fibroblast, Endothelial</td></tr>
+  <tr><td>IL1B</td><td>8 / 45</td><td>17.8%</td><td>Immune, Epithelial, Fibroblast, Muscle, Bone, Other</td></tr>
+  <tr><td>IL4</td><td>7 / 45</td><td>15.6%</td><td>Immune, Epithelial, Fibroblast</td></tr>
+  <tr><td>IL6</td><td>4 / 45</td><td>8.9%</td><td>Immune, Cancer</td></tr>
+  <tr><td>EGF</td><td>4 / 45</td><td>8.9%</td><td>Epithelial, Cancer, Fibroblast</td></tr>
+  <tr><td>IL10</td><td>4 / 45</td><td>8.9%</td><td>Immune</td></tr>
+  <tr><td>IL2</td><td>4 / 45</td><td>8.9%</td><td>Immune</td></tr>
+  <tr><td>BMP2</td><td>4 / 45</td><td>8.9%</td><td>Stromal, Bone</td></tr>
+  <tr><td>WNT3A</td><td>4 / 45</td><td>8.9%</td><td>Cancer, Fibroblast, Stem</td></tr>
+</table>
+
+<h3>9.2 Cell-Type-Specific Cytokines</h3>
+
+<p>Some cytokines have signatures in only 1&ndash;2 cell types, reflecting biological specificity:</p>
+
+<table>
+  <tr><th>Cytokine</th><th>Cell Types</th><th>Biological Rationale</th></tr>
+  <tr><td>IL3</td><td>Basophil</td><td>Basophil survival/activation factor</td></tr>
+  <tr><td>PDL1</td><td>T_CD8</td><td>Immune checkpoint signaling</td></tr>
+  <tr><td>IL17A</td><td>Keratinocyte, Fibroblast</td><td>Skin/barrier immunity</td></tr>
+  <tr><td>GDF11, MSTN</td><td>Skeletal_Muscle</td><td>Muscle-specific TGF&beta; superfamily</td></tr>
+  <tr><td>ADM, VEGFC</td><td>Lymphatic_Endothelial</td><td>Lymphatic-specific growth factors</td></tr>
+  <tr><td>NRG1</td><td>Hepatocyte</td><td>Neuregulin/ErbB signaling in liver</td></tr>
+  <tr><td>IFNL</td><td>Hepatocyte</td><td>Type III interferon &mdash; epithelial tropism</td></tr>
+  <tr><td>IL22</td><td>Keratinocyte</td><td>Barrier tissue cytokine</td></tr>
+  <tr><td>IL36A/B/G</td><td>Keratinocyte</td><td>IL-1 family &mdash; skin-specific</td></tr>
+  <tr><td>NTF4, BDNF</td><td>ESC, Neuron</td><td>Neurotrophic factors</td></tr>
+</table>
+
+<hr>
+
+<!-- 10. LinCytoSig vs CytoSig -->
+<h2 id="comparison">10. LinCytoSig vs CytoSig</h2>
+
+<table>
+  <tr><th>Property</th><th><span class="badge blue">CytoSig</span></th><th><span class="badge amber">LinCytoSig</span></th></tr>
+  <tr><td>Construction data</td><td colspan="2" style="text-align:center;">Same CytoSig database (<code>diff.merge</code> + <code>meta_info</code>)</td></tr>
+  <tr><td>Cell type treatment</td><td>Pooled (all cell types together)</td><td>Stratified (per cell type)</td></tr>
+  <tr><td>Aggregation</td><td>Median log<sub>2</sub>FC across all experiments</td><td>Median log<sub>2</sub>FC within cell type</td></tr>
+  <tr><td>Total signatures</td><td>44</td><td>178</td></tr>
+  <tr><td>Distinct cytokines</td><td>44</td><td>57 (includes 13 additional cytokines with cell-type-specific experiments only)</td></tr>
+  <tr><td>Genes</td><td>~20,000</td><td>19,918</td></tr>
+  <tr><td>Cell type specificity</td><td>None &mdash; same signature applied to all cell types</td><td>High &mdash; each signature encodes a specific cell type response</td></tr>
+  <tr><td>Validation requirement</td><td>Can validate at donor level (no cell type annotation needed)</td><td>Requires cell type annotation for matched evaluation</td></tr>
+  <tr><td>Best suited for</td><td>Donor-level analysis, bulk RNA-seq, cell-type-agnostic screening</td><td>Cell-type-resolved analysis, single-cell data with known cell type annotations</td></tr>
+</table>
+
+<div class="callout green">
+  <strong>Key insight:</strong> LinCytoSig is <em>not</em> a replacement for CytoSig. It is a <strong>complementary resource</strong> for situations where cell-type context matters. Validation results show LinCytoSig outperforms CytoSig for cell types where CytoSig pooling dilutes cell-type-specific signals (e.g., Basophil +0.21 &Delta;&rho;, NK Cell +0.19, Dendritic Cell +0.18), but CytoSig remains superior for cell types where pooling provides more stable estimates (e.g., Lymphatic Endothelial, Adipocyte, PBMC).
+</div>
+
+<hr>
+
+<!-- 11. Limitations -->
+<h2 id="limitations">11. Limitations</h2>
+
+<ol>
+  <li><strong>Uneven cell type representation:</strong> The CytoSig database is heavily biased toward certain cell types (Macrophage: 85 exp, Hepatocyte: 107 exp) while others have minimal coverage (Neutrophil: 3 exp, T_CD8: 3 exp). Signatures for underrepresented cell types may be less reliable.</li>
+
+  <li><strong>Sparse coverage matrix:</strong> Only 6.9% of all possible (cell type, cytokine) pairs have sufficient data. Most cell types have signatures for only 1&ndash;4 cytokines, while heavily studied types (Keratinocyte, Breast_Cancer_Line, Hepatocyte) cover 11&ndash;13.</li>
+
+  <li><strong>Cell line vs primary cell mixing:</strong> The classification maps both primary cells and cell lines to the same category (e.g., HepG2, Huh7, and Primary Hepatocyte all map to <code>Hepatocyte</code>). Cell line responses may differ from primary cell responses.</li>
+
+  <li><strong>Regex classification limitations:</strong> The regex-based approach cannot resolve ambiguous or complex annotations. 35.1% of raw annotations remain unclassified, though these represent only 18.7% of experiments.</li>
+
+  <li><strong>Temporal and dose heterogeneity:</strong> Experiments within each (cell type, cytokine) group may span different durations (4h to 72h) and doses. The median aggregation provides a "typical" response but may miss time- or dose-dependent effects.</li>
+
+  <li><strong>No cross-cell-type normalization:</strong> Each cell-type-specific signature is computed independently. There is no normalization to account for overall gene expression differences between cell types.</li>
+</ol>
+
+<hr>
+
+<!-- 12. Source Code -->
+<h2 id="source">12. Source Code</h2>
+
+<p>The generation script is located at:</p>
+<pre><code>archive/scripts/utility/build_celltype_signatures.py</code></pre>
+
+<p>Output directory:</p>
+<pre><code>results/celltype_signatures/</code></pre>
+
+<p>The combined matrix is packaged in SecActpy as <code>LinCytoSig.tsv.gz</code> and loaded via:</p>
+<pre><code><span class="keyword">from</span> secactpy <span class="keyword">import</span> load_lincytosig
+lincytosig = load_lincytosig()
+</code></pre>
+
+<div class="footer">
+  <p>LinCytoSig Methodology Document &mdash; CytoAtlas Project, NCI-CDSL</p>
+  <p>Generated: 2026-02-11 &nbsp;|&nbsp; Author: Seongyong Park &nbsp;|&nbsp; <a href="PI_REPORT.html#sec5">&larr; Back to PI Report</a></p>
+</div>
+
+</body>
+</html>
