@@ -119,7 +119,7 @@ export default function Chat() {
       <div className="flex flex-1 flex-col">
         {/* Chat header */}
         <div className="flex items-center border-b border-border-light bg-white px-4 py-2.5">
-          <h1 className="text-base font-semibold text-slate-900">CytoAtlas Assistant</h1>
+          <h1 className="text-base font-semibold" style={{ color: '#0f172a' }}>CytoAtlas Assistant</h1>
           {status?.model && (
             <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">
               {status.model.split('/').pop()}
@@ -172,7 +172,7 @@ function WelcomeScreen({
     <div className="flex flex-1 items-center justify-center overflow-y-auto px-4 py-12">
       <div className="w-full max-w-2xl">
         <div className="mb-8 text-center">
-          <h1 className="mb-3 text-3xl font-bold text-slate-900">CytoAtlas Assistant</h1>
+          <h1 className="mb-3 text-3xl font-bold" style={{ color: '#0f172a' }}>CytoAtlas Assistant</h1>
           <p className="text-base text-slate-600">
             Ask questions about cytokine activity, cell types, diseases, and more.
             Powered by AI with access to the full CytoAtlas dataset.
