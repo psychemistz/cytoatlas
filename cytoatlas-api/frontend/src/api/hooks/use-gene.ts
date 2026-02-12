@@ -95,6 +95,8 @@ export function useGeneCorrelations(gene: string, signatureType: string) {
             type: item.category ?? category,
             rho: item.rho,
             p_value: item.pvalue,
+            q_value: item.qvalue,
+            cell_type: item.cell_type,
             n: item.n_samples ?? 0,
           });
         }

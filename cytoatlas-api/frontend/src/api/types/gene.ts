@@ -116,5 +116,7 @@ export interface GeneCorrelation {
   type: string;
   rho: number;
   p_value: number;
+  q_value?: number;
+  cell_type?: string;
   n: number;
 }

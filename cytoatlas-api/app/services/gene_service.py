@@ -341,10 +341,14 @@ class GeneService(BaseService):
             top_tissue=top_tissue,
         )
 
+        # Load description from gene mapping
+        names = get_all_names(signature)
+        description = names.get("description") or None
+
         return GeneOverview(
             signature=signature,
             signature_type=signature_type,
-            description=None,  # Could add gene descriptions later
+            description=description,
             atlases=atlases,
             summary_stats=summary_stats,
         )

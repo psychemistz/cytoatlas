@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate, Link } from 'react-router';
 import { useAppStore } from '@/stores/app-store';
 import { useGeneCheck, useGeneOverview } from '@/api/hooks/use-gene';
 import { TabPanel } from '@/components/ui/tab-panel';
@@ -29,11 +29,11 @@ export default function GeneDetail() {
 
   const tabs = useMemo(() => {
     const t = [];
-    if (!check || check.has_expression) t.push({ id: 'expression', label: 'Expression' });
-    if (!check || check.has_cytosig) t.push({ id: 'cytosig', label: 'CytoSig' });
-    if (!check || check.has_secact) t.push({ id: 'secact', label: 'SecAct' });
-    t.push({ id: 'diseases', label: 'Diseases' });
-    t.push({ id: 'correlations', label: 'Correlations' });
+    if (!check || check.has_expression) t.push({ id: 'expression', label: '\uD83E\uDDEC Expression' });
+    if (!check || check.has_cytosig) t.push({ id: 'cytosig', label: '\uD83D\uDD34 CytoSig' });
+    if (!check || check.has_secact) t.push({ id: 'secact', label: '\u26AA SecAct' });
+    t.push({ id: 'diseases', label: '\uD83E\uDDA0 Diseases' });
+    t.push({ id: 'correlations', label: '\uD83D\uDCCA Correlations' });
     return t;
   }, [check]);
 
@@ -60,6 +60,12 @@ export default function GeneDetail() {
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-8">
       <div className="mb-6">
+        <Link
+          to="/search"
+          className="mb-3 inline-flex items-center gap-1 text-sm text-primary hover:text-primary/80"
+        >
+          &larr; Back to Search
+        </Link>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold">{symbol}</h1>
@@ -86,6 +92,22 @@ export default function GeneDetail() {
                 </span>
               )}
             </div>
+            {overview?.atlases && overview.atlases.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="text-xs text-text-muted">Atlases:</span>
+                {overview.atlases.map((a) => {
+                  const displayName = a === 'cima' ? 'CIMA' : a === 'inflammation' ? 'Inflammation Atlas' : a === 'scatlas' ? 'scAtlas' : a;
+                  return (
+                    <span
+                      key={a}
+                      className="rounded-md bg-bg-secondary px-2 py-0.5 text-xs font-medium text-text-secondary"
+                    >
+                      {displayName}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
             <div className="mt-2 flex flex-wrap gap-2">
               {externalLinks.map((link) => (
                 <a

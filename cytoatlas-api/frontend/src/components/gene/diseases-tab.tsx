@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useGeneDiseases } from '@/api/hooks/use-gene';
 import { Spinner } from '@/components/ui/loading-skeleton';
 import { BarChart } from '@/components/charts/bar-chart';
+import { VolcanoChart } from '@/components/charts/volcano-chart';
 
 interface DiseasesTabProps {
   gene: string;
@@ -10,6 +11,21 @@ interface DiseasesTabProps {
 
 export default function DiseasesTab({ gene, signatureType }: DiseasesTabProps) {
   const { data, isLoading, error } = useGeneDiseases(gene, signatureType);
+
+  const nSignificant = useMemo(() => {
+    if (!data) return 0;
+    return data.filter((d) => d.fdr != null && d.fdr < 0.05).length;
+  }, [data]);
+
+  const volcanoPoints = useMemo(() => {
+    if (!data || data.length === 0) return null;
+    return data.map((d) => ({
+      label: d.disease,
+      activity_diff: d.activity_diff,
+      p_value: d.p_value,
+      fdr: d.fdr,
+    }));
+  }, [data]);
 
   const barData = useMemo(() => {
     if (!data || data.length === 0) return null;
@@ -42,6 +58,25 @@ export default function DiseasesTab({ gene, signatureType }: DiseasesTabProps) {
 
   return (
     <div className="space-y-6">
+      <p className="text-sm text-text-secondary">
+        {data.length} diseases, {nSignificant} significant (FDR &lt; 0.05)
+      </p>
+
+      {volcanoPoints && volcanoPoints.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-text-secondary">
+            Volcano Plot
+          </h3>
+          <VolcanoChart
+            points={volcanoPoints}
+            title={`${gene}: Disease Volcano`}
+            leftLabel={'\u2190 Lower in disease'}
+            rightLabel={'Higher in disease \u2192'}
+            height={450}
+          />
+        </div>
+      )}
+
       {barData && (
         <div>
           <h3 className="mb-2 text-sm font-semibold text-text-secondary">
@@ -72,6 +107,7 @@ export default function DiseasesTab({ gene, signatureType }: DiseasesTabProps) {
               <th className="px-3 py-2 font-medium text-right">{'\u0394'} Activity</th>
               <th className="px-3 py-2 font-medium text-right">p-value</th>
               <th className="px-3 py-2 font-medium text-right">FDR</th>
+              <th className="px-3 py-2 font-medium text-center">Sig</th>
             </tr>
           </thead>
           <tbody>
@@ -91,6 +127,11 @@ export default function DiseasesTab({ gene, signatureType }: DiseasesTabProps) {
                       {d.fdr.toExponential(2)} {d.fdr < 0.01 ? '**' : d.fdr < 0.05 ? '*' : ''}
                     </span>
                   ) : '-'}
+                </td>
+                <td className="px-3 py-1.5 text-center">
+                  {d.fdr != null && d.fdr < 0.05 ? (
+                    <span className="text-green-600" title="FDR < 0.05">{'\u2713'}</span>
+                  ) : ''}
                 </td>
               </tr>
             ))}

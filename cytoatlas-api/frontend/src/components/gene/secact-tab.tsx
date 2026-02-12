@@ -61,8 +61,22 @@ export default function SecactTab({ gene, signatureType }: SecactTabProps) {
     );
   }
 
+  const nCellTypes = useMemo(() => {
+    if (!data) return 0;
+    return new Set(data.map((d) => d.cell_type)).size;
+  }, [data]);
+
   return (
     <div className="space-y-6">
+      <div>
+        <p className="text-xs text-text-muted">
+          Activity = Z-score from ridge regression against 1,249-signature matrix
+        </p>
+        <p className="mt-1 text-sm text-text-secondary">
+          {nCellTypes} cell types across {atlases.length} atlas{atlases.length !== 1 ? 'es' : ''}
+        </p>
+      </div>
+
       <FilterBar>
         <SelectFilter
           label="Atlas"
