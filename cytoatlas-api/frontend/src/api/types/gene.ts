@@ -71,8 +71,8 @@ export interface GeneDiseaseItem {
   disease: string;
   disease_group: string;
   activity_diff: number;
-  p_value: number;
-  q_value?: number;
+  pvalue: number;
+  qvalue?: number;
   mean_disease: number;
   mean_healthy: number;
   neg_log10_pval?: number;
@@ -103,8 +103,8 @@ export interface GeneCorrelationsResponse {
 export interface GeneCorrelationItem {
   variable: string;
   rho: number;
-  p_value: number;
-  q_value?: number;
+  pvalue: number;
+  qvalue?: number;
   n_samples?: number;
   cell_type?: string;
   category?: string;

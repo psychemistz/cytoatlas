@@ -83,7 +83,7 @@ export default function DiseasesTab({ gene, signatureType }: DiseasesTabProps) {
                   {d.activity_diff.toFixed(3)}
                 </td>
                 <td className="px-3 py-1.5 text-right font-mono">
-                  {d.p_value.toExponential(2)}
+                  {d.p_value != null ? d.p_value.toExponential(2) : '-'}
                 </td>
                 <td className="px-3 py-1.5 text-right font-mono">
                   {d.fdr != null ? (

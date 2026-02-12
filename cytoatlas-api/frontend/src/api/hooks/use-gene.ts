@@ -67,8 +67,8 @@ export function useGeneDiseases(gene: string, signatureType: string) {
         disease: d.disease,
         cohort: d.disease_group,
         activity_diff: d.activity_diff,
-        p_value: d.p_value,
-        fdr: d.q_value,
+        p_value: d.pvalue,
+        fdr: d.qvalue,
         mean_disease: d.mean_disease,
         mean_healthy: d.mean_healthy,
       })) as GeneDiseaseData[];
@@ -94,7 +94,7 @@ export function useGeneCorrelations(gene: string, signatureType: string) {
             variable: item.variable,
             type: item.category ?? category,
             rho: item.rho,
-            p_value: item.p_value,
+            p_value: item.pvalue,
             n: item.n_samples ?? 0,
           });
         }

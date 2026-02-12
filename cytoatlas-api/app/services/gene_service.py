@@ -985,29 +985,46 @@ class GeneService(BaseService):
         has_cytosig = False
         has_secact = False
 
-        # Check expression
-        gene_file = self.viz_data_path / "genes" / f"{gene}.json"
-        has_expression = gene_file.exists()
+        # Get all name variants for the gene
+        names = get_all_names(gene)
+        gene_names = [gene]
+        if names["hgnc"] and names["hgnc"] != gene:
+            gene_names.append(names["hgnc"])
+        if names["cytosig"] and names["cytosig"] != gene and names["cytosig"] not in gene_names:
+            gene_names.append(names["cytosig"])
+
+        # Check expression - per-gene file first
+        for gn in gene_names:
+            gene_file = self.viz_data_path / "genes" / f"{gn}.json"
+            if gene_file.exists():
+                has_expression = True
+                break
+
+        # If no per-gene file, check combined expression files
+        if not has_expression:
+            expression_result = await self.get_gene_expression(gene)
+            has_expression = expression_result is not None and len(expression_result.data) > 0
 
         # Check CytoSig
         try:
             cima_data = await self.load_json("cima_celltype.json")
             has_cytosig = any(
-                r.get("signature") == gene and r.get("signature_type") == "CytoSig"
+                r.get("signature") in gene_names and r.get("signature_type") == "CytoSig"
                 for r in cima_data
             )
         except FileNotFoundError:
             pass
 
         # Check SecAct
-        try:
-            cima_data = await self.load_json("cima_celltype.json")
-            has_secact = any(
-                r.get("signature") == gene and r.get("signature_type") == "SecAct"
-                for r in cima_data
-            )
-        except FileNotFoundError:
-            pass
+        if not has_secact:
+            try:
+                cima_data = await self.load_json("cima_celltype.json")
+                has_secact = any(
+                    r.get("signature") in gene_names and r.get("signature_type") == "SecAct"
+                    for r in cima_data
+                )
+            except FileNotFoundError:
+                pass
 
         return {
             "gene": gene,
