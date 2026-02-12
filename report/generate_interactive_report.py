@@ -181,21 +181,23 @@ def prepare_method_comparison_boxplot(df):
     """Prepare rho arrays for section 5.1 boxplot — 6-way method comparison.
 
     Loads pre-computed 6-way comparison data (ridge regression on pseudobulk)
-    for CIMA, scAtlas Normal, scAtlas Cancer. Inflammation atlases are excluded
-    because they use Ensembl gene IDs (incompatible with LinCytoSig gene filtering).
+    for all 6 atlases: CIMA, Inflammation Main/Val/Ext, scAtlas Normal/Cancer.
 
     Six methods:
       1. CytoSig — 43 cytokines, 4,881 curated genes (cell-type agnostic)
-      2. LinCytoSig (orig) — cell-type-matched signatures, all 19,918 genes
+      2. LinCytoSig (orig) — cell-type-matched signatures, all ~20K genes
       3. LinCytoSig (gene-filtered) — cell-type-matched, restricted to CytoSig 4,881 genes
       4. LinCytoSig (best-bulk, orig) — best signature per cytokine selected by
-         GTEx+TCGA bulk correlation, all 19,918 genes
+         GTEx+TCGA bulk correlation, all ~20K genes
       5. LinCytoSig (best-bulk, filtered) — best bulk signature, CytoSig genes only
       6. SecAct — 1,249 secreted proteins
     """
-    sixway_path = VIZ_DIR / 'method_comparison_6way.json'
+    sixway_path = VIZ_DIR / 'method_comparison_6way_all.json'
     if not sixway_path.exists():
-        print(f'  WARNING: {sixway_path} not found — falling back to empty')
+        # Fall back to old file
+        sixway_path = VIZ_DIR / 'method_comparison_6way.json'
+    if not sixway_path.exists():
+        print(f'  WARNING: no 6-way JSON found — falling back to empty')
         return {}
 
     with open(sixway_path) as f:
@@ -204,19 +206,16 @@ def prepare_method_comparison_boxplot(df):
     # Map 6-way atlas keys to display labels
     atlas_key_to_label = {
         'CIMA': 'CIMA',
+        'Inflammation Main': 'Inflam (Main)',
+        'Inflammation Val': 'Inflam (Val)',
+        'Inflammation Ext': 'Inflam (Ext)',
         'scAtlas Normal': 'scAtlas (Normal)',
         'scAtlas Cancer': 'scAtlas (Cancer)',
     }
 
-    # Method key mapping: 6-way JSON key → output key
-    method_keys = [
-        ('CytoSig', 'cytosig'),
-        ('LinCyto_orig', 'lincyto_orig'),
-        ('LinCyto_filt', 'lincyto_filt'),
-        ('LinCyto_best_orig', 'lincyto_best_orig'),
-        ('LinCyto_best_filt', 'lincyto_best_filt'),
-        ('SecAct', 'secact'),
-    ]
+    # Method keys match the JSON keys directly
+    method_keys = ['cytosig', 'lincyto_orig', 'lincyto_filt',
+                   'lincyto_best_orig', 'lincyto_best_filt', 'secact']
 
     result = {}
     for src_key, label in atlas_key_to_label.items():
@@ -224,8 +223,8 @@ def prepare_method_comparison_boxplot(df):
             continue
         atlas_data = sixway[src_key]
         entry = {}
-        for json_key, out_key in method_keys:
-            entry[out_key] = [round(v, 4) for v in atlas_data.get(json_key, [])]
+        for key in method_keys:
+            entry[key] = [round(v, 4) for v in atlas_data.get(key, [])]
         result[label] = entry
     return result
 
@@ -1054,12 +1053,39 @@ CytoAtlas validates at five levels: donor-level pseudobulk, donor &times; cell-t
 <h3>5.1 Method Overview</h3>
 
 <table>
-  <tr><th>Property</th><th><span class="badge blue">CytoSig</span></th><th><span class="badge amber">LinCytoSig</span></th><th><span class="badge green">SecAct</span></th></tr>
-  <tr><td>Targets</td><td>43 cytokines</td><td>178 (45 cell types &times; 1&ndash;13 cytokines)</td><td>1,249 secreted proteins</td></tr>
-  <tr><td>Specificity</td><td>Global (cell-type agnostic)</td><td>Cell-type specific</td><td>Global</td></tr>
-  <tr><td>Source</td><td>Experimental bulk RNA-seq</td><td>CytoSig stratified by cell type (<a href="LINCYTOSIG_METHODOLOGY.html">full methodology</a>)</td><td>Spatial Moran's I</td></tr>
-  <tr><td>Best for</td><td>General cytokine activity</td><td>Cell-type-resolved analysis</td><td>Broad secretome profiling</td></tr>
+  <tr>
+    <th>Method</th><th>Targets</th><th>Genes</th><th>Specificity</th><th>Selection</th>
+  </tr>
+  <tr>
+    <td><span class="badge blue">CytoSig</span></td>
+    <td>43 cytokines</td><td>4,881 curated</td><td>Cell-type agnostic</td><td>&mdash;</td>
+  </tr>
+  <tr>
+    <td><span class="badge amber">LinCytoSig (orig)</span></td>
+    <td>178 (45 CT &times; cytokines)</td><td>All ~20K</td><td>Cell-type specific</td><td>Matched cell type</td>
+  </tr>
+  <tr>
+    <td><span style="background:#F59E0B;color:#fff;padding:1px 8px;border-radius:3px;font-size:0.85em">LinCytoSig (gene-filtered)</span></td>
+    <td>178</td><td>4,881 (CytoSig overlap)</td><td>Cell-type specific</td><td>Matched cell type</td>
+  </tr>
+  <tr>
+    <td><span style="background:#B45309;color:#fff;padding:1px 8px;border-radius:3px;font-size:0.85em">LinCytoSig Best (orig)</span></td>
+    <td>43 (1 per cytokine)</td><td>All ~20K</td><td>Best CT per cytokine</td><td>Max bulk (GTEx+TCGA) &rho;</td>
+  </tr>
+  <tr>
+    <td><span style="background:#92400E;color:#fff;padding:1px 8px;border-radius:3px;font-size:0.85em">LinCytoSig Best (gene-filtered)</span></td>
+    <td>43 (1 per cytokine)</td><td>4,881 (CytoSig overlap)</td><td>Best CT per cytokine</td><td>Max bulk &rho; (filtered)</td>
+  </tr>
+  <tr>
+    <td><span class="badge green">SecAct</span></td>
+    <td>1,249 secreted proteins</td><td>Spatial Moran&rsquo;s I</td><td>Cell-type agnostic</td><td>&mdash;</td>
+  </tr>
 </table>
+<p style="margin-top:0.5em;font-size:0.9em;color:#6B7280;">
+  <strong>Gene filter:</strong> LinCytoSig signatures restricted from ~20K to CytoSig&rsquo;s 4,881 curated genes.
+  <strong>Best selection:</strong> For each cytokine, test all cell-type-specific LinCytoSig signatures and select the one with highest GTEx+TCGA bulk RNA-seq correlation as the representative.
+  See <a href="LINCYTOSIG_METHODOLOGY.html">LinCytoSig Methodology</a> for details.
+</p>
 
 <div class="plotly-container">
   <div class="controls">
@@ -1069,23 +1095,24 @@ CytoAtlas validates at five levels: donor-level pseudobulk, donor &times; cell-t
     </select>
   </div>
   <div id="method-boxplot-chart" style="height:550px;"></div>
-  <div class="caption"><strong>Figure 9.</strong> Six-way signature method comparison at matched (cell type, cytokine) pair level. All 6 methods are evaluated on the <em>same set</em> of matched pairs per atlas (identical n). Use dropdown to view individual atlas boxplots. Inflammation atlases excluded (Ensembl gene IDs). For LinCytoSig construction, see <a href="LINCYTOSIG_METHODOLOGY.html">LinCytoSig Methodology</a>.</div>
+  <div class="caption"><strong>Figure 9.</strong> Six-way signature method comparison at matched (cell type, cytokine) pair level across all 6 atlases. All 6 methods are evaluated on the <em>same set</em> of matched pairs per atlas (identical n). Use dropdown to view individual atlas boxplots. For LinCytoSig construction, see <a href="LINCYTOSIG_METHODOLOGY.html">LinCytoSig Methodology</a>.</div>
 </div>
 
 <div class="callout">
-<p><strong>Six methods compared on identical matched pairs:</strong></p>
+<p><strong>Six methods compared on identical matched pairs across all 6 atlases:</strong></p>
 <ol>
-  <li><strong><span style="color:#2563EB">CytoSig</span></strong> &mdash; 43 cytokines, 4,881 curated genes, cell-type agnostic (pooled from all cell types)</li>
-  <li><strong><span style="color:#D97706">LinCytoSig (orig)</span></strong> &mdash; cell-type-matched signatures from the CytoSig database, all 19,918 genes</li>
-  <li><strong><span style="color:#F59E0B">LinCytoSig (gene-filtered)</span></strong> &mdash; same cell-type-matched signatures, restricted to CytoSig&rsquo;s 4,881 curated genes</li>
-  <li><strong><span style="color:#B45309">LinCytoSig (best-bulk)</span></strong> &mdash; for each cytokine, select the single best-performing cell-type signature based on GTEx+TCGA bulk RNA-seq correlation (all 19,918 genes)</li>
-  <li><strong><span style="color:#92400E">LinCytoSig (best-bulk+filt)</span></strong> &mdash; same best-bulk selection, restricted to CytoSig&rsquo;s 4,881 genes</li>
-  <li><strong><span style="color:#059669">SecAct</span></strong> &mdash; 1,249 secreted protein signatures (Moran&rsquo;s I spatial method), shown for the subset of CytoSig-overlapping targets</li>
+  <li><strong><span style="color:#2563EB">CytoSig</span></strong> &mdash; 43 cytokines, 4,881 curated genes, cell-type agnostic</li>
+  <li><strong><span style="color:#D97706">LinCytoSig (orig)</span></strong> &mdash; cell-type-matched signatures, all ~20K genes</li>
+  <li><strong><span style="color:#F59E0B">LinCytoSig (gene-filtered)</span></strong> &mdash; cell-type-matched signatures, restricted to CytoSig&rsquo;s 4,881 genes</li>
+  <li><strong><span style="color:#B45309">LinCytoSig Best (orig)</span></strong> &mdash; best cell-type signature per cytokine (selected by GTEx+TCGA bulk &rho;), all ~20K genes</li>
+  <li><strong><span style="color:#92400E">LinCytoSig Best (gene-filtered)</span></strong> &mdash; best cell-type signature per cytokine (selected by bulk &rho; on filtered genes), restricted to 4,881 genes</li>
+  <li><strong><span style="color:#059669">SecAct</span></strong> &mdash; 1,249 secreted proteins (Moran&rsquo;s I), subset matching CytoSig targets</li>
 </ol>
-<p><strong>Key findings:</strong> SecAct achieves the highest median &rho; across all atlases.
-CytoSig outperforms the cell-type-matched LinCytoSig (orig) across all three atlases, largely because LinCytoSig signatures have fewer experiments (3&ndash;12 vs 50&ndash;300+) and more genes (19,918 vs 4,881), amplifying noise.
-The &ldquo;best-bulk&rdquo; selection strategy (selecting one representative cell-type signature per cytokine based on GTEx+TCGA bulk correlation) substantially improves performance, approaching or exceeding CytoSig.
-Gene filtering helps (orig &lt; filt) consistently, confirming that restricting to CytoSig&rsquo;s curated 4,881 genes reduces noise.</p>
+<p><strong>Key findings:</strong> SecAct achieves the highest median &rho; across all 6 atlases.
+CytoSig consistently outperforms the cell-type-matched LinCytoSig (orig), largely because LinCytoSig signatures use all ~20K genes (amplifying noise) versus CytoSig&rsquo;s curated 4,881.
+Gene filtering improves LinCytoSig in 5 of 6 atlases (CIMA +102%, Inflam Ext +114%), confirming noise reduction from restricting the gene space.
+The &ldquo;best&rdquo; selection strategy (one representative cell-type signature per cytokine) further improves performance, with &ldquo;Best (gene-filtered)&rdquo; approaching or exceeding CytoSig in Inflammation atlases.
+Consistent ranking: SecAct &gt; CytoSig &gt; LinCytoSig Best (filt) &ge; LinCytoSig Best (orig) &gt; LinCytoSig (filt) &gt; LinCytoSig (orig).</p>
 </div>
 
 <h3>5.2 When Does LinCytoSig Outperform CytoSig?</h3>
