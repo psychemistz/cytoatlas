@@ -81,7 +81,7 @@ class GeneDiseaseActivity(BaseModel):
     neg_log10_pval: float | None = None
     is_significant: bool = Field(default=False, description="FDR < 0.05")
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
 
 
 class GeneCorrelationResult(BaseModel):
@@ -95,7 +95,7 @@ class GeneCorrelationResult(BaseModel):
     cell_type: str | None = None
     category: str | None = Field(default=None, description="Variable category (age, bmi, biochem, metabolite)")
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
 
 
 class GeneCorrelations(BaseModel):

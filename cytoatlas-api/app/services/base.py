@@ -82,7 +82,10 @@ _JSON_TO_TABLE: dict[str, str] = {
     # Validation tables
     "cima_atlas_validation.json": "cima_atlas_validation",
     "gene_expression_inflammation.json": "gene_expression_inflammation",
-    "validation_corr_boxplot.json": "validation_corr_boxplot",
+    # NOTE: validation_corr_boxplot.json has deeply nested rhos (target→category→[values])
+    # that DuckDB flattening cannot capture — only 8 category-label rows survive.
+    # Excluded from DuckDB mapping; always loaded from JSON.
+    # "validation_corr_boxplot.json": "validation_corr_boxplot",
     "validation_summary.json": "validation_summary",
     # Perturbation domain (parse_10M + Tahoe)
     "parse10m_cytokine_heatmap.json": "parse10m_cytokine_heatmap",

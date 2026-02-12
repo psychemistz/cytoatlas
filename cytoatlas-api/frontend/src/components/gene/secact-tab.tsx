@@ -43,6 +43,11 @@ export default function SecactTab({ gene, signatureType }: SecactTabProps) {
     };
   }, [filtered]);
 
+  const nCellTypes = useMemo(() => {
+    if (!data) return 0;
+    return new Set(data.map((d) => d.cell_type)).size;
+  }, [data]);
+
   if (isLoading) return <Spinner message="Loading SecAct activity..." />;
 
   if (error) {
@@ -60,11 +65,6 @@ export default function SecactTab({ gene, signatureType }: SecactTabProps) {
       </p>
     );
   }
-
-  const nCellTypes = useMemo(() => {
-    if (!data) return 0;
-    return new Set(data.map((d) => d.cell_type)).size;
-  }, [data]);
 
   return (
     <div className="space-y-6">

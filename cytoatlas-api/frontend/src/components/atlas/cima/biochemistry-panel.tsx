@@ -78,7 +78,7 @@ export default function BiochemistryPanel({ signatureType }: BiochemistryPanelPr
         </h3>
         <p className="mb-3 text-xs text-text-muted">
           Top 30 signatures by max |Spearman rho| across all biochemistry markers.
-          {data.length} total correlation pairs.
+          {data?.length ?? 0} total correlation pairs.
         </p>
       </div>
 

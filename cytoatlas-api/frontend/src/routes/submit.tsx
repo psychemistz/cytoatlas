@@ -81,7 +81,8 @@ function statusColor(status: Job['status']): string {
 /* ------------------------------------------------------------------ */
 
 export default function Submit() {
-  const isAuthenticated = Boolean(localStorage.getItem('auth_token'));
+  // Auth gate removed: server-side RBAC handles permissions; no login UI exists
+  const isAuthenticated = true;
 
   const [file, setFile] = useState<File | null>(null);
   const [atlasName, setAtlasName] = useState('');

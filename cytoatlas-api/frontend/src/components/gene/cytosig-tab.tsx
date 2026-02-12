@@ -43,6 +43,11 @@ export default function CytosigTab({ gene, signatureType }: CytosigTabProps) {
     };
   }, [filtered]);
 
+  const nCellTypes = useMemo(() => {
+    if (!data) return 0;
+    return new Set(data.map((d) => d.cell_type)).size;
+  }, [data]);
+
   if (isLoading) return <Spinner message="Loading CytoSig activity..." />;
 
   if (error) {
@@ -60,11 +65,6 @@ export default function CytosigTab({ gene, signatureType }: CytosigTabProps) {
       </p>
     );
   }
-
-  const nCellTypes = useMemo(() => {
-    if (!data) return 0;
-    return new Set(data.map((d) => d.cell_type)).size;
-  }, [data]);
 
   return (
     <div className="space-y-6">

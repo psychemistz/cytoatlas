@@ -365,6 +365,16 @@ class CrossAtlasService(BaseService):
         """Get list of available atlases."""
         return ["CIMA", "Inflammation", "scAtlas"]
 
+    # Static atlas summary metadata — the "summary" section in cross_atlas.json
+    # is a simple dict (not list-of-dicts), so DuckDB flattening skips it.
+    # Hard-coded here to avoid depending on the JSON file for static metadata.
+    _ATLAS_SUMMARY: dict = {
+        "cima": {"cells": 6484974, "samples": 421, "cell_types": 27},
+        "inflammation": {"cells": 4918140, "samples": 817, "cell_types": 66},
+        "scatlas_normal": {"cells": 2289588, "samples": 317, "cell_types": 376, "organs": 35, "donors": 317},
+        "scatlas_cancer": {"cells": 4144933, "samples": 464, "cell_types": 156, "donors": 464},
+    }
+
     @cached(prefix="cross_atlas", ttl=3600)
     async def get_summary(self) -> dict:
         """
@@ -373,8 +383,16 @@ class CrossAtlasService(BaseService):
         Returns:
             Summary dict with cells, samples, cell_types per atlas
         """
-        data = await self.load_json("cross_atlas.json")
-        summary = data.get("summary", {})
+        # Try loading from JSON file (nested dict format)
+        try:
+            data = await self.load_json("cross_atlas.json")
+            if isinstance(data, dict) and "summary" in data:
+                summary = data["summary"]
+            else:
+                # DuckDB returns flat list — summary section not captured
+                summary = self._ATLAS_SUMMARY
+        except Exception:
+            summary = self._ATLAS_SUMMARY
 
         # Calculate totals
         total_cells = 0
