@@ -194,9 +194,24 @@ export function ChatMessages({
 }: ChatMessagesProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const userScrolledUp = useRef(false);
+
+  // Track whether user has scrolled away from the bottom
   useEffect(() => {
     const el = scrollRef.current;
-    if (el) {
+    if (!el) return;
+    const handleScroll = () => {
+      const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      userScrolledUp.current = distFromBottom > 80;
+    };
+    el.addEventListener('scroll', handleScroll);
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Auto-scroll only when user is near the bottom
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el && !userScrolledUp.current) {
       el.scrollTop = el.scrollHeight;
     }
   }, [messages, streamedContent, toolCalls]);
