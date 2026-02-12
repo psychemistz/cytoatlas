@@ -11,6 +11,8 @@ interface Tab {
 interface TabPanelProps {
   tabs: Tab[];
   defaultTab?: string;
+  /** Controlled active tab — when provided, overrides internal state */
+  activeTab?: string;
   onTabChange?: (tabId: string) => void;
   children: (activeTab: string) => ReactNode;
   className?: string;
@@ -21,16 +23,18 @@ interface TabPanelProps {
 export function TabPanel({
   tabs,
   defaultTab,
+  activeTab: controlledTab,
   onTabChange,
   children,
   className,
   orientation = 'horizontal',
   variant = 'underline',
 }: TabPanelProps) {
-  const [activeTab, setActiveTab] = useState(defaultTab ?? tabs[0]?.id ?? '');
+  const [internalTab, setInternalTab] = useState(defaultTab ?? tabs[0]?.id ?? '');
+  const activeTab = controlledTab ?? internalTab;
 
   function handleTabClick(tabId: string) {
-    setActiveTab(tabId);
+    setInternalTab(tabId);
     onTabChange?.(tabId);
   }
 

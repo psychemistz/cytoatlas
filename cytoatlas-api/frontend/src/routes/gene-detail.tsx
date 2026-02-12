@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import { useAppStore } from '@/stores/app-store';
 import { useGeneCheck, useGeneOverview } from '@/api/hooks/use-gene';
@@ -17,9 +17,13 @@ export default function GeneDetail() {
   const { symbol = '' } = useParams<{ symbol: string }>();
   const navigate = useNavigate();
   const signatureType = useAppStore((s) => s.signatureType);
+  const [activeTab, setActiveTab] = useState('expression');
 
   const { data: check, isLoading: checkLoading } = useGeneCheck(symbol);
-  const { data: overview, isLoading: overviewLoading } = useGeneOverview(symbol, signatureType);
+  const { data: overview, isFetching: overviewFetching } = useGeneOverview(symbol, signatureType);
+
+  // Only show full-page spinner for initial load (no data yet)
+  const initialLoading = checkLoading || (!overview && overviewFetching);
 
   useEffect(() => {
     if (overview?.gene && overview.gene !== symbol) {
@@ -37,6 +41,13 @@ export default function GeneDetail() {
     return t;
   }, [check]);
 
+  // If active tab is not in available tabs, reset to first tab
+  useEffect(() => {
+    if (tabs.length > 0 && !tabs.some((t) => t.id === activeTab)) {
+      setActiveTab(tabs[0].id);
+    }
+  }, [tabs, activeTab]);
+
   const externalLinks = useMemo(() => {
     const s = encodeURIComponent(symbol);
     return [
@@ -49,7 +60,7 @@ export default function GeneDetail() {
     ];
   }, [symbol]);
 
-  if (checkLoading || overviewLoading) {
+  if (initialLoading) {
     return (
       <div className="mx-auto max-w-[1400px] px-4 py-12">
         <Spinner message={`Loading ${symbol}...`} />
@@ -131,7 +142,7 @@ export default function GeneDetail() {
           No data available for {symbol}
         </p>
       ) : (
-        <TabPanel tabs={tabs} defaultTab={tabs[0].id}>
+        <TabPanel tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab}>
           {(tabId) => (
             <ErrorBoundary>
               <Suspense fallback={<Spinner message="Loading tab..." />}>

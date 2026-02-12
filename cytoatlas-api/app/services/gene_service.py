@@ -321,14 +321,14 @@ class GeneService(BaseService):
         try:
             corr_data = await self.load_json("cima_correlations.json")
             for var in ["age", "bmi", "biochemistry"]:
-                if var in corr_data:
-                    var_filtered = [
-                        r for r in corr_data[var]
-                        if r.get("protein") == signature and r.get("signature") == signature_type
-                        and self._parse_pvalue(r.get("qvalue", r.get("pvalue", 1))) < 0.05
-                    ]
-                    n_correlations += len(var_filtered)
-        except FileNotFoundError:
+                items = self._extract_corr_items(corr_data, var)
+                var_filtered = [
+                    r for r in items
+                    if r.get("protein") == signature and r.get("signature") == signature_type
+                    and self._parse_pvalue(r.get("qvalue", r.get("pvalue", 1))) < 0.05
+                ]
+                n_correlations += len(var_filtered)
+        except (FileNotFoundError, Exception):
             pass
 
         summary_stats = GeneStats(
@@ -572,6 +572,22 @@ class GeneService(BaseService):
             n_significant=n_significant,
         )
 
+    def _extract_corr_items(
+        self,
+        corr_data: dict | list,
+        category: str,
+    ) -> list[dict]:
+        """Extract items for a category from correlations data.
+
+        Handles two formats:
+        - Nested dict (JSON file): {age: [...], bmi: [...], biochemistry: [...]}
+        - Flat list (DuckDB): [{category: 'age', ...}, ...]
+        """
+        if isinstance(corr_data, dict):
+            return corr_data.get(category, [])
+        # Flat list from DuckDB
+        return [r for r in corr_data if r.get("category") == category]
+
     @cached(prefix="gene", ttl=3600)
     async def get_correlations(
         self,
@@ -596,58 +612,90 @@ class GeneService(BaseService):
         # Get all possible signature names (HGNC + CytoSig variants)
         sig_names = get_signature_names(signature, signature_type)
 
-        # Load CIMA correlations (age, bmi, biochemistry)
+        # Load CIMA aggregate correlations (age, bmi, biochemistry)
         try:
             corr_data = await self.load_json("cima_correlations.json")
 
-            # Age correlations
-            if "age" in corr_data:
-                for r in corr_data["age"]:
-                    if r.get("protein") in sig_names and r.get("signature") == signature_type:
-                        pval = self._parse_pvalue(r.get("pvalue"))
-                        qval = self._parse_pvalue(r.get("qvalue")) if r.get("qvalue") is not None else None
-                        age_results.append(GeneCorrelationResult(
-                            variable="age",
-                            rho=self._safe_float(r.get("rho")),
-                            pvalue=pval,
-                            qvalue=qval,
-                            n_samples=r.get("n"),
-                            cell_type=r.get("cell_type", "All"),
-                            category="age",
-                        ))
+            # Age correlations (aggregate)
+            for r in self._extract_corr_items(corr_data, "age"):
+                if r.get("protein") in sig_names and r.get("signature") == signature_type:
+                    pval = self._parse_pvalue(r.get("pvalue"))
+                    qval = self._parse_pvalue(r.get("qvalue")) if r.get("qvalue") is not None else None
+                    age_results.append(GeneCorrelationResult(
+                        variable="Age",
+                        rho=self._safe_float(r.get("rho")),
+                        pvalue=pval,
+                        qvalue=qval,
+                        n_samples=r.get("n"),
+                        cell_type=r.get("cell_type", "All"),
+                        category="age",
+                    ))
 
-            # BMI correlations
-            if "bmi" in corr_data:
-                for r in corr_data["bmi"]:
-                    if r.get("protein") in sig_names and r.get("signature") == signature_type:
-                        pval = self._parse_pvalue(r.get("pvalue"))
-                        qval = self._parse_pvalue(r.get("qvalue")) if r.get("qvalue") is not None else None
-                        bmi_results.append(GeneCorrelationResult(
-                            variable="bmi",
-                            rho=self._safe_float(r.get("rho")),
-                            pvalue=pval,
-                            qvalue=qval,
-                            n_samples=r.get("n"),
-                            cell_type=r.get("cell_type", "All"),
-                            category="bmi",
-                        ))
+            # BMI correlations (aggregate)
+            for r in self._extract_corr_items(corr_data, "bmi"):
+                if r.get("protein") in sig_names and r.get("signature") == signature_type:
+                    pval = self._parse_pvalue(r.get("pvalue"))
+                    qval = self._parse_pvalue(r.get("qvalue")) if r.get("qvalue") is not None else None
+                    bmi_results.append(GeneCorrelationResult(
+                        variable="BMI",
+                        rho=self._safe_float(r.get("rho")),
+                        pvalue=pval,
+                        qvalue=qval,
+                        n_samples=r.get("n"),
+                        cell_type=r.get("cell_type", "All"),
+                        category="bmi",
+                    ))
 
             # Biochemistry correlations
-            if "biochemistry" in corr_data:
-                for r in corr_data["biochemistry"]:
-                    if r.get("protein") in sig_names and r.get("signature") == signature_type:
-                        pval = self._parse_pvalue(r.get("pvalue"))
-                        qval = self._parse_pvalue(r.get("qvalue")) if r.get("qvalue") is not None else None
-                        biochem_results.append(GeneCorrelationResult(
-                            variable=r.get("feature"),
-                            rho=self._safe_float(r.get("rho")),
-                            pvalue=pval,
-                            qvalue=qval,
-                            n_samples=r.get("n"),
-                            cell_type=r.get("cell_type", "All"),
-                            category="biochemistry",
-                        ))
-        except FileNotFoundError:
+            for r in self._extract_corr_items(corr_data, "biochemistry"):
+                if r.get("protein") in sig_names and r.get("signature") == signature_type:
+                    pval = self._parse_pvalue(r.get("pvalue"))
+                    qval = self._parse_pvalue(r.get("qvalue")) if r.get("qvalue") is not None else None
+                    biochem_results.append(GeneCorrelationResult(
+                        variable=r.get("feature"),
+                        rho=self._safe_float(r.get("rho")),
+                        pvalue=pval,
+                        qvalue=qval,
+                        n_samples=r.get("n"),
+                        cell_type=r.get("cell_type", "All"),
+                        category="biochemistry",
+                    ))
+        except (FileNotFoundError, Exception):
+            pass
+
+        # Load per-cell-type age/BMI correlations
+        try:
+            ct_corr_data = await self.load_json("cima_celltype_correlations.json")
+
+            # Handle nested dict vs flat list (DuckDB)
+            for r in self._extract_corr_items(ct_corr_data, "age"):
+                if r.get("protein") in sig_names and r.get("signature") == signature_type:
+                    pval = self._parse_pvalue(r.get("pvalue"))
+                    qval = self._parse_pvalue(r.get("qvalue")) if r.get("qvalue") is not None else None
+                    age_results.append(GeneCorrelationResult(
+                        variable="Age",
+                        rho=self._safe_float(r.get("rho")),
+                        pvalue=pval,
+                        qvalue=qval,
+                        n_samples=r.get("n"),
+                        cell_type=r.get("cell_type"),
+                        category="age",
+                    ))
+
+            for r in self._extract_corr_items(ct_corr_data, "bmi"):
+                if r.get("protein") in sig_names and r.get("signature") == signature_type:
+                    pval = self._parse_pvalue(r.get("pvalue"))
+                    qval = self._parse_pvalue(r.get("qvalue")) if r.get("qvalue") is not None else None
+                    bmi_results.append(GeneCorrelationResult(
+                        variable="BMI",
+                        rho=self._safe_float(r.get("rho")),
+                        pvalue=pval,
+                        qvalue=qval,
+                        n_samples=r.get("n"),
+                        cell_type=r.get("cell_type"),
+                        category="bmi",
+                    ))
+        except (FileNotFoundError, Exception):
             pass
 
         # Load metabolite correlations
@@ -666,7 +714,7 @@ class GeneService(BaseService):
                         cell_type=r.get("cell_type", "All"),
                         category="metabolite",
                     ))
-        except FileNotFoundError:
+        except (FileNotFoundError, Exception):
             pass
 
         # Sort by absolute rho
@@ -985,17 +1033,21 @@ class GeneService(BaseService):
 
     async def check_gene_exists(self, gene: str) -> dict:
         """Check if a gene exists in expression data, CytoSig, or SecAct."""
+        import logging
+        logger = logging.getLogger(__name__)
+
         has_expression = False
         has_cytosig = False
         has_secact = False
 
         # Get all name variants for the gene
         names = get_all_names(gene)
-        gene_names = [gene]
-        if names["hgnc"] and names["hgnc"] != gene:
-            gene_names.append(names["hgnc"])
-        if names["cytosig"] and names["cytosig"] != gene and names["cytosig"] not in gene_names:
-            gene_names.append(names["cytosig"])
+        gene_names = set()
+        gene_names.add(gene)
+        if names["hgnc"]:
+            gene_names.add(names["hgnc"])
+        if names["cytosig"]:
+            gene_names.add(names["cytosig"])
 
         # Check expression - per-gene file first
         for gn in gene_names:
@@ -1006,29 +1058,34 @@ class GeneService(BaseService):
 
         # If no per-gene file, check combined expression files
         if not has_expression:
-            expression_result = await self.get_gene_expression(gene)
-            has_expression = expression_result is not None and len(expression_result.data) > 0
-
-        # Check CytoSig
-        try:
-            cima_data = await self.load_json("cima_celltype.json")
-            has_cytosig = any(
-                r.get("signature") in gene_names and r.get("signature_type") == "CytoSig"
-                for r in cima_data
-            )
-        except FileNotFoundError:
-            pass
-
-        # Check SecAct
-        if not has_secact:
             try:
-                cima_data = await self.load_json("cima_celltype.json")
-                has_secact = any(
-                    r.get("signature") in gene_names and r.get("signature_type") == "SecAct"
-                    for r in cima_data
-                )
-            except FileNotFoundError:
-                pass
+                expression_result = await self.get_gene_expression(gene)
+                has_expression = expression_result is not None and len(expression_result.data) > 0
+            except Exception as e:
+                logger.debug("Expression check failed for %s: %s", gene, e)
+
+        # Check CytoSig and SecAct from celltype data across atlases
+        celltype_files = ["cima_celltype.json", "inflammation_celltype.json"]
+        for filename in celltype_files:
+            if has_cytosig and has_secact:
+                break
+            try:
+                data = await self.load_json(filename)
+                if not isinstance(data, list):
+                    continue
+                for r in data:
+                    sig = r.get("signature")
+                    if sig not in gene_names:
+                        continue
+                    sig_type = r.get("signature_type")
+                    if sig_type == "CytoSig":
+                        has_cytosig = True
+                    elif sig_type == "SecAct":
+                        has_secact = True
+                    if has_cytosig and has_secact:
+                        break
+            except Exception as e:
+                logger.debug("Celltype check failed for %s (%s): %s", gene, filename, e)
 
         return {
             "gene": gene,
