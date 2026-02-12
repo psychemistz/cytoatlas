@@ -83,8 +83,8 @@ export default function GeneDetail() {
             {overview?.gene && overview.gene !== symbol && (
               <p className="text-xs text-text-muted">Redirected from {symbol}</p>
             )}
-            {overview?.description && (
-              <p className="mt-1 text-sm text-text-secondary">{overview.description}</p>
+            {(check?.description || overview?.description) && (
+              <p className="mt-1 text-sm text-text-secondary">{check?.description || overview?.description}</p>
             )}
             <div className="mt-2 flex flex-wrap gap-3">
               {check?.has_expression && (

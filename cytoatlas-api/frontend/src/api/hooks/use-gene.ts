@@ -14,7 +14,7 @@ import type {
 export function useGeneCheck(gene: string) {
   return useQuery({
     queryKey: ['gene', 'check', gene],
-    queryFn: () => get<{ has_expression: boolean; has_cytosig: boolean; has_secact: boolean }>(`/gene/${encodeURIComponent(gene)}/check`),
+    queryFn: () => get<{ has_expression: boolean; has_cytosig: boolean; has_secact: boolean; description?: string }>(`/gene/${encodeURIComponent(gene)}/check`),
     enabled: !!gene,
   });
 }

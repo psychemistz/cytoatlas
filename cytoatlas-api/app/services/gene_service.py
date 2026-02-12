@@ -1093,6 +1093,7 @@ class GeneService(BaseService):
             "has_cytosig": has_cytosig,
             "has_secact": has_secact,
             "exists": has_expression or has_cytosig or has_secact,
+            "description": names.get("description") or None,
         }
 
     @cached(prefix="gene_boxplot", ttl=3600)
