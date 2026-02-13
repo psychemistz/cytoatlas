@@ -68,8 +68,10 @@ def log(msg: str) -> None:
 # =============================================================================
 
 # Each grouping defines extra columns beyond sample_col to group by.
-# None = donor-only (pool all cells per sample)
+# [] = donor-only (pool all cells per sample, or per donor_col if set)
 # ['col'] = donor × col
+# Optional 'donor_col': when set and group_cols=[], group by this column
+# instead of sample_col (for atlases where sample ≠ donor, e.g. scAtlas Normal)
 # ['col1', 'col2'] = donor × col1 × col2
 
 ATLAS_CONFIGS = OrderedDict([
@@ -148,6 +150,7 @@ ATLAS_CONFIGS = OrderedDict([
         'h5ad_path': '/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/'
                      'igt_s9_fine_counts.h5ad',
         'sample_col': 'sampleID',
+        'donor_col': 'donorID',  # sampleID is per donor×organ (706); donorID is per donor (317)
         'gene_col': None,  # var_names are gene symbols
         'groupings': OrderedDict([
             ('donor_only', []),
@@ -275,7 +278,10 @@ def generate_pseudobulk_multipass(
         log(f"Using var['{gene_col}'] for gene symbols ({len(gene_symbols)} genes)")
 
     # Load metadata columns needed across all levels
+    donor_col = config.get('donor_col')
     all_cols = {sample_col}
+    if donor_col:
+        all_cols.add(donor_col)
     for group_cols in levels_to_generate.values():
         all_cols.update(group_cols)
     all_cols = sorted(all_cols)
@@ -308,8 +314,9 @@ def generate_pseudobulk_multipass(
     level_group_keys = {}
     for level_name, group_cols in levels_to_generate.items():
         if not group_cols:
-            # Donor-only: key is just the sample col
-            keys = obs_df[sample_col].astype(str).values
+            # Donor-only: use donor_col if available, otherwise sample_col
+            id_col = donor_col if donor_col else sample_col
+            keys = obs_df[id_col].astype(str).values
         else:
             # Donor × other cols: join with '__'
             parts = [obs_df[sample_col].astype(str)]
@@ -318,7 +325,10 @@ def generate_pseudobulk_multipass(
             keys = np.array(['__'.join(vals) for vals in zip(*[p.values for p in parts])])
 
         # Mark invalid (nan) entries
+        # Always check sample_col (cell exclusion sets it to NaN)
         has_nan = obs_df[sample_col].isna()
+        if not group_cols and donor_col:
+            has_nan = has_nan | obs_df[donor_col].isna()
         for col in group_cols:
             has_nan = has_nan | obs_df[col].isna()
         keys[has_nan.values] = '__INVALID__'
