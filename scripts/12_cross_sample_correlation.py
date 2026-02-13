@@ -164,11 +164,18 @@ ATLAS_CONFIGS = OrderedDict([
         'h5ad_path': '/data/Jiang_Lab/Data/Seongyong/scAtlas_2025/'
                      'PanCancer_igt_s9_fine_counts.h5ad',
         'sample_col': 'sampleID',
+        'donor_col': 'donorID',  # sampleID is per sample (1,062); donorID is per donor (717)
         'gene_col': None,
+        'tissue_filter': {
+            'col': 'tissue',
+            'value': 'Tumor',
+            'levels': ['tumor_only', 'tumor_by_cancer', 'tumor_by_cancer_celltype1'],
+        },
         'groupings': OrderedDict([
-            ('donor_cancertype', ['cancerType']),
-            ('donor_cancertype_celltype1', ['cancerType', 'cellType1']),
-            ('donor_cancertype_celltype2', ['cancerType', 'cellType2']),
+            ('donor_only', []),
+            ('tumor_only', []),
+            ('tumor_by_cancer', ['cancerType']),
+            ('tumor_by_cancer_celltype1', ['cancerType', 'cellType1']),
         ]),
     }),
 ])
@@ -279,9 +286,12 @@ def generate_pseudobulk_multipass(
 
     # Load metadata columns needed across all levels
     donor_col = config.get('donor_col')
+    tissue_filter = config.get('tissue_filter', {})
     all_cols = {sample_col}
     if donor_col:
         all_cols.add(donor_col)
+    if tissue_filter:
+        all_cols.add(tissue_filter['col'])
     for group_cols in levels_to_generate.values():
         all_cols.update(group_cols)
     all_cols = sorted(all_cols)
@@ -313,24 +323,35 @@ def generate_pseudobulk_multipass(
     # Build group keys for each level
     level_group_keys = {}
     for level_name, group_cols in levels_to_generate.items():
+        # Use donor_col as primary identifier when available (aggregates
+        # multi-sample donors into single profiles at all levels)
+        id_col = donor_col if donor_col else sample_col
         if not group_cols:
-            # Donor-only: use donor_col if available, otherwise sample_col
-            id_col = donor_col if donor_col else sample_col
             keys = obs_df[id_col].astype(str).values
         else:
             # Donor × other cols: join with '__'
-            parts = [obs_df[sample_col].astype(str)]
+            parts = [obs_df[id_col].astype(str)]
             for col in group_cols:
                 parts.append(obs_df[col].astype(str))
             keys = np.array(['__'.join(vals) for vals in zip(*[p.values for p in parts])])
 
         # Mark invalid (nan) entries
-        # Always check sample_col (cell exclusion sets it to NaN)
         has_nan = obs_df[sample_col].isna()
-        if not group_cols and donor_col:
+        if donor_col:
             has_nan = has_nan | obs_df[donor_col].isna()
         for col in group_cols:
             has_nan = has_nan | obs_df[col].isna()
+
+        # Apply per-level tissue filter (e.g., tumor-only for scAtlas Cancer)
+        if tissue_filter and level_name in tissue_filter.get('levels', []):
+            tf_col = tissue_filter['col']
+            tf_val = tissue_filter['value']
+            tissue_mask = obs_df[tf_col] != tf_val
+            has_nan = has_nan | tissue_mask
+            n_filtered = tissue_mask.sum()
+            log(f"  Tissue filter ({tf_col}='{tf_val}'): excluding {n_filtered:,} non-{tf_val} cells "
+                f"({n_filtered/len(obs_df)*100:.1f}%)")
+
         keys[has_nan.values] = '__INVALID__'
 
         level_group_keys[level_name] = keys

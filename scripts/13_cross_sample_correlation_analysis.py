@@ -409,7 +409,7 @@ ATLAS_CONFIGS = OrderedDict([
         'gene_col': None,
     }),
     ('scatlas_cancer', {
-        'levels': ['donor_cancertype', 'donor_cancertype_celltype1', 'donor_cancertype_celltype2'],
+        'levels': ['donor_only', 'tumor_only', 'tumor_by_cancer', 'tumor_by_cancer_celltype1'],
         'signatures': ['cytosig', 'lincytosig', 'secact'],
         'gene_col': None,
     }),
