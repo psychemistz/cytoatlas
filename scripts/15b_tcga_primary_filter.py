@@ -30,7 +30,11 @@ import pandas as pd
 sys.stdout.reconfigure(line_buffering=True)
 sys.path.insert(0, "/data/parks34/projects/1ridgesig/SecActpy")
 
-from secactpy import load_cytosig, load_secact, ridge
+from secactpy import (
+    load_cytosig, load_secact,
+    ridge_batch, estimate_batch_size,
+    CUPY_AVAILABLE,
+)
 
 
 # =============================================================================
@@ -41,6 +45,10 @@ TCGA_DIR = Path('/data/parks34/projects/2cytoatlas/results/cross_sample_validati
 
 # Keep sample types 01 (Primary Solid Tumor) and 03 (Primary Blood Derived Cancer)
 PRIMARY_SAMPLE_TYPES = {'01', '03'}
+
+BACKEND = 'cupy' if CUPY_AVAILABLE else 'numpy'
+N_RAND = 1000
+SEED = 0
 
 
 def log(msg: str) -> None:
@@ -98,13 +106,20 @@ def run_activity_inference(
     prefix: str,
     force: bool = False,
     lambda_: float = 5e5,
-    backend: str = 'auto',
+    backend: str = BACKEND,
 ) -> Dict[str, Path]:
-    """Run activity inference (mean-center across all samples, single ridge)."""
+    """Run activity inference (mean-center across all samples, ridge_batch with GPU)."""
     signatures = load_signatures()
     gene_names = list(expr_df.columns)
     expr_matrix = expr_df.values
     output_paths = {}
+
+    # Estimate batch size once
+    batch_size = estimate_batch_size(
+        n_genes=len(gene_names),
+        n_features=max(s.shape[1] for s in signatures.values()),
+        available_gb=32 if CUPY_AVAILABLE else 16,
+    )
 
     for sig_name, sig_matrix in signatures.items():
         act_path = output_dir / f"{prefix}_{sig_name}.h5ad"
@@ -114,7 +129,7 @@ def run_activity_inference(
             output_paths[sig_name] = act_path
             continue
 
-        log(f"  Computing {sig_name}...")
+        log(f"  Computing {sig_name} (backend={backend})...")
 
         # Find common genes
         expr_genes = set(gene_names)
@@ -131,11 +146,20 @@ def run_activity_inference(
 
         t0 = time.time()
 
-        # Mean-center across all samples, run ridge once
+        # Mean-center across all samples
         Y = expr_matrix[:, gene_idx].T.astype(np.float64)
         np.nan_to_num(Y, copy=False, nan=0.0)
         Y -= Y.mean(axis=1, keepdims=True)
-        result = ridge(X, Y, lambda_=lambda_, n_rand=1000, backend=backend, verbose=False)
+
+        result = ridge_batch(
+            X, Y,
+            lambda_=lambda_,
+            n_rand=N_RAND,
+            seed=SEED,
+            batch_size=batch_size,
+            backend=backend,
+            verbose=True,
+        )
         activity = result['zscore'].T.astype(np.float32)
 
         elapsed = time.time() - t0
@@ -171,7 +195,7 @@ def run_stratified_activity_inference(
     group_col: str,
     force: bool = False,
     lambda_: float = 5e5,
-    backend: str = 'auto',
+    backend: str = BACKEND,
     min_samples: int = 30,
 ) -> Dict[str, Path]:
     """Run within-group stratified activity inference."""
@@ -220,6 +244,13 @@ def run_stratified_activity_inference(
     n_samples = expr_matrix.shape[0]
     group_labels = meta_valid[group_col].values
 
+    # Estimate batch size once (shared across groups)
+    batch_size = estimate_batch_size(
+        n_genes=expr_matrix.shape[1],
+        n_features=max(s.shape[1] for s in signatures.values()),
+        available_gb=32 if CUPY_AVAILABLE else 16,
+    )
+
     output_paths = {}
 
     for sig_name, sig_matrix in signatures.items():
@@ -230,7 +261,7 @@ def run_stratified_activity_inference(
             output_paths[sig_name] = act_path
             continue
 
-        log(f"  Computing {sig_name} (stratified by {group_col})...")
+        log(f"  Computing {sig_name} (stratified by {group_col}, backend={backend})...")
 
         expr_genes = set(gene_names)
         sig_genes = set(sig_matrix.index)
@@ -259,7 +290,15 @@ def run_stratified_activity_inference(
             np.nan_to_num(Y_g, copy=False, nan=0.0)
             Y_g -= Y_g.mean(axis=1, keepdims=True)
 
-            result_g = ridge(X, Y_g, lambda_=lambda_, n_rand=1000, backend=backend, verbose=False)
+            result_g = ridge_batch(
+                X, Y_g,
+                lambda_=lambda_,
+                n_rand=N_RAND,
+                seed=SEED,
+                batch_size=batch_size,
+                backend=backend,
+                verbose=False,
+            )
             activity[g_mask] = result_g['zscore'].T.astype(np.float32)
 
             del Y_g, result_g
@@ -315,8 +354,8 @@ def main():
         description="TCGA Primary Tumor Filter + Activity Inference"
     )
     parser.add_argument('--force', action='store_true', help='Force overwrite existing files')
-    parser.add_argument('--backend', default='auto', choices=['auto', 'numpy', 'cupy'],
-                        help='Computation backend (default: auto)')
+    parser.add_argument('--backend', default=BACKEND, choices=['numpy', 'cupy'],
+                        help=f'Computation backend (default: {BACKEND})')
     args = parser.parse_args()
 
     # =========================================================================
