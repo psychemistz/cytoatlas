@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 # Download bulk RNA-seq data for TCGA/GTEx external validation.
 #
-# Downloads TOIL recomputed TCGA+GTEx TPM, standalone GTEx v8, standalone TCGA,
-# metadata, and gene ID mapping (GENCODE v23 probemap).
+# Downloads TOIL recomputed TCGA+GTEx TPM (fallback), standalone GTEx v8 (fallback),
+# standalone TCGA, metadata, and gene ID mapping (GENCODE v23 probemap).
+#
+# NOTE: The pipeline prefers GTEx v11 data (parquet, 19,788 samples) which must
+# be obtained separately from the GTEx Portal (requires registration):
+#   - GTEx_Analysis_2025-08-22_v11_RNASeQCv2.4.3_gene_tpm.parquet  (4.1 GB)
+#   - GTEx_Analysis_v11_Annotations_SampleAttributesDS.txt           (37 MB)
+# Place these in the output directory below. The TOIL combined file serves as
+# fallback if v11 files are absent.
 #
 # Usage:
 #   bash scripts/15a_download_bulk_data.sh
