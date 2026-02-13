@@ -150,6 +150,7 @@ ATLAS_CONFIGS = OrderedDict([
         'sample_col': 'sampleID',
         'gene_col': None,  # var_names are gene symbols
         'groupings': OrderedDict([
+            ('donor_only', []),
             ('donor_organ', ['tissue']),
             ('donor_organ_celltype1', ['tissue', 'cellType1']),
             ('donor_organ_celltype2', ['tissue', 'cellType2']),
