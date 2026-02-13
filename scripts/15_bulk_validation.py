@@ -238,39 +238,48 @@ def load_tcga_pancan(probemap: Dict[str, str]) -> Tuple[pd.DataFrame, pd.DataFra
     The TSV file has:
       - Index 'gene_id': format 'symbol|entrezID' (e.g., 'TP53|7157')
       - Columns: TCGA barcode sample IDs
-      - Values: RSEM normalized counts (apply log2(x+1))
+      - Values: EBPlusPlus batch-adjusted RSEM normalized counts
+        (NOT TPM; column sums vary 759K-16.4M; ~0.55% values are negative
+        from batch correction artifacts)
     """
     log("Loading TCGA PanCancer expression...")
     t0 = time.time()
 
-    tpm = pd.read_csv(TCGA_PANCAN, sep='\t', index_col=0)
-    log(f"  Raw matrix: {tpm.shape} ({time.time() - t0:.1f}s)")
+    rsem = pd.read_csv(TCGA_PANCAN, sep='\t', index_col=0)
+    log(f"  Raw matrix: {rsem.shape} ({time.time() - t0:.1f}s)")
 
     # Parse gene symbols from 'symbol|entrezID' index
     log("  Parsing gene symbols from symbol|entrezID format...")
     gene_symbols = []
     valid_rows = []
 
-    for i, gid in enumerate(tpm.index):
+    for i, gid in enumerate(rsem.index):
         parts = str(gid).split('|')
         symbol = parts[0]
         if symbol and symbol != '?':
             gene_symbols.append(symbol)
             valid_rows.append(i)
 
-    tpm = tpm.iloc[valid_rows]
-    tpm.index = gene_symbols
-    n_before = tpm.shape[0]
-    n_dup = n_before - tpm.index.nunique()
-    tpm = tpm.groupby(level=0).mean()
-    log(f"  After gene mapping: {tpm.shape[0]} unique genes, {tpm.shape[1]} samples"
+    rsem = rsem.iloc[valid_rows]
+    rsem.index = gene_symbols
+    n_before = rsem.shape[0]
+    n_dup = n_before - rsem.index.nunique()
+    rsem = rsem.groupby(level=0).mean()
+    log(f"  After gene mapping: {rsem.shape[0]} unique genes, {rsem.shape[1]} samples"
         f" ({n_dup} duplicates averaged)")
 
-    # log2(x + 1)
-    log("  Applying log2(x + 1) transform...")
-    tpm = np.log2(tpm + 1)
+    # Clip negative values from EBPlusPlus batch correction artifacts
+    n_neg = (rsem.values < 0).sum()
+    if n_neg > 0:
+        pct_neg = n_neg / rsem.values.size * 100
+        log(f"  Clipping {n_neg} negative values ({pct_neg:.2f}%) from batch correction")
+        rsem = rsem.clip(lower=0)
 
-    expr_df = tpm.T  # (samples x genes)
+    # log2(x + 1) on clipped RSEM normalized counts
+    log("  Applying log2(RSEM + 1) transform...")
+    rsem = np.log2(rsem + 1)
+
+    expr_df = rsem.T  # (samples x genes)
 
     # Build metadata from phenotype file
     # TCGA barcodes: PanCancer uses 7-part (TCGA-OR-A5J1-01A-11R-A29S-07),
@@ -401,6 +410,7 @@ def run_activity_inference(
     expr_df: pd.DataFrame,
     output_dir: Path,
     dataset_name: str,
+    data_format: str = 'TPM',
     force: bool = False,
     lambda_: float = 5e5,
     backend: str = 'auto',
@@ -412,9 +422,11 @@ def run_activity_inference(
     Mean-center genes across all samples, then run ridge regression.
 
     Args:
-        expr_df: samples x genes DataFrame (log2(TPM+1) transformed)
+        expr_df: samples x genes DataFrame (log-transformed)
         output_dir: directory to save H5AD files
         dataset_name: 'gtex' or 'tcga'
+        data_format: source data format for metadata tracking
+            'TPM' for GTEx, 'EBPlusPlus_RSEM_normalized_counts' for TCGA
         force: overwrite existing files
         lambda_: ridge regularization parameter
         backend: 'auto', 'numpy', or 'cupy'
@@ -477,7 +489,11 @@ def run_activity_inference(
         adata_act.uns['gene_coverage'] = len(common) / len(sig_genes)
         adata_act.uns['signature'] = sig_name
         adata_act.uns['source'] = f"{dataset_name}_donor_only_expression.h5ad"
-        adata_act.uns['transform'] = 'log2(TPM+1)'
+        adata_act.uns['data_format'] = data_format
+        if data_format == 'EBPlusPlus_RSEM_normalized_counts':
+            adata_act.uns['transform'] = 'clip(0) -> log2(RSEM+1)'
+        else:
+            adata_act.uns['transform'] = f'log2({data_format}+1)'
 
         adata_act.write_h5ad(act_path, compression='gzip')
         output_paths[sig_name] = act_path
@@ -496,6 +512,7 @@ def run_stratified_activity_inference(
     dataset_name: str,
     group_col: str,
     level_name: str,
+    data_format: str = 'TPM',
     force: bool = False,
     lambda_: float = 5e5,
     backend: str = 'auto',
@@ -509,12 +526,13 @@ def run_stratified_activity_inference(
     does the donor with higher IFNG expression also show higher IFNG activity?"
 
     Args:
-        expr_df: samples x genes DataFrame (log2(TPM+1) transformed)
+        expr_df: samples x genes DataFrame (log-transformed)
         metadata: DataFrame with group_col annotation
         output_dir: directory to save H5AD files
         dataset_name: 'gtex' or 'tcga'
         group_col: column in metadata to group by ('tissue_type' or 'cancer_type')
         level_name: e.g. 'by_tissue' or 'by_cancer'
+        data_format: source data format for metadata tracking
         force: overwrite existing files
         lambda_: ridge regularization parameter
         backend: 'auto', 'numpy', or 'cupy'
@@ -556,7 +574,11 @@ def run_stratified_activity_inference(
             obs=obs_df,
             var=pd.DataFrame(index=expr_valid.columns),
         )
-        adata_pb.uns['transform'] = 'log2(TPM+1)'
+        adata_pb.uns['data_format'] = data_format
+        if data_format == 'EBPlusPlus_RSEM_normalized_counts':
+            adata_pb.uns['transform'] = 'clip(0) -> log2(RSEM+1)'
+        else:
+            adata_pb.uns['transform'] = f'log2({data_format}+1)'
         adata_pb.uns['n_samples'] = expr_valid.shape[0]
         adata_pb.uns['n_groups'] = len(valid_groups)
         adata_pb.uns['group_col'] = group_col
@@ -633,7 +655,11 @@ def run_stratified_activity_inference(
         adata_act.uns['gene_coverage'] = len(common) / len(sig_genes)
         adata_act.uns['signature'] = sig_name
         adata_act.uns['source'] = f"{dataset_name}_{level_name}_expression.h5ad"
-        adata_act.uns['transform'] = 'log2(TPM+1)'
+        adata_act.uns['data_format'] = data_format
+        if data_format == 'EBPlusPlus_RSEM_normalized_counts':
+            adata_act.uns['transform'] = 'clip(0) -> log2(RSEM+1)'
+        else:
+            adata_act.uns['transform'] = f'log2({data_format}+1)'
         adata_act.uns['group_col'] = group_col
         adata_act.uns['n_groups'] = len(valid_groups)
         adata_act.uns['stratified'] = True
@@ -669,9 +695,10 @@ def run_dataset(
     # Load gene ID mapping
     probemap = load_probemap(PROBEMAP)
 
-    # Load expression data
+    # Load expression data and determine data format
     # Prefer primary files (more samples); fall back to TOIL unified
     if dataset == 'gtex':
+        data_format = 'TPM'
         if GTEX_V11_TPM.exists():
             expr_df, metadata = load_gtex_v11(probemap)
         elif TOIL_TPM.exists():
@@ -681,8 +708,10 @@ def run_dataset(
             return
     elif dataset == 'tcga':
         if TCGA_PANCAN.exists():
+            data_format = 'EBPlusPlus_RSEM_normalized_counts'
             expr_df, metadata = load_tcga_pancan(probemap)
         elif TOIL_TPM.exists():
+            data_format = 'TPM'  # TOIL recomputed as TPM
             expr_df, metadata = load_toil_data('tcga', probemap)
         else:
             log(f"ERROR: No TCGA data found. Need {TCGA_PANCAN.name} or {TOIL_TPM.name}")
@@ -690,6 +719,8 @@ def run_dataset(
     else:
         log(f"ERROR: Unknown dataset '{dataset}'. Use 'gtex' or 'tcga'.")
         return
+
+    log(f"  Data format: {data_format}")
 
     # Save bulk expression H5AD
     pb_path = output_dir / f"{dataset}_donor_only_expression.h5ad"
@@ -700,7 +731,16 @@ def run_dataset(
             obs=metadata,
             var=pd.DataFrame(index=expr_df.columns),
         )
-        adata_pb.uns['transform'] = 'log2(TPM+1)'
+        # Record format-specific metadata
+        if dataset == 'gtex':
+            adata_pb.uns['data_format'] = 'TPM'
+            adata_pb.uns['transform'] = 'log2(TPM+1)'
+        elif dataset == 'tcga':
+            adata_pb.uns['data_format'] = 'EBPlusPlus_RSEM_normalized_counts'
+            adata_pb.uns['transform'] = 'clip(0) -> log2(RSEM+1)'
+        else:
+            adata_pb.uns['data_format'] = 'unknown'
+            adata_pb.uns['transform'] = 'log2(x+1)'
         adata_pb.uns['n_samples'] = expr_df.shape[0]
         adata_pb.uns['n_genes'] = expr_df.shape[1]
         adata_pb.write_h5ad(pb_path, compression='gzip')
@@ -715,6 +755,7 @@ def run_dataset(
         expr_df=expr_df,
         output_dir=output_dir,
         dataset_name=dataset,
+        data_format=data_format,
         force=force,
         backend=backend,
     )
@@ -729,6 +770,7 @@ def run_dataset(
             dataset_name=dataset,
             group_col='tissue_type',
             level_name='by_tissue',
+            data_format=data_format,
             force=force,
             backend=backend,
         )
@@ -741,6 +783,7 @@ def run_dataset(
             dataset_name=dataset,
             group_col='cancer_type',
             level_name='by_cancer',
+            data_format=data_format,
             force=force,
             backend=backend,
         )
