@@ -65,6 +65,9 @@ ATLAS_CONFIGS = {
             'L1': 'Level1',
             'L2': 'Level2',
         },
+        'exclude_celltypes': {
+            'Level1': ['Doublets', 'LowQuality_cells'],
+        },
     },
     'inflammation_val': {
         'name': 'Inflammation_Validation',
@@ -74,6 +77,9 @@ ATLAS_CONFIGS = {
             'L1': 'Level1pred',
             'L2': 'Level2pred',
         },
+        'exclude_celltypes': {
+            'Level1pred': ['Doublets', 'LowQuality_cells'],
+        },
     },
     'inflammation_ext': {
         'name': 'Inflammation_External',
@@ -82,6 +88,9 @@ ATLAS_CONFIGS = {
         'levels': {
             'L1': 'Level1pred',
             'L2': 'Level2pred',
+        },
+        'exclude_celltypes': {
+            'Level1pred': ['Doublets', 'LowQuality_cells'],
         },
     },
     'scatlas_normal': {
@@ -271,6 +280,37 @@ class DonorLevelAggregator:
 
         log(f"Loading metadata: {cols_to_load}")
         obs_df = adata.obs[cols_to_load].copy()
+
+        # Exclude unwanted cell types (e.g., Doublets, LowQuality_cells)
+        # Mark excluded cells by setting their annotations to NaN so they are
+        # skipped during group assignment (preserves positional alignment with adata.X)
+        exclude_map = self.config.get('exclude_celltypes', {})
+        if exclude_map:
+            # Load any additional columns needed for exclusion filtering
+            exclude_cols_needed = [c for c in exclude_map.keys() if c not in obs_df.columns]
+            for ec in exclude_cols_needed:
+                obs_df[ec] = adata.obs[ec].values
+
+            exclude_mask = pd.Series(False, index=obs_df.index)
+            for col, values in exclude_map.items():
+                if col in obs_df.columns:
+                    col_mask = obs_df[col].isin(values)
+                    exclude_mask |= col_mask
+                    excluded_types = obs_df.loc[col_mask, col].value_counts()
+                    for ct, cnt in excluded_types.items():
+                        log(f"  Excluding {cnt:,} cells with {col}='{ct}'")
+
+            n_excluded = exclude_mask.sum()
+            if n_excluded > 0:
+                # Null out the celltype/donor columns for excluded cells
+                # so they become NaN groups and are skipped during accumulation
+                if is_composite:
+                    for p in parts:
+                        obs_df.loc[exclude_mask, p] = np.nan
+                else:
+                    obs_df.loc[exclude_mask, composite_col] = np.nan
+                obs_df.loc[exclude_mask, donor_col] = np.nan
+                log(f"  Total excluded: {n_excluded:,} cells ({n_excluded/len(obs_df)*100:.1f}%)")
 
         # Create composite column if needed
         if is_composite:

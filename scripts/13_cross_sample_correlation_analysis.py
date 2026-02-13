@@ -420,7 +420,7 @@ ATLAS_CONFIGS = OrderedDict([
         'expr_suffix': 'expression',
     }),
     ('tcga', {
-        'levels': ['donor_only', 'by_cancer'],
+        'levels': ['donor_only', 'by_cancer', 'primary_only', 'primary_by_cancer'],
         'signatures': ['cytosig', 'lincytosig', 'secact'],
         'gene_col': None,
         'expr_suffix': 'expression',
