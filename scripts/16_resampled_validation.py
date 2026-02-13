@@ -40,7 +40,11 @@ from scipy import stats
 sys.stdout.reconfigure(line_buffering=True)
 sys.path.insert(0, "/data/parks34/projects/1ridgesig/SecActpy")
 
-from secactpy import load_cytosig, load_secact, ridge
+from secactpy import (
+    load_cytosig, load_secact,
+    ridge_batch, estimate_batch_size,
+    CUPY_AVAILABLE,
+)
 
 
 # =============================================================================
@@ -212,9 +216,18 @@ def run_resampled_activity(
         np.nan_to_num(X, copy=False, nan=0.0)
 
         Y = expr_matrix[:, gene_idx].T.copy()  # (genes x samples)
+        np.nan_to_num(Y, copy=False, nan=0.0)
         Y -= Y.mean(axis=1, keepdims=True)
 
-        result = ridge(X, Y, lambda_=lambda_, n_rand=1000, backend=backend, verbose=False)
+        batch_sz = estimate_batch_size(
+            n_genes=len(common),
+            n_features=X.shape[1],
+            available_gb=32 if CUPY_AVAILABLE else 16,
+        )
+        result = ridge_batch(
+            X, Y, lambda_=lambda_, n_rand=1000, seed=42,
+            batch_size=batch_sz, backend=backend, verbose=False,
+        )
         activity = result["zscore"].T.astype(np.float32)
 
         elapsed = time.time() - t0

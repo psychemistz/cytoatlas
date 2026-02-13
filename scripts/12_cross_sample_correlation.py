@@ -50,7 +50,11 @@ from scipy import sparse
 sys.stdout.reconfigure(line_buffering=True)
 sys.path.insert(0, "/vf/users/parks34/projects/1ridgesig/SecActpy")
 
-from secactpy import load_cytosig, load_secact, ridge
+from secactpy import (
+    load_cytosig, load_secact,
+    ridge_batch, estimate_batch_size,
+    CUPY_AVAILABLE,
+)
 
 
 def log(msg: str) -> None:
@@ -522,6 +526,16 @@ def run_activity_inference(
     if ct_col is not None:
         log(f"  Within-celltype normalization on '{ct_col}'")
 
+    # Estimate batch size for ridge_batch based on available GPU/CPU memory
+    max_features = max(s.shape[1] for s in signatures.values())
+    batch_sz = estimate_batch_size(
+        n_genes=len(matching_genes),
+        n_features=max_features,
+        available_gb=32 if CUPY_AVAILABLE else 16,
+    )
+    log(f"  ridge_batch: backend={backend}, batch_size={batch_sz}, "
+        f"GPU={'yes' if CUPY_AVAILABLE else 'no'}")
+
     output_paths = {}
 
     for sig_name, sig_matrix in signatures.items():
@@ -555,14 +569,18 @@ def run_activity_inference(
         t0 = time.time()
 
         if ct_col is None:
-            # Donor-only: mean-center across all donors, run ridge once
-            Y = expr_matrix[:, gene_idx].T.astype(np.float64)  # (genes x samples)
+            # Donor-only: mean-center across all donors, ridge_batch once
+            Y = expr_matrix[:, gene_idx].T.astype(np.float64)
+            np.nan_to_num(Y, copy=False, nan=0.0)
             Y -= Y.mean(axis=1, keepdims=True)
-            result = ridge(X, Y, lambda_=lambda_, n_rand=1000, backend=backend, verbose=False)
+            result = ridge_batch(
+                X, Y, lambda_=lambda_, n_rand=1000, seed=42,
+                batch_size=batch_sz, backend=backend, verbose=True,
+            )
             activity[:] = result['zscore'].T.astype(np.float32)
             del Y, result
         else:
-            # Celltype-stratified: run ridge per celltype separately
+            # Celltype-stratified: ridge_batch per celltype separately
             celltypes = obs_df[ct_col].unique()
             for ct in celltypes:
                 ct_mask = (obs_df[ct_col] == ct).values
@@ -571,9 +589,13 @@ def run_activity_inference(
                     continue
 
                 Y_ct = expr_matrix[ct_mask][:, gene_idx].T.astype(np.float64)
+                np.nan_to_num(Y_ct, copy=False, nan=0.0)
                 Y_ct -= Y_ct.mean(axis=1, keepdims=True)
 
-                result_ct = ridge(X, Y_ct, lambda_=lambda_, n_rand=1000, backend=backend, verbose=False)
+                result_ct = ridge_batch(
+                    X, Y_ct, lambda_=lambda_, n_rand=1000, seed=42,
+                    batch_size=batch_sz, backend=backend, verbose=False,
+                )
                 activity[ct_mask] = result_ct['zscore'].T.astype(np.float32)
 
                 del Y_ct, result_ct
